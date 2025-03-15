@@ -6,12 +6,11 @@ use chrono;
 use crate::config::Config;
 
 pub async fn capture_screenshots(config: &Config) {
-    let interval = Duration::from_secs(config.screen.interval);
 
     // check to see if the directory exists    
     loop {
         let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S.%3f %Z");
-        let output_path = format!("{}/{}.png", config.screen.dir, timestamp);
+        let output_path = format!("{}/{}.png", config.screen.output_dir, timestamp);
         
         Command::new("grim")
             .arg("-t")
@@ -20,6 +19,6 @@ pub async fn capture_screenshots(config: &Config) {
             .status()
             .expect("Failed to execute grim");
         
-        sleep(interval).await;
+        sleep(Duration::from_millis((config.screen.interval * 1000.0) as u64)).await;
     }
 }

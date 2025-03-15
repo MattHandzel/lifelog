@@ -1,8 +1,17 @@
-
-logger_dir = "~/lifelog"
+lifelog_dir = "~/lifelog"
 
 [screen]
-interval = 10
+enabled = true
+interval = 1
 program = "grim"
-dir = "/home/matth/Projects/lifelog/data/screen"
+output_dir = "/home/matth/lifelog/data/screen"
 
+[keyboard]
+enabled = false
+interval = 0.001
+output_dir = "/home/matth/lifelog/data/keyboard"
+
+[mouse]
+enabled = false
+interval = 0.001
+output_dir = "/home/matth/lifelog/data/mouse"

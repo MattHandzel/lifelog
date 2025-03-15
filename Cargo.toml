@@ -8,5 +8,13 @@ serde = { version = "1.0", features = ["derive"] }
 toml = "0.5"
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4"
+rusqlite = "0.29"    # SQLite database
+evdev = "0.12"         
+thiserror = "1"
+dirs = "4.0"
+
 # cpal = "0.15"
 # opus = "0.2"
+
+[dev-dependencies]
+anyhow = "1"

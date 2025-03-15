@@ -13,11 +13,10 @@
       };
     in {
 
-      packages.${system}.default = pkgs.rustPlatform.buildRustPackage {
+      packages.${system}.lifelog= pkgs.rustPlatform.buildRustPackage {
         pname = "lifelog";
         version = "0.1.0";
         src = ./.;
-        cargoSha256 = "sha256-0000000000000000000000000000000000000000000000000000"; 
 
         cargoLock = {
           lockFile = ./Cargo.lock;
@@ -27,6 +26,7 @@
           pkgs.pkg-config
           pkgs.openssl
           pkgs.alsa-lib
+          pkgs.sqlite
         ];
 
         nativeBuildInputs = [
@@ -34,9 +34,9 @@
         ];
 
         meta = with pkgs.lib; {
-          description = "My Rust Project";
+          description = "A lifelogging project";
           license = licenses.mit;
-          maintainers = [ maintainers.yourname ];
+          maintainers = [ maintainers.MattHandzel ];
         };
       };
       devShells.${system}.default = pkgs.mkShell {
@@ -52,6 +52,7 @@
           pkgs.grim
           pkgs.alsa-lib
           pkgs.slurp
+          pkgs.sqlite
         ];
       };
     };
