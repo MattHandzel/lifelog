@@ -1,17 +1,73 @@
 lifelog_dir = "~/lifelog"
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
 
 [screen]
 enabled = true
 interval = 1
 program = "grim"
-output_dir = "/home/matth/lifelog/data/screen"
+output_dir = "~/lifelog/data/screen"
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
 
 [keyboard]
 enabled = false
-interval = 0.001
-output_dir = "/home/matth/lifelog/data/keyboard"
+output_dir = "~/lifelog/data/keyboard"
 
 [mouse]
 enabled = false
-interval = 0.001
-output_dir = "/home/matth/lifelog/data/mouse"
+output_dir = "~/lifelog/data/mouse"
+
+[microphone]
+enabled = true
+sample_rate = 44100
+bits_per_sample = 16
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+[system_performance]
+enabled = true
+interval = 5.0
+output_dir = "~/lifelog/data/system"
+track_cpu = true
+track_memory = true
+track_disk = true
+
+[ambient]
+enabled = false
+interval = 10.0
+output_dir = "~/lifelog/data/ambient"
+temperature_sensor_path = "/sys/class/thermal/thermal_zone0/temp"
+humidity_sensor_path = ""
+
+[weather]
+enabled = false
+interval = 600.0  # 10 minutes
+output_dir = "~/lifelog/data/weather"
+api_key = ""
+latitude = 0.0
+longitude = 0.0
+
+[audio]
+enabled = false
+output_dir = "~/lifelog/data/audio"
+sample_rate = 44100
+chunk_duration_secs = 60
+
+[geolocation]
+enabled = false
+interval = 60.0
+output_dir = "~/lifelog/data/geo"
+use_ip_fallback = true
+
+[wifi]
+enabled = false
+interval = 300.0 # 5 minutes
+output_dir = "~/lifelog/data/wifi"
+scan_command = "nmcli dev wifi list"
+
+[camera]
+enabled = false
+interval = 60.0  # Capture every 60 seconds
+output_dir = "~/lifelog/data/camera"
+device = "/dev/video0"
+resolution = [1280, 720]
+fps = 30
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"

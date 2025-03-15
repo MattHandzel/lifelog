@@ -40,3 +40,6 @@ pub fn get_hyprland_state() -> HyprlandState {
         active_monitor: v["monitor"].as_str().unwrap_or_default().to_string(),
     }
 }
+
+pub async fn start_logger(){
+}

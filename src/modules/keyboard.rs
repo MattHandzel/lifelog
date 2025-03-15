@@ -6,7 +6,7 @@ use tokio::time::{sleep, Duration};
 use crate::config::Config;
 use crate::setup;
 
-pub async fn start_keyboard_logger(config: &Config) {
+pub async fn start_logger(config: &Config) {
     // Open the keyboard device
     let mut device = Device::open("/dev/input/event1").expect("Failed to open keyboard device (do you have access to dialout?)");
 

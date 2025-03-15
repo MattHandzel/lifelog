@@ -6,7 +6,7 @@ use tokio::time::{sleep, Duration};
 use crate::config::Config;
 use crate::setup;
 
-pub async fn start_mouse_logger(config: &Config) {
+pub async fn start_logger(config: &Config) {
     // Open the mouse device
     let mut device = Device::open("/dev/input/mouse1").expect("Failed to open mouse device");
 

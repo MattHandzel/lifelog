@@ -3,14 +3,14 @@
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 use chrono;
-use crate::config::Config;
+use crate::config::ScreenConfig;
 
-pub async fn capture_screenshots(config: &Config) {
+pub async fn start_logger(config: &ScreenConfig) {
 
     // check to see if the directory exists    
     loop {
-        let timestamp = chrono::Local::now().format("%Y-%m-%d_%H-%M-%S.%3f %Z");
-        let output_path = format!("{}/{}.png", config.screen.output_dir, timestamp);
+        let timestamp = chrono::Local::now().format(config.timestamp_format);
+        let output_path = format!("{}/{}.png", config.output_dir, timestamp);
         
         Command::new("grim")
             .arg("-t")
@@ -19,6 +19,6 @@ pub async fn capture_screenshots(config: &Config) {
             .status()
             .expect("Failed to execute grim");
         
-        sleep(Duration::from_millis((config.screen.interval * 1000.0) as u64)).await;
+        sleep(Duration::from_millis((config.interval * 1000.0) as u64)).await;
     }
 }

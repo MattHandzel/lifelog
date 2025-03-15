@@ -12,6 +12,15 @@ rusqlite = "0.29"    # SQLite database
 evdev = "0.12"         
 thiserror = "1"
 dirs = "4.0"
+cpal = "0.15"
+hound = "3.4"
+sysinfo = "0.29"    # For system performance
+reqwest = { version = "0.11", features = ["json"] }
+serde_json = "1.0"
+sensors = "0.2"     # For ambient environment (Linux-only)
+geoip2 = "0.1.7"      # For IP-based geolocation
+rscam = "0.5"  # Linux-only camera access
+image = "0.24"  # Optional for format conversion
 
 # cpal = "0.15"
 # opus = "0.2"
