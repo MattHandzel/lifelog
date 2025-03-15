@@ -22,7 +22,7 @@
           pkgs.pkg-config
           pkgs.openssl
           pkgs.grim
-          pkgs.alsaLib
+          pkgs.alsa-lib
           pkgs.slurp
         ];
       };

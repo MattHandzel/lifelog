@@ -4,5 +4,5 @@ logger_dir = "~/lifelog"
 [screen]
 interval = 10
 program = "grim"
-dir = "screen"
+dir = "/home/matth/Projects/lifelog/data/screen"
 
