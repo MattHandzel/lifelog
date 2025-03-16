@@ -110,7 +110,7 @@ pub fn setup_geo_db(output_dir: &Path) -> rusqlite::Result<Connection> {
     let db_path = output_dir.join("geolocation.db");
     initialize_database(
         &db_path,
-        "CREATE TABLE IF NOT EXISTS locations (
+        "CREATE TABLE IF NOT EXISTS location (
             id INTEGER PRIMARY KEY,
             timestamp DATETIME NOT NULL,
             latitude REAL NOT NULL,
@@ -228,4 +228,28 @@ pub fn setup_hyprland_db(output_dir: &Path) -> rusqlite::Result<Connection> {
     )?;
 
     Ok(conn)
+}
+pub fn setup_process_db(output_dir: &Path) -> rusqlite::Result<Connection> {
+    ensure_directory(output_dir).expect("Failed to create process output directory");
+    let db_path = output_dir.join("processes.db");
+    initialize_database(
+        &db_path,
+        r#"
+        CREATE TABLE IF NOT EXISTS processes (
+            timestamp REAL NOT NULL,
+            pid INTEGER NOT NULL,
+            ppid INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            exe TEXT,
+            cmdline TEXT,
+            status TEXT NOT NULL,
+            cpu_usage REAL,
+            memory_usage INTEGER,
+            threads INTEGER,
+            user TEXT,
+            start_time REAL,
+            PRIMARY KEY (timestamp, pid)
+            );
+        "#
+    )
 }

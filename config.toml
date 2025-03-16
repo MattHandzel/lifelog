@@ -82,10 +82,10 @@ enabled = true
 interval = 300 # 5 minutes
 output_dir = "~/lifelog/data/network"
 
-[process]
+[processes]
 enabled = true
-interval = 60 # 1 minute
-output_dir = "~/lifelog/data/process"
+interval = 60 # every minute
+output_dir = "~/lifelog/data/processes"
 
 [hyprland]
 enabled = true

@@ -45,6 +45,14 @@ async fn main() {
         }));
     }
 
+    // Add to existing task spawning code
+    if config.processes.enabled {
+        let config_clone = Arc::clone(&config);
+        tasks.push(tokio::spawn(async move {
+            processes::start_logger(&config_clone.processes).await
+        }));
+    }
+
     //if config.microphone.enabled {
     //    let config = Arc::clone(&config);
     //    tasks.push(tokio::spawn(async move {

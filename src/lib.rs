@@ -6,6 +6,8 @@ pub mod modules {
     pub mod mouse;
     pub mod camera;
     pub mod hyprland;
+
+    pub mod processes;
 }
 
 pub mod utils;

@@ -13,7 +13,7 @@ pub struct Config {
     pub microphone: MicrophoneConfig,
     pub timestamp_format: String,
     pub network: NetworkConfig,
-    pub process: ProcessConfig,
+    pub processes: ProcessesConfig,
     pub system_performance: SystemPerformanceConfig,
     pub ambient: AmbientConfig,
     pub weather: WeatherConfig,
@@ -31,7 +31,7 @@ pub struct NetworkConfig {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ProcessConfig {
+pub struct ProcessesConfig {
     pub enabled: bool,
     pub interval: f64,
     pub output_dir: PathBuf,
@@ -146,6 +146,8 @@ pub struct CameraConfig {
     pub timestamp_format: String,
 }
 
+
+
 pub fn load_config() -> Config {
 
     let home_dir = dirs::home_dir().expect("Failed to get home directory");
@@ -154,6 +156,7 @@ pub fn load_config() -> Config {
 
     toml::from_str(replace_home_dir_in_path(config_str).as_str()).expect("Failed to parse config.toml")
 }
+
 
 
 
