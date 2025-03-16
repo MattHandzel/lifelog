@@ -39,7 +39,7 @@
         ];
 
         meta = with pkgs.lib; {
-          description = "A lifelogging project";
+          description = "A project to log various sources of data for your lifelog";
           license = licenses.mit;
           maintainers = [ maintainers.MattHandzel ];
         };

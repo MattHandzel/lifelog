@@ -206,7 +206,7 @@ pub fn setup_hyprland_db(output_dir: &Path) -> rusqlite::Result<Connection> {
             pinned BOOLEAN NOT NULL,
             mapped BOOLEAN NOT NULL,
             focus_history_id INTEGER NOT NULL,
-            PRIMARY KEY (timestamp, class, pid)
+            PRIMARY KEY (timestamp, class, pid, address)
         );
 
 

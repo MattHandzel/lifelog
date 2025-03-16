@@ -3,7 +3,7 @@ timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
 
 [screen]
 enabled = true
-interval = 10
+interval = 5
 program = "grim"
 output_dir = "~/lifelog/data/screen"
 timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
@@ -89,7 +89,7 @@ output_dir = "~/lifelog/data/processes"
 
 [hyprland]
 enabled = true
-interval = 1
+interval = 5 
 output_dir = "~/lifelog/data/hyprland"
 log_clients = true
 log_activewindow = true
