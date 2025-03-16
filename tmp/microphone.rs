@@ -20,7 +20,7 @@ pub async fn start_logger(config: &MicrophoneConfig) {
     };
 
     loop {
-        let timestamp = chrono::Local::now().format(config.timestamp_format);
+        let timestamp = chrono::Local::now().format(config.timestamp_format.as_str());
         let output_path = format!("{}/{}.wav", config.microphone.output_dir, timestamp);
 
         let writer = WavWriter::new(BufWriter::new(File::create(&output_path).unwrap()), spec).unwrap();

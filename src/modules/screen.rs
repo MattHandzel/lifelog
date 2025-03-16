@@ -9,7 +9,7 @@ pub async fn start_logger(config: &ScreenConfig) {
 
     // check to see if the directory exists    
     loop {
-        let timestamp = chrono::Local::now().format(config.timestamp_format);
+        let timestamp = chrono::Local::now().format(config.timestamp_format.as_str());
         let output_path = format!("{}/{}.png", config.output_dir, timestamp);
         
         Command::new("grim")

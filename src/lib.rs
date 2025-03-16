@@ -4,7 +4,9 @@ pub mod modules {
     pub mod screen;
     pub mod keyboard;
     pub mod mouse;
-    pub mod microphone;
+    pub mod camera;
+    pub mod hyprland;
 }
 
 pub mod utils;
+pub mod prelude;

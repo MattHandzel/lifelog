@@ -11,24 +11,29 @@ timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
 [keyboard]
 enabled = false
 output_dir = "~/lifelog/data/keyboard"
+interval=0.01
 
 [mouse]
 enabled = false
 output_dir = "~/lifelog/data/mouse"
+interval=0.01
 
 [microphone]
 enabled = true
 sample_rate = 44100
 bits_per_sample = 16
 timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+chunk_duration_secs = 300 # 5 minute chunks
+output_dir = "~/lifelog/data/microphone"
+
 
 [system_performance]
 enabled = true
 interval = 5.0
 output_dir = "~/lifelog/data/system"
-track_cpu = true
-track_memory = true
-track_disk = true
+log_cpu = true
+log_memory = true
+log_disk = true
 
 [ambient]
 enabled = false
@@ -71,3 +76,23 @@ device = "/dev/video0"
 resolution = [1280, 720]
 fps = 30
 timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+[network]
+enabled = true
+interval = 300 # 5 minutes
+output_dir = "~/lifelog/data/network"
+
+[process]
+enabled = true
+interval = 60 # 1 minute
+output_dir = "~/lifelog/data/process"
+
+[hyprland]
+enabled = true
+interval = 1
+output_dir = "~/lifelog/data/hyprland"
+log_clients = true
+log_activewindow = true
+log_workspace = true
+log_active_monitor = true
+log_devices = true

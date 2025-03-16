@@ -20,6 +20,30 @@ pub struct Config {
     pub audio: AudioConfig,
     pub geolocation: GeoConfig,
     pub wifi: WifiConfig,
+    pub hyprland: HyprlandConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct NetworkConfig {
+    pub enabled: bool,
+    pub interval: f64,
+    pub output_dir: PathBuf,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ProcessConfig {
+    pub enabled: bool,
+    pub interval: f64,
+    pub output_dir: PathBuf,
+}
+#[derive(Debug, Deserialize)]
+pub struct MicrophoneConfig {
+    pub enabled: bool,
+    pub output_dir: PathBuf,
+    pub sample_rate: u32,
+    pub chunk_duration_secs: u64,
+    pub timestamp_format: String,
+
 }
 
 // Add new config structs
@@ -28,9 +52,9 @@ pub struct SystemPerformanceConfig {
     pub enabled: bool,
     pub interval: f64,
     pub output_dir: PathBuf,
-    pub track_cpu: bool,
-    pub track_memory: bool,
-    pub track_disk: bool,
+    pub log_cpu: bool,
+    pub log_memory: bool,
+    pub log_disk: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,6 +120,19 @@ pub struct ScreenConfig {
     pub interval: f64,
     pub output_dir: String,
     pub program: String,
+    pub timestamp_format: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct HyprlandConfig {
+    pub enabled: bool,
+    pub interval: f64,
+    pub output_dir: String,
+    pub log_clients: bool,
+    pub log_activewindow: bool,
+    pub log_workspace: bool,
+    pub log_active_monitor: bool,
+    pub log_devices: bool,
 }
 
 #[derive(Debug, Deserialize)]

@@ -12,20 +12,18 @@ pub fn ensure_directory(path: &Path) -> std::io::Result<()> {
 }
 
 
-pub fn initialize_project(config: &Config) -> Result<(), Box<dyn std::error::Error> > {
+pub fn initialize_project(config: &Config) -> std::io::Result<()> {
     // TODO: Check to see if all of these things exist or not
     
-    
-    ensure_directory(Path::new(&config.keyboard.output_dir)).expect("Failed to create keyboard output directory");
-    ensure_directory(Path::new(&config.screen.output_dir)).expect("Failed to create keyboard output directory");
-    ensure_directory(Path::new(&config.mouse.output_dir)).expect("Failed to create keyboard output directory");
+    ensure_directory(Path::new(&config.keyboard.output_dir))?;
+    ensure_directory(Path::new(&config.screen.output_dir))?;
+    ensure_directory(Path::new(&config.mouse.output_dir))?;
     ensure_directory(Path::new(&config.system_performance.output_dir))?;
     ensure_directory(Path::new(&config.ambient.output_dir))?;
     ensure_directory(Path::new(&config.weather.output_dir))?;
     ensure_directory(Path::new(&config.audio.output_dir))?;
     ensure_directory(Path::new(&config.geolocation.output_dir))?;
     ensure_directory(Path::new(&config.wifi.output_dir))?;
-
     ensure_directory(Path::new(&config.camera.output_dir))?;
 
 
@@ -75,7 +73,7 @@ pub fn setup_mouse_db(output_dir: &Path) -> rusqlite::Result<Connection> {
 
 
 pub fn setup_system_performance_db(output_dir: &Path) -> rusqlite::Result<Connection> {
-    ensure_directory(output_dir)?;
+    ensure_directory(output_dir).expect("Failed to create system performance output directory");
     let db_path = output_dir.join("system_metrics.db");
     initialize_database(
         &db_path,
@@ -92,7 +90,7 @@ pub fn setup_system_performance_db(output_dir: &Path) -> rusqlite::Result<Connec
 }
 
 pub fn setup_weather_db(output_dir: &Path) -> rusqlite::Result<Connection> {
-    ensure_directory(output_dir)?;
+    ensure_directory(output_dir).expect("Failed to create weather output directory");
     let db_path = output_dir.join("weather.db");
     initialize_database(
         &db_path,
@@ -108,7 +106,7 @@ pub fn setup_weather_db(output_dir: &Path) -> rusqlite::Result<Connection> {
 }
 
 pub fn setup_geo_db(output_dir: &Path) -> rusqlite::Result<Connection> {
-    ensure_directory(output_dir)?;
+    ensure_directory(output_dir).expect("Failed to create geolocation output directory");
     let db_path = output_dir.join("geolocation.db");
     initialize_database(
         &db_path,
@@ -124,7 +122,7 @@ pub fn setup_geo_db(output_dir: &Path) -> rusqlite::Result<Connection> {
 }
 
 pub fn setup_wifi_db(output_dir: &Path) -> rusqlite::Result<Connection> {
-    ensure_directory(output_dir)?;
+    ensure_directory(output_dir).expect("Failed to create wifi output directory");
     let db_path = output_dir.join("wifi.db");
     initialize_database(
         &db_path,
@@ -137,4 +135,97 @@ pub fn setup_wifi_db(output_dir: &Path) -> rusqlite::Result<Connection> {
             frequency REAL NOT NULL
         )",
     )
+}
+
+pub fn setup_hyprland_db(output_dir: &Path) -> rusqlite::Result<Connection> {
+    ensure_directory(output_dir).expect("Failed to create Hyprland output directory");
+    let db_path = output_dir.join("hyprland.db");
+    let conn = Connection::open(db_path)?;
+
+    // Create tables for each Hyprland data type
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS monitors (
+            timestamp REAL NOT NULL,
+            id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL,
+            width INTEGER NOT NULL,
+            height INTEGER NOT NULL,
+            refresh_rate REAL NOT NULL,
+            x INTEGER NOT NULL,
+            y INTEGER NOT NULL,
+            active_workspace_id INTEGER NOT NULL,
+            active_workspace_name TEXT NOT NULL,
+            scale REAL NOT NULL,
+            focused BOOLEAN NOT NULL,
+            PRIMARY KEY (timestamp, id)
+        );
+
+        CREATE TABLE IF NOT EXISTS workspaces (
+            timestamp REAL NOT NULL,
+            id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            monitor TEXT NOT NULL,
+            monitor_id INTEGER,
+            windows INTEGER NOT NULL,
+            fullscreen BOOLEAN NOT NULL,
+            last_window TEXT NOT NULL,
+            last_window_title TEXT NOT NULL,
+            PRIMARY KEY (timestamp, id)
+        );
+
+        CREATE TABLE IF NOT EXISTS activeworkspace (
+            timestamp REAL NOT NULL,
+            id INTEGER NOT NULL,
+            name TEXT NOT NULL,
+            monitor TEXT NOT NULL,
+            monitor_id INTEGER,
+            windows INTEGER NOT NULL,
+            fullscreen BOOLEAN NOT NULL,
+            last_window TEXT NOT NULL,
+            last_window_title TEXT NOT NULL,
+            PRIMARY KEY (timestamp, id)
+        );
+
+        CREATE TABLE IF NOT EXISTS clients (
+            timestamp REAL NOT NULL,
+            address TEXT NOT NULL,
+            at_x INTEGER NOT NULL,
+            at_y INTEGER NOT NULL,
+            size_x INTEGER NOT NULL,
+            size_y INTEGER NOT NULL,
+            workspace_id INTEGER NOT NULL,
+            workspace_name TEXT NOT NULL,
+            floating BOOLEAN NOT NULL,
+            fullscreen_mode TEXT NOT NULL,
+            monitor_id INTEGER NOT NULL,
+            title TEXT NOT NULL,
+            class TEXT NOT NULL,
+            pid INTEGER NOT NULL,
+            pinned BOOLEAN NOT NULL,
+            mapped BOOLEAN NOT NULL,
+            focus_history_id INTEGER NOT NULL,
+            PRIMARY KEY (timestamp, class, pid)
+        );
+
+
+        CREATE TABLE IF NOT EXISTS devices (
+            timestamp REAL NOT NULL,
+            type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            address TEXT NOT NULL,
+            PRIMARY KEY (timestamp, name)
+        );
+
+        CREATE TABLE IF NOT EXISTS cursor_positions (
+            timestamp REAL PRIMARY KEY NOT NULL,
+            x INTEGER NOT NULL,
+            y INTEGER NOT NULL
+        );
+
+        "#
+    )?;
+
+    Ok(conn)
 }

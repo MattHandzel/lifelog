@@ -12,37 +12,45 @@ async fn main() {
     setup::initialize_project(&config).expect("Failed to initialize project");
 
     let mut tasks = Vec::new();
+
     if config.keyboard.enabled {
-        let config = Arc::clone(&config);
+        let config_clone = Arc::clone(&config);
         tasks.push(tokio::spawn(async move {
-            keyboard::start_logger(&config).await
+            keyboard::start_logger(&config_clone.keyboard).await
         }));
     }
     if config.mouse.enabled {
-        let config = Arc::clone(&config);
+        let config_clone = Arc::clone(&config);
         tasks.push(tokio::spawn(async move {
-            mouse::start_logger(&config).await
+            mouse::start_logger(&config_clone.mouse).await
         }));
     }
     if config.screen.enabled {
-        let config = Arc::clone(&config);
+        let config_clone = Arc::clone(&config);
         tasks.push(tokio::spawn(async move {
-            screen::start_logger(&config).await
+            screen::start_logger(&config_clone.screen).await
+        }));
+    }
+    if config.camera.enabled {
+        let config_clone = Arc::clone(&config);
+        tasks.push(tokio::spawn(async move {
+            camera::start_logger(&config_clone.camera).await
         }));
     }
 
-    if config.camera.enabled {
-        let config = Arc::clone(&config);
+    if config.hyprland.enabled {
+        let config_clone = Arc::clone(&config);
         tasks.push(tokio::spawn(async move {
-            camera::start_logger(&config).await
+            hyprland::start_logger(&config_clone.hyprland).await
         }));
     }
-    if config.microphone.enabled {
-        let config = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            microphone::start_logger(&config).await
-        }));
-    }
+
+    //if config.microphone.enabled {
+    //    let config = Arc::clone(&config);
+    //    tasks.push(tokio::spawn(async move {
+    //        microphone::start_logger(&config).await
+    //    }));
+    //}
 
     // Wait for all tasks to complete
     for task in tasks {

@@ -13,7 +13,7 @@
       };
     in {
 
-      packages.${system}.lifelog= pkgs.rustPlatform.buildRustPackage {
+      packages.${system}.default = pkgs.rustPlatform.buildRustPackage {
         pname = "lifelog";
         version = "0.1.0";
         src = ./.;
@@ -27,10 +27,14 @@
           pkgs.openssl
           pkgs.alsa-lib
           pkgs.sqlite
+          pkgs.openssl 
+          pkgs.linuxPackages.v4l2loopback 
         ];
 
         nativeBuildInputs = [
+          pkgs.pkg-config
           pkgs.cmake
+          pkgs.alsa-lib
         ];
 
         meta = with pkgs.lib; {
@@ -40,19 +44,22 @@
         };
       };
       devShells.${system}.default = pkgs.mkShell {
+        PKG_CONFIG_PATH = "${pkgs.alsa-lib}/lib/pkgconfig";
 
-        packages = [
-          (pkgs.rust-bin.stable.latest.default.override {
+        packages = with pkgs; [
+          (rust-bin.stable.latest.default.override {
             extensions = [ "rust-src" "rust-analyzer" ];
           })
-          pkgs.glibc
-          pkgs.libxkbcommon
-          pkgs.pkg-config
-          pkgs.openssl
-          pkgs.grim
-          pkgs.alsa-lib
-          pkgs.slurp
-          pkgs.sqlite
+          openssl 
+          glibc
+          linuxPackages.v4l2loopback 
+          v4l-utils
+          libxkbcommon
+          pkg-config
+          alsa-lib
+          grim
+          slurp
+          sqlite
         ];
       };
     };

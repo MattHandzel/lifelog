@@ -3,15 +3,15 @@ use rusqlite::Connection;
 use rusqlite::params;
 use chrono::Local;
 use tokio::time::{sleep, Duration};
-use crate::config::Config;
+use crate::config::KeyboardConfig;
 use crate::setup;
 
-pub async fn start_logger(config: &Config) {
+pub async fn start_logger(config: &KeyboardConfig) {
     // Open the keyboard device
     let mut device = Device::open("/dev/input/event1").expect("Failed to open keyboard device (do you have access to dialout?)");
 
     // Set up the database
-    let conn = setup::setup_keyboard_db(&config.keyboard.output_dir)
+    let conn = setup::setup_keyboard_db(&config.output_dir)
         .expect("Failed to set up keyboard database");
 
     // Main logging loop
@@ -33,6 +33,6 @@ pub async fn start_logger(config: &Config) {
         }
 
         // Sleep for the configured interval
-        sleep(Duration::from_millis((config.keyboard.interval * 1000.0) as u64)).await;
+        sleep(Duration::from_millis((config.interval * 1000.0) as u64)).await;
     }
 }

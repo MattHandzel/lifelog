@@ -3,15 +3,15 @@ use rusqlite::Connection;
 use rusqlite::params;
 use chrono::Local;
 use tokio::time::{sleep, Duration};
-use crate::config::Config;
+use crate::config::MouseConfig;
 use crate::setup;
 
-pub async fn start_logger(config: &Config) {
+pub async fn start_logger(config: &MouseConfig) {
     // Open the mouse device
     let mut device = Device::open("/dev/input/mouse1").expect("Failed to open mouse device");
 
     // Set up the database
-    let conn = setup::setup_mouse_db(&config.mouse.output_dir)
+    let conn = setup::setup_mouse_db(&config.output_dir)
         .expect("Failed to set up mouse database");
 
     // Main logging loop
@@ -51,6 +51,6 @@ pub async fn start_logger(config: &Config) {
         }
 
         // Sleep for the configured interval
-        sleep(Duration::from_millis((config.keyboard.interval * 1000.0) as u64)).await;
+        sleep(Duration::from_secs_f64(config.interval)).await;
     }
 }
