@@ -22,19 +22,20 @@
           lockFile = ./Cargo.lock;
         };
 
-        buildInputs = [
-          pkgs.pkg-config
-          pkgs.openssl
-          pkgs.alsa-lib
-          pkgs.sqlite
-          pkgs.openssl 
-          pkgs.linuxPackages.v4l2loopback 
+        buildInputs = with pkgs; [
+          pkg-config
+          openssl
+          alsa-lib
+          sqlite
+          openssl 
+          linuxPackages.v4l2loopback 
+          v4l-utils
         ];
 
-        nativeBuildInputs = [
-          pkgs.pkg-config
-          pkgs.cmake
-          pkgs.alsa-lib
+        nativeBuildInputs = with pkgs; [
+          pkg-config
+          cmake
+          alsa-lib
         ];
 
         meta = with pkgs.lib; {
