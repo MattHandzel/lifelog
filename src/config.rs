@@ -151,7 +151,13 @@ pub struct CameraConfig {
 pub fn load_config() -> Config {
 
     let home_dir = dirs::home_dir().expect("Failed to get home directory");
+    #[cfg(feature="dev")]
+    let config_path: PathBuf = "dev-config.toml".into();
+    
+    #[cfg(not(feature="dev"))]
     let config_path: PathBuf = [home_dir.to_str().unwrap(), ".config/lifelog/config.toml"].iter().collect();
+
+    println!("Using the config file at: {:?}", config_path);
     let config_str = fs::read_to_string(config_path).expect("Failed to read config.toml");
 
     toml::from_str(replace_home_dir_in_path(config_str).as_str()).expect("Failed to parse config.toml")

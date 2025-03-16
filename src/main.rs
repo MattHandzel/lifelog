@@ -6,6 +6,9 @@ use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
+    #[cfg(feature = "dev")]
+    println!("DEVELOPMENT MODE");
+
     println!("Starting Life Logger!");
     let config = Arc::new(load_config());
 

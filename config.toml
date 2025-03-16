@@ -3,7 +3,7 @@ timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
 
 [screen]
 enabled = true
-interval = 1
+interval = 10
 program = "grim"
 output_dir = "~/lifelog/data/screen"
 timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"

@@ -19,5 +19,8 @@ users = "0.11"
 # cpal = "0.15"
 # opus = "0.2"
 
+[features]
+dev= []
+
 [dev-dependencies]
 anyhow = "1"
