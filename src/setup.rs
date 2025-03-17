@@ -37,9 +37,13 @@ pub fn initialize_project(config: &Config) -> std::io::Result<()> {
 
 pub fn is_already_running(process_name: &str) -> bool {
     let system = System::new_all();
+    let mut process_count = 0;
     for process in system.processes_by_name(process_name) {
         if process.name() == process_name {
-            return true;
+            process_count += 1;
+            if process_count > 1 {
+                return true;
+            }
         }
     }
     false
