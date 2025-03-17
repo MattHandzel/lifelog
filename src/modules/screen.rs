@@ -19,6 +19,6 @@ pub async fn start_logger(config: &ScreenConfig) {
             .status()
             .expect("Failed to execute grim");
         
-        sleep(Duration::from_millis((config.interval * 1000.0) as u64)).await;
+        sleep(Duration::from_secs_f64(config.interval)).await;
     }
 }
