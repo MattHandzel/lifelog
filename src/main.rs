@@ -56,12 +56,12 @@ async fn main() {
         }));
     }
 
-    //if config.microphone.enabled {
-    //    let config = Arc::clone(&config);
-    //    tasks.push(tokio::spawn(async move {
-    //        microphone::start_logger(&config).await
-    //    }));
-    //}
+    if config.weather.enabled {
+        let config_clone = Arc::clone(&config);
+        tasks.push(tokio::spawn(async move {
+            weather::start_logger(&config_clone.weather).await
+        }));
+    }
 
     // Wait for all tasks to complete
     for task in tasks {
