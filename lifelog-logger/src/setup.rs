@@ -145,7 +145,7 @@ pub fn setup_wifi_db(output_dir: &Path) -> rusqlite::Result<Connection> {
         &db_path,
         "CREATE TABLE IF NOT EXISTS wifi_networks (
             id INTEGER PRIMARY KEY,
-            timestamp DATETIME NOT NULL,
+            timestamp REAL NOT NULL,
             ssid TEXT NOT NULL,
             bssid TEXT NOT NULL,
             signal_strength INTEGER NOT NULL,
