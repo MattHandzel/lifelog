@@ -1,7 +1,7 @@
-/target
-/data
-/result
-/dev-data
-/config.toml
-/tmp
-dev-config.toml
+lifelog-logger/target
+lifelog-logger/data
+lifelog-logger/result
+lifelog-logger/dev-data
+lifelog-logger/config.toml
+lifelog-logger/tmp
+lifelog-logger/dev-config.toml

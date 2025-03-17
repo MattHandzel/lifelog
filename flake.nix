@@ -13,13 +13,13 @@
       };
     in {
 
-      packages.${system}.default = pkgs.rustPlatform.buildRustPackage {
-        pname = "lifelog";
+      packages.${system}.lifelog-logger = pkgs.rustPlatform.buildRustPackage {
+        pname = "lifelog-logger";
         version = "0.1.0";
-        src = ./.;
+        src = ./lifelog-logger;
 
         cargoLock = {
-          lockFile = ./Cargo.lock;
+          lockFile = ./lifelog-logger/Cargo.lock;
         };
 
         buildInputs = with pkgs; [
