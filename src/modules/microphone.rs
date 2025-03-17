@@ -16,8 +16,8 @@ pub async fn start_logger(config: &MicrophoneConfig) {
     let stream_config = input_config.config();
 
     let spec = WavSpec {
-        channels: input_config.channels() as u16,
-        sample_rate: input_config.sample_rate().0 as u32,
+        channels: config.channels as u16,
+        sample_rate: config.sample_rate as u32,
         bits_per_sample: config.bits_per_sample as u16,
         sample_format: hound::SampleFormat::Int,
     };
