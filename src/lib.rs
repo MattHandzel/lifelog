@@ -7,6 +7,7 @@ pub mod modules {
     pub mod camera;
     pub mod hyprland;
     pub mod weather;
+    pub mod microphone;
 
     pub mod processes;
 }

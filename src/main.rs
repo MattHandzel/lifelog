@@ -1,4 +1,5 @@
 use tokio::join;
+use tokio::task;
 use lifelog::config::load_config;
 use lifelog::modules::*;
 use lifelog::setup;
@@ -11,6 +12,14 @@ async fn main() {
 
     println!("Starting Life Logger!");
     let config = Arc::new(load_config());
+
+    // Check to see if there is another instance of lifelog running
+    if setup::is_already_running(env!("CARGO_PKG_NAME")) {
+        println!("Another instance of lifelog is already running. Exiting...");
+
+        #[cfg(not(feature = "dev"))]
+        return;
+    }
 
     setup::initialize_project(&config).expect("Failed to initialize project");
 
@@ -56,15 +65,24 @@ async fn main() {
         }));
     }
 
-    if config.weather.enabled {
+    //if config.weather.enabled {
+    //    let config_clone = Arc::clone(&config);
+    //    tasks.push(tokio::spawn(async move {
+    //        weather::start_logger(&config_clone.weather).await
+    //    }));
+    //}
+
+    task::block_in_place(|| {
         let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            weather::start_logger(&config_clone.weather).await
-        }));
-    }
+        tokio::runtime::Handle::current().block_on(async {
+            microphone::start_logger(&config_clone.microphone).await;
+        });
+    });
 
     // Wait for all tasks to complete
     for task in tasks {
         let _ = task.await;
     }
 }
+
+
