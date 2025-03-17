@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use rusqlite::Connection;
+use sysinfo::{ProcessExt, System, SystemExt};
 use crate::config::Config;
 use std::fs;
 
@@ -25,11 +26,23 @@ pub fn initialize_project(config: &Config) -> std::io::Result<()> {
     ensure_directory(Path::new(&config.geolocation.output_dir))?;
     ensure_directory(Path::new(&config.wifi.output_dir))?;
     ensure_directory(Path::new(&config.camera.output_dir))?;
+    ensure_directory(Path::new(&config.microphone.output_dir))?;
 
 
     //let keyboard_db = setup_keyboard_db(output_dir)?;
     //let mouse_db = setup_mouse_db(output_dir)?;
     Ok(())
+
+}
+
+pub fn is_already_running(process_name: &str) -> bool {
+    let system = System::new_all();
+    for process in system.processes_by_name(process_name) {
+        if process.name() == process_name {
+            return true;
+        }
+    }
+    false
 }
 
 /// Initializes the SQLite database and creates tables if they don't exist.

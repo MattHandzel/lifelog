@@ -43,6 +43,8 @@ pub struct MicrophoneConfig {
     pub sample_rate: u32,
     pub chunk_duration_secs: u64,
     pub timestamp_format: String,
+    pub bits_per_sample: u32,
+    pub channels: u32,
 
 }
 

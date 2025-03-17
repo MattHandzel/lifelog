@@ -15,8 +15,10 @@ dirs = "4.0"
 rscam = "0.5.5"
 hyprland = "0.4.0-beta.1"
 users = "0.11"
+sysinfo = "0.24"
+hound = "3.5.1"
 
-# cpal = "0.15"
+cpal = "0.15.3"
 # opus = "0.2"
 
 [features]
