@@ -10,4 +10,6 @@ lifelog-logger/dev-config.toml
 /target
 /result
 /data
-
+dev-config.toml
+tmp
+config.toml

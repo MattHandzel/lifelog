@@ -187,7 +187,6 @@ fn main() {
         for data_source in data_sources {
             let table_names = data_source_kind_to_table_names(data_source.kind);
 
-            // Execute the query on each table in the data source
             for table_name in table_names {
                 println!("Executing query on table: {}", table_name);
                 if let Err(e) = execute_query_on_table(&data_source.conn, &table_name, query) {
