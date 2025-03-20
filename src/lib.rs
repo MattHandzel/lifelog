@@ -8,7 +8,6 @@ pub mod modules {
     pub mod hyprland;
     pub mod weather;
     pub mod microphone;
-
     pub mod processes;
 }
 

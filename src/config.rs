@@ -1,8 +1,7 @@
-use serde::Deserialize;
-use std::path::PathBuf;
-use std::fs;
 use crate::utils::replace_home_dir_in_path;
-
+use serde::Deserialize;
+use std::fs;
+use std::path::PathBuf;
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
@@ -45,7 +44,6 @@ pub struct MicrophoneConfig {
     pub timestamp_format: String,
     pub bits_per_sample: u32,
     pub channels: u32,
-
 }
 
 // Add new config structs
@@ -120,7 +118,7 @@ pub struct MouseConfig {
 pub struct ScreenConfig {
     pub enabled: bool,
     pub interval: f64,
-    pub output_dir: String,
+    pub output_dir: PathBuf,
     pub program: String,
     pub timestamp_format: String,
 }
@@ -129,7 +127,7 @@ pub struct ScreenConfig {
 pub struct HyprlandConfig {
     pub enabled: bool,
     pub interval: f64,
-    pub output_dir: String,
+    pub output_dir: PathBuf,
     pub log_clients: bool,
     pub log_activewindow: bool,
     pub log_workspace: bool,
@@ -148,23 +146,19 @@ pub struct CameraConfig {
     pub timestamp_format: String,
 }
 
-
-
 pub fn load_config() -> Config {
-
     let home_dir = dirs::home_dir().expect("Failed to get home directory");
-    #[cfg(feature="dev")]
+    #[cfg(feature = "dev")]
     let config_path: PathBuf = "dev-config.toml".into();
-    
-    #[cfg(not(feature="dev"))]
-    let config_path: PathBuf = [home_dir.to_str().unwrap(), ".config/lifelog/config.toml"].iter().collect();
+
+    #[cfg(not(feature = "dev"))]
+    let config_path: PathBuf = [home_dir.to_str().unwrap(), ".config/lifelog/config.toml"]
+        .iter()
+        .collect();
 
     println!("Using the config file at: {:?}", config_path);
     let config_str = fs::read_to_string(config_path).expect("Failed to read config.toml");
 
-    toml::from_str(replace_home_dir_in_path(config_str).as_str()).expect("Failed to parse config.toml")
+    toml::from_str(replace_home_dir_in_path(config_str).as_str())
+        .expect("Failed to parse config.toml")
 }
-
-
-
-

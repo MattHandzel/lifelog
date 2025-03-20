@@ -1,53 +1,47 @@
-use chrono::Local;
-use rusqlite::{Connection, params};
-use tokio::time::{sleep, Duration};
 use crate::config::HyprlandConfig;
-use crate::setup;
-use std::path::Path;
 use crate::prelude::*;
+use crate::setup;
+use chrono::Local;
+use rusqlite::{params, Connection};
+use std::path::Path;
+use tokio::time::{sleep, Duration};
 
 //use hyprland::data::*;
+use hyprland::data::{Client, Clients, CursorPosition, Devices, Monitors, Workspace, Workspaces};
 use hyprland::prelude::*;
-use hyprland::data::{
-    Monitors, Workspaces, Clients, Devices,
-    CursorPosition, Workspace, Client
-};
-
-
 
 pub async fn start_logger(config: &HyprlandConfig) {
     let conn = setup::setup_hyprland_db(Path::new(&config.output_dir))
         .expect("Failed to set up Hyprland database");
 
     loop {
-
         // Fetch and log enabled data types
         if config.log_active_monitor {
-            let timestamp = Local::now().timestamp() as f64 + 
-                Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
+            let timestamp = Local::now().timestamp() as f64
+                + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
             log_monitors(&conn, timestamp);
         }
-        
+
         if config.log_workspace {
-            let timestamp = Local::now().timestamp() as f64 + 
-                Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
+            let timestamp = Local::now().timestamp() as f64
+                + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
             log_workspaces(&conn, timestamp);
         }
 
         if config.log_clients {
-            let timestamp = Local::now().timestamp() as f64 + 
-                Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
+            let timestamp = Local::now().timestamp() as f64
+                + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
             log_clients(&conn, timestamp);
         }
 
         if config.log_devices {
-            let timestamp = Local::now().timestamp() as f64 + 
-                Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
+            let timestamp = Local::now().timestamp() as f64
+                + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
             log_devices(&conn, timestamp);
         }
 
-        let timestamp = Local::now().timestamp() as f64 + 
-            Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
+        let timestamp = Local::now().timestamp() as f64
+            + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
         log_cursor_position(&conn, timestamp);
 
         sleep(Duration::from_secs_f64(config.interval)).await;
@@ -80,7 +74,7 @@ fn log_monitors(conn: &Connection, timestamp: f64) {
 }
 
 fn log_workspaces(conn: &Connection, timestamp: f64) {
-    if let Ok(workspaces) = Workspaces::get(){
+    if let Ok(workspaces) = Workspaces::get() {
         for workspace in workspaces {
             conn.execute(
                 "INSERT INTO workspaces VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -95,24 +89,26 @@ fn log_workspaces(conn: &Connection, timestamp: f64) {
                     workspace.last_window.to_string(),
                     workspace.last_window_title
                 ],
-            ).unwrap();
+            )
+            .unwrap();
         }
     }
-    if let Ok(active_workspaces) = Workspace::get_active(){
+    if let Ok(active_workspaces) = Workspace::get_active() {
         conn.execute(
             "INSERT INTO activeworkspace VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
-            timestamp,
-            active_workspaces.id as i64,
-            active_workspaces.name,
-            active_workspaces.monitor,
-            active_workspaces.monitor_id as i64,
-            active_workspaces.windows,
-            active_workspaces.fullscreen,
-            active_workspaces.last_window.to_string(),
-            active_workspaces.last_window_title
+                timestamp,
+                active_workspaces.id as i64,
+                active_workspaces.name,
+                active_workspaces.monitor,
+                active_workspaces.monitor_id as i64,
+                active_workspaces.windows,
+                active_workspaces.fullscreen,
+                active_workspaces.last_window.to_string(),
+                active_workspaces.last_window_title
             ],
-        ).unwrap();
+        )
+        .unwrap();
     }
 }
 
@@ -143,8 +139,6 @@ fn log_clients(conn: &Connection, timestamp: f64) {
             ).unwrap();
         }
     }
-
-
 }
 
 fn log_devices(conn: &Connection, timestamp: f64) {
@@ -154,7 +148,8 @@ fn log_devices(conn: &Connection, timestamp: f64) {
             conn.execute(
                 "INSERT INTO devices VALUES (?1, 'mouse', ?2, ?3)",
                 params![timestamp, mouse.name, mouse.address.to_string()],
-            ).unwrap();
+            )
+            .unwrap();
         }
 
         // Log keyboards
@@ -162,14 +157,16 @@ fn log_devices(conn: &Connection, timestamp: f64) {
             conn.execute(
                 "INSERT INTO devices VALUES (?1, 'keyboard', ?2, ?3)",
                 params![timestamp, keyboard.name, keyboard.address.to_string()],
-            ).unwrap();
+            )
+            .unwrap();
         }
-    //pub tablets: Vec<Tablet>,
+        //pub tablets: Vec<Tablet>,
         for tablet in devices.tablets {
             conn.execute(
-            "INSERT INTO devices VALUES (?1, 'tablet', ?2, ?3)",
-            params![timestamp, tablet.name, tablet.address.to_string()],
-            ).unwrap();
+                "INSERT INTO devices VALUES (?1, 'tablet', ?2, ?3)",
+                params![timestamp, tablet.name, tablet.address.to_string()],
+            )
+            .unwrap();
         }
     }
 }
@@ -179,6 +176,7 @@ fn log_cursor_position(conn: &Connection, timestamp: f64) {
         conn.execute(
             "INSERT INTO cursor_positions VALUES (?1, ?2, ?3)",
             params![timestamp, pos.x, pos.y],
-        ).unwrap();
+        )
+        .unwrap();
     }
 }

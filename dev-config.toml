@@ -1,0 +1,98 @@
+lifelog_dir = "~/Projects/lifelog/dev-data"
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+[screen]
+enabled = true
+interval = 5
+program = "grim"
+output_dir = "~/Projects/lifelog/dev-data/screen"
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+[keyboard]
+enabled = false
+output_dir = "~/Projects/lifelog/dev-data/keyboard"
+interval=0.01
+
+[mouse]
+enabled = false
+output_dir = "~/Projects/lifelog/dev-data/mouse"
+interval=0.01
+
+[microphone]
+enabled = true
+sample_rate = 44100
+bits_per_sample = 16
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+chunk_duration_secs = 100 
+output_dir = "~/Projects/lifelog/dev-data/microphone"
+channels = 1
+
+[system_performance]
+enabled = true
+interval = 5.0
+output_dir = "~/Projects/lifelog/dev-data/system"
+log_cpu = true
+log_memory = true
+log_disk = true
+
+[ambient]
+enabled = false
+interval = 10.0
+output_dir = "~/Projects/lifelog/dev-data/ambient"
+temperature_sensor_path = "/sys/class/thermal/thermal_zone0/temp"
+humidity_sensor_path = ""
+
+[weather]
+enabled = false
+interval = 600  # 10 minutes
+output_dir = "~/Projects/lifelog/dev-data/weather"
+api_key = "18ac135d894543e09a722525251703"
+latitude = 0.0
+longitude = 0.0
+
+[audio]
+enabled = true
+output_dir = "~/Projects/lifelog/dev-data/audio"
+sample_rate = 44100
+chunk_duration_secs = 60
+
+[geolocation]
+enabled = false
+interval = 60.0
+output_dir = "~/Projects/lifelog/dev-data/geo"
+use_ip_fallback = true
+
+[wifi]
+enabled = false
+interval = 300.0 # 5 minutes
+output_dir = "~/Projects/lifelog/dev-data/wifi"
+scan_command = "nmcli dev wifi list"
+
+[camera]
+enabled = false
+interval = 60.0  # Capture every 60 seconds
+output_dir = "~/Projects/lifelog/dev-data/camera"
+device = "/dev/video0"
+resolution = [1280, 720]
+fps = 30
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+[network]
+enabled = true
+interval = 300 # 5 minutes
+output_dir = "~/Projects/lifelog/dev-data/network"
+
+[processes]
+enabled = true
+interval = 60 # every minute
+output_dir = "~/Projects/lifelog/dev-data/processes"
+
+[hyprland]
+enabled = true
+interval = 1
+output_dir = "~/Projects/lifelog/dev-data/hyprland"
+log_clients = true
+log_activewindow = true
+log_workspace = true
+log_active_monitor = true
+log_devices = true

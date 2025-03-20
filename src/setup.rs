@@ -1,10 +1,10 @@
-use std::path::{Path, PathBuf};
-use rusqlite::Connection;
-use sysinfo::{ProcessExt, System, SystemExt};
 use crate::config::Config;
+use rusqlite::Connection;
 use std::fs;
+use std::path::{Path, PathBuf};
+use sysinfo::{ProcessExt, System, SystemExt};
 
-/// Ensures the directory exists, creating it if necessary.
+// Ensures the directory exists, creating it if necessary.
 pub fn ensure_directory(path: &Path) -> std::io::Result<()> {
     if !path.exists() {
         fs::create_dir_all(path)?;
@@ -12,10 +12,9 @@ pub fn ensure_directory(path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-
 pub fn initialize_project(config: &Config) -> std::io::Result<()> {
     // TODO: Check to see if all of these things exist or not
-    
+
     ensure_directory(Path::new(&config.keyboard.output_dir))?;
     ensure_directory(Path::new(&config.screen.output_dir))?;
     ensure_directory(Path::new(&config.mouse.output_dir))?;
@@ -28,11 +27,9 @@ pub fn initialize_project(config: &Config) -> std::io::Result<()> {
     ensure_directory(Path::new(&config.camera.output_dir))?;
     ensure_directory(Path::new(&config.microphone.output_dir))?;
 
-
     //let keyboard_db = setup_keyboard_db(output_dir)?;
     //let mouse_db = setup_mouse_db(output_dir)?;
     Ok(())
-
 }
 
 pub fn is_already_running(process_name: &str) -> bool {
@@ -88,7 +85,6 @@ pub fn setup_mouse_db(output_dir: &Path) -> rusqlite::Result<Connection> {
     )
 }
 
-
 pub fn setup_system_performance_db(output_dir: &Path) -> rusqlite::Result<Connection> {
     ensure_directory(output_dir).expect("Failed to create system performance output directory");
     let db_path = output_dir.join("system_metrics.db");
@@ -134,6 +130,18 @@ pub fn setup_geo_db(output_dir: &Path) -> rusqlite::Result<Connection> {
             longitude REAL NOT NULL,
             accuracy REAL,
             source TEXT NOT NULL
+        )",
+    )
+}
+
+pub fn setup_microphone_db(output_dir: &Path) -> rusqlite::Result<Connection> {
+    panic!("Not implemented");
+    ensure_directory(output_dir).expect("Failed to create microphone output directory");
+    let db_path = output_dir.join("microphone.db");
+    initialize_database(
+        &db_path,
+        "CREATE TABLE IF NOT EXISTS microphone (
+            timestamp DATETIME NOT NULL,
         )",
     )
 }
@@ -241,11 +249,25 @@ pub fn setup_hyprland_db(output_dir: &Path) -> rusqlite::Result<Connection> {
             y INTEGER NOT NULL
         );
 
-        "#
+        "#,
     )?;
 
     Ok(conn)
 }
+pub fn setup_screen_db(output_dir: &Path) -> rusqlite::Result<Connection> {
+    ensure_directory(output_dir).expect("Failed to create screen output directory");
+    let db_path = output_dir.join("screen.db");
+    initialize_database(
+        &db_path,
+        r#"
+        CREATE TABLE IF NOT EXISTS screen (
+            timestamp REAL NOT NULL,
+            PRIMARY KEY (timestamp)
+        );
+        "#,
+    )
+}
+
 pub fn setup_process_db(output_dir: &Path) -> rusqlite::Result<Connection> {
     ensure_directory(output_dir).expect("Failed to create process output directory");
     let db_path = output_dir.join("processes.db");
@@ -267,6 +289,6 @@ pub fn setup_process_db(output_dir: &Path) -> rusqlite::Result<Connection> {
             start_time REAL,
             PRIMARY KEY (timestamp, pid)
             );
-        "#
+        "#,
     )
 }

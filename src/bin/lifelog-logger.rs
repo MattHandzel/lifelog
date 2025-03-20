@@ -1,9 +1,9 @@
+use lifelog::config::load_config;
+use lifelog::modules::*;
+use lifelog::setup;
+use std::sync::Arc;
 use tokio::join;
 use tokio::task;
-use lifelog_logger::config::load_config;
-use lifelog_logger::modules::*;
-use lifelog_logger::setup;
-use std::sync::Arc;
 
 #[tokio::main]
 async fn main() {
@@ -84,5 +84,3 @@ async fn main() {
         let _ = task.await;
     }
 }
-
-
