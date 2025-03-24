@@ -292,3 +292,19 @@ pub fn setup_process_db(output_dir: &Path) -> rusqlite::Result<Connection> {
         "#,
     )
 }
+
+pub fn setup_embeddings_db(output_dir: &Path) -> rusqlite::Result<Connection> {
+    ensure_directory(output_dir).expect("Failed to create embeddings output directory");
+    let db_path = output_dir.join("embeddings.db");
+    initialize_database(
+        &db_path,
+        r#"
+        CREATE TABLE IF NOT EXISTS image_embeddings (
+            timestamp REAL NOT NULL,
+            embedding FLOAT8[] NOT NULL,
+            resource_uri TEXT NOT NULL,
+            PRIMARY KEY (timestamp)
+        );
+        "#,
+    )
+}

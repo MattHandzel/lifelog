@@ -57,32 +57,6 @@ fn data_source_kind_to_table_names(kind: DataSourceKind) -> Vec<String> {
     }
 }
 
-//fn identify_data_source_kind(directory: PathBuf) -> DataSourceKind {
-//    for entry in std::fs::read_dir(directory.clone()).expect("Directory not found") {
-//        let entry = entry.expect("Failed to read entry");
-//        let path = entry.path();
-//        if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("db") {
-//            return DataSourceKind::Database {
-//                database_path: path.to_str().unwrap().to_string(),
-//            };
-//        }
-//    }
-//    DataSourceKind::Blob {
-//        directory: directory.to_str().unwrap().to_string(),
-//    }
-//}
-
-//fn open_data_source(data_source: DataSource) {
-//    match data_source.kind {
-//        DataSourceKind::Blob { directory } => {
-//            println!("Opening blob data source: {}", directory);
-//        }
-//        DataSourceKind::Database { database_path } => {
-//            println!("Opening database data source: {}", database_path);
-//        }
-//    }
-//}
-
 fn execute_query_on_table(conn: &Connection, table_name: &str, query: &str) -> Result<()> {
     // Prepare the full SQL statement by appending the user's query to a SELECT statement
     let sql = format!("SELECT * FROM {} WHERE {}", table_name, query);
@@ -106,17 +80,12 @@ fn execute_query_on_table(conn: &Connection, table_name: &str, query: &str) -> R
 fn main() {
     let config = load_config();
 
-    // create a hashmap between name and the database getter
-    // Ex: "hyprland" : setup_hyprland_db
-
     let matches = Command::new("lifelog-server")
         .version("0.1.0")
-        .author("Matthew Handzel <handzelmatthew@gmail.com>")
+        .author("Matt Handzel <handzelmatthew@gmail.com>")
         .about("Lifelog Server")
         .arg(Arg::new("query").short('q').long("query").takes_value(true))
         .get_matches();
-
-    // Get the value of the "config" argument
 
     let data_sources: Vec<_> = [
         ConfigKind::Hyprland(config.hyprland),
@@ -124,11 +93,9 @@ fn main() {
         ConfigKind::Processes(config.processes),
     ]
     .iter()
-    //.filter_map(|(config)| match config {
-    //    ConfigKind::Hyprland(.., enabled) => if enabled { Some(ConfigKind::Hyprland(config) } else {None()}),
-    //}) // this is bs 😭
     .map(|_config| -> DataSource {
         match _config {
+            // Bruh why is this so verbose 😭
             ConfigKind::Hyprland(HyprlandConfig {
                 enabled,
                 interval,
@@ -178,6 +145,8 @@ fn main() {
         }
     })
     .collect();
+
+    setup_embeddings_db(&config.server).expect("Failed to setup embeddings db");
 
     println!("Data sources opened");
 
