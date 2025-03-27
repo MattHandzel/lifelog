@@ -4,7 +4,7 @@ The vision for the project would allow the user to record their own data from ma
 
 # LifeLog-Logger
 
-This is a logger that you can use to help log your life! It captures data of many different modalities.
+This is a logger that you can use to help log your life! It captures data from many different modalities.
 
 #### Data Modalities
 
@@ -15,7 +15,10 @@ This is a logger that you can use to help log your life! It captures data of man
 - [ ] Browser history, browser analytics
 - [ ] Application-specific information (like the current song playing on Spotify, current file being used in neovim, etc.)
 - [ ] Web-app specific information (instagram messages, youtube watch history (and analytics, videos liked, etc.))
-- [ ] Who you are interacting with (like who you are messaging on discord, who you are interacting with in real life)
+  - [ ] [Instagram](https://www.the-sun.com/lifestyle/tech/272081/how-to-download-all-your-instagram-photos-stories-and-videos-quickly/)
+  - [ ] [Reddit](https://www.reddit.com/r/DataHoarder/comments/800g94/any_way_to_download_reddit_profile/)
+- [ ] Who you are interacting with (like who you are messaging on discord, who you are interacting with in real life through audio logs)
+- [ ] Activity watch and other loggering software
 - [ ] Smartwatch data (like heart rate, steps, etc.)
 - [ ] Terminal commands
 - [ ] Clipboard history
@@ -24,6 +27,7 @@ This is a logger that you can use to help log your life! It captures data of man
 #### Features
 
 - [ ] Intelligently capture data. I.e. instead of based on time, capture data when events are happening (the screen is changing, the user pressed a button to change windows, etc).
+- [ ] Synchronize data to server
 
 ### Benchmarking
 
@@ -35,6 +39,7 @@ Here is an estimate of how much data each modality will generate:
 ### TODO
 
 Should everything be a database? Should I have one database for each modality? Or should I have one database for all modalities?
+Create a module that can access other software (such as activity watch)
 
 ### IDEA
 
@@ -49,10 +54,16 @@ The lifelog server created `a unified, digital record` from the logger that proc
 It should be able to work with software services and allow the user to select what data for other services to use. Other companies cannot take any data from your lifelog.
 
 Features:
-Memex (Memory extender): Be able to recall what you were doing at a given time, what you have read, query your own database
-Retrieve important information you don't know you need
-Stores copies of data, when data is manipulated store original
-Have a version of this software for vulnerable populations, one that has metadata and not storing the real data?
+
+- Memex (Memory extender): Be able to recall what you were doing at a given time, what you have read, query your own database
+- Retrieve important information you don't know you need
+- Stores copies of data, when data is manipulated store original
+- Have a version of this software for vulnerable populations, one that has metadata and not storing the real data?
+- Send commands and signals to all loggers
+
+### TODO
+
+- Ensure data integrity from the logger or over time?
 
 # Lifelog Interface
 
@@ -60,7 +71,9 @@ Features:
 
 - Manipulate data, fix erronous data
 - Remove information
--
+- See last time a data source has been added to, it's size, etc
+- Add a button to request social media data, or a button to request that a data source is "synced" between all devices
+- Be able to see your data in human understandable format, scrub through audio, video, be able to search/fuzzy find through text. Create components for each data modality. Searching through one data modality also searches through the other.
 
 ### References
 
