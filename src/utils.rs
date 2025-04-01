@@ -1,5 +1,5 @@
+use chrono::{DateTime, FixedOffset, NaiveDateTime, TimeZone};
 use std::path::{Path, PathBuf};
-use chrono::{DateTime, FixedOffset, NaiveDateTime,TimeZone}
 
 pub fn replace_home_dir_in_path(path: String) -> String {
     let home_dir = dirs::home_dir().expect("Failed to get home directory");

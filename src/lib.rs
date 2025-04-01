@@ -11,6 +11,6 @@ pub mod modules {
     pub mod weather;
 }
 
-pub mod embed;
+//pub mod embed;
 pub mod prelude;
 pub mod utils;
