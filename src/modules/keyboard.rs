@@ -1,18 +1,19 @@
-use evdev::{Device, EventType, InputEvent};
-use rusqlite::Connection;
-use rusqlite::params;
-use chrono::Local;
-use tokio::time::{sleep, Duration};
 use crate::config::KeyboardConfig;
 use crate::setup;
+use chrono::Local;
+use evdev::{Device, EventType, InputEvent};
+use rusqlite::params;
+use rusqlite::Connection;
+use tokio::time::{sleep, Duration};
 
 pub async fn start_logger(config: &KeyboardConfig) {
     // Open the keyboard device
-    let mut device = Device::open("/dev/input/event1").expect("Failed to open keyboard device (do you have access to dialout?)");
+    let mut device = Device::open("/dev/input/event1")
+        .expect("Failed to open keyboard device (do you have access to dialout?)");
 
     // Set up the database
-    let conn = setup::setup_keyboard_db(&config.output_dir)
-        .expect("Failed to set up keyboard database");
+    let conn =
+        setup::setup_keyboard_db(&config.output_dir).expect("Failed to set up keyboard database");
 
     // Main logging loop
     loop {
@@ -20,15 +21,21 @@ pub async fn start_logger(config: &KeyboardConfig) {
             println!("Keyboard {:?}", event);
             if event.event_type() == EventType::KEY {
                 let now = Local::now();
-                let timestamp = now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
+                let timestamp =
+                    now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
                 let key_code = event.code();
-                let action = if event.value() == 1 { "press" } else { "release" };
+                let action = if event.value() == 1 {
+                    "press"
+                } else {
+                    "release"
+                };
 
                 // Insert into database
                 conn.execute(
                     "INSERT INTO key_events (timestamp, key_code, action) VALUES (?1, ?2, ?3)",
                     params![timestamp, key_code, action],
-                ).expect("Failed to insert key event");
+                )
+                .expect("Failed to insert key event");
             }
         }
 

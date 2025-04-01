@@ -32,6 +32,7 @@
           sqlite
           linuxPackages.v4l2loopback
           v4l-utils
+          xorg.libXtst
         ];
 
         cargoBuildFlags = ["--bin" "lifelog-server"];
@@ -64,6 +65,7 @@
           sqlite
           linuxPackages.v4l2loopback
           v4l-utils
+          xorg.libXtst
         ];
 
         cargoBuildFlags = ["--bin" "lifelog-logger"];
@@ -97,6 +99,7 @@
         alsa-lib
         grim
         slurp
+        xorg.libXtst
         sqlite
       ];
     };
