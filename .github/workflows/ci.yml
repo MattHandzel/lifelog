@@ -1,4 +1,4 @@
-name: Rust CI/CD with Nix Flakes
+name: 
 
 on:
   push:
@@ -26,18 +26,18 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
         # Lifelog logger
-      - name: Build Lifelog Server
-        run: cargo build --release
-
-      - name: Run Rust application
-        run: cargo run --release
+      # - name: Build Lifelog Server
+      #   run: cargo build --release
+      #
+      # - name: Run Rust application
+      #   run: cargo run --release
 
       # - name: Run Rust tests
       #   run: cargo test --release --verbose
       #
-      # - name: Nix build
-      #   run: nix build .#lifelog-server
-      #   run: nix build .#lifelog-logger
+      - name: Nix build
+        run: nix build .#lifelog-server
+        run: nix build .#lifelog-logger
       #
       # - name: Check Flake output
       #   run: nix run . 
