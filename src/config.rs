@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 // TODO: Implement default for all configs
 // TODO: Make it so that there is a default directory
+// TODO: How do other projects do configs
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
