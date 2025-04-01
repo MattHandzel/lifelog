@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* optional animation support */
+@layer base {
+  :root {
+    --font-sans: 'Inter', sans-serif;
+    --font-mono: 'Fira Code', monospace;
+  }
+}
+
+@layer utilities {
+  /* Animation utilities */
+  .animate-in {
+    animation-duration: 300ms;
+    animation-timing-function: ease-out;
+    animation-fill-mode: both;
+  }
+  
+  .fade-in-50 {
+    animation-name: fadeIn50;
+  }
+  
+  .slide-in-from-left-5 {
+    animation-name: slideInFromLeft5;
+  }
+  
+  .slide-in-from-bottom-5 {
+    animation-name: slideInFromBottom5;
+  }
+  
+  .zoom-in-95 {
+    animation-name: zoomIn95;
+  }
+  
+  @keyframes fadeIn50 {
+    from { opacity: 0.5; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slideInFromLeft5 {
+    from { transform: translateX(-5px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  
+  @keyframes slideInFromBottom5 {
+    from { transform: translateY(5px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  
+  @keyframes zoomIn95 {
+    from { transform: scale(0.95); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+  
+  /* Glass morphism */
+  .glass {
+    backdrop-filter: blur(16px) saturate(180%);
+    background-color: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(209, 213, 219, 0.3);
+  }
+  
+  .dark .glass {
+    background-color: rgba(17, 24, 39, 0.7);
+    border: 1px solid rgba(55, 65, 81, 0.3);
+  }
+  
+  /* Gradient text */
+  .text-gradient {
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    @apply bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-blue-400 dark:to-indigo-500;
+  }
+}
+
+@layer components {
+  /* Card hover effects */
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-md hover:-translate-y-1;
+  }
+  
+  /* Button styles */
+  .btn-primary {
+    @apply px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors;
+  }
+  
+  .btn-secondary {
+    @apply px-4 py-2 bg-gray-200 text-gray-900 rounded-md hover:bg-gray-300 transition-colors;
+  }
+  
+  /* Input styles */
+  .input-primary {
+    @apply px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-300 focus:border-transparent transition-all dark:bg-gray-800 dark:border-gray-700 dark:focus:ring-blue-700;
+  }
+}

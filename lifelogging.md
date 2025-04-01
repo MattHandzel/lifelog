@@ -1,0 +1,1 @@
+/home/matth/notes/projects/life-logging/life-logging.md

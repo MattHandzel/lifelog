@@ -1,0 +1,15 @@
+lifelog-logger/target
+lifelog-logger/data
+lifelog-logger/result
+lifelog-logger/dev-data
+/dev-data
+/data
+lifelog-logger/config.toml
+lifelog-logger/tmp
+lifelog-logger/dev-config.toml
+/target
+/result
+/data
+dev-config.toml
+tmp
+config.toml
