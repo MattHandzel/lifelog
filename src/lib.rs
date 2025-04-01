@@ -6,6 +6,8 @@ pub mod modules {
     pub mod keyboard;
     pub mod microphone;
     pub mod mouse;
+
+    pub mod logger;
     pub mod processes;
     pub mod screen;
     pub mod weather;
