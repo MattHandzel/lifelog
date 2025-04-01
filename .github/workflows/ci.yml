@@ -29,8 +29,8 @@ jobs:
       - name: Cache Cargo Dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Build Lifelog Server
-        run: cargo build --release
+      # - name: Build Lifelog Server
+      #   run: cargo build --release
 
       # - name: Run Rust application
       #   run: cargo run --release
