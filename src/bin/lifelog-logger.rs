@@ -3,10 +3,13 @@ use lifelog::modules::*;
 use lifelog::setup;
 use std::sync::Arc;
 use tokio::join;
+use tokio::sync::RwLock;
 use tokio::task;
 
 #[tokio::main]
 async fn main() {
+    // TODO: How to make it so that when the computer suspends all loggers are restarted so the
+    // time is aligned
     #[cfg(feature = "dev")]
     println!("DEVELOPMENT MODE");
 
@@ -65,12 +68,19 @@ async fn main() {
         }));
     }
 
-    task::block_in_place(|| {
+    if config.input_logger.enabled {
         let config_clone = Arc::clone(&config);
-        tokio::runtime::Handle::current().block_on(async {
-            microphone::start_logger(&config_clone.microphone).await;
-        });
-    });
+        tasks.push(tokio::spawn(async move {
+            input_logger::start_logger(&config.input_logger).await;
+        }));
+    }
+
+    //if config.microphone.enabled {
+    //    let config_clone = Arc::clone(&config);
+    //    tasks.push(tokio::spawn(async move {
+    //        microphone::start_logger(&config_clone.microphone).await;
+    //    }));
+    //}
 
     // Wait for all tasks to complete
     for task in tasks {
