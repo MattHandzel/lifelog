@@ -1,5 +1,3 @@
-// Capture the screen using the program of choice
-
 use crate::config::ScreenConfig;
 use crate::setup;
 use chrono;
