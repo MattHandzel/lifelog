@@ -6,9 +6,12 @@ pub fn replace_home_dir_in_path(path: String) -> String {
     path.replace("~/", &format!("{}/", home_dir.to_str().unwrap()))
 }
 
-pub fn timestamp_to_epoch(timestamp: &str) -> i64 {
+pub fn timestamp_to_epoch(timestamp: &str) -> Result<i64, &'static str> {
+    if !timestamp.ends_with(".png") {
+        return Err("Timestamp does not end with .png");
+    }
     let timestamp = &timestamp[..timestamp.len() - 4]; // Remove the ".png" extension
     let format = "%Y-%m-%d_%H-%M-%S%.3f%:z";
-    let datetime = DateTime::parse_from_str(timestamp, format).expect("Failed to parse timestamp");
-    datetime.timestamp()
+    let datetime = DateTime::parse_from_str(timestamp, format).map_err(|_| "Failed to parse timestamp")?;
+    Ok(datetime.timestamp())
 }
