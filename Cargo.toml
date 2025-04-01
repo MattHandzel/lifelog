@@ -29,6 +29,10 @@ serde_json = "1.0"
 reqwest = { version = "0.11", features = ["json"] }
 rocket = "0.5.1"
 clap = "3.2.25"
+crossbeam-channel = "0.5"
+rdev = "0.5"
+anyhow = "1.0"
+log = "0.4"
 
 
 # embedings

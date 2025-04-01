@@ -8,6 +8,12 @@ use std::process::Command;
 use tokio::time::{sleep, Duration};
 use users::{Users, UsersCache};
 
+//impl DataLogger for ProcessLogger {
+//
+//
+//}
+
+// TODO: Make this logger work with windows (see how activity watch does this)
 pub async fn start_logger(config: &ProcessesConfig) {
     let conn = setup::setup_process_db(Path::new(&config.output_dir))
         .expect("Failed to set up process database");
