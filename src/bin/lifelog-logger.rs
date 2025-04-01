@@ -65,13 +65,6 @@ async fn main() {
         }));
     }
 
-    //if config.weather.enabled {
-    //    let config_clone = Arc::clone(&config);
-    //    tasks.push(tokio::spawn(async move {
-    //        weather::start_logger(&config_clone.weather).await
-    //    }));
-    //}
-
     task::block_in_place(|| {
         let config_clone = Arc::clone(&config);
         tokio::runtime::Handle::current().block_on(async {

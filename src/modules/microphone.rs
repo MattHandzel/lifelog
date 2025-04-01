@@ -1,18 +1,22 @@
+use crate::config::MicrophoneConfig;
+use chrono;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use hound::{WavWriter, WavSpec};
-use std::sync::{Arc, Mutex};
+use hound::{WavSpec, WavWriter};
 use std::fs::File;
 use std::io::BufWriter;
+use std::sync::{Arc, Mutex};
 use tokio::time::{sleep, Duration};
-use chrono;
-use crate::config::MicrophoneConfig;
 
 pub async fn start_logger(config: &MicrophoneConfig) {
     println!("Config is {:?}", config);
 
     let host = cpal::default_host();
-    let device = host.default_input_device().expect("Failed to get default input device");
-    let input_config = device.default_input_config().expect("Failed to get default input format");
+    let device = host
+        .default_input_device()
+        .expect("Failed to get default input device");
+    let input_config = device
+        .default_input_config()
+        .expect("Failed to get default input format");
     let stream_config = input_config.config();
 
     let spec = WavSpec {
@@ -31,23 +35,25 @@ pub async fn start_logger(config: &MicrophoneConfig) {
         let writer = WavWriter::create(&output_path, spec);
         let writer = Arc::new(Mutex::new(writer));
 
-        let stream = device.build_input_stream(
-            &stream_config,
-            {
-                let writer = Arc::clone(&writer);
-                move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                    let mut writer = writer.lock().unwrap();
-                    for &sample in data {
-                        let sample = (sample * i16::MAX as f32) as i16;
-                        writer.as_mut().unwrap().write_sample(sample).unwrap();
+        let stream = device
+            .build_input_stream(
+                &stream_config,
+                {
+                    let writer = Arc::clone(&writer);
+                    move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                        let mut writer = writer.lock().unwrap();
+                        for &sample in data {
+                            let sample = (sample * i16::MAX as f32) as i16;
+                            writer.as_mut().unwrap().write_sample(sample).unwrap();
+                        }
                     }
-                }
-            },
-            move |err| {
-                eprintln!("An error occurred on the input audio stream: {}", err);
-            },
-            None, // Added the missing Optional timeout parameter
-        ).unwrap();
+                },
+                move |err| {
+                    eprintln!("An error occurred on the input audio stream: {}", err);
+                },
+                None, // Added the missing Optional timeout parameter
+            )
+            .unwrap();
 
         stream.play().unwrap();
 
