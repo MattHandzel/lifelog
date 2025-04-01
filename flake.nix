@@ -34,6 +34,7 @@
           v4l-utils
           xorg.libX11
           xorg.libXtst
+          xorg.libXi
         ];
 
         cargoBuildFlags = ["--bin" "lifelog-server"];
@@ -68,6 +69,7 @@
           v4l-utils
           xorg.libX11
           xorg.libXtst
+          xorg.libXi
         ];
 
         cargoBuildFlags = ["--bin" "lifelog-logger"];
@@ -103,6 +105,7 @@
         xorg.libX11
         slurp
         xorg.libXtst
+        xorg.libXi
         sqlite
       ];
     };
