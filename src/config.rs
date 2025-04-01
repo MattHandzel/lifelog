@@ -20,6 +20,14 @@ pub struct Config {
     pub geolocation: GeoConfig,
     pub wifi: WifiConfig,
     pub hyprland: HyprlandConfig,
+    pub server: ServerConfig,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ServerConfig {
+    pub ip: String,
+    pub port: u16,
+    pub folder_dir: PathBuf,
 }
 
 #[derive(Debug, Deserialize)]
