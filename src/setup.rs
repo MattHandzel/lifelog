@@ -26,6 +26,7 @@ pub fn initialize_project(config: &Config) -> std::io::Result<()> {
     ensure_directory(Path::new(&config.wifi.output_dir))?;
     ensure_directory(Path::new(&config.camera.output_dir))?;
     ensure_directory(Path::new(&config.microphone.output_dir))?;
+    ensure_directory(Path::new(&config.input_logger.output_dir))?;
 
     //let keyboard_db = setup_keyboard_db(output_dir)?;
     //let mouse_db = setup_mouse_db(output_dir)?;
@@ -307,4 +308,47 @@ pub fn setup_embeddings_db(output_dir: &Path) -> rusqlite::Result<Connection> {
         );
         "#,
     )
+}
+
+pub fn setup_input_logger_db(output_dir: &Path) -> rusqlite::Result<Connection> {
+    let db_path = output_dir.join("input.db");
+    let conn = Connection::open(db_path)?;
+
+    conn.execute_batch(
+        r#"
+        CREATE TABLE IF NOT EXISTS key_events (
+            timestamp REAL PRIMARY KEY,
+            event_type TEXT CHECK(event_type IN ('press', 'release')),
+            key TEXT NOT NULL
+        );
+        
+        CREATE TABLE IF NOT EXISTS mouse_buttons (
+            timestamp REAL PRIMARY KEY,
+            event_type TEXT CHECK(event_type IN ('press', 'release')),
+            button TEXT NOT NULL
+        );
+        
+        CREATE TABLE IF NOT EXISTS mouse_movements (
+            timestamp REAL PRIMARY KEY,
+            x REAL NOT NULL,
+            y REAL NOT NULL
+        );
+        
+        CREATE TABLE IF NOT EXISTS mouse_wheel (
+            timestamp REAL PRIMARY KEY,
+            delta_x REAL NOT NULL,
+            delta_y REAL NOT NULL
+        );
+        
+        CREATE TABLE IF NOT EXISTS devices (
+            timestamp REAL,
+            event_type TEXT CHECK(event_type IN ('connected', 'disconnected')),
+            device_type TEXT NOT NULL,
+            device_id TEXT NOT NULL,
+            PRIMARY KEY (timestamp, device_id)
+        );
+        "#,
+    )?;
+
+    Ok(conn)
 }

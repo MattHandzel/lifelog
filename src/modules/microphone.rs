@@ -7,6 +7,9 @@ use std::io::BufWriter;
 use std::sync::{Arc, Mutex};
 use tokio::time::{sleep, Duration};
 
+// TODO: Make it so that this logger stops recording on sleep/suspend and then creates a new file
+// TODO: Does it make sense to just cut off the audio after 5 minutes, what if there was a better
+// way to "chunk" the audio
 pub async fn start_logger(config: &MicrophoneConfig) {
     println!("Config is {:?}", config);
 
