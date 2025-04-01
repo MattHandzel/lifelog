@@ -146,7 +146,7 @@ fn main() {
     })
     .collect();
 
-    setup_embeddings_db(&config.server).expect("Failed to setup embeddings db");
+    //setup_embeddings_db(&config.server).expect("Failed to setup embeddings db");
 
     println!("Data sources opened");
 
