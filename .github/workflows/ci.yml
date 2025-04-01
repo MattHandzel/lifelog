@@ -1,0 +1,67 @@
+name: Rust CI/CD with Nix Flakes
+
+on:
+  push:
+    branches:
+      - main  # Runs only when pushing to 'main'
+  pull_request:
+    branches:
+      - main  # Also run checks for pull requests to 'main'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v22
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+
+        # Lifelog logger
+      - name: Build Lifelog Server
+        run: cargo build --release
+
+      - name: Run Rust application
+        run: cargo run --release
+
+      - name: Run Rust tests
+        run: cargo test --release --verbose
+
+      - name: Nix build
+        run: nix build .#lifelog-server
+        run: nix build .#lifelog-logger
+
+      - name: Check Flake output
+        run: nix run . 
+
+      # - name: Lint code (optional)
+      #   run: cargo clippy -- -D warnings
+      #
+
+# name: Cross-Platform CI
+# on: [push]
+#
+# jobs:
+#   build-and-test:
+#     strategy:
+#       matrix:
+#         os: [ubuntu-latest, windows-latest, macos-latest]
+#         node-version: [18.x, 20.x]
+#     runs-on: ${{ matrix.os }}
+#
+#     steps:
+#       - uses: actions/checkout@v4
+#       - name: Setup Node.js
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: ${{ matrix.node-version }}
+#       - run: npm ci
+#       - run: npm test
