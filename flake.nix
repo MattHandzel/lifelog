@@ -32,6 +32,7 @@
           sqlite
           linuxPackages.v4l2loopback
           v4l-utils
+          xorg.libX11
           xorg.libXtst
         ];
 
@@ -65,6 +66,7 @@
           sqlite
           linuxPackages.v4l2loopback
           v4l-utils
+          xorg.libX11
           xorg.libXtst
         ];
 
@@ -98,6 +100,7 @@
         pkg-config
         alsa-lib
         grim
+        xorg.libX11
         slurp
         xorg.libXtst
         sqlite
