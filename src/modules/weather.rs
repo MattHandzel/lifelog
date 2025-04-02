@@ -1,15 +1,16 @@
-use reqwest::Client;
-use serde_json::Value;
-use tokio::time::{sleep, Duration};
 use crate::config::WeatherConfig;
+use chrono::Utc;
+use reqwest::Client;
 use rusqlite::params;
 use rusqlite::Connection;
-use chrono::Utc;
+use serde_json::Value;
+use tokio::time::{sleep, Duration};
 
+// TODO: How to get location based on IP that is resistant to vpn's
 pub async fn start_logger(
     config: &WeatherConfig,
     conn: &Connection,
-) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<(), Box<dyn std::error::Error>> {
     let client = Client::new();
     let url = format!(
         "https://api.openweathermap.org/data/2.5/weather?lat={}&lon={}&appid={}&units=metric",
@@ -19,7 +20,7 @@ pub async fn start_logger(
     loop {
         let response = client.get(&url).send().await?;
         let json: Value = response.json().await?;
-        
+
         let main = json["main"].as_object().unwrap();
         let weather = json["weather"][0].as_object().unwrap();
 
