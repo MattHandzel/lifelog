@@ -71,9 +71,6 @@ Features:
 This paper helped inform this project:
 https://link.springer.com/article/10.1007/s11948-013-9456-1
 
-https://github.com/nanovin/gaze
 https://x.com/vin_acct/status/1876088761664385346
-https://github.com/Whitecat18/Rust-for-Malware-Development
-https://github.com/DanPRD/rust-poc-malware/blob/218b2c9395afa3c0c252b35ad16147deb3e48120/client/src/keylogger/mod.rs#L5
 https://github.com/nanovin/gaze
 https://github.com/openrecall/openrecall
