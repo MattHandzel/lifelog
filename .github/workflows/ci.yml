@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 name: Cross-Platform Build
-=======
-name: Cross-Platform CI/CD
->>>>>>> a6c75393001a2e640f994703562f612adbfe4cb6
 
 on:
   push:
@@ -11,29 +7,17 @@ on:
     branches: [main]
 
 jobs:
-<<<<<<< HEAD
   build-cross-platform:
-=======
-  build-and-test:
->>>>>>> a6c75393001a2e640f994703562f612adbfe4cb6
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
       fail-fast: false
     runs-on: ${{ matrix.os }}
-<<<<<<< HEAD
-=======
-
->>>>>>> a6c75393001a2e640f994703562f612adbfe4cb6
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-<<<<<<< HEAD
-      # Install Nix on Linux/macOS 
-=======
->>>>>>> a6c75393001a2e640f994703562f612adbfe4cb6
       - name: Install Nix (Linux and macOS)
         if: runner.os != 'Windows'
         uses: cachix/install-nix-action@v22
@@ -56,43 +40,24 @@ jobs:
       - name: Cache Cargo Dependencies
         uses: Swatinem/rust-cache@v2
 
-<<<<<<< HEAD
-      # Build and test steps (remove continue-on-error to diagnose issues)
-=======
->>>>>>> a6c75393001a2e640f994703562f612adbfe4cb6
       - name: Build Lifelog Server
         run: cargo build --release
         continue-on-error: true
 
       - name: Run Rust application
-<<<<<<< HEAD
         run: |
           cargo run --release --bin lifelog-logger
           cargo run --release --bin lifelog-server
-=======
-        run: cargo run --release
->>>>>>> a6c75393001a2e640f994703562f612adbfe4cb6
         continue-on-error: true
 
       - name: Run Rust tests
         run: cargo test --release --verbose
         continue-on-error: true
 
-<<<<<<< HEAD
-      # Nix builds remain for Linux/macOS
-      - name: Build with Nix (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          nix build .#lifelog-server
-          nix build .#lifelog-logger
-=======
       - name: Build the server with nix build (Linux and macOS)
         if: runner.os != 'Windows'
         run: nix build .#lifelog-server
-        continue-on-error: true
 
       - name: Build the logger with nix build (Linux and macOS)
         if: runner.os != 'Windows'
         run: nix build .#lifelog-logger
-        continue-on-error: true
->>>>>>> a6c75393001a2e640f994703562f612adbfe4cb6
