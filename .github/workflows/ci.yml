@@ -54,7 +54,6 @@ jobs:
 
       - name: Run Rust tests
         run: cargo test --release --verbose
-        continue-on-error: true
 
       # Nix builds remain for Linux/macOS
       - name: Build with Nix (Linux/macOS)
@@ -62,4 +61,3 @@ jobs:
         run: |
           nix build .#lifelog-server
           nix build .#lifelog-logger
-        continue-on-error: true
