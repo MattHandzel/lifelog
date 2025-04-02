@@ -23,6 +23,7 @@ This is a logger that you can use to help log your life! It captures data from m
 - [ ] Terminal commands
 - [ ] Clipboard history
 - [ ] Events (such as calendars)
+- [ ] "Actions" (for example, there is reading code versus writing code which are two different actions. they both will look identical when it comes to the screen modality, but they are different actions when looking at the input modality). Do clustering on data modalities?
 
 #### Features
 

@@ -14,11 +14,19 @@ async fn main() {
     #[cfg(feature = "dev")]
     println!("DEVELOPMENT MODE");
 
-    println!("Starting Life Logger!");
+    let binary_name = std::env::current_exe()
+        .ok()
+        .and_then(|path| {
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+        })
+        .unwrap_or_else(|| "unknown".to_string());
+
+    println!("Starting Life Logger! Binary: {}", binary_name);
     let config = Arc::new(load_config());
 
     // Check to see if there is another instance of lifelog running
-    if setup::is_already_running(env!("CARGO_PKG_NAME")) {
+    if setup::is_already_running(&binary_name) {
         println!("Another instance of lifelog is already running. Exiting...");
 
         #[cfg(not(feature = "dev"))]
