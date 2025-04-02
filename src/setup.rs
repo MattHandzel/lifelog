@@ -326,13 +326,14 @@ pub fn setup_input_logger_db(output_dir: &Path) -> rusqlite::Result<Connection> 
         );
         CREATE TABLE IF NOT EXISTS key_events (
             timestamp REAL PRIMARY KEY,
-            code TEXT,
-            value TEXT NOT NULL
+            event_type TEXT CHECK(event_type IN ('press', 'release')),
+            key TEXT NOT NULL
         );
         
         CREATE TABLE IF NOT EXISTS mouse_buttons (
             timestamp REAL PRIMARY KEY,
             code TEXT CHECK(event_type IN ('press', 'release')),
+            event_type TEXT CHECK(event_type IN ('press', 'release')),
             button TEXT NOT NULL
         );
         
