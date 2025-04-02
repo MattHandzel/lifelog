@@ -9,8 +9,6 @@ use std::path::PathBuf;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Config {
-    pub keyboard: KeyboardConfig,
-    pub mouse: MouseConfig,
     pub screen: ScreenConfig,
     pub camera: CameraConfig,
     pub microphone: MicrophoneConfig,

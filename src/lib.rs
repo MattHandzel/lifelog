@@ -5,11 +5,7 @@ pub mod modules {
     pub mod evdev_input_logger;
     pub mod hyprland;
     pub mod input_logger;
-    pub mod keyboard;
     pub mod microphone;
-    pub mod microphone;
-    pub mod mouse;
-    pub mod mouse;
 
     //pub mod logger;
     pub mod processes;

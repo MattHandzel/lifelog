@@ -29,12 +29,6 @@ async fn main() {
 
     let mut tasks = Vec::new();
 
-    if config.mouse.enabled {
-        let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            mouse::start_logger(&config_clone.mouse).await
-        }));
-    }
     if config.screen.enabled {
         let config_clone = Arc::clone(&config);
         tasks.push(tokio::spawn(async move {
@@ -63,7 +57,6 @@ async fn main() {
         }));
     }
 
-<<<<<<< HEAD
     let user_is_running_wayland = env::var("WAYLAND_DISPLAY").is_ok();
     if config.input_logger.enabled {
         let config_clone = Arc::clone(&config);
@@ -77,15 +70,6 @@ async fn main() {
             }));
         }
     }
-=======
-    if config.input_logger.enabled {
-        let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            input_logger::start_logger(&config.input_logger).await;
-        }));
-    }
-
->>>>>>> a6c75393001a2e640f994703562f612adbfe4cb6
     //if config.microphone.enabled {
     //    let config_clone = Arc::clone(&config);
     //    tasks.push(tokio::spawn(async move {

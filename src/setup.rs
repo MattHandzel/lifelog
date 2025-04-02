@@ -14,10 +14,9 @@ pub fn ensure_directory(path: &Path) -> std::io::Result<()> {
 
 pub fn initialize_project(config: &Config) -> std::io::Result<()> {
     // TODO: Check to see if all of these things exist or not
+    // TODO: These should be moved inside their respective loggers
 
-    ensure_directory(Path::new(&config.keyboard.output_dir))?;
     ensure_directory(Path::new(&config.screen.output_dir))?;
-    ensure_directory(Path::new(&config.mouse.output_dir))?;
     ensure_directory(Path::new(&config.system_performance.output_dir))?;
     ensure_directory(Path::new(&config.ambient.output_dir))?;
     ensure_directory(Path::new(&config.weather.output_dir))?;
