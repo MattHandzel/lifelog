@@ -17,6 +17,7 @@ pub mod modules {
     pub mod weather;
 }
 
+pub mod ocr;
 //pub mod embed;
 pub mod prelude;
 pub mod utils;
