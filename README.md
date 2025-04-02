@@ -36,12 +36,6 @@ Here is an estimate of how much data each modality will generate:
 `hyprland` 3600 logs = 6 MB \~= 0.0016666 MB/log
 `screen` \~256kb/screenshot
 
-### TODO
-
-Should everything be a database? Should I have one database for each modality? Or should I have one database for all modalities?
-Create a module that can access other software (such as activity watch)
-Ensure that this program tells the user they need access to the input group.
-
 ### IDEA
 
 Be able to go `back` in time to that event would be very cool.
@@ -61,10 +55,6 @@ Features:
 - Stores copies of data, when data is manipulated store original
 - Have a version of this software for vulnerable populations, one that has metadata and not storing the real data?
 - Send commands and signals to all loggers
-
-### TODO
-
-- Ensure data integrity from the logger or over time?
 
 # Lifelog Interface
 
@@ -87,12 +77,3 @@ https://github.com/Whitecat18/Rust-for-Malware-Development
 https://github.com/DanPRD/rust-poc-malware/blob/218b2c9395afa3c0c252b35ad16147deb3e48120/client/src/keylogger/mod.rs#L5
 https://github.com/nanovin/gaze
 https://github.com/openrecall/openrecall
-
-### Todo:
-
-    Creating an GUI interface for people to more naturally interface with their data
-    Taking natural language and converting it into database queries
-    Being able to query multimodal data (video, audio, and text)
-    Refactoring the database to better handle queries (right now it's a SQL database)
-    Improving the interface for search
-    Port the software onto Windows and Mac, develop more logging software.
