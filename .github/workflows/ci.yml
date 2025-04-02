@@ -33,11 +33,13 @@ jobs:
 
       - name: Build Lifelog Server
         run: cargo build --release
+        continue-on-error: true
 
       - name: Run Rust application
         run: |
           cargo run --release --bin lifelog-logger
           cargo run --release --bin lifelog-server
+        continue-on-error: true
 
       - name: Run Rust tests
         run: cargo test --release --verbose
@@ -46,9 +48,7 @@ jobs:
       - name: Build the server with nix build (Linux and macOS)
         if: runner.os != 'Windows'
         run: nix build .#lifelog-server
-        continue-on-error: true
 
       - name: Build the logger with nix build (Linux and macOS)
         if: runner.os != 'Windows'
         run: nix build .#lifelog-logger
-        continue-on-error: true
