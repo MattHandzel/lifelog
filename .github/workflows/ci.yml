@@ -27,6 +27,8 @@ jobs:
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
 
       - name: Cache Cargo Dependencies
         uses: Swatinem/rust-cache@v2
