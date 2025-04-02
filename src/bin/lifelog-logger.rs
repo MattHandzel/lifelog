@@ -1,6 +1,7 @@
 use lifelog::config::load_config;
 use lifelog::modules::*;
 use lifelog::setup;
+use std::env;
 use std::sync::Arc;
 use tokio::join;
 use tokio::sync::RwLock;
@@ -28,12 +29,6 @@ async fn main() {
 
     let mut tasks = Vec::new();
 
-    if config.keyboard.enabled {
-        let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            keyboard::start_logger(&config_clone.keyboard).await
-        }));
-    }
     if config.mouse.enabled {
         let config_clone = Arc::clone(&config);
         tasks.push(tokio::spawn(async move {
@@ -68,13 +63,19 @@ async fn main() {
         }));
     }
 
+    let user_is_running_wayland = env::var("WAYLAND_DISPLAY").is_ok();
     if config.input_logger.enabled {
         let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            input_logger::start_logger(&config.input_logger).await;
-        }));
+        if user_is_running_wayland {
+            tasks.push(tokio::spawn(async move {
+                evdev_input_logger::start_logger(&config.input_logger).await;
+            }));
+        } else {
+            tasks.push(tokio::spawn(async move {
+                input_logger::start_logger(&config.input_logger).await;
+            }));
+        }
     }
-
     //if config.microphone.enabled {
     //    let config_clone = Arc::clone(&config);
     //    tasks.push(tokio::spawn(async move {

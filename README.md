@@ -40,6 +40,7 @@ Here is an estimate of how much data each modality will generate:
 
 Should everything be a database? Should I have one database for each modality? Or should I have one database for all modalities?
 Create a module that can access other software (such as activity watch)
+Ensure that this program tells the user they need access to the input group.
 
 ### IDEA
 
