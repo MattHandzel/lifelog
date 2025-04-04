@@ -4,11 +4,11 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{WavSpec, WavWriter};
 use std::fs::{self, File};
 use std::io::BufWriter;
+use std::path::PathBuf;
+use std::process::Command;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::time::{sleep, Duration};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::process::Command;
-use std::path::PathBuf;
 
 // Global flags for controlling recording state
 static RECORDING_ENABLED: AtomicBool = AtomicBool::new(false);
@@ -20,12 +20,12 @@ static mut CURRENT_CONFIG: Option<Mutex<MicrophoneConfig>> = None;
 
 pub async fn start_logger(config: &MicrophoneConfig) {
     println!("Starting microphone logger with config: {:?}", config);
-    
+
     // Store config for runtime updates
     unsafe {
         CURRENT_CONFIG = Some(Mutex::new(config.clone()));
     }
-    
+
     // Set initial state based on config
     AUTO_RECORDING_ENABLED.store(config.enabled, Ordering::SeqCst);
     RECORDING_ENABLED.store(false, Ordering::SeqCst);
@@ -40,33 +40,33 @@ pub async fn start_logger(config: &MicrophoneConfig) {
     let config_clone = config.clone();
     tokio::spawn(async move {
         println!("Starting auto-recording scheduler");
-        
+
         loop {
             if !AUTO_RECORDING_ENABLED.load(Ordering::SeqCst) {
                 // If auto-recording is disabled, just check again after a short delay
                 sleep(Duration::from_secs(1)).await;
                 continue;
             }
-            
+
             // Get the current capture interval (may have been updated)
             let capture_interval_secs = unsafe {
                 match &CURRENT_CONFIG {
                     Some(cfg) => cfg.lock().unwrap().capture_interval_secs,
-                    None => config_clone.capture_interval_secs
+                    None => config_clone.capture_interval_secs,
                 }
             };
-            
+
             // If recording is not already in progress, start a new one
             if !RECORDING_ENABLED.load(Ordering::SeqCst) {
                 println!("Auto-recording: starting new recording");
                 RECORDING_ENABLED.store(true, Ordering::SeqCst);
                 RECORDING_PAUSED.store(false, Ordering::SeqCst);
             }
-            
+
             // Wait for the next scheduled recording time
-            let interval = if capture_interval_secs > 0 { 
-                capture_interval_secs 
-            } else { 
+            let interval = if capture_interval_secs > 0 {
+                capture_interval_secs
+            } else {
                 300 // Default to 5 minutes
             };
             println!("Auto-recording scheduler waiting for {} seconds", interval);
@@ -77,7 +77,7 @@ pub async fn start_logger(config: &MicrophoneConfig) {
     // Main recording loop
     #[cfg(not(target_os = "macos"))]
     cross_platform_recording_loop(config).await;
-    
+
     #[cfg(target_os = "macos")]
     macos_recording_loop(config).await;
 }
@@ -92,7 +92,7 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
             return;
         }
     };
-    
+
     let input_config = match device.default_input_config() {
         Ok(c) => c,
         Err(e) => {
@@ -100,7 +100,7 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
             return;
         }
     };
-    
+
     let stream_config = input_config.config();
 
     let spec = WavSpec {
@@ -110,9 +110,11 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
         sample_format: hound::SampleFormat::Int,
     };
 
-    println!("Audio settings - Sample rate: {:?}, Channels: {:?}", 
-             input_config.sample_rate().0,
-             input_config.channels());
+    println!(
+        "Audio settings - Sample rate: {:?}, Channels: {:?}",
+        input_config.sample_rate().0,
+        input_config.channels()
+    );
 
     loop {
         // Check if recording is enabled (manual or auto)
@@ -126,7 +128,7 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
         let current_config = unsafe {
             match &CURRENT_CONFIG {
                 Some(cfg) => cfg.lock().unwrap().clone(),
-                None => config.clone()
+                None => config.clone(),
             }
         };
 
@@ -138,7 +140,11 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
         }
 
         let timestamp = chrono::Local::now().format(current_config.timestamp_format.as_str());
-        let output_path = format!("{}/{}.wav", current_config.output_dir.to_str().unwrap(), timestamp);
+        let output_path = format!(
+            "{}/{}.wav",
+            current_config.output_dir.to_str().unwrap(),
+            timestamp
+        );
         println!("Creating new audio file: {}", output_path);
 
         let writer = match WavWriter::create(&output_path, spec) {
@@ -150,7 +156,7 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
                 continue;
             }
         };
-        
+
         let writer = Arc::new(Mutex::new(Some(writer)));
 
         let err_writer = Arc::clone(&writer);
@@ -163,7 +169,7 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
                     if RECORDING_PAUSED.load(Ordering::SeqCst) {
                         return;
                     }
-                    
+
                     if let Some(mut guard) = writer.lock().ok() {
                         if let Some(w) = guard.as_mut() {
                             for &sample in data {
@@ -207,45 +213,49 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
         // Create a loop to check for pause/stop
         let mut chunk_timer = Duration::from_secs(0);
         let check_interval = Duration::from_millis(100);
-        
+
         // Get the current chunk duration (may have been updated)
         let chunk_duration_secs = unsafe {
             match &CURRENT_CONFIG {
                 Some(cfg) => cfg.lock().unwrap().chunk_duration_secs,
-                None => config.chunk_duration_secs
+                None => config.chunk_duration_secs,
             }
         };
-        
+
         // Keep recording for the specified chunk duration or until disabled
         loop {
             sleep(check_interval).await;
-            
+
             // Check if recording has been disabled
             if !RECORDING_ENABLED.load(Ordering::SeqCst) {
                 println!("Recording stopped by user");
-                stream.pause().unwrap_or_else(|e| eprintln!("Failed to pause stream: {}", e));
+                stream
+                    .pause()
+                    .unwrap_or_else(|e| eprintln!("Failed to pause stream: {}", e));
                 break;
             }
-            
+
             // Only increment timer if not paused
             if !RECORDING_PAUSED.load(Ordering::SeqCst) {
                 chunk_timer += check_interval;
             }
-            
+
             // Check if we've reached the chunk duration
             if chunk_timer.as_secs() >= chunk_duration_secs {
                 println!("Chunk duration reached, finalizing recording");
-                stream.pause().unwrap_or_else(|e| eprintln!("Failed to pause stream: {}", e));
-                
+                stream
+                    .pause()
+                    .unwrap_or_else(|e| eprintln!("Failed to pause stream: {}", e));
+
                 // If auto-recording is not enabled, stop recording altogether
                 if !AUTO_RECORDING_ENABLED.load(Ordering::SeqCst) {
                     RECORDING_ENABLED.store(false, Ordering::SeqCst);
                 }
-                
+
                 break;
             }
         }
-        
+
         // Finalize the WAV file by explicitly taking and dropping the writer
         if let Ok(mut guard) = writer.lock() {
             if let Some(w) = guard.take() {
@@ -254,7 +264,7 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
                 }
             }
         }
-        
+
         println!("Recording chunk completed");
     }
 }
@@ -263,29 +273,38 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
 async fn macos_recording_loop(config: &MicrophoneConfig) {
     // Check if we have the required command-line tools
     println!("Using macOS-specific recording implementation");
-    
-    let has_sox = Command::new("which").arg("sox").output().map(|output| {
-        let success = output.status.success();
-        if success {
-            println!("SoX found at: {}", String::from_utf8_lossy(&output.stdout).trim());
-        } else {
-            eprintln!("SoX not found: {}", String::from_utf8_lossy(&output.stderr));
-        }
-        success
-    }).unwrap_or_else(|e| {
-        eprintln!("Failed to check for SoX: {}", e);
-        false
-    });
-    
+
+    let has_sox = Command::new("which")
+        .arg("sox")
+        .output()
+        .map(|output| {
+            let success = output.status.success();
+            if success {
+                println!(
+                    "SoX found at: {}",
+                    String::from_utf8_lossy(&output.stdout).trim()
+                );
+            } else {
+                eprintln!("SoX not found: {}", String::from_utf8_lossy(&output.stderr));
+            }
+            success
+        })
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to check for SoX: {}", e);
+            false
+        });
+
     if !has_sox {
-        eprintln!("SoX not found. Please install SoX with 'brew install sox' to enable audio recording.");
+        eprintln!(
+            "SoX not found. Please install SoX with 'brew install sox' to enable audio recording."
+        );
         return;
     }
-    
+
     // Create base output directory at startup
     let base_dir = config.output_dir.clone();
     println!("Base output directory: {:?}", base_dir);
-    
+
     if let Err(e) = fs::create_dir_all(&base_dir) {
         eprintln!("Failed to create output directory: {}", e);
         // Try to create in home directory as fallback
@@ -301,7 +320,10 @@ async fn macos_recording_loop(config: &MicrophoneConfig) {
                 if let Some(ref mutex) = CURRENT_CONFIG {
                     if let Ok(mut current) = mutex.lock() {
                         current.output_dir = fallback_dir.clone();
-                        println!("Using fallback directory for recordings: {:?}", fallback_dir);
+                        println!(
+                            "Using fallback directory for recordings: {:?}",
+                            fallback_dir
+                        );
                     }
                 }
             }
@@ -310,7 +332,7 @@ async fn macos_recording_loop(config: &MicrophoneConfig) {
             return;
         }
     }
-    
+
     loop {
         // Check if recording is enabled (manual or auto)
         if !RECORDING_ENABLED.load(Ordering::SeqCst) {
@@ -323,26 +345,26 @@ async fn macos_recording_loop(config: &MicrophoneConfig) {
         let current_config = unsafe {
             match &CURRENT_CONFIG {
                 Some(cfg) => cfg.lock().unwrap().clone(),
-                None => config.clone()
+                None => config.clone(),
             }
         };
 
         // Create output directory if it doesn't exist
         let output_dir = current_config.output_dir.clone();
         println!("Using output directory: {:?}", output_dir);
-        
+
         if let Err(e) = fs::create_dir_all(&output_dir) {
             eprintln!("Failed to create output directory: {}", e);
             RECORDING_ENABLED.store(false, Ordering::SeqCst);
             continue;
         }
-        
+
         // Check directory permissions
         match fs::metadata(&output_dir) {
             Ok(metadata) => {
                 let permissions = metadata.permissions();
                 println!("Directory permissions: {:?}", permissions);
-            },
+            }
             Err(e) => {
                 eprintln!("Failed to get directory metadata: {}", e);
             }
@@ -358,7 +380,7 @@ async fn macos_recording_loop(config: &MicrophoneConfig) {
             Ok(_) => {
                 println!("Successfully wrote test file to directory");
                 let _ = fs::remove_file(&test_path);
-            },
+            }
             Err(e) => {
                 eprintln!("Failed to write test file to directory: {}", e);
                 RECORDING_ENABLED.store(false, Ordering::SeqCst);
@@ -370,48 +392,57 @@ async fn macos_recording_loop(config: &MicrophoneConfig) {
         let chunk_duration_secs = unsafe {
             match &CURRENT_CONFIG {
                 Some(cfg) => cfg.lock().unwrap().chunk_duration_secs,
-                None => config.chunk_duration_secs
+                None => config.chunk_duration_secs,
             }
         };
-        
+
         // Use sox for recording on macOS
         // rec -c 1 -r 44100 -b 16 -e signed-integer output.wav trim 0 60
         let mut cmd = Command::new("rec");
-        cmd.arg("-c").arg(current_config.channels.to_string())
-           .arg("-r").arg(current_config.sample_rate.to_string())
-           .arg("-b").arg(current_config.bits_per_sample.to_string())
-           .arg("-e").arg("signed-integer")
-           .arg(&output_path)
-           .arg("trim").arg("0").arg(chunk_duration_secs.to_string());
-           
+        cmd.arg("-c")
+            .arg(current_config.channels.to_string())
+            .arg("-r")
+            .arg(current_config.sample_rate.to_string())
+            .arg("-b")
+            .arg(current_config.bits_per_sample.to_string())
+            .arg("-e")
+            .arg("signed-integer")
+            .arg(&output_path)
+            .arg("trim")
+            .arg("0")
+            .arg(chunk_duration_secs.to_string());
+
         // Add debug output
         println!("Starting SoX recording command: {:?}", cmd);
-        
+
         // Start the recording process
         let recording_handle = match cmd.spawn() {
             Ok(child) => {
-                println!("Successfully started SoX recording with PID: {}", child.id());
+                println!(
+                    "Successfully started SoX recording with PID: {}",
+                    child.id()
+                );
                 child
-            },
+            }
             Err(e) => {
                 eprintln!("Failed to start recording with SoX: {}", e);
-                
+
                 // Try to directly execute sox to see if it's in PATH
                 match Command::new("sox").arg("--version").output() {
                     Ok(output) => {
                         println!("SoX version: {}", String::from_utf8_lossy(&output.stdout));
-                    },
+                    }
                     Err(e) => {
                         eprintln!("Failed to get SoX version: {}", e);
                     }
                 }
-                
+
                 RECORDING_ENABLED.store(false, Ordering::SeqCst);
                 sleep(Duration::from_secs(1)).await;
                 continue;
             }
         };
-        
+
         // Check SoX process status in a separate task
         let recording_id = recording_handle.id();
         let recording_task = tokio::spawn(async move {
@@ -420,60 +451,70 @@ async fn macos_recording_loop(config: &MicrophoneConfig) {
                     if output.status.success() {
                         println!("SoX recording completed successfully");
                     } else {
-                        eprintln!("SoX recording failed with exit code: {:?}", output.status.code());
+                        eprintln!(
+                            "SoX recording failed with exit code: {:?}",
+                            output.status.code()
+                        );
                         if !output.stderr.is_empty() {
                             eprintln!("Error: {}", String::from_utf8_lossy(&output.stderr));
                         }
                     }
-                },
+                }
                 Err(e) => {
                     eprintln!("Error waiting for SoX process: {}", e);
                 }
             }
         });
-        
+
         // Create a loop to check for pause/stop
         let start_time = std::time::Instant::now();
         let check_interval = Duration::from_millis(100);
-        
+
         // Keep checking until duration is reached or recording is stopped
         loop {
             sleep(check_interval).await;
-            
+
             // Check if recording has been disabled or paused
-            if !RECORDING_ENABLED.load(Ordering::SeqCst) || RECORDING_PAUSED.load(Ordering::SeqCst) {
+            if !RECORDING_ENABLED.load(Ordering::SeqCst) || RECORDING_PAUSED.load(Ordering::SeqCst)
+            {
                 println!("Recording stopped or paused by user");
                 // Kill the SoX process
-                let _ = Command::new("kill").arg("-INT").arg(recording_id.to_string()).status();
+                let _ = Command::new("kill")
+                    .arg("-INT")
+                    .arg(recording_id.to_string())
+                    .status();
                 recording_task.abort();
                 break;
             }
-            
+
             // Check if we've reached the chunk duration
             let elapsed = start_time.elapsed();
             if elapsed.as_secs() >= chunk_duration_secs {
-                println!("Chunk duration reached for macOS recording: {} seconds", elapsed.as_secs());
+                println!(
+                    "Chunk duration reached for macOS recording: {} seconds",
+                    elapsed.as_secs()
+                );
                 // The SoX command should terminate on its own after the specified duration
                 // Just wait for the task to complete
                 break;
             }
         }
-        
+
         // Wait a moment to ensure the file is properly closed
         sleep(Duration::from_millis(500)).await;
-        
+
         // Check if the file was created
         if let Ok(metadata) = fs::metadata(&output_path) {
             println!("Recording file created: {} bytes", metadata.len());
         } else {
             eprintln!("Failed to verify recording file was created");
         }
-        
+
         // If auto-recording is disabled, stop recording altogether
         if !AUTO_RECORDING_ENABLED.load(Ordering::SeqCst) {
             RECORDING_ENABLED.store(false, Ordering::SeqCst);
         }
-        
+
         println!("macOS recording chunk completed");
     }
 }

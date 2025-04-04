@@ -419,7 +419,12 @@ pub fn load_config() -> Config {
         .collect();
 
     println!("Using the config file at: {:?}", config_path);
-    
+    if config_path.exists() {
+        println!("Config file exists");
+    } else {
+        panic!("Config file does not exist at {:?}", config_path);
+    }
+
     // Try to read the config file, but provide defaults if it doesn't exist
     let config_str = match fs::read_to_string(&config_path) {
         Ok(content) => content,
@@ -433,16 +438,16 @@ pub fn load_config() -> Config {
                     println!("Warning: Failed to create config directory: {}", e);
                 }
             }
-            
+
             let config_str = toml::to_string(&default_config).unwrap_or_else(|e| {
                 println!("Warning: Failed to serialize default config: {}", e);
                 "".to_string()
             });
-            
+
             if let Err(e) = fs::write(&config_path, &config_str) {
                 println!("Warning: Failed to write default config: {}", e);
             }
-            
+
             return default_config;
         }
     };
@@ -451,28 +456,31 @@ pub fn load_config() -> Config {
     match toml::from_str::<Config>(&replace_home_dir_in_path(config_str)) {
         Ok(config) => config,
         Err(e) => {
-            println!("Failed to parse config.toml: {}. Using default config instead.", e);
+            println!(
+                "Failed to parse config.toml: {}. Using default config instead.",
+                e
+            );
             let default_config = create_default_config();
-            
+
             // Try to save the default config to help the user
             let config_str = toml::to_string(&default_config).unwrap_or_else(|e| {
                 println!("Warning: Failed to serialize default config: {}", e);
                 "".to_string()
             });
-            
+
             let backup_path = config_path.with_extension("toml.bak");
             if let Err(e) = fs::copy(&config_path, &backup_path) {
                 println!("Warning: Failed to create backup of original config: {}", e);
             } else {
                 println!("Created backup of original config at {:?}", backup_path);
             }
-            
+
             if let Err(e) = fs::write(&config_path, &config_str) {
                 println!("Warning: Failed to write fixed config: {}", e);
             } else {
                 println!("Wrote fixed config to {:?}", config_path);
             }
-            
+
             default_config
         }
     }
@@ -481,7 +489,7 @@ pub fn load_config() -> Config {
 // Function to create a default configuration
 fn create_default_config() -> Config {
     let home_dir = dirs::home_dir().expect("Failed to get home directory");
-    
+
     Config {
         timestamp_format: default_timestamp_format(),
         screen: ScreenConfig {
@@ -590,7 +598,12 @@ fn create_default_config() -> Config {
             enabled: default_true(),
             output_dir: home_dir.join("lifelog_text"),
             max_file_size_mb: 10,
-            supported_formats: vec!["txt".to_string(), "md".to_string(), "json".to_string(), "csv".to_string()],
+            supported_formats: vec![
+                "txt".to_string(),
+                "md".to_string(),
+                "json".to_string(),
+                "csv".to_string(),
+            ],
         },
     }
 }
@@ -616,7 +629,7 @@ impl ConfigManager {
 
     pub fn save(&self) -> Result<(), std::io::Error> {
         let home_dir = dirs::home_dir().expect("Failed to get home directory");
-        
+
         #[cfg(feature = "dev")]
         let config_path: PathBuf = "dev-config.toml".into();
 
@@ -626,12 +639,12 @@ impl ConfigManager {
             .collect();
 
         let config_str = toml::to_string(&self.config).expect("Failed to serialize config");
-        
+
         // Create parent directories if they don't exist
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)?;
         }
-        
+
         fs::write(config_path, config_str)
     }
 }
