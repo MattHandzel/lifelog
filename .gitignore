@@ -13,5 +13,6 @@ lifelog-logger/dev-config.toml
 dev-config.toml
 tmp
 config.toml
+.DS_Store
 other-projects.md
 lifelogging.md
