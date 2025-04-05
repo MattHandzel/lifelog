@@ -1625,7 +1625,6 @@ dependencies = [
  "rdev",
  "reqwest",
  "rocket",
- "rscam",
  "rusqlite",
  "serde",
  "serde_json",
