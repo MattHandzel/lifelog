@@ -7,6 +7,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::time::{sleep, Duration};
 
+#[cfg(target_os = "macos")]
+use std::process::Command;
+
 // Global flags for controlling recording state
 static RECORDING_ENABLED: AtomicBool = AtomicBool::new(false);
 static RECORDING_PAUSED: AtomicBool = AtomicBool::new(false);
