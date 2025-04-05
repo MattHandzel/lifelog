@@ -7,6 +7,8 @@ lifelog-logger/dev-data
 lifelog-logger/config.toml
 lifelog-logger/tmp
 lifelog-logger/dev-config.toml
+interface/src-tauri/target
+interface/result
 /target
 /result
 /data
