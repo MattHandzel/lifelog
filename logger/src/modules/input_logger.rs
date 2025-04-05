@@ -1,11 +1,9 @@
 use crate::setup;
 use anyhow::Result;
-use async_trait::async_trait;
 use chrono::Local;
 use config::InputLoggerConfig;
 use rdev::{listen, Event, EventType};
 use rusqlite::{params, Connection};
-use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::time::{sleep, Duration};

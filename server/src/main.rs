@@ -1,13 +1,7 @@
-use clap::{Arg, Command};
-use lifelog_server::install;
 use rusqlite::*;
 
 use ::config::*;
-use serde::Deserialize;
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tokio::join;
+use std::path::PathBuf;
 
 enum DataSourceKind {
     Hyprland {

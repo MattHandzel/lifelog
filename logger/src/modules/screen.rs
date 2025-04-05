@@ -1,7 +1,7 @@
 use crate::setup;
 use chrono;
 use config::ScreenConfig;
-use rusqlite::{params, Connection};
+use rusqlite::params;
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};

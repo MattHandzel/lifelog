@@ -1,11 +1,10 @@
-use crate::setup;
 use chrono::Utc;
 use config::WeatherConfig;
 use reqwest::Client;
 use rusqlite::params;
 use rusqlite::Connection;
 use serde_json::Value;
-use tokio::time::{sleep, Duration};
+use tokio::time::Duration;
 
 // TODO: How to get location based on IP that is resistant to vpn's
 pub async fn start_logger(

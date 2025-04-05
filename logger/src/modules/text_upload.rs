@@ -1,12 +1,11 @@
 use crate::setup;
 use chrono;
 use config::TextUploadConfig;
-use rusqlite::{params, Connection};
+use rusqlite::params;
 use sha2::{Digest, Sha256};
 use std::fs;
-use std::io;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub struct TextFile {
     pub filename: String,

@@ -1,12 +1,8 @@
-use crate::setup;
 use chrono;
 use config::MicrophoneConfig;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{WavSpec, WavWriter};
-use std::fs::{self, File};
-use std::io::BufWriter;
-use std::path::PathBuf;
-use std::process::Command;
+use std::fs::{self};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::time::{sleep, Duration};

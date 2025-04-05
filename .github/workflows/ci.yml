@@ -40,9 +40,9 @@ jobs:
       - name: Cache Cargo Dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Build Lifelog Server
+      - name: Build Lifelog Project
+        if: runner.os != "Linux"
         run: cargo build --release
-        continue-on-error: true
 
       # - name: Run Rust application
       #   run: |
@@ -55,9 +55,9 @@ jobs:
       #   continue-on-error: true
 
       - name: Build the server with nix build (Linux and macOS)
-        if: runner.os != 'Windows'
+        if: runner.os == 'Linux'
         run: nix build .#lifelog-server
 
       - name: Build the logger with nix build (Linux and macOS)
-        if: runner.os != 'Windows'
+        if: runner.os == 'Linux'
         run: nix build .#lifelog-logger

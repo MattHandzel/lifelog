@@ -4,9 +4,6 @@ use lifelog_logger::modules::*;
 use lifelog_logger::setup;
 use std::env;
 use std::sync::Arc;
-use tokio::join;
-use tokio::sync::RwLock;
-use tokio::task;
 
 #[tokio::main]
 async fn main() {

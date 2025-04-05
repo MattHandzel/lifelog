@@ -1,7 +1,6 @@
 use crate::logger::*;
 use crate::setup;
 use async_trait::async_trait;
-use chrono::Local;
 use config::HyprlandConfig;
 use rusqlite::{params, Connection};
 use std::path::Path;
@@ -10,7 +9,7 @@ use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 use utils::current_timestamp;
 
-use hyprland::data::{Client, Clients, CursorPosition, Devices, Monitors, Workspace, Workspaces};
+use hyprland::data::{Clients, CursorPosition, Devices, Monitors, Workspace, Workspaces};
 
 use hyprland::shared::HyprData;
 use hyprland::shared::HyprDataActive;

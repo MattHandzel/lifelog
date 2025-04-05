@@ -1,7 +1,7 @@
 use config::Config;
 use rusqlite::Connection;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use sysinfo::{ProcessExt, System, SystemExt};
 
 // Ensures the directory exists, creating it if necessary.
