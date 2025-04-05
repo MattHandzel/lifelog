@@ -7,6 +7,8 @@ lifelog-logger/dev-data
 lifelog-logger/config.toml
 lifelog-logger/tmp
 lifelog-logger/dev-config.toml
+interface/src-tauri/target
+interface/result
 /target
 /result
 /data
@@ -16,3 +18,5 @@ config.toml
 .DS_Store
 other-projects.md
 lifelogging.md
+.db
+node_modules/

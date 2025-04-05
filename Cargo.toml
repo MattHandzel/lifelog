@@ -1,5 +1,13 @@
 [workspace]
-members = ["lifelog/src-tauri"]
+members = [
+    "logger",
+    "server",
+    # "interface/src-tauri",
+    "common/utils",
+    "common/data-models",
+    "common/config"
+]
+
 resolver = "2"
 
 [workspace.package]

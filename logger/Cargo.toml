@@ -1,0 +1,49 @@
+[package]
+name = "lifelog-logger"
+version = "0.1.0"
+edition = "2021"
+description = "A project to log, process, and interact with various sources of data for your lifelog"
+
+[dependencies]
+utils = { path = "../common/utils" }
+config = { path = "../common/config" }
+data-models = { path = "../common/data-models" }
+
+sha2 = "0.10"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.5"
+tokio = { version = "1", features = ["full"] }
+chrono = "0.4"
+rusqlite = "0.34.0"    # SQLite database
+evdev = "0.13"         
+thiserror = "1"
+dirs = "4.0"
+hyprland = "0.4.0-beta.1"
+users = "0.11"
+sysinfo = "0.24"
+hound = "3.5.1"
+serde_json = "1.0"
+reqwest = { version = "0.11", features = ["json"] }
+rocket = "0.5.1"
+clap = "3.2.25"
+crossbeam-channel = "0.5"
+rdev = "0.5"
+anyhow = "1.0"
+log = "0.4"
+image = "0.24"
+cpal = "0.15.3"
+async-trait = "0.1"
+
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rscam = { version = "0.5.5"}
+
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tempfile = "3.8.1"
+
+[features]
+dev= []
+
+[dev-dependencies]
+anyhow = "1"
