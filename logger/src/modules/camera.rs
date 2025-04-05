@@ -387,21 +387,21 @@ pub async fn start_logger(_config: &CameraConfig) {
     println!("Camera logging is not supported on this platform");
 }
 
-fn save_frame(frame: &Frame, path: &Path) -> std::io::Result<()> {
-    println!("Save frame not implemented for linux");
-    Ok(())
-}
-
-//#[cfg(target_os = "linux")]
 //fn save_frame(frame: &Frame, path: &Path) -> std::io::Result<()> {
-//    match std::fs::write(path, &frame[..]) {
-//        Ok(_) => {
-//            println!("Frame saved to: {}", path.display());
-//            Ok(())
-//        }
-//        Err(e) => {
-//            eprintln!("Failed to save frame: {}", e);
-//            Err(e)
-//        }
-//    }
+//    println!("Save frame not implemented for linux");
+//    Ok(())
 //}
+
+#[cfg(target_os = "linux")]
+fn save_frame(frame: &Frame, path: &Path) -> std::io::Result<()> {
+    match std::fs::write(path, &frame[..]) {
+        Ok(_) => {
+            println!("Frame saved to: {}", path.display());
+            Ok(())
+        }
+        Err(e) => {
+            eprintln!("Failed to save frame: {}", e);
+            Err(e)
+        }
+    }
+}
