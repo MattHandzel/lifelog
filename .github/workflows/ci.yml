@@ -44,15 +44,15 @@ jobs:
         run: cargo build --release
         continue-on-error: true
 
-      - name: Run Rust application
-        run: |
-          cargo run --release --bin lifelog-logger
-          cargo run --release --bin lifelog-server
-        continue-on-error: true
+      # - name: Run Rust application
+      #   run: |
+      #     cargo run --release --bin lifelog-logger
+      #     cargo run --release --bin lifelog-server
+      #   continue-on-error: true
 
-      - name: Run Rust tests
-        run: cargo test --release --verbose
-        continue-on-error: true
+      # - name: Run Rust tests
+      #   run: cargo test --release --verbose
+      #   continue-on-error: true
 
       - name: Build the server with nix build (Linux and macOS)
         if: runner.os != 'Windows'

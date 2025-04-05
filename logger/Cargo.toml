@@ -38,6 +38,10 @@ async-trait = "0.1"
 [target.'cfg(target_os = "linux")'.dependencies]
 rscam = { version = "0.5.5"}
 
+
+[target.'cfg(target_os = "macos")'.dependencies]
+tempfile = "3.8.1"
+
 [features]
 dev= []
 
