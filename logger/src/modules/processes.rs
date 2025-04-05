@@ -1,3 +1,4 @@
+use crate::setup;
 use chrono::Local;
 use config::ProcessesConfig;
 use rusqlite::{params, Connection};
@@ -6,7 +7,6 @@ use std::path::Path;
 use std::process::Command;
 use tokio::time::{sleep, Duration};
 use users::{Users, UsersCache};
-
 //impl DataLogger for ProcessLogger {
 //
 //

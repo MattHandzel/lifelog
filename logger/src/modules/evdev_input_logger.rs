@@ -1,3 +1,4 @@
+use crate::setup;
 use chrono::Local;
 use config::InputLoggerConfig;
 #[cfg(target_os = "linux")]

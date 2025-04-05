@@ -1,3 +1,4 @@
+use crate::setup;
 use chrono::Utc;
 use config::WeatherConfig;
 use reqwest::Client;

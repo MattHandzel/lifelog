@@ -59,7 +59,7 @@
         pkgs.rustPlatform.buildRustPackage {
           inherit pname;
           version = "0.1.0";
-          src = ./lifelog/src-tauri/.;
+          src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
           cargoBuildFlags = ["--bin" binName];
 

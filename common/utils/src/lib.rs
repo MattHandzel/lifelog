@@ -1,4 +1,4 @@
-use chrono::{DateTime, FixedOffset, NaiveDateTime, TimeZone};
+use chrono::{DateTime, FixedOffset, Local, NaiveDateTime, TimeZone};
 use dirs_next;
 use std::path::{Path, PathBuf};
 
@@ -16,4 +16,8 @@ pub fn timestamp_to_epoch(timestamp: &str) -> Result<i64, &'static str> {
     let datetime =
         DateTime::parse_from_str(timestamp, format).map_err(|_| "Failed to parse timestamp")?;
     Ok(datetime.timestamp())
+}
+pub fn current_timestamp() -> f64 {
+    let now = Local::now();
+    now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1_000_000_000.0
 }
