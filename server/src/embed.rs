@@ -3,10 +3,10 @@ use bincode;
 #[cfg(feature = "ml")]
 use image::DynamicImage;
 use rusqlite::{params, Connection};
+use serde::{Deserialize, Serialize};
 use std::fs;
 #[cfg(feature = "ml")]
 use tch::{CModule, Kind, Tensor};
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ImageEmbedding {

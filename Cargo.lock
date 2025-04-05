@@ -1610,6 +1610,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "lifelog-server"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "config",
+ "cpal",
+ "crossbeam-channel",
+ "data-models",
+ "dirs",
+ "evdev",
+ "hound",
+ "hyprland",
+ "image",
+ "log",
+ "rdev",
+ "reqwest",
+ "rocket",
+ "rscam",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sysinfo",
+ "thiserror",
+ "tokio",
+ "toml 0.5.11",
+ "users",
+ "utils",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
