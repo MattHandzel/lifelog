@@ -1,10 +1,14 @@
 [workspace]
 members = [
-    "lifelog-common",
-    "lifelog-logger",
-    "lifelog-server",
-    "lifelog-interface",
+    "logger",
+    "server",
+    "common/utils",
+    "common/data-models",
+    "common/config"
 ]
+    # "interface",
+
+
 resolver = "2"
 
 [workspace.package]
