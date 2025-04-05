@@ -17,3 +17,4 @@ config.toml
 other-projects.md
 lifelogging.md
 .db
+node_modules/
