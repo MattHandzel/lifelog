@@ -59,8 +59,12 @@ Features:
 
 # Lifelog Interface
 
+This is the lifelog interface, it will be an interface for the user to be able to access and view their lifelog. They will be able to look at _all_ of their data modalities and be able to query them. This will be the centeralized way the user can inferface with their lifelog.
+
 Features:
 
+- Query data modalities with natural language
+- Search as a Memex.
 - Manipulate data, fix erronous data
 - Remove information
 - See last time a data source has been added to, it's size, etc
