@@ -1,5 +1,6 @@
-use crate::prelude::*;
+use crate::setup;
 use anyhow::Result;
+use async_trait::async_trait;
 use chrono::Local;
 use config::InputLoggerConfig;
 use rdev::{listen, Event, EventType};

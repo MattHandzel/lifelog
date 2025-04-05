@@ -1,3 +1,4 @@
+use crate::setup;
 use chrono;
 use config::MicrophoneConfig;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};

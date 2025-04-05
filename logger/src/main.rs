@@ -1,6 +1,7 @@
-use crate::modules::*;
 use config::load_config;
-use setup;
+use lifelog_logger::logger::DataLogger;
+use lifelog_logger::modules::*;
+use lifelog_logger::setup;
 use std::env;
 use std::sync::Arc;
 use tokio::join;
@@ -51,9 +52,18 @@ async fn main() {
     }
 
     if config.hyprland.enabled {
-        let config_clone = Arc::clone(&config);
+        let logger = hyprland::HyprlandLogger::new(config.hyprland.clone()).unwrap();
+        // 2. Initialize the logger
+        if let Err(e) = logger.setup().await {
+            eprintln!("Failed to initialize Hyprland logger: {}", e);
+        }
+
+        // 3. Spawn the logger task
         tasks.push(tokio::spawn(async move {
-            hyprland::start_logger(&config_clone.hyprland).await
+            match logger.run().await {
+                Ok(_) => println!("Hyprland logger completed successfully"),
+                Err(e) => eprintln!("Hyprland logger failed: {}", e),
+            }
         }));
     }
 

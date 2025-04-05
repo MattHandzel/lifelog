@@ -1,3 +1,4 @@
+use crate::setup;
 use chrono;
 use config::ScreenConfig;
 use rusqlite::{params, Connection};

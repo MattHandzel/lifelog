@@ -11,8 +11,9 @@ use base64;
 use base64::{engine::general_purpose, Engine as _};
 use chrono::{DateTime, Local, TimeZone, Utc};
 use dirs;
+
+use config::{MicrophoneConfig, ProcessesConfig, ScreenConfig, TextUploadConfig},
 use lifelog_interface_lib::{
-    config::{MicrophoneConfig, ProcessesConfig, ScreenConfig, TextUploadConfig},
     config_utils, modules,
     modules::text_upload,
     setup,

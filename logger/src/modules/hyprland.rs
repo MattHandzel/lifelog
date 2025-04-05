@@ -1,63 +1,101 @@
+use crate::logger::*;
+use crate::setup;
+use async_trait::async_trait;
 use chrono::Local;
 use config::HyprlandConfig;
 use rusqlite::{params, Connection};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use tokio::time::{sleep, Duration};
+use utils::current_timestamp;
 
-// Linux-specific imports
-#[cfg(target_os = "linux")]
 use hyprland::data::{Client, Clients, CursorPosition, Devices, Monitors, Workspace, Workspaces};
-#[cfg(target_os = "linux")]
-use hyprland::prelude::*;
 
-#[cfg(target_os = "linux")]
-pub async fn start_logger(config: &HyprlandConfig) {
-    let conn = setup::setup_hyprland_db(Path::new(&config.output_dir))
-        .expect("Failed to set up Hyprland database");
+use hyprland::shared::HyprData;
+use hyprland::shared::HyprDataActive;
 
-    loop {
-        // Fetch and log enabled data types
-        if config.log_active_monitor {
-            let timestamp = Local::now().timestamp() as f64
-                + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
-            log_monitors(&conn, timestamp);
+pub struct HyprlandLogger {
+    config: HyprlandConfig,
+    running_flag: Arc<AtomicBool>,
+}
+
+#[async_trait]
+impl DataLogger for HyprlandLogger {
+    type Config = HyprlandConfig;
+
+    async fn setup(&self) -> Result<(), LoggerError> {
+        setup::setup_hyprland_db(Path::new(&self.config.output_dir))
+            .map_err(|e| LoggerError::Database(e));
+        Ok(())
+    }
+
+    async fn run(&self) -> Result<(), LoggerError> {
+        self.running_flag.store(true, Ordering::SeqCst);
+
+        while self.running_flag.load(Ordering::SeqCst) {
+            let timestamp = current_timestamp();
+            self.log_data().await?;
+
+            sleep(Duration::from_secs_f64(self.config.interval)).await;
         }
+        Ok(())
+    }
 
-        if config.log_workspace {
-            let timestamp = Local::now().timestamp() as f64
-                + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
-            log_workspaces(&conn, timestamp);
-        }
+    fn stop(&self) {
+        self.running_flag.store(false, Ordering::SeqCst);
+    }
 
-        if config.log_clients {
-            let timestamp = Local::now().timestamp() as f64
-                + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
-            log_clients(&conn, timestamp);
-        }
+    async fn log_data(&self) -> Result<(), LoggerError> {
+        let timestamp = current_timestamp();
+        self.log_hypr_data(timestamp)
+            .await
+            .map_err(|e| LoggerError::Generic(e.to_string()))?;
+        Ok(())
+    }
 
-        if config.log_devices {
-            let timestamp = Local::now().timestamp() as f64
-                + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
-            log_devices(&conn, timestamp);
-        }
-
-        let timestamp = Local::now().timestamp() as f64
-            + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
-        log_cursor_position(&conn, timestamp);
-
-        sleep(Duration::from_secs_f64(config.interval)).await;
+    // TODO: I could set up the connection here...
+    fn new(config: Self::Config) -> Result<Self, LoggerError> {
+        Ok(Self {
+            config,
+            running_flag: Arc::new(AtomicBool::new(false)),
+        })
     }
 }
 
-#[cfg(not(target_os = "linux"))]
-pub async fn start_logger(config: &HyprlandConfig) {
-    println!("Hyprland is only available on Linux");
-    loop {
-        sleep(Duration::from_secs_f64(config.interval)).await;
+// Implementation details
+impl HyprlandLogger {
+    async fn log_hypr_data(&self, timestamp: f64) -> Result<(), Box<dyn std::error::Error>> {
+        {
+            let conn = setup::setup_hyprland_db(Path::new(&self.config.output_dir))
+                .expect("Failed to set up Hyprland database");
+
+            loop {
+                if self.config.log_active_monitor {
+                    log_monitors(&conn, timestamp);
+                }
+
+                if self.config.log_workspace {
+                    log_workspaces(&conn, timestamp);
+                }
+
+                if self.config.log_clients {
+                    log_clients(&conn, timestamp);
+                }
+
+                if self.config.log_devices {
+                    log_devices(&conn, timestamp);
+                }
+
+                log_cursor_position(&conn, timestamp);
+
+                sleep(Duration::from_secs_f64(self.config.interval)).await;
+            }
+        }
+        Ok(())
     }
 }
 
-#[cfg(target_os = "linux")]
 fn log_monitors(conn: &Connection, timestamp: f64) {
     if let Ok(monitors) = Monitors::get() {
         for monitor in monitors {
@@ -83,7 +121,6 @@ fn log_monitors(conn: &Connection, timestamp: f64) {
     }
 }
 
-#[cfg(target_os = "linux")]
 fn log_workspaces(conn: &Connection, timestamp: f64) {
     if let Ok(workspaces) = Workspaces::get() {
         for workspace in workspaces {
@@ -123,7 +160,6 @@ fn log_workspaces(conn: &Connection, timestamp: f64) {
     }
 }
 
-#[cfg(target_os = "linux")]
 fn log_clients(conn: &Connection, timestamp: f64) {
     if let Ok(clients) = Clients::get() {
         for client in clients {
@@ -153,7 +189,6 @@ fn log_clients(conn: &Connection, timestamp: f64) {
     }
 }
 
-#[cfg(target_os = "linux")]
 fn log_devices(conn: &Connection, timestamp: f64) {
     if let Ok(devices) = Devices::get() {
         // Log mice
@@ -184,7 +219,6 @@ fn log_devices(conn: &Connection, timestamp: f64) {
     }
 }
 
-#[cfg(target_os = "linux")]
 fn log_cursor_position(conn: &Connection, timestamp: f64) {
     if let Ok(pos) = CursorPosition::get() {
         conn.execute(
