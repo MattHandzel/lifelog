@@ -6,6 +6,7 @@ use std::sync::Arc;
 use tokio::join;
 use tokio::sync::RwLock;
 use tokio::task;
+use auto_launch::AutoLaunch;
 
 #[tokio::main]
 async fn main() {
@@ -13,6 +14,16 @@ async fn main() {
     // time is aligned
     #[cfg(feature = "dev")]
     println!("DEVELOPMENT MODE");
+
+    let app_name = "lifelog-logger";
+    let app_path = "~/Documents/lifelog/target/debug/lifelog-logger";
+    // if needed
+    let args = &[""];
+    let auto = AutoLaunch::new(app_name, app_path, false, args);
+
+    // enable the auto launch
+    auto.enable().is_ok();
+    auto.is_enabled().unwrap();
 
     let binary_name = std::env::current_exe()
         .ok()
