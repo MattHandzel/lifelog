@@ -6,16 +6,18 @@ use std::fs;
 use std::path::Path;
 use tokio::time::{sleep, Duration};
 use users::{Users, UsersCache};
+use surrealdb::engine::remote::ws::Ws;
+use surrealdb::Surreal;
+use surrealdb::sql::{Object, Value};
+use surrealdb::Connection;
 //impl DataLogger for ProcessLogger {
 //
 //
 //}
 
 // TODO: Make this logger work with windows (see how activity watch does this)
-pub async fn start_logger(config: &ProcessesConfig) {
-    let conn = setup::setup_process_db(Path::new(&config.output_dir))
-        .expect("Failed to set up process database");
-
+pub async fn start_logger<C>(config: &ProcessesConfig, db: &mut Surreal<C>) -> surrealdb::Result<()> where
+C: Connection, {
     let users_cache = UsersCache::new();
 
     loop {
@@ -24,26 +26,47 @@ pub async fn start_logger(config: &ProcessesConfig) {
 
         if let Ok(processes) = get_process_info(&users_cache) {
             for process in processes {
-                conn.execute(
-                    "INSERT INTO processes VALUES (
-                        ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12
-                    )",
-                    params![
-                        timestamp,
-                        process.pid,
-                        process.ppid,
-                        process.name,
-                        process.exe,
-                        process.cmdline,
-                        process.status,
-                        process.cpu_usage,
-                        process.memory_usage,
-                        process.threads,
-                        process.user,
-                        process.start_time
-                    ],
-                )
-                .unwrap();
+                // Build a SurrealDB document
+                let mut data = Object::default();
+                data.insert("timestamp".into(), Value::from(timestamp));
+                data.insert("pid".into(), Value::from(process.pid));
+                data.insert("ppid".into(), Value::from(process.ppid));
+                data.insert("name".into(), Value::from(process.name));
+                data.insert(
+                    "exe".into(),
+                    process.exe.map(Value::from).unwrap_or(Value::None),
+                );
+                data.insert(
+                    "cmdline".into(),
+                    process
+                        .cmdline
+                        .map(Value::from)
+                        .unwrap_or(Value::None),
+                );
+                data.insert("status".into(), Value::from(process.status));
+                data.insert(
+                    "cpu_usage".into(),
+                    process
+                        .cpu_usage
+                        .map(Value::from)
+                        .unwrap_or(Value::None),
+                );
+                data.insert(
+                    "memory_usage".into(),
+                    process
+                        .memory_usage
+                        .map(Value::from)
+                        .unwrap_or(Value::None),
+                );
+                data.insert("threads".into(), Value::from(process.threads));
+                data.insert(
+                    "user".into(),
+                    process.user.map(Value::from).unwrap_or(Value::None),
+                );
+                data.insert("start_time".into(), Value::from(process.start_time));
+
+                // Create a document in the "processes" table
+                let _: Option<surrealdb::sql::Value> = db.create("processes").content(data).await?;
             }
         }
 
@@ -142,11 +165,11 @@ fn get_process_info(users_cache: &UsersCache) -> Result<Vec<ProcessInfo>, std::i
 
             // Read cmdline
             if let Ok(cmdline) = fs::read(entry.path().join("cmdline")) {
-                process.cmdline = String::from_utf8_lossy(&cmdline)
+                let s = String::from_utf8_lossy(&cmdline)
                     .replace('\0', " ")
                     .trim()
-                    .to_string()
-                    .into();
+                    .to_string();
+                process.cmdline = if s.is_empty() { None } else { Some(s) };
             }
 
             // Read stat file for CPU usage and start time

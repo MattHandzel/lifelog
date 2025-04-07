@@ -4,9 +4,13 @@ use lifelog_logger::modules::*;
 use lifelog_logger::setup;
 use std::env;
 use std::sync::Arc;
+use surrealdb::engine::remote::ws::Ws;
+use surrealdb::Surreal;
+use surrealdb::opt::auth::Root;
+use surrealdb::sql::{Object, Value};
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TODO: How to make it so that when the computer suspends all loggers are restarted so the
     // time is aligned
     #[cfg(feature = "dev")]
@@ -28,10 +32,18 @@ async fn main() {
         println!("Another instance of lifelog is already running. Exiting...");
 
         #[cfg(not(feature = "dev"))]
-        return;
+        return Ok(())
     }
 
     setup::initialize_project(&config).expect("Failed to initialize project");
+
+    let mut db = Surreal::new::<Ws>("localhost:8000").await?;
+    db.signin(Root {
+        username: "root",
+        password: "root",
+    }).await?;
+
+    db.use_ns("namespace").use_db("database").await?;
 
     let mut tasks = Vec::new();
 
@@ -68,7 +80,9 @@ async fn main() {
     if config.processes.enabled {
         let config_clone = Arc::clone(&config);
         tasks.push(tokio::spawn(async move {
-            processes::start_logger(&config_clone.processes).await
+            if let Err(e) = processes::start_logger(&config_clone.processes, &mut db).await {
+                eprintln!("Error in processes logger: {:?}", e);
+            }
         }));
     }
 
@@ -96,4 +110,6 @@ async fn main() {
     for task in tasks {
         let _ = task.await;
     }
+
+    return Ok(())
 }
