@@ -34,6 +34,14 @@
             xorg.libXi
           ];
 
+        # TODO: Work out dependencies for front end and the rest of the software
+        frontendDeps = with pkgs; [
+          gtk3
+          atk
+          webkitgtk
+          libsoup
+        ];
+
         nativeBuildInputs = with pkgs;
           [
             pkg-config
@@ -98,6 +106,7 @@
           ]
           ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             linuxPackages.v4l2loopback
+            gtk3
             v4l-utils
             libxkbcommon
             alsa-lib
@@ -106,6 +115,9 @@
             slurp
             xorg.libXtst
             xorg.libXi
+
+            gtk3
+            atk
           ];
       };
     });
