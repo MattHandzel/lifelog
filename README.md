@@ -18,7 +18,6 @@ This is a logger that you can use to help log your life! It captures data from m
   - [ ] [Instagram](https://www.the-sun.com/lifestyle/tech/272081/how-to-download-all-your-instagram-photos-stories-and-videos-quickly/)
   - [ ] [Reddit](https://www.reddit.com/r/DataHoarder/comments/800g94/any_way_to_download_reddit_profile/)
 - [ ] Who you are interacting with (like who you are messaging on discord, who you are interacting with in real life through audio logs)
-- [ ] Location
 - [ ] Activity watch and other loggering software
 - [ ] Smartwatch data (like heart rate, steps, etc.)
 - [ ] Terminal commands
@@ -57,39 +56,11 @@ Features:
 - Stores copies of data, when data is manipulated store original
 - Have a version of this software for vulnerable populations, one that has metadata and not storing the real data?
 - Send commands and signals to all loggers
-- Extract important information from all input data modalities
-
-##### Data Modalities
-
-Images:
-
-- [ ] Object recognition
-- [ ] OCR
-
-Audio:
-
-- [ ] Speech to text
-- [ ] VAD
-
-Text:
-
-- [ ] Sentiment analysis
-- [ ] Text embedding
-
-Location:
-
-- [ ] Weather
-- [ ] Luminosity
-- [ ] Air pollution (environment data on that date)
 
 # Lifelog Interface
 
-This is the lifelog interface, it will be an interface for the user to be able to access and view their lifelog. They will be able to look at _all_ of their data modalities and be able to query them. This will be the centeralized way the user can inferface with their lifelog.
-
 Features:
 
-- Query data modalities with natural language
-- Search as a Memex.
 - Manipulate data, fix erronous data
 - Remove information
 - See last time a data source has been added to, it's size, etc
@@ -104,6 +75,3 @@ https://link.springer.com/article/10.1007/s11948-013-9456-1
 https://x.com/vin_acct/status/1876088761664385346
 https://github.com/nanovin/gaze
 https://github.com/openrecall/openrecall
-
-[ImageBind: One Embedding Space to Bind Them All](https://arxiv.org/pdf/2305.05665)
-This paper talks about and shows some very cool examples of the benefits of having one embedding space for many different data modalities.
