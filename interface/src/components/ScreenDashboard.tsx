@@ -4,6 +4,10 @@ import { Button } from './ui/button';
 import { Camera, X, Settings, Power, Clock, ArrowUpDown, RefreshCw } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
+import axios from 'axios';
+
+// Server API endpoint from environment variable
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface Screenshot {
   id: number;
@@ -92,20 +96,36 @@ export default function ScreenDashboard() {
   async function loadScreenshots() {
     setIsLoading(true);
     try {
-      const result = await invoke<Screenshot[]>('get_screenshots', { 
-        page: currentPage,
-        pageSize
+      // Use server API to get frames
+      const response = await axios.get(`${API_BASE_URL}/api/logger/screen/data`, {
+        params: {
+          page: currentPage,
+          page_size: pageSize,
+          limit: pageSize,
+          ...(sortOrder === 'desc' && { filter: "ORDER BY timestamp DESC" }),
+          ...(sortOrder === 'asc' && { filter: "ORDER BY timestamp ASC" })
+        }
       });
-      console.log("Screenshots loaded:", result);
       
-      // Load image data for each screenshot
+      console.log("Screen frames loaded:", response.data);
+      
+      // Load image data for each frame
       const screenshotsWithData = await Promise.all(
-        result.map(async (screenshot) => {
+        response.data.map(async (screenshot: any) => {
           try {
-            const dataUrl = await invoke<string>('get_screenshot_data', {
-              filename: screenshot.path
+            // For images stored as files, we need a separate API to get the image data
+            const imageResponse = await axios.get(`${API_BASE_URL}/api/logger/screen/files/${screenshot.path}`, {
+              responseType: 'blob'
             });
-            return { ...screenshot, dataUrl };
+            
+            const dataUrl = URL.createObjectURL(imageResponse.data);
+            return { 
+              timestamp: screenshot.timestamp,
+              path: screenshot.path,
+              width: screenshot.width || 0,
+              height: screenshot.height || 0,
+              dataUrl 
+            };
           } catch (error) {
             console.error(`Failed to load data for screenshot ${screenshot.path}:`, error);
             return screenshot;
@@ -115,14 +135,12 @@ export default function ScreenDashboard() {
       
       setScreenshots(screenshotsWithData);
       
-      // For simplicity, assuming there are more pages if we got a full page
-      if (result.length === pageSize) {
-        setTotalPages(currentPage + 1);
-      } else if (currentPage > 1) {
-        setTotalPages(currentPage);
-      } else {
-        setTotalPages(1);
-      }
+      // Calculate total pages based on header or data size
+      const totalCount = response.headers['x-total-count'] 
+        ? parseInt(response.headers['x-total-count']) 
+        : response.data.length === pageSize ? (currentPage + 1) * pageSize : currentPage * pageSize;
+        
+      setTotalPages(Math.ceil(totalCount / pageSize));
     } catch (error) {
       console.error('Failed to load screenshots:', error);
     } finally {
@@ -133,12 +151,24 @@ export default function ScreenDashboard() {
   async function loadSettings() {
     setIsLoadingSettings(true);
     try {
-      const result = await invoke<ScreenSettings>('get_screenshot_settings');
-      setSettings(result);
-      setTempInterval(result.interval);
-      setTempEnabled(result.enabled);
+      // Use server API to get screen configuration
+      const response = await axios.get(`${API_BASE_URL}/api/logger/screen/config`);
+      const apiSettings = response.data;
+      
+      // Map server config to our settings format
+      const settings: ScreenSettings = {
+        enabled: apiSettings.enabled,
+        interval: apiSettings.interval,
+        output_dir: apiSettings.output_dir || '',
+        program: apiSettings.program || '',
+        timestamp_format: apiSettings.timestamp_format || '%Y-%m-%d_%H-%M-%S'
+      };
+      
+      setSettings(settings);
+      setTempInterval(settings.interval);
+      setTempEnabled(settings.enabled);
     } catch (error) {
-      console.error('Failed to load screenshot settings:', error);
+      console.error('Failed to load screen settings:', error);
     } finally {
       setIsLoadingSettings(false);
     }
@@ -162,7 +192,9 @@ export default function ScreenDashboard() {
     
     setIsSavingSettings(true);
     try {
-      await invoke('update_screenshot_settings', {
+      console.log('Updating screen settings...');
+      // Use server API to update screen configuration
+      await axios.put(`${API_BASE_URL}/api/logger/screen/config`, {
         enabled: tempEnabled,
         interval: tempInterval
       });
@@ -174,7 +206,31 @@ export default function ScreenDashboard() {
         interval: tempInterval
       });
       
-      console.log(`Screenshot settings updated: enabled=${tempEnabled}, interval=${tempInterval}s`);
+      console.log(`Screen settings updated: enabled=${tempEnabled}, interval=${tempInterval}s`);
+      
+      // If enabled, restart the screen logger via server API
+      if (tempEnabled) {
+        try {
+          console.log('Restarting screen logger...');
+          await axios.post(`${API_BASE_URL}/api/logger/screen/start`);
+          console.log('Screen logger restarted');
+          
+          // After a short delay, refresh the screenshots to show the newly captured ones
+          setTimeout(() => {
+            loadScreenshots();
+          }, 2000);
+        } catch (restartError) {
+          console.error('Failed to restart screen logger:', restartError);
+        }
+      } else {
+        // Stop the logger if disabled
+        try {
+          await axios.post(`${API_BASE_URL}/api/logger/screen/stop`);
+        } catch (stopError) {
+          console.error('Failed to stop screen logger:', stopError);
+        }
+      }
+      
       setShowSettings(false);
     } catch (error) {
       console.error('Failed to save settings:', error);
@@ -274,7 +330,8 @@ export default function ScreenDashboard() {
           </div>
           <Button 
             onClick={toggleSettings}
-            className="btn-secondary flex items-center gap-2"
+            variant="secondary"
+            className="flex items-center gap-2"
           >
             <Settings className="w-4 h-4" />
             Settings
@@ -345,14 +402,13 @@ export default function ScreenDashboard() {
               <div className="flex justify-end gap-4 pt-4">
                 <Button
                   onClick={() => setShowSettings(false)}
-                  className="btn-secondary"
+                  variant="secondary"
                   disabled={isSavingSettings}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={saveSettings}
-                  className="btn-primary"
                   disabled={isSavingSettings}
                 >
                   {isSavingSettings ? (
@@ -391,7 +447,7 @@ export default function ScreenDashboard() {
         <div className="p-6">
           <div className="flex flex-col sm:flex-row justify-between gap-4 mb-8">
             <div className="flex items-center gap-2">
-              <Button onClick={loadScreenshots} className="btn-primary">
+              <Button onClick={loadScreenshots}>
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
                   className="h-5 w-5 mr-2" 
@@ -411,9 +467,9 @@ export default function ScreenDashboard() {
 
               <Button 
                 onClick={toggleSortOrder} 
-                className="btn-secondary flex items-center gap-2"
+                variant="secondary"
               >
-                <ArrowUpDown className="w-4 h-4" />
+                <ArrowUpDown className="w-4 h-4 mr-2" />
                 {sortOrder === 'asc' ? 'Oldest First' : 'Newest First'}
               </Button>
 
@@ -440,7 +496,7 @@ export default function ScreenDashboard() {
               <Button 
                 onClick={handlePreviousPage} 
                 disabled={currentPage === 1 || isLoading}
-                className="btn-secondary"
+                variant="secondary"
               >
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
@@ -466,7 +522,7 @@ export default function ScreenDashboard() {
               <Button 
                 onClick={handleNextPage} 
                 disabled={currentPage >= totalPages || isLoading}
-                className="btn-secondary"
+                variant="secondary"
               >
                 Next
                 <svg 
@@ -554,14 +610,15 @@ export default function ScreenDashboard() {
                                   // Manually try to load the data for this screenshot
                                   (async () => {
                                     try {
-                                      const dataUrl = await invoke<string>('get_screenshot_data', {
-                                        filename: screenshot.path
+                                      const dataUrl = await axios.get(`${API_BASE_URL}/api/logger/screen/files/${screenshot.path}`, {
+                                        responseType: 'blob'
                                       });
                                       
+                                      const url = URL.createObjectURL(dataUrl.data);
                                       // Update the screenshot with the data URL
                                       setScreenshots(prevScreenshots => 
                                         prevScreenshots.map(s => 
-                                          s.id === screenshot.id ? {...s, dataUrl} : s
+                                          s.id === screenshot.id ? {...s, dataUrl: url} : s
                                         )
                                       );
                                     } catch (error) {
@@ -629,17 +686,18 @@ export default function ScreenDashboard() {
                     onClick={async () => {
                       if (selectedScreenshot && selectedImage) {
                         try {
-                          const dataUrl = await invoke<string>('get_screenshot_data', {
-                            filename: selectedImage
+                          const dataUrl = await axios.get(`${API_BASE_URL}/api/logger/screen/files/${selectedImage}`, {
+                            responseType: 'blob'
                           });
                           
+                          const url = URL.createObjectURL(dataUrl.data);
                           // Update the screenshot with the data URL
-                          setSelectedScreenshot({...selectedScreenshot, dataUrl});
+                          setSelectedScreenshot({...selectedScreenshot, dataUrl: url});
                           
                           // Also update in the main list
                           setScreenshots(prevScreenshots => 
                             prevScreenshots.map(s => 
-                              s.id === selectedScreenshot.id ? {...s, dataUrl} : s
+                              s.id === selectedScreenshot.id ? {...s, dataUrl: url} : s
                             )
                           );
                         } catch (error) {
@@ -647,7 +705,6 @@ export default function ScreenDashboard() {
                         }
                       }
                     }}
-                    className="btn-primary"
                   >
                     Try Again
                   </Button>
@@ -656,6 +713,7 @@ export default function ScreenDashboard() {
             )}
             <Button 
               onClick={closeModal}
+              variant="secondary"
               className="absolute top-3 right-3 rounded-full p-2 bg-[#1C2233]/80 hover:bg-[#232B3D]/80 backdrop-blur-sm"
             >
               <X className="w-6 h-6 text-[#F9FAFB]" />

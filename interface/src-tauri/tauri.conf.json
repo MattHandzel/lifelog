@@ -11,7 +11,10 @@
   },
   "app": {
     "security": {
-      "csp": null,
+      "csp": {
+        "defaultSrc": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+        "connectSrc": ["'self'", "http://localhost:9000", "ws://localhost:1420", "http://localhost:8080", "*"]
+      },
       "capabilities": []
     },
     "windows": [
@@ -33,6 +36,11 @@
     },
     "fs": {
       "scope": ["$DOCUMENT/*", "$HOME/*", "$APP/*", "$TEMP/*"]
+    },
+    "http": {
+      "all": true,
+      "request": true,
+      "scope": ["http://localhost:9000/*", "http://localhost:8080/*"]
     }
   },
   "bundle": {
