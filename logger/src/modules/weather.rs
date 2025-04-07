@@ -1,14 +1,15 @@
+use crate::setup::setup_weather_db;
 use chrono::Utc;
 use config::WeatherConfig;
 use reqwest::Client;
 use rusqlite::params;
 use rusqlite::Connection;
 use serde_json::Value;
-use tokio::time::Duration;
 use std::env;
 use std::path::Path;
 use std::time::Duration as StdDuration;
 use tokio::time::sleep;
+use tokio::time::Duration;
 
 // Function to get API key from environment if available
 fn get_weather_api_key(config_api_key: &str) -> String {
@@ -16,16 +17,16 @@ fn get_weather_api_key(config_api_key: &str) -> String {
 }
 
 // TODO: How to get location based on IP that is resistant to vpn's
-pub async fn start_logger(config: &WeatherConfig) {
+pub async fn start_logger(config: &WeatherConfig) -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting weather logger");
-    let conn = setup::setup_weather_db(Path::new(&config.output_dir)).unwrap();
+    let conn = setup_weather_db(Path::new(&config.output_dir)).unwrap();
 
     // Get API key from environment or config
     let api_key = get_weather_api_key(&config.api_key);
-    
+
     if api_key.is_empty() {
         eprintln!("Weather API key is not set! Please set WEATHER_API_KEY environment variable or configure it in settings.");
-        return;
+        return Err("API key is missing".into());
     }
 
     let client = Client::new();

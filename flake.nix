@@ -38,6 +38,7 @@
         frontendDeps = with pkgs; [
           gtk3
           atk
+          glib
           webkitgtk
           libsoup
         ];
@@ -61,7 +62,7 @@
           version = "0.1.0";
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
-          cargoBuildFlags = ["--bin" binName];
+          cargoBuildFlags = ["-p" binName];
 
           buildInputs = commonDeps.buildInputs;
           nativeBuildInputs = commonDeps.nativeBuildInputs;
@@ -116,6 +117,7 @@
             xorg.libXtst
             xorg.libXi
 
+            glib
             gtk3
             atk
           ];
