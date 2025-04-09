@@ -16,7 +16,7 @@ use surrealdb::Connection;
 //}
 
 // TODO: Make this logger work with windows (see how activity watch does this)
-pub async fn start_logger<C>(config: &ProcessesConfig, db: &mut Surreal<C>) -> surrealdb::Result<()> where
+pub async fn start_logger<C>(config: &ProcessesConfig, db: &Surreal<C>) -> surrealdb::Result<()> where
 C: Connection, {
     let users_cache = UsersCache::new();
 

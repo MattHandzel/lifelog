@@ -8,6 +8,8 @@ use surrealdb::engine::remote::ws::Ws;
 use surrealdb::opt::auth::Root;
 use surrealdb::sql::{Object, Value};
 use surrealdb::Surreal;
+use mobc::Pool;
+use mobc_surrealdb::SurrealDBConnectionManager;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -44,14 +46,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     setup::initialize_project(&config).expect("Failed to initialize project");
 
-    let mut db = Surreal::new::<Ws>("localhost:8000").await?;
-    db.signin(Root {
-        username: "root",
-        password: "root",
-    })
-    .await?;
+    let manager = SurrealDBConnectionManager::new(
+        "127.0.0.1:8000", // localhost?
+        "root",
+        "root",
+    );
 
-    db.use_ns("namespace").use_db("database").await?;
+    let pool = Pool::builder()
+        .max_open(12) // number of loggers
+        .max_idle(12) // don't force all to be active
+        .max_lifetime(None) //don't kill
+        .build(manager);
 
     let mut tasks = Vec::new();
 
@@ -87,8 +92,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Add to existing task spawning code
     if config.processes.enabled {
         let config_clone = Arc::clone(&config);
+
+        let mut conn = pool.get().await?;
+        conn.use_ns("namespace").use_db("database").await?;
+
         tasks.push(tokio::spawn(async move {
-            if let Err(e) = processes::start_logger(&config_clone.processes, &mut db).await {
+            if let Err(e) = processes::start_logger(&config_clone.processes, &conn).await {
                 eprintln!("Error in processes logger: {:?}", e);
             }
         }));

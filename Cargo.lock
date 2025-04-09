@@ -2552,6 +2552,8 @@ dependencies = [
  "hyprland",
  "image",
  "log",
+ "mobc",
+ "mobc-surrealdb",
  "rdev",
  "reqwest 0.11.27",
  "rocket",
@@ -2736,6 +2738,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
 
 [[package]]
+name = "metrics"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "884adb57038347dfbaf2d5065887b6cf4312330dc8e94bc30a1a839bd79d3261"
+dependencies = [
+ "ahash 0.8.11",
+ "portable-atomic",
+]
+
+[[package]]
 name = "miette"
 version = "5.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2799,6 +2811,35 @@ dependencies = [
  "libc",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "mobc"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "316a7d198b51958a0ab57248bf5f42d8409551203cb3c821d5925819a8d5415f"
+dependencies = [
+ "async-trait",
+ "futures-channel",
+ "futures-core",
+ "futures-timer",
+ "futures-util",
+ "log",
+ "metrics",
+ "thiserror 1.0.69",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "mobc-surrealdb"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a79cefa5fc270e3238a9ca4260bf262cac74178fb62c36b63197806f55d87e6"
+dependencies = [
+ "mobc",
+ "surrealdb",
 ]
 
 [[package]]
@@ -3412,6 +3453,12 @@ dependencies = [
  "flate2",
  "miniz_oxide",
 ]
+
+[[package]]
+name = "portable-atomic"
+version = "1.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "350e9b48cbc6b0e028b0473b114454c6316e57336ee184ceab6e53f72c178b3e"
 
 [[package]]
 name = "powerfmt"
