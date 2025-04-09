@@ -5,9 +5,9 @@ use lifelog_logger::setup;
 use std::env;
 use std::sync::Arc;
 use surrealdb::engine::remote::ws::Ws;
-use surrealdb::Surreal;
 use surrealdb::opt::auth::Root;
 use surrealdb::sql::{Object, Value};
+use surrealdb::Surreal;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -28,11 +28,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Arc::new(load_config());
 
     // Check to see if there is another instance of lifelog running
-    if setup::is_already_running(&binary_name) {
+    #[cfg(not(feature = "dev"))]
+    if setup::n_processes_already_running(&binary_name, 2) {
+        // need n=2 b/c when this process runs
+        // it has same binary name as the one that is running
         println!("Another instance of lifelog is already running. Exiting...");
 
         #[cfg(not(feature = "dev"))]
-        return Ok(())
+        return Ok(());
+    }
+
+    if !setup::n_processes_already_running("surreal", 1) {
+        panic!("Surreal db needs to be running. Please start it and try again.");
     }
 
     setup::initialize_project(&config).expect("Failed to initialize project");
@@ -41,7 +48,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     db.signin(Root {
         username: "root",
         password: "root",
-    }).await?;
+    })
+    .await?;
 
     db.use_ns("namespace").use_db("database").await?;
 
@@ -111,5 +119,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let _ = task.await;
     }
 
-    return Ok(())
+    return Ok(());
 }

@@ -36,6 +36,7 @@ pub fn is_already_running(process_name: &str) -> bool {
     let system = System::new_all();
     let mut process_count = 0;
     for process in system.processes_by_name(process_name) {
+        println!(process.name());
         if process.name() == process_name {
             process_count += 1;
             if process_count > 1 {
@@ -139,10 +140,10 @@ pub fn setup_microphone_db(_output_dir: &Path) -> rusqlite::Result<Connection> {
     panic!("Not implemented");
     // The following code is commented out to avoid unreachable code warning
     // ensure_directory(output_dir).expect("Failed to create microphone output directory");
-    // 
+    //
     // let db_path = output_dir.join("microphone.db");
     // let conn = Connection::open(&db_path)?;
-    // 
+    //
     // conn.execute(
     //     "CREATE TABLE IF NOT EXISTS microphone (
     //         id INTEGER PRIMARY KEY,
@@ -151,7 +152,7 @@ pub fn setup_microphone_db(_output_dir: &Path) -> rusqlite::Result<Connection> {
     //     )",
     //     params![],
     // )?;
-    // 
+    //
     // Ok(conn)
 }
 
