@@ -1,12 +1,8 @@
-use crate::setup;
 use chrono;
 use config::ScreenConfig;
-use rusqlite::params;
-use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::time::{sleep, Duration};
-use surrealdb::engine::remote::ws::Ws;
 use surrealdb::Surreal;
 use surrealdb::sql::{Object, Value};
 use surrealdb::Connection;

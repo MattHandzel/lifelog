@@ -1,10 +1,8 @@
 use chrono;
 use config::MicrophoneConfig;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use hound::{WavSpec, WavWriter};
 use std::fs::{self};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tokio::time::{sleep, Duration};
 
 #[cfg(target_os = "macos")]

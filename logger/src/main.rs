@@ -5,10 +5,6 @@ use lifelog_logger::setup;
 use std::env;
 use std::process::Command;
 use std::sync::Arc;
-use surrealdb::engine::remote::ws::Ws;
-use surrealdb::opt::auth::Root;
-use surrealdb::sql::{Object, Value};
-use surrealdb::Surreal;
 use mobc::Pool;
 use mobc_surrealdb::SurrealDBConnectionManager;
 use std::{thread, time};
@@ -90,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if config.screen.enabled {
         let config_clone = Arc::clone(&config);
 
-        let mut conn = pool.get().await?;
+        let conn = pool.get().await?;
         conn.use_ns("namespace").use_db("database").await?;
 
         tasks.push(tokio::spawn(async move {
@@ -126,7 +122,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if config.processes.enabled {
         let config_clone = Arc::clone(&config);
 
-        let mut conn = pool.get().await?;
+        let conn = pool.get().await?;
         conn.use_ns("namespace").use_db("database").await?;
 
         tasks.push(tokio::spawn(async move {
