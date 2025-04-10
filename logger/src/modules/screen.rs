@@ -66,7 +66,7 @@ C: Connection, {
         let mut data = Object::default();
         data.insert("datetime".into(), Value::from(timestamp));
         data.insert("path".into(), Value::from(output_path));
-        let _: Option<surrealdb::sql::Value> = db.create("processes").content(data).await?;
+        let _: Option<surrealdb::sql::Value> = db.create("screen").content(data).await?;
 
         sleep(Duration::from_secs_f64(config.interval)).await;
     }

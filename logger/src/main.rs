@@ -11,6 +11,7 @@ use surrealdb::sql::{Object, Value};
 use surrealdb::Surreal;
 use mobc::Pool;
 use mobc_surrealdb::SurrealDBConnectionManager;
+use std::{thread, time};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -41,10 +42,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // TODO: add windows and linux support, maybe unhardcode path
+    // TODO: add windows support
     if !setup::n_processes_already_running("surreal", 1) {
         let home = env::var("HOME").expect("Unable to read home directory");
-        let db_path = format!("file:{}/lifelog/data/db", home);
+        let db_path = format!("rocksdb:{}/lifelog/data/db", home);
 
         #[cfg(target_os = "macos")]
         {
@@ -58,10 +59,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .arg("none")
                 .arg("--no-banner")
                 .arg(&db_path)
-                .status()
+                .spawn()
                 .expect("Failed to execute start surrealdb command");
         }
     }
+
+    // let db spin up
+    thread::sleep(time::Duration::from_millis(1000));
 
     if !setup::n_processes_already_running("surreal", 1) {
         panic!("Surreal db auto-launch failed. Please try again.");
