@@ -6,10 +6,45 @@ use users::{Users, UsersCache};
 use surrealdb::Surreal;
 use surrealdb::sql::{Object, Value};
 use surrealdb::Connection;
+use serde::{Deserialize, Serialize};
+use surrealdb::RecordId;
 //impl DataLogger for ProcessLogger {
 //
 //
 //}
+
+#[derive(Deserialize)]
+struct Record {
+    id: RecordId,
+    timestamp: f64,
+    pid: i32,
+    ppid: i32,
+    name: String,
+    exe: Option<String>,
+    cmdline: Option<String>,
+    status: String,
+    cpu_usage: Option<f64>,
+    memory_usage: Option<i64>,
+    threads: i32,
+    user: Option<String>,
+    start_time: f64,
+}
+
+#[derive(Serialize)]
+struct ProcessLog {
+    timestamp: f64,
+    pid: i32,
+    ppid: i32,
+    name: String,
+    exe: Option<String>,
+    cmdline: Option<String>,
+    status: String,
+    cpu_usage: Option<f64>,
+    memory_usage: Option<i64>,
+    threads: i32,
+    user: Option<String>,
+    start_time: f64,
+}
 
 // TODO: Make this logger work with windows (see how activity watch does this)
 pub async fn start_logger<C>(config: &ProcessesConfig, db: &Surreal<C>) -> surrealdb::Result<()> where
@@ -22,47 +57,21 @@ C: Connection, {
 
         if let Ok(processes) = get_process_info(&users_cache) {
             for process in processes {
-                // Build a SurrealDB document
-                let mut data = Object::default();
-                data.insert("timestamp".into(), Value::from(timestamp));
-                data.insert("pid".into(), Value::from(process.pid));
-                data.insert("ppid".into(), Value::from(process.ppid));
-                data.insert("name".into(), Value::from(process.name));
-                data.insert(
-                    "exe".into(),
-                    process.exe.map(Value::from).unwrap_or(Value::None),
-                );
-                data.insert(
-                    "cmdline".into(),
-                    process
-                        .cmdline
-                        .map(Value::from)
-                        .unwrap_or(Value::None),
-                );
-                data.insert("status".into(), Value::from(process.status));
-                data.insert(
-                    "cpu_usage".into(),
-                    process
-                        .cpu_usage
-                        .map(Value::from)
-                        .unwrap_or(Value::None),
-                );
-                data.insert(
-                    "memory_usage".into(),
-                    process
-                        .memory_usage
-                        .map(Value::from)
-                        .unwrap_or(Value::None),
-                );
-                data.insert("threads".into(), Value::from(process.threads));
-                data.insert(
-                    "user".into(),
-                    process.user.map(Value::from).unwrap_or(Value::None),
-                );
-                data.insert("start_time".into(), Value::from(process.start_time));
-
-                // Create a document in the "processes" table
-                let _: Option<surrealdb::sql::Value> = db.create("processes").content(data).await?;
+                let _: Vec<Record> = db.upsert(("screen")).content(ProcessLog {
+                    timestamp: timestamp,
+                    pid: process.pid,
+                    ppid: process.ppid,
+                    name: process.name,
+                    exe: process.exe,
+                    cmdline: process.cmdline,
+                    status: process.status,
+                    cpu_usage: process.cpu_usage,
+                    memory_usage: process.memory_usage,
+                    threads: process.threads,
+                    user: process.user,
+                    start_time: process.start_time,
+                })
+                .await?;
             }
         }
 

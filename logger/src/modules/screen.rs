@@ -6,8 +6,24 @@ use tokio::time::{sleep, Duration};
 use surrealdb::Surreal;
 use surrealdb::sql::{Object, Value};
 use surrealdb::Connection;
+use serde::{Deserialize, Serialize};
+use surrealdb::RecordId;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
+
+
+#[derive(Deserialize)]
+struct Record {
+    id: RecordId,
+    datetime: f64,
+    path: String
+}
+
+#[derive(Serialize)]
+struct ScreenLog {
+    datetime: f64,
+    path: String,
+}
 
 pub async fn start_logger<C>(config: &ScreenConfig,  db: &Surreal<C>) -> surrealdb::Result<()> where
 C: Connection, {
@@ -59,10 +75,18 @@ C: Connection, {
                 .expect("Failed to execute screenshot command");
         }
 
-        let mut data = Object::default();
-        data.insert("datetime".into(), Value::from(timestamp));
-        data.insert("path".into(), Value::from(output_path));
-        let _: Option<surrealdb::sql::Value> = db.create("screen").content(data).await?;
+        let _: Vec<Record> = db.upsert("screen").content(ScreenLog {
+            datetime: timestamp,
+            path: Value::from(output_path).to_string(),
+        })
+        .await?;
+
+        // EXAMPLE simple query
+        // let records: Vec<Record> = db.select("screen").await?;
+        // for record in records {
+        //     println!("Record ID: {:?} datetime: {}", record.id, record.datetime);
+        // }
+        // println!("");
 
         sleep(Duration::from_secs_f64(config.interval)).await;
     }
