@@ -6,23 +6,23 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::time::{sleep, Duration};
+use surrealdb::engine::remote::ws::Ws;
+use surrealdb::Surreal;
+use surrealdb::sql::{Object, Value};
+use surrealdb::Connection;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
-pub async fn start_logger(config: &ScreenConfig) {
+pub async fn start_logger<C>(config: &ScreenConfig,  db: &Surreal<C>) -> surrealdb::Result<()> where
+C: Connection, {
     // Check if already running
     if RUNNING.swap(true, Ordering::SeqCst) {
-        return;
+        return Ok(());
     }
-
-    // Set up the database
-    let conn = setup::setup_screen_db(Path::new(&config.output_dir))
-        .expect("Failed to set up screen database");
-
     loop {
         // Check if we should stop
         if !RUNNING.load(Ordering::SeqCst) {
-            break;
+            break Ok (());
         }
 
         let now = chrono::Local::now();
@@ -63,8 +63,10 @@ pub async fn start_logger(config: &ScreenConfig) {
                 .expect("Failed to execute screenshot command");
         }
 
-        conn.execute("INSERT INTO screen VALUES (?1)", params![timestamp])
-            .unwrap();
+        let mut data = Object::default();
+        data.insert("datetime".into(), Value::from(timestamp));
+        data.insert("path".into(), Value::from(output_path));
+        let _: Option<surrealdb::sql::Value> = db.create("processes").content(data).await?;
 
         sleep(Duration::from_secs_f64(config.interval)).await;
     }

@@ -3,6 +3,7 @@ use lifelog_logger::logger::DataLogger;
 use lifelog_logger::modules::*;
 use lifelog_logger::setup;
 use std::env;
+use std::process::Command;
 use std::sync::Arc;
 use surrealdb::engine::remote::ws::Ws;
 use surrealdb::opt::auth::Root;
@@ -40,8 +41,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    // TODO: add windows and linux support, maybe unhardcode path
     if !setup::n_processes_already_running("surreal", 1) {
-        panic!("Surreal db needs to be running. Please start it and try again.");
+        let home = env::var("HOME").expect("Unable to read home directory");
+        let db_path = format!("file:{}/lifelog/data/db", home);
+
+        #[cfg(target_os = "macos")]
+        {
+            Command::new("surreal")
+                .arg("start")
+                .arg("--user")
+                .arg("root")
+                .arg("--pass")
+                .arg("root")
+                .arg("--log")
+                .arg("none")
+                .arg("--no-banner")
+                .arg(&db_path)
+                .status()
+                .expect("Failed to execute start surrealdb command");
+        }
+    }
+
+    if !setup::n_processes_already_running("surreal", 1) {
+        panic!("Surreal db auto-launch failed. Please try again.");
     }
 
     setup::initialize_project(&config).expect("Failed to initialize project");
@@ -62,8 +85,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if config.screen.enabled {
         let config_clone = Arc::clone(&config);
+
+        let mut conn = pool.get().await?;
+        conn.use_ns("namespace").use_db("database").await?;
+
         tasks.push(tokio::spawn(async move {
-            screen::start_logger(&config_clone.screen).await
+            if let Err(e) = screen::start_logger(&config_clone.screen, &conn).await {
+                eprintln!("Error in screen logger: {:?}", e);
+            }
         }));
     }
     if config.camera.enabled {
