@@ -1,0 +1,1 @@
+cool idea: suppose the query the user gives is not specific enough and it returns 10k results, what if our system can look at the results and do some clusters and then ask the user if they remember anything about the thing they want based on the clusters.
