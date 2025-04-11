@@ -2,7 +2,7 @@
 members = [
     "logger",
     "server",
-    # "interface/src-tauri",
+    "interface/src-tauri",
     "common/utils",
     "common/data-models",
     "common/config"

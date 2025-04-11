@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+use std::env;
 use utils::replace_home_dir_in_path;
 use surrealdb::RecordId;
 
@@ -39,13 +40,20 @@ pub struct ServerConfig {
     pub folder_dir: PathBuf,
 }
 
-// TODO: Should this be changed fromo https?
+// Load environment variables for sensitive config values
+fn get_env_var<T: std::str::FromStr>(name: &str, default: T) -> T {
+    match env::var(name) {
+        Ok(val) => val.parse::<T>().unwrap_or(default),
+        Err(_) => default,
+    }
+}
+
 fn default_server_ip() -> String {
-    "https://localhost".to_string()
+    env::var("SERVER_IP").unwrap_or_else(|_| "localhost".to_string())
 }
 
 fn default_server_port() -> u16 {
-    7182 // randomish number
+    get_env_var::<u16>("SERVER_PORT", 7182)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -175,6 +183,11 @@ pub struct WeatherConfig {
 
 fn default_weather_interval() -> f64 {
     60.0
+}
+
+// Weather specific function to load API key from environment
+fn load_weather_api_key() -> String {
+    env::var("WEATHER_API_KEY").unwrap_or_else(|_| "".to_string())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -411,6 +424,10 @@ pub struct TextUploadConfig {
 
 pub fn load_config() -> Config {
     let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
+    let lifelog_home_dir = env::var("LIFELOG_HOME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| home_dir.clone());
+
     #[cfg(feature = "dev")]
     let config_path: PathBuf = "dev-config.toml".into();
 
@@ -548,7 +565,7 @@ fn create_default_config() -> Config {
             enabled: default_false(),
             interval: default_weather_interval(),
             output_dir: home_dir.join("lifelog_weather"),
-            api_key: "".to_string(),
+            api_key: load_weather_api_key(),
             latitude: 0.0,
             longitude: 0.0,
         },
@@ -618,6 +635,10 @@ impl ConfigManager {
         Self {
             config: load_config(),
         }
+    }
+
+    pub fn get_config(&self) -> &Config {
+        &self.config
     }
 
     pub fn get_camera_config(&self) -> CameraConfig {
