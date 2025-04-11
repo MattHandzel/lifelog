@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net" agent="Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0" version="26.2.10">
   <diagram name="Page-1" id="FO4wU6uAOWpxlEI_7BUU">
-    <mxGraphModel dx="884" dy="832" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="804" dy="756" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -123,7 +123,7 @@
         <mxCell id="elYpCwUr6IDclWBqz2dl-3" value="Screen Logger" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;strokeColor=light-dark(#000000,#FF0000);" parent="elYpCwUr6IDclWBqz2dl-58" vertex="1">
           <mxGeometry x="180" y="26.67" width="120" height="43.33" as="geometry" />
         </mxCell>
-        <mxCell id="l8wk_pgIOx0_skZfnd5F-1" value="" style="endArrow=classic;html=1;rounded=0;entryX=0.62;entryY=0.017;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.62;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;fillColor=#f0a30a;strokeColor=#BD7000;" edge="1" parent="1" source="elYpCwUr6IDclWBqz2dl-37" target="elYpCwUr6IDclWBqz2dl-32">
+        <mxCell id="l8wk_pgIOx0_skZfnd5F-1" value="" style="endArrow=classic;html=1;rounded=0;entryX=0.467;entryY=0.019;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.467;exitY=1.024;exitDx=0;exitDy=0;exitPerimeter=0;fillColor=#f0a30a;strokeColor=#BD7000;" edge="1" parent="1" source="elYpCwUr6IDclWBqz2dl-37" target="elYpCwUr6IDclWBqz2dl-32">
           <mxGeometry width="50" height="50" relative="1" as="geometry">
             <mxPoint x="500" y="410" as="sourcePoint" />
             <mxPoint x="550" y="360" as="targetPoint" />
@@ -196,6 +196,28 @@
         </mxCell>
         <mxCell id="l8wk_pgIOx0_skZfnd5F-56" value="IFTTT" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=none;strokeColor=light-dark(#000000,#66CC00);" vertex="1" parent="l8wk_pgIOx0_skZfnd5F-60">
           <mxGeometry x="160" y="79.99999999999997" width="120" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="l8wk_pgIOx0_skZfnd5F-62" value="" style="endArrow=classic;html=1;rounded=0;entryX=0.467;entryY=0.019;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.467;exitY=1.024;exitDx=0;exitDy=0;exitPerimeter=0;fillColor=#dae8fc;strokeColor=#6c8ebf;gradientColor=#7ea6e0;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="270" y="200" as="sourcePoint" />
+            <mxPoint x="270" y="390" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l8wk_pgIOx0_skZfnd5F-63" value="Annotate data/timestamp" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="l8wk_pgIOx0_skZfnd5F-62">
+          <mxGeometry x="-0.288" y="-2" relative="1" as="geometry">
+            <mxPoint y="35" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l8wk_pgIOx0_skZfnd5F-65" value="" style="endArrow=classic;html=1;rounded=0;entryX=0.467;entryY=0.019;entryDx=0;entryDy=0;entryPerimeter=0;exitX=0.658;exitY=0.959;exitDx=0;exitDy=0;exitPerimeter=0;fillColor=#dae8fc;strokeColor=#6c8ebf;gradientColor=#7ea6e0;" edge="1" parent="1" source="elYpCwUr6IDclWBqz2dl-32">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="280" y="390" as="sourcePoint" />
+            <mxPoint x="280" y="580" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="l8wk_pgIOx0_skZfnd5F-66" value="Annotate data/timestamp" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="l8wk_pgIOx0_skZfnd5F-65">
+          <mxGeometry x="-0.288" y="-2" relative="1" as="geometry">
+            <mxPoint y="35" as="offset" />
+          </mxGeometry>
         </mxCell>
       </root>
     </mxGraphModel>
