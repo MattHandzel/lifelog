@@ -7,8 +7,7 @@ use surrealdb::Surreal;
 use surrealdb::sql::{Object, Value};
 use surrealdb::Connection;
 use serde::{Deserialize, Serialize};
-use config::ProcessRecord;
-use config::ProcessLog;
+use config::{ProcessRecord, ProcessLog, Log};
 //impl DataLogger for ProcessLogger {
 //
 //
@@ -38,6 +37,10 @@ C: Connection, {
                     threads: process.threads,
                     user: process.user,
                     start_time: process.start_time,
+                    log: Log {
+                        processed: false,
+                        process_timestamp: None,
+                    }
                 })
                 .await?;
             }

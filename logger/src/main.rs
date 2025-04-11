@@ -76,7 +76,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     let pool = Pool::builder()
-        .max_open(12) // number of loggers
+        .max_open(12) // max number of loggers
         .max_idle(12) // don't force all to be active
         .max_lifetime(None) //don't kill
         .build(manager);

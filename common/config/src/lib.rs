@@ -655,21 +655,36 @@ pub fn default_microphone_capture_interval_secs() -> u64 {
 }
 
 #[derive(Deserialize)]
-pub struct ScreenRecord {
+pub struct Record {
     pub id: RecordId,
+    pub processed: bool,
+    pub process_timestamp: Option<f64>,
+}
+
+#[derive(Serialize)]
+pub struct Log {
+    pub processed: bool,
+    pub process_timestamp: Option<f64>,
+}
+
+#[derive(Deserialize)]
+pub struct ScreenRecord {
+    pub record: Record,
     pub datetime: f64,
-    pub path: String
+    pub path: String,
+    
 }
 
 #[derive(Serialize)]
 pub struct ScreenLog {
+    pub log: Log,
     pub datetime: f64,
     pub path: String,
 }
 
 #[derive(Deserialize)]
 pub struct ProcessRecord {
-    pub id: RecordId,
+    pub record: Record,
     pub timestamp: f64,
     pub pid: i32,
     pub ppid: i32,
@@ -686,6 +701,7 @@ pub struct ProcessRecord {
 
 #[derive(Serialize)]
 pub struct ProcessLog {
+    pub log: Log,
     pub timestamp: f64,
     pub pid: i32,
     pub ppid: i32,

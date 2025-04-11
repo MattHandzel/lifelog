@@ -7,8 +7,7 @@ use surrealdb::Surreal;
 use surrealdb::sql::{Object, Value};
 use surrealdb::Connection;
 use serde::{Deserialize, Serialize};
-use config::ScreenRecord;
-use config::ScreenLog;
+use config::{ScreenRecord, ScreenLog, Log};
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -65,6 +64,10 @@ C: Connection, {
         let _: Vec<ScreenRecord> = db.upsert("screen").content(ScreenLog {
             datetime: timestamp,
             path: Value::from(output_path).to_string(),
+            log: Log {
+                processed: false,
+                process_timestamp: None,
+            }
         })
         .await?;
 
