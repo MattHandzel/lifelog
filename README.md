@@ -19,6 +19,9 @@ Use the `flake.nix` 😀
 
 - [x] Device Screen
 - [x] Device Microphone
+- [ ] Device audio
+- [ ] Device camera
+- [X] Device input
 - [x] Device Processes
 - [ ] Deskctop environment information (like the current window title, monitors connected, current workspace)
     - [x] Hyprland 
@@ -34,6 +37,11 @@ Use the `flake.nix` 😀
         - [ ] Whatsapp
     - [ ] Youtube (watch history, videos liked)
     - [ ] Calendar
+        - [ ] Google calendar
+        - [ ] Apple calendar
+    - [ ] Apple Health
+    - [ ] Samsung Health
+    - [ ] Medical records lol
 - [ ] Location
 - [ ] Smartwatch data (like heart rate, steps, etc.)
 - [ ] Terminal history
@@ -41,11 +49,14 @@ Use the `flake.nix` 😀
     - [ ] Zsh
     - [ ] Fish
 
-  ### Inferences
+
+
+ ### Inferences
 - [ ] Who you are interacting with (like who you are messaging on discord, who you are interacting with in real life through audio logs)
 - [ ] Tasks you are doing (reading, writing, doing homework)
 - [ ] Objects in the environment (from camera, microphone)
 - [ ] Environment (bedroom, outside, etc.)
+
 
 ## Configuration
 Everything in this project is configurable through a `config.toml` file located at `~/.config/lifelog/config.toml`. There is also a planned GUI interface for updating the config.
@@ -59,7 +70,7 @@ This is a program that when run on a device will activate other modules to recor
 - [X] User-configurable modules
 - [X] Adapt modules based on device compiling
 - [ ] Write to database
-- [ ] Capture data at more meanintful times. I.e. instead of based on time, capture data when events are happening (the screen is changing, the user pressed a button to change windows, etc).
+- [ ] Capture data at meaningful times. I.e. instead of based on time, capture data when events are happening (the screen is changing, the user pressed a button to change windows, etc).
 - [ ] Write over network
 - [ ] Fault tolerance
 - [ ] Encrypt logger data
@@ -83,28 +94,25 @@ Features:
     - [ ] Takes database queries and executes them
     - [ ] Time, location, object parsing
     - [ ] Processes natural language queries and converts them into a series of database queries
+- [ ] Data compression
 
 
-##### Data Modalities
+##### Data Transformations
 
 Images:
-
 - [ ] Object recognition
 - [ ] OCR
 
 Audio:
-
 - [ ] Speech to text
 - [ ] VAD
 
 Text:
-
 - [ ] Sentiment analysis
 - [ ] Text embedding
 
 Location:
-
-- [ ] Weather
+- [ ] Weatherhttps://dl.acm.org/doi/10.1145/3592573.3593106
 - [ ] Luminosity
 - [ ] Air pollution (environment data on that date)
 
@@ -126,7 +134,7 @@ This is the lifelog interface, it will be an interface for the user to be able t
 - [ ] Connect with server
 - [ ] Annotate data
 - [ ] Update, fix, remove, archive data
-- [ ] System panel (loggers, whether they are active, last time written)
+- [ ] System panel (loggers, whether they are https://dl.acm.org/doi/10.1145/3592573.3593106active, last time written)
 - [ ] Be able to 'take a snapshot' with all loggers
 - [ ] Manually activate individual loggers
 - [ ] Manually activate jobs (for processing data)
