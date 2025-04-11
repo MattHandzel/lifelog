@@ -65,6 +65,7 @@ Images:
 
 - [ ] Object recognition
 - [ ] OCR
+- [ ]
 
 Audio:
 
@@ -74,6 +75,7 @@ Audio:
 Text:
 
 - [ ] Sentiment analysis
+- [ ] Named Entity Recognition
 - [ ] Text embedding
 
 Location:

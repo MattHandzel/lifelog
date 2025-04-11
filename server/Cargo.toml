@@ -32,6 +32,7 @@ anyhow = "1.0"
 log = "0.4"
 image = "0.24"
 cpal = "0.15.3"
+rust-bert = "0.18.0"
 
 [features]
 dev= []
