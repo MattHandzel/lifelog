@@ -28,4 +28,4 @@ Desktop environment logger creates multiple tables, applications, current worksp
   Screen logger would like OCR transform and image embedding transform on the file in column filepath. For image embedding transform has a priority of 1 and OCR transform has a priority of 2. The OCR transform would like to use the tesseract engine with the language set to eng+deu. The image embedding transform would like to use the CLIP model with the text encoder...
   Audio logger would like text to speech logger. Overnight it would like to process the audio file with whisper-large but if the user wants to request unprocessed audio then it will use whisper-small
 
--
+- How often it should be synced with the database/server (every 1 hour, instantaneously, etc).
