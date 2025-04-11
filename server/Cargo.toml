@@ -8,6 +8,7 @@ description = "A project to log, process, and interact with various sources of d
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }
 data-models = { path = "../common/data-models" }
+tokio-cron-scheduler = "0.13"
 
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.5"
