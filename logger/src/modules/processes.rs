@@ -7,44 +7,12 @@ use surrealdb::Surreal;
 use surrealdb::sql::{Object, Value};
 use surrealdb::Connection;
 use serde::{Deserialize, Serialize};
-use surrealdb::RecordId;
+use config::ProcessRecord;
+use config::ProcessLog;
 //impl DataLogger for ProcessLogger {
 //
 //
 //}
-
-#[derive(Deserialize)]
-struct Record {
-    id: RecordId,
-    timestamp: f64,
-    pid: i32,
-    ppid: i32,
-    name: String,
-    exe: Option<String>,
-    cmdline: Option<String>,
-    status: String,
-    cpu_usage: Option<f64>,
-    memory_usage: Option<i64>,
-    threads: i32,
-    user: Option<String>,
-    start_time: f64,
-}
-
-#[derive(Serialize)]
-struct ProcessLog {
-    timestamp: f64,
-    pid: i32,
-    ppid: i32,
-    name: String,
-    exe: Option<String>,
-    cmdline: Option<String>,
-    status: String,
-    cpu_usage: Option<f64>,
-    memory_usage: Option<i64>,
-    threads: i32,
-    user: Option<String>,
-    start_time: f64,
-}
 
 // TODO: Make this logger work with windows (see how activity watch does this)
 pub async fn start_logger<C>(config: &ProcessesConfig, db: &Surreal<C>) -> surrealdb::Result<()> where
@@ -57,7 +25,7 @@ C: Connection, {
 
         if let Ok(processes) = get_process_info(&users_cache) {
             for process in processes {
-                let _: Vec<Record> = db.upsert(("screen")).content(ProcessLog {
+                let _: Vec<ProcessRecord> = db.upsert("process").content(ProcessLog {
                     timestamp: timestamp,
                     pid: process.pid,
                     ppid: process.ppid,

@@ -7,23 +7,10 @@ use surrealdb::Surreal;
 use surrealdb::sql::{Object, Value};
 use surrealdb::Connection;
 use serde::{Deserialize, Serialize};
-use surrealdb::RecordId;
+use config::ScreenRecord;
+use config::ScreenLog;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
-
-
-#[derive(Deserialize)]
-struct Record {
-    id: RecordId,
-    datetime: f64,
-    path: String
-}
-
-#[derive(Serialize)]
-struct ScreenLog {
-    datetime: f64,
-    path: String,
-}
 
 pub async fn start_logger<C>(config: &ScreenConfig,  db: &Surreal<C>) -> surrealdb::Result<()> where
 C: Connection, {
@@ -75,16 +62,16 @@ C: Connection, {
                 .expect("Failed to execute screenshot command");
         }
 
-        let _: Vec<Record> = db.upsert("screen").content(ScreenLog {
+        let _: Vec<ScreenRecord> = db.upsert("screen").content(ScreenLog {
             datetime: timestamp,
             path: Value::from(output_path).to_string(),
         })
         .await?;
 
-        // EXAMPLE simple query
+        // // EXAMPLE simple query
         // let records: Vec<Record> = db.select("screen").await?;
         // for record in records {
-        //     println!("Record ID: {:?} datetime: {}", record.id, record.datetime);
+        //     println!("Record ID: {} datetime: {} path: {}", record.id, record.datetime, record.path);
         // }
         // println!("");
 

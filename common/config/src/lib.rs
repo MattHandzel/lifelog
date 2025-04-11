@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use utils::replace_home_dir_in_path;
+use surrealdb::RecordId;
 
 // TODO: Implement default for all configs
 // TODO: Make it so that there is a default directory
@@ -651,4 +652,50 @@ impl ConfigManager {
 
 pub fn default_microphone_capture_interval_secs() -> u64 {
     300 // Default to capturing every 5 minutes (300 seconds)
+}
+
+#[derive(Deserialize)]
+pub struct ScreenRecord {
+    pub id: RecordId,
+    pub datetime: f64,
+    pub path: String
+}
+
+#[derive(Serialize)]
+pub struct ScreenLog {
+    pub datetime: f64,
+    pub path: String,
+}
+
+#[derive(Deserialize)]
+pub struct ProcessRecord {
+    pub id: RecordId,
+    pub timestamp: f64,
+    pub pid: i32,
+    pub ppid: i32,
+    pub name: String,
+    pub exe: Option<String>,
+    pub cmdline: Option<String>,
+    pub status: String,
+    pub cpu_usage: Option<f64>,
+    pub memory_usage: Option<i64>,
+    pub threads: i32,
+    pub user: Option<String>,
+    pub start_time: f64,
+}
+
+#[derive(Serialize)]
+pub struct ProcessLog {
+    pub timestamp: f64,
+    pub pid: i32,
+    pub ppid: i32,
+    pub name: String,
+    pub exe: Option<String>,
+    pub cmdline: Option<String>,
+    pub status: String,
+    pub cpu_usage: Option<f64>,
+    pub memory_usage: Option<i64>,
+    pub threads: i32,
+    pub user: Option<String>,
+    pub start_time: f64,
 }
