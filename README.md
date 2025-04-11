@@ -2,6 +2,11 @@
 
 The vision for the project would allow the user to record their own data from many different data sources, store their data securely in a local database, and have an interface to be able to query it with natural language.
 
+### System Diagram
+
+![System Diagram](./docs/Lifelog.drawio.svg)
+
+
 # LifeLog-Logger
 
 This is a logger that you can use to help log your life! It captures data from many different modalities.
