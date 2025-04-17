@@ -29,3 +29,8 @@ Desktop environment logger creates multiple tables, applications, current worksp
   Audio logger would like text to speech logger. Overnight it would like to process the audio file with whisper-large but if the user wants to request unprocessed audio then it will use whisper-small
 
 - How often it should be synced with the database/server (every 1 hour, instantaneously, etc).
+- Compression priority and method
+  Different datatypes can be compressed differently and might have different preferences on how they should be compressed.
+  Images:
+  Could have a higher compression priority (when running low on space, we should compress them), compared to audio because they carry less information per byte.
+  We could also define the compression algorithm (gzip, zlib, etc) and the compression level (1-9) for each data type.

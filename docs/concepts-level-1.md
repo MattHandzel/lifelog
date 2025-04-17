@@ -1,3 +1,7 @@
+# Lifelog
+
+The vision for the project is a software system that allows users to store information about themselves from various data sources locally, process their data into more meaningful representations, and finally have an interface to be able to interact with it in an intuitive manner to help them complete their tasks.
+
 ## Principles
 
 Store everything, don't lose anything
@@ -53,7 +57,7 @@ It defines the binary `lifelog-collector`.
   When the server makes a request, the logger should open up a thread to handle the request. The request will be in the format of { "request" : "get_data", "sources" : \[{"name": "camera", "start_time": "2023-01-01T00:00:00Z", "end_time": "2023-01-02T00:00:00Z"}, {"name: "screen", "start_time": "2023-01-01T00:00:00Z", "end_time": "2023-01-02T00:00:00Z"}, {"name" : "input", "start_time" : "past", "end_time": "now" \]}
   The collector will then look at all the data sources available on the device, and if the data source is a data source on the device, it will get the data from the database and send it to the server. The server will then process the data, validate the data, and store it in the database.
 
-- The collector can choose to send data to the server when it wants to (on an interval, upon an event (such as when the device is about to shutdown), or when the device is connected to a network)
+- The collector can choose to send data to the server when it wants to (on an interval, upon an event (such as when the device is about to shutdown), or when the device is connected to a network, when it's connected to the same network as the server)
   "When it wants to" is defined by things such as when it would be convenient for the client to send data to the server. For example, if it is charging overnight it might be a good time, if the CPU is not being utilized it might be a good time, if it has been 1 hour since the last send, it might be a good time to do so
   When sending data to the server, the server needs to ensure the data sent by the collector is what the collector meant to send (do this with hashes?). After the collector has confirmation that what the server sent is what the collector meant to send, the collector can delete the data from its local database.
 - The collector can send a `status` message to the server which contains what data sources are available, what data sources are being logged, when each data-source was last logged, it's current config,
@@ -75,6 +79,11 @@ It defines the binary `lifelog-collector`.
 - If anything fails, it should report that to the server
 - Each collector should have an interface so the user on that device can see what is up?
 - Each collector has a `meta` database that contains its own log. that log should be sendable to the server
+- Collector detects if server is online, if not, it waits a timeout
+
+gRPC methods:
+
+-
 
 #### Buffers
 
@@ -104,6 +113,9 @@ A server is a component that is a local (but can be remote) server that receives
 - It supports hot-reload of its config
 - It has an audit log of everything that happens on the server (such as when it requests data, what collectors try and connect, etc.)
 - It is run automatically upon boot
+- Uses a queue to define and send out jobs instead of doing it sequenitally
+
+gRPC methods:
 
 ### Interface
 

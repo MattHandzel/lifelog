@@ -37,6 +37,7 @@ It defines the binary `lifelog-collector`.
 - Each collector should have an interface so the user on that device can see what is up?
 - If anything fails, it should report that to the server
 - Each collector has a `meta` database that contains its own log. that log should be sendable to the server
+- Collectors automatically detect and connect to servers
 
 #### Buffers
 
@@ -60,6 +61,7 @@ A server is a component that is a local (but can be remote) server that receives
 - It creates backups on the device and can interface with different types of data storage (SSD, HDD, and cloud).
 - It has an audit log of everything that happens on the server
 - It is run automatically on boot
+- Server can compress the data for storage depending on the data types
 
 ### Interface
 
