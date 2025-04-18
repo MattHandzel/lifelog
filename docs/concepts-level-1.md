@@ -22,7 +22,7 @@ A data source is one source of data. Some example of data sources are: The camer
 `logger`
 A logger is something that logs a datasource, it is used in this project when the target data source is not already stored/logged on device.
 
-- Methods:
+- Logger trait:
 
   - initialization:
     It will notify the collector of its current status
@@ -81,9 +81,42 @@ It defines the binary `lifelog-collector`.
 - Each collector has a `meta` database that contains its own log. that log should be sendable to the server
 - Collector detects if server is online, if not, it waits a timeout
 
+Collector struct:
+
+```rs
+
+struct Collector {
+    name : String, // name of the collector
+    device : DeviceType, // type of device (phone, computer, etc)
+    operating_system: OperatingSystemType, // operating system of the device (windows, linux, mac, etc)
+    location: URI, // location of the collector (ip address, bluetooth address, etc)
+    config: CollectorConfig, // configuration of the collector
+    state: CollectorState, // state of the collector (state of the collector and all data sources, loggers)
+    data_sources: DashMap<DataSourceType, DataSource>, // data sources available on the device
+    grpc_client: GrpcClient, // gRPC client to communicate with the server
+    security_context: SecurityContext, // security context to ensure the data being sent is not tampered with
+    command_tx: mpsc::Sender<CollectorCommand>, // commands to send between threads
+    command_rx: mpsc::Receiver<CollectorCommand>, // commands to send between threads
+    //checkpoint_service: Arc<CheckpointService>, // checkpoints to disk in case of a crash
+}
+```
+
 gRPC methods:
 
--
+- `QueryDataFromCollector`: Used to fetch data from the collector
+  Type: Server-streaming RPC
+  Request: Contains the collector (name, device), contains the data sources, time ranges, incremental sync markers
+  Response: Stream of data chunk messages
+
+- `UpdateConfig`: Used to update the collector's configuration
+  Type: Unary RPC
+  Request: Contains the new configuration
+  Response: Acknowledge message
+
+- `GetStatus`: Used to get the collector's status
+  Type: Unary RPC
+  Request: CollectorStatusRequest
+  Response: CollectorStatusResponse
 
 #### Buffers
 
@@ -114,8 +147,21 @@ A server is a component that is a local (but can be remote) server that receives
 - It has an audit log of everything that happens on the server (such as when it requests data, what collectors try and connect, etc.)
 - It is run automatically upon boot
 - Uses a queue to define and send out jobs instead of doing it sequenitally
+- It can process the data and do transforms on it.
+
+```rs
+struct Server {
+    dbPool: DatabasePool, // database pool to connect to the database
+    name : String, // name of the server
+    location: URI, // location of the server (ip address, bluetooth address, etc)
+    config: ServerConfig, // configuration of the server
+    database: Database, // database of the server
+}
+```
 
 gRPC methods:
+
+-
 
 ### Interface
 
@@ -144,3 +190,5 @@ We need to solve the following problems with security:
 - How to authenticate the user from an interface to the server securely (prevent man in the middle attacks and replay attacks)
 
 To ensure message confidentiality and integrity, we will be using the following security scheme:
+
+Use TLS between the collector and the server to ensure that the data being sent is encrypted and not readable by a third party. This will also ensure that the data being sent is not tampered with.

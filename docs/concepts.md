@@ -62,6 +62,7 @@ A server is a component that is a local (but can be remote) server that receives
 - It has an audit log of everything that happens on the server
 - It is run automatically on boot
 - Server can compress the data for storage depending on the data types
+- It can process the data and do transforms on it.
 
 ### Interface
 

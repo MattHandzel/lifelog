@@ -1,6 +1,6 @@
 For each data modality the following needs to be defined:
 
-- What device it works on, what operating system, requirements from the device
+- What device it works on, what operating system, hardware requirements from device, dependencies (could be in Config.toml, or system libraries, permissions on mobiles `android.permission.ACCESS_FINE_LOCATION`)
   Example:
   Screen logger:
   | availiable | device | operating system | requires |
@@ -34,3 +34,5 @@ Desktop environment logger creates multiple tables, applications, current worksp
   Images:
   Could have a higher compression priority (when running low on space, we should compress them), compared to audio because they carry less information per byte.
   We could also define the compression algorithm (gzip, zlib, etc) and the compression level (1-9) for each data type.
+
+- Per-data modality buffer (could be number of instances), could also be capped by global buffer
