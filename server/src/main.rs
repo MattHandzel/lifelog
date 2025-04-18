@@ -1,7 +1,53 @@
+// Main server application entry point and configuration
+use ::config as config_crate;
+use actix_files::{Files, NamedFile};
+use actix_web::middleware::Logger;
+use actix_web::{get, middleware, post, put, web, App, Error, HttpResponse, HttpServer, Responder};
+use dotenv::dotenv;
+use lifelog_server::auth::{Claims, JwtAuth, UserStore};
+use lifelog_server::auth_handlers::{self, AuthState};
+use lifelog_server::cors::cors_config;
+use lifelog_server::db::{init_db, LoggerDb};
+use lifelog_server::error::ApiError;
+use lifelog_server::handlers::get_logger_data as surreal_get_logger_data;
+use lifelog_server::handlers::{
+    get_logger_count, insert_camera_frame, insert_microphone_recording, insert_process_data,
+    insert_screen_capture,
+};
+use rusqlite::types::ValueRef;
 use rusqlite::*;
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::collections::HashMap;
+use std::env;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::sync::{Arc, Mutex};
+use tokio::process::Command as TokioCommand;
+use tracing_actix_web::TracingLogger;
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
-use ::config::*;
-use std::path::PathBuf;
+use ::config::{
+    CameraConfig, Config, HyprlandConfig, MicrophoneConfig, ProcessesConfig, ScreenConfig,
+};
+
+fn load_env_config() {
+    dotenv().ok();
+}
+
+fn setup_logging() {
+    let log_level = env::var("LOG_LEVEL").unwrap_or_else(|_| "info".to_string());
+
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(format!(
+            "lifelog_server={},actix_web=info,actix_http=info",
+            log_level
+        )))
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+
+    tracing::info!("Logging initialized at {} level", log_level);
+}
 
 enum DataSourceKind {
     Hyprland {
@@ -18,6 +64,10 @@ enum DataSourceKind {
         path_to_db: PathBuf,
         path_to_dir: PathBuf,
     },
+    Camera {
+        path_to_db: PathBuf,
+        path_to_dir: PathBuf,
+    },
 }
 
 enum ConfigKind {
@@ -25,6 +75,7 @@ enum ConfigKind {
     Screen(ScreenConfig),
     Processes(ProcessesConfig),
     Microphone(MicrophoneConfig),
+    Camera(CameraConfig),
 }
 
 struct DataSource {
@@ -32,7 +83,44 @@ struct DataSource {
     conn: Connection,
 }
 
-fn data_source_kind_to_table_names(kind: DataSourceKind) -> Vec<String> {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LoggerConfig {
+    enabled: bool,
+    interval: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LoggerStatus {
+    enabled: bool,
+    running: bool,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PaginationParams {
+    page: Option<usize>,
+    page_size: Option<usize>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct QueryParams {
+    start_time: Option<f64>,
+    end_time: Option<f64>,
+    limit: Option<u32>,
+    filter: Option<String>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ApiResponse<T> {
+    status: String,
+    data: T,
+}
+
+struct AppState {
+    config: Arc<Mutex<config_crate::Config>>,
+    loggers: HashMap<String, Arc<Mutex<LoggerStatus>>>,
+}
+
+fn data_source_kind_to_table_names(kind: &DataSourceKind) -> Vec<String> {
     match kind {
         DataSourceKind::Hyprland { .. } => vec![
             "clients",
@@ -48,29 +136,60 @@ fn data_source_kind_to_table_names(kind: DataSourceKind) -> Vec<String> {
         DataSourceKind::Screen { .. } => vec!["screen".to_string()],
         DataSourceKind::Processes { .. } => vec!["processes".to_string()],
         DataSourceKind::Microphone { .. } => vec!["microphone".to_string()],
+        DataSourceKind::Camera { .. } => vec!["camera".to_string()],
     }
 }
 
-fn execute_query_on_table(conn: &Connection, table_name: &str, query: &str) -> Result<()> {
-    // Prepare the full SQL statement by appending the user's query to a SELECT statement
+fn execute_query_on_table(
+    conn: &Connection,
+    table_name: &str,
+    query: &str,
+) -> Result<Vec<serde_json::Value>> {
     let sql = format!("SELECT * FROM {} WHERE {}", table_name, query);
 
-    // Prepare and execute the SQL statement
     let mut stmt = conn.prepare(&sql)?;
+    let column_names: Vec<String> = stmt
+        .column_names()
+        .iter()
+        .map(|name| name.to_string())
+        .collect();
+
     let rows = stmt.query_map([], |row| {
-        // This closure processes each row of the result
-        // For simplicity, we'll just print the row as a debug string
-        Ok(format!("{:?}", row))
+        let mut obj = serde_json::Map::new();
+
+        for (i, name) in column_names.iter().enumerate() {
+            let value: serde_json::Value = match row.get_ref(i)? {
+                ValueRef::Null => serde_json::Value::Null,
+                ValueRef::Integer(i) => serde_json::Value::Number(serde_json::Number::from(i)),
+                ValueRef::Real(f) => {
+                    if let Some(n) = serde_json::Number::from_f64(f) {
+                        serde_json::Value::Number(n)
+                    } else {
+                        serde_json::Value::Null
+                    }
+                }
+                ValueRef::Text(t) => {
+                    serde_json::Value::String(String::from_utf8_lossy(t).to_string())
+                }
+                ValueRef::Blob(b) => {
+                    let base64 = base64::encode(b);
+                    serde_json::Value::String(format!("BLOB:{}", base64))
+                }
+            };
+
+            obj.insert(name.clone(), value);
+        }
+
+        Ok(serde_json::Value::Object(obj))
     })?;
 
-    // Iterate over the rows and print the results
+    let mut results = Vec::new();
     for row in rows {
-        println!("{}", row?);
+        results.push(row?);
     }
 
-    Ok(())
+    Ok(results)
 }
-
 // TODO: Add support for CRON-like scheduling for:
 //       - Data processing
 //       - Synching between data sources (cloud data sources, browser history, cliphistory)

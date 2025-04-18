@@ -25,7 +25,6 @@ import CameraDashboard from "./CameraDashboard";
 import MicrophoneDashboard from "./MicrophoneDashboard";
 import PlaceholderDashboard from "./PlaceholderDashboard";
 
-// Define the module types
 type ModuleType = 
   | "text_upload" 
   | "processes" 
@@ -95,7 +94,7 @@ export default function FeatureTabs() {
   const tabs: TabDefinition[] = [
     {
       id: "text_upload",
-      label: "Text Files",
+      label: "Text Upload",
       icon: FileTextIcon,
       component: <TextUploadDashboard />,
       implemented: true,

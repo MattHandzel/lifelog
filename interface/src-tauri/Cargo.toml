@@ -37,13 +37,13 @@ bytes = "1.5"
 dirs = "5.0.1"
 base64 = "0.21.0"
 async-trait = "0.1"
+reqwest = { version = "0.11", features = ["json", "multipart"] }
 
 # Cross-platform dependencies
 toml = "0.5"
 thiserror = "1"
 users = "0.11"
 hound = "3.5.1"
-reqwest = { version = "0.11", features = ["json"] }
 rocket = "0.5.1"
 clap = "3.2.25"
 crossbeam-channel = "0.5"

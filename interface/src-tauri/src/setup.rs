@@ -1,4 +1,4 @@
-use crate::config::Config;
+use config::Config;
 use rusqlite::Connection;
 use std::fs;
 use std::path::{Path, PathBuf};

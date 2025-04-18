@@ -4,6 +4,13 @@ import { Button } from './ui/button';
 import { Settings, Power, Clock, X, RefreshCcw, Camera } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
+import axios from 'axios';
+import { Card, CardContent } from './ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import { Trash, ArrowUpDown } from 'lucide-react';
+
+// Server API endpoint from environment variable
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface CameraFrame {
   timestamp: number;
@@ -58,6 +65,7 @@ export default function CameraDashboard() {
 
   async function checkCameraSupport() {
     try {
+      // Can still use invoke for system-specific checks
       const supported = await invoke<boolean>('is_camera_supported');
       setIsSupported(supported);
     } catch (error) {
@@ -69,37 +77,57 @@ export default function CameraDashboard() {
   async function loadFrames() {
     setIsLoading(true);
     try {
-      const result = await invoke<CameraFrame[]>('get_camera_frames', { 
-        page: currentPage,
-        pageSize
+      // Use server API to get frames
+      const response = await axios.get(`${API_BASE_URL}/api/logger/camera/data`, {
+        params: {
+          page: currentPage,
+          page_size: pageSize,
+          limit: pageSize,
+          // For newest first
+          ...(sortOrder === 'desc' && { filter: "ORDER BY timestamp DESC" }),
+          ...(sortOrder === 'asc' && { filter: "ORDER BY timestamp ASC" })
+        }
       });
-      console.log("Camera frames loaded:", result);
+      
+      console.log("Camera frames loaded:", response.data);
       
       // Load image data for each frame
       const framesWithData = await Promise.all(
-        result.map(async (frame) => {
+        response.data.map(async (frame: any) => {
           try {
-            const dataUrl = await invoke<string>('get_camera_frame_data', {
-              filename: frame.path
+            // For images stored as files, we need a separate API to get the image data
+            const imageResponse = await axios.get(`${API_BASE_URL}/api/logger/camera/files/${frame.path}`, {
+              responseType: 'blob'
             });
-            return { ...frame, dataUrl };
+            
+            const dataUrl = URL.createObjectURL(imageResponse.data);
+            return { 
+              timestamp: frame.timestamp,
+              path: frame.path,
+              width: frame.width || 0,
+              height: frame.height || 0,
+              dataUrl 
+            };
           } catch (error) {
             console.error(`Failed to load data for frame ${frame.path}:`, error);
-            return frame;
+            return {
+              timestamp: frame.timestamp,
+              path: frame.path,
+              width: frame.width || 0,
+              height: frame.height || 0
+            };
           }
         })
       );
       
       setFrames(framesWithData);
       
-      // For simplicity, assuming there are more pages if we got a full page
-      if (result.length === pageSize) {
-        setTotalPages(currentPage + 1);
-      } else if (currentPage > 1) {
-        setTotalPages(currentPage);
-      } else {
-        setTotalPages(1);
-      }
+      // Calculate total pages based on header or data size
+      const totalCount = response.headers['x-total-count'] 
+        ? parseInt(response.headers['x-total-count']) 
+        : response.data.length === pageSize ? (currentPage + 1) * pageSize : currentPage * pageSize;
+        
+      setTotalPages(Math.ceil(totalCount / pageSize));
     } catch (error) {
       console.error('Failed to load camera frames:', error);
     } finally {
@@ -110,11 +138,25 @@ export default function CameraDashboard() {
   async function loadSettings() {
     setIsLoadingSettings(true);
     try {
-      const result = await invoke<CameraSettings>('get_camera_settings');
-      setSettings(result);
-      setTempInterval(result.interval);
-      setTempEnabled(result.enabled);
-      setTempFps(result.fps);
+      // Use server API to get camera configuration
+      const response = await axios.get(`${API_BASE_URL}/api/logger/camera/config`);
+      const apiSettings = response.data;
+      
+      // Map server config to our settings format
+      const settings: CameraSettings = {
+        enabled: apiSettings.enabled,
+        interval: apiSettings.interval,
+        fps: apiSettings.fps,
+        device: apiSettings.device || '',
+        output_dir: apiSettings.output_dir || '',
+        resolution: apiSettings.resolution || [640, 480],
+        timestamp_format: apiSettings.timestamp_format || '%Y-%m-%d_%H-%M-%S'
+      };
+      
+      setSettings(settings);
+      setTempInterval(settings.interval);
+      setTempEnabled(settings.enabled);
+      setTempFps(settings.fps);
     } catch (error) {
       console.error('Failed to load camera settings:', error);
     } finally {
@@ -128,7 +170,8 @@ export default function CameraDashboard() {
     setIsSavingSettings(true);
     try {
       console.log('Updating camera settings...');
-      await invoke('update_camera_settings', {
+      // Use server API to update camera configuration
+      await axios.put(`${API_BASE_URL}/api/logger/camera/config`, {
         enabled: tempEnabled,
         interval: tempInterval,
         fps: tempFps
@@ -143,11 +186,11 @@ export default function CameraDashboard() {
       
       console.log(`Camera settings updated: enabled=${tempEnabled}, interval=${tempInterval}s, fps=${tempFps}`);
       
-      // If enabled, manually ensure the camera is started
+      // If enabled, restart the camera logger via server API
       if (tempEnabled) {
         try {
-          console.log('Manually triggering camera restart...');
-          await invoke('restart_camera_logger');
+          console.log('Restarting camera logger...');
+          await axios.post(`${API_BASE_URL}/api/logger/camera/start`);
           console.log('Camera logger restarted');
           
           // After a short delay, refresh the frames to show the newly captured ones
@@ -156,7 +199,13 @@ export default function CameraDashboard() {
           }, 2000);
         } catch (restartError) {
           console.error('Failed to restart camera logger:', restartError);
-          // Don't alert here, as settings were still saved
+        }
+      } else {
+        // Stop the logger if disabled
+        try {
+          await axios.post(`${API_BASE_URL}/api/logger/camera/stop`);
+        } catch (stopError) {
+          console.error('Failed to stop camera logger:', stopError);
         }
       }
       
@@ -173,7 +222,10 @@ export default function CameraDashboard() {
     try {
       setIsLoading(true);
       console.log('Triggering camera capture...');
-      await invoke('trigger_camera_capture');
+      
+      // Use server API to trigger a one-off camera capture
+      await axios.post(`${API_BASE_URL}/api/logger/camera/capture`);
+      
       console.log('Frame captured, reloading frames...');
       await loadFrames();
     } catch (error) {
@@ -188,7 +240,13 @@ export default function CameraDashboard() {
     try {
       setIsLoading(true);
       console.log('Restarting camera logger...');
-      await invoke('restart_camera_logger');
+      
+      // Stop the logger first
+      await axios.post(`${API_BASE_URL}/api/logger/camera/stop`);
+      
+      // Then start it again
+      await axios.post(`${API_BASE_URL}/api/logger/camera/start`);
+      
       console.log('Camera logger restarted, refreshing frames...');
       await loadFrames();
     } catch (error) {
@@ -324,7 +382,8 @@ export default function CameraDashboard() {
           </div>
           <Button 
             onClick={toggleSettings}
-            className="btn-secondary flex items-center gap-2"
+            variant="secondary"
+            className="flex items-center gap-2"
           >
             <Settings className="w-4 h-4" />
             Settings
@@ -425,14 +484,14 @@ export default function CameraDashboard() {
               <div className="flex justify-end gap-4 pt-4">
                 <Button
                   onClick={() => setShowSettings(false)}
-                  className="btn-secondary"
+                  variant="secondary"
                   disabled={isSavingSettings}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={saveSettings}
-                  className="btn-primary"
+                  variant="default"
                   disabled={isSavingSettings}
                 >
                   {isSavingSettings ? (
@@ -471,14 +530,15 @@ export default function CameraDashboard() {
         <div className="p-6">
           <div className="flex flex-col sm:flex-row justify-between gap-4 mb-8">
             <div className="flex items-center gap-2">
-              <Button onClick={loadFrames} className="btn-secondary">
+              <Button onClick={loadFrames} variant="secondary">
                 <RefreshCcw className="w-4 h-4 mr-2" />
                 Refresh
               </Button>
 
               <Button 
                 onClick={toggleSortOrder} 
-                className="btn-secondary flex items-center gap-2"
+                variant="secondary"
+                className="flex items-center gap-2"
               >
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
@@ -499,7 +559,8 @@ export default function CameraDashboard() {
 
               <Button 
                 onClick={captureFrame} 
-                className="btn-primary"
+                variant="default"
+                className="flex items-center gap-2"
                 disabled={!settings?.enabled}
               >
                 <Camera className="w-4 h-4 mr-2" />
@@ -508,7 +569,8 @@ export default function CameraDashboard() {
 
               <Button 
                 onClick={restartCameraLogger} 
-                className="btn-secondary"
+                variant="secondary"
+                className="flex items-center gap-2"
                 disabled={!settings?.enabled}
                 title="Restart camera logger if it's not working"
               >
@@ -521,7 +583,7 @@ export default function CameraDashboard() {
               <Button 
                 onClick={handlePreviousPage} 
                 disabled={currentPage === 1 || isLoading}
-                className="btn-secondary"
+                variant="secondary"
               >
                 <svg 
                   xmlns="http://www.w3.org/2000/svg" 
@@ -547,7 +609,7 @@ export default function CameraDashboard() {
               <Button 
                 onClick={handleNextPage} 
                 disabled={currentPage >= totalPages || isLoading}
-                className="btn-secondary"
+                variant="secondary"
               >
                 Next
                 <svg 

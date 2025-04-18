@@ -5,6 +5,10 @@ import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
 import { Mic, Clock, Square, Settings, Play, Pause, ExternalLink } from 'lucide-react';
 import { cn } from '../lib/utils';
+import axios from 'axios';
+
+// Server API endpoint from environment variable
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface MicrophoneSettings {
   enabled: boolean; // Auto-recording enabled
@@ -92,7 +96,22 @@ const MicrophoneDashboard: React.FC = () => {
   const loadSettings = async () => {
     try {
       setErrorMessage(null);
-      const config = await invoke<MicrophoneSettings>('get_microphone_config');
+      // Use server API to get microphone configuration
+      const response = await axios.get(`${API_BASE_URL}/api/logger/microphone/config`);
+      const apiSettings = response.data;
+      
+      // Map API response to our settings format
+      const config: MicrophoneSettings = {
+        enabled: apiSettings.enabled,
+        chunk_duration_secs: apiSettings.chunk_duration_secs,
+        capture_interval_secs: apiSettings.capture_interval_secs || 300,
+        output_dir: apiSettings.output_dir || '',
+        channels: apiSettings.channels || 1,
+        sample_rate: apiSettings.sample_rate || 44100,
+        bits_per_sample: apiSettings.bits_per_sample || 16,
+        timestamp_format: apiSettings.timestamp_format || '%Y-%m-%d_%H-%M-%S',
+      };
+      
       console.log('Loaded microphone config:', config);
       setSettings(config);
       setTempSettings({
@@ -110,20 +129,37 @@ const MicrophoneDashboard: React.FC = () => {
     try {
       setIsSavingSettings(true);
       setErrorMessage(null);
+      
+      // Use server API to update microphone configuration
+      await axios.put(`${API_BASE_URL}/api/logger/microphone/config`, {
+        enabled: tempSettings.autoCapture,
+        chunk_duration_secs: tempSettings.recordingDuration,
+        capture_interval_secs: tempSettings.captureInterval
+      });
+      
+      // Update local settings state
       const updatedSettings = {
         ...settings,
         enabled: tempSettings.autoCapture,
         chunk_duration_secs: tempSettings.recordingDuration,
         capture_interval_secs: tempSettings.captureInterval,
       };
-
-      // Update configuration on the backend
-      await invoke('update_microphone_config', { config: updatedSettings });
-      
       setSettings(updatedSettings);
       
-      // No need to call both update_microphone_config and update_microphone_settings
-      // as update_microphone_config now handles runtime updates as well
+      // Restart or stop the logger based on enabled state
+      if (tempSettings.autoCapture) {
+        try {
+          await axios.post(`${API_BASE_URL}/api/logger/microphone/start`);
+        } catch (error) {
+          console.error('Failed to start microphone logger:', error);
+        }
+      } else {
+        try {
+          await axios.post(`${API_BASE_URL}/api/logger/microphone/stop`);
+        } catch (error) {
+          console.error('Failed to stop microphone logger:', error);
+        }
+      }
       
       setShowSettings(false);
     } catch (error) {
@@ -139,16 +175,30 @@ const MicrophoneDashboard: React.FC = () => {
       setIsLoading(true);
       setErrorMessage(null);
       console.log('Fetching audio recordings...');
-      const files = await invoke<AudioFile[]>('get_audio_files', {
-        page: 1,
-        pageSize: 20,
+      
+      // Use server API to get recordings data
+      const response = await axios.get(`${API_BASE_URL}/api/logger/microphone/data`, {
+        params: {
+          page: 1,
+          page_size: 20,
+          filter: "ORDER BY created_at DESC"
+        }
       });
+      
+      // Map API response to our AudioFile format
+      const files = response.data.map((item: any) => ({
+        path: item.path || '',
+        filename: item.filename || '',
+        duration: item.duration || 0,
+        created_at: item.created_at || '',
+        size: item.size || 0
+      }));
+      
       console.log('Retrieved audio files:', files);
       setRecordings(Array.isArray(files) ? files : []);
     } catch (error) {
       console.error('Failed to fetch recordings:', error);
       setErrorMessage(`Failed to fetch recordings: ${error}`);
-      setRecordings([]);
     } finally {
       setIsLoading(false);
     }
@@ -157,7 +207,8 @@ const MicrophoneDashboard: React.FC = () => {
   const handleStartRecording = async () => {
     try {
       setErrorMessage(null);
-      await invoke('start_recording');
+      // Use server API to start recording
+      await axios.post(`${API_BASE_URL}/api/logger/microphone/record/start`);
       setIsRecording(true);
       setIsPaused(false);
     } catch (error) {
@@ -170,10 +221,12 @@ const MicrophoneDashboard: React.FC = () => {
     try {
       setErrorMessage(null);
       if (isPaused) {
-        await invoke('resume_recording');
+        // Use server API to resume recording
+        await axios.post(`${API_BASE_URL}/api/logger/microphone/record/resume`);
         setIsPaused(false);
       } else {
-        await invoke('pause_recording');
+        // Use server API to pause recording
+        await axios.post(`${API_BASE_URL}/api/logger/microphone/record/pause`);
         setIsPaused(true);
       }
     } catch (error) {
@@ -185,7 +238,8 @@ const MicrophoneDashboard: React.FC = () => {
   const handleStopRecording = async () => {
     try {
       setErrorMessage(null);
-      await invoke('stop_recording');
+      // Use server API to stop recording
+      await axios.post(`${API_BASE_URL}/api/logger/microphone/record/stop`);
       setIsRecording(false);
       setIsPaused(false);
       fetchRecordings();
@@ -198,283 +252,377 @@ const MicrophoneDashboard: React.FC = () => {
   const handleOpenTerminalForRecording = async () => {
     try {
       setErrorMessage(null);
-      await invoke('open_terminal_for_recording');
+      // This can still use invoke as it's a Tauri-specific action
+      await invoke('open_terminal_for_audio', {
+        directory: settings.output_dir,
+      });
     } catch (error) {
-      console.error('Failed to open terminal for recording:', error);
+      console.error('Failed to open terminal:', error);
       setErrorMessage(`Failed to open terminal: ${error}`);
     }
   };
 
   const checkRecordingStatus = async () => {
     try {
-      const status = await invoke<RecordingStatus>('get_recording_status');
-      setIsRecording(status.is_recording);
-      setIsPaused(status.is_paused);
+      // Use server API to get current recording status
+      const response = await axios.get(`${API_BASE_URL}/api/logger/microphone/status`);
+      const status = response.data;
       
-      // Also update the settings if auto recording state changed
+      setIsRecording(status.is_recording || false);
+      setIsPaused(status.is_paused || false);
+      
+      // Also update our knowledge of whether auto-recording is enabled
       if (settings.enabled !== status.auto_recording_enabled) {
         setSettings({
           ...settings,
-          enabled: status.auto_recording_enabled
+          enabled: status.auto_recording_enabled,
         });
-        
         setTempSettings({
           ...tempSettings,
-          autoCapture: status.auto_recording_enabled
+          autoCapture: status.auto_recording_enabled,
         });
       }
     } catch (error) {
       console.error('Failed to check recording status:', error);
+      // Don't show this error to the user as it might spam the UI during polling
     }
   };
 
-  // Helper to format seconds into a friendly string (e.g., "5m 30s")
   const formatTimeForDisplay = (seconds: number): string => {
     if (seconds < 60) {
-      return `${seconds}s`;
-    } else {
+      return `${seconds} seconds`;
+    } else if (seconds === 60) {
+      return "1 minute";
+    } else if (seconds < 3600) {
       const minutes = Math.floor(seconds / 60);
-      const remainingSecs = seconds % 60;
-      return remainingSecs === 0 ? `${minutes}m` : `${minutes}m ${remainingSecs}s`;
+      const remainingSeconds = seconds % 60;
+      return remainingSeconds > 0 ? `${minutes}m ${remainingSeconds}s` : `${minutes} minutes`;
+    } else {
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor((seconds % 3600) / 60);
+      return minutes > 0 ? `${hours}h ${minutes}m` : `${hours} hours`;
     }
   };
 
-  // Calculate maximum recording duration as 80% of the capture interval
   const getMaxRecordingDuration = () => Math.floor(tempSettings.captureInterval * 0.8);
+
+  const handlePlayRecording = async (audioFile: AudioFile) => {
+    try {
+      // Use server API to stream the audio file
+      const audioUrl = `${API_BASE_URL}/api/logger/microphone/files/${audioFile.path}`;
+      
+      // We can use the browser's audio capabilities to play it
+      const audio = new Audio(audioUrl);
+      audio.play().catch(e => {
+        console.error('Failed to play audio:', e);
+        setErrorMessage(`Failed to play audio: ${e}`);
+      });
+    } catch (error) {
+      console.error('Failed to play recording:', error);
+      setErrorMessage(`Failed to play recording: ${error}`);
+    }
+  };
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
 
   return (
     <div className="p-6 md:p-8 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 flex items-center justify-center bg-blue-900/20 rounded-lg">
-            <Mic className="h-5 w-5 text-blue-400" />
+      {/* Header section */}
+      <div className="mb-8">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-3">
+            <Mic className="w-8 h-8 text-[#4C8BF5]" />
+            <h1 className="title">Microphone</h1>
           </div>
-          <div>
-            <h1 className="text-xl font-semibold text-white">Audio Capture</h1>
-            <p className="text-sm text-gray-400">Manage audio recording settings</p>
-          </div>
+          <Button 
+            onClick={() => setShowSettings(!showSettings)}
+            variant="secondary"
+            className="flex items-center gap-2"
+          >
+            <Settings className="w-4 h-4" />
+            Settings
+          </Button>
         </div>
-        <Button onClick={() => setShowSettings(!showSettings)} className="btn-secondary flex items-center gap-2">
-          <Settings className="h-4 w-4" />
-          <span>Settings</span>
-        </Button>
+        <p className="subtitle">Record and manage audio from your microphone</p>
       </div>
 
-      {/* Microphone Settings Panel (Card) */}
+      {/* Error message display */}
+      {errorMessage && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-500 p-4 rounded-lg mb-6">
+          <p>{errorMessage}</p>
+        </div>
+      )}
+
+      {/* Settings panel */}
       {showSettings && (
-        <div className="card mb-8 bg-[#151926] rounded-lg shadow-2xl">
+        <div className="card mb-8">
           <div className="p-6">
             <h2 className="text-lg font-medium text-[#F9FAFB] mb-6">Microphone Settings</h2>
             <div className="space-y-6">
-              {/* Auto Recording Toggle */}
+              {/* Auto-capture toggle */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#1C2233] rounded-lg">
-                    <Mic className={`w-5 h-5 ${tempSettings.autoCapture ? 'text-green-500' : 'text-[#9CA3AF]'}`} />
+                  <div className={`p-2 bg-[#1C2233] rounded-lg ${tempSettings.autoCapture ? 'text-green-500' : 'text-[#9CA3AF]'}`}>
+                    <Mic className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="font-medium text-[#F9FAFB]">Enable Auto Recording</p>
+                    <p className="font-medium text-[#F9FAFB]">Auto-Recording</p>
                     <p className="text-sm text-[#9CA3AF]">
-                      {tempSettings.autoCapture
-                        ? 'Audio will be recorded automatically'
-                        : 'Auto recording is disabled'}
+                      {tempSettings.autoCapture 
+                        ? `Recording automatically every ${formatTimeForDisplay(tempSettings.captureInterval)}` 
+                        : 'Automatic recording is disabled'}
                     </p>
                   </div>
                 </div>
-                <Switch
-                  checked={tempSettings.autoCapture}
-                  onCheckedChange={(checked) => setTempSettings({ ...tempSettings, autoCapture: checked })}
-                  className="data-[state=checked]:bg-[#4C8BF5] data-[state=unchecked]:bg-[#1C2233]"
+                <Switch 
+                  checked={tempSettings.autoCapture} 
+                  onCheckedChange={(checked) => setTempSettings({...tempSettings, autoCapture: checked})}
+                  className="data-[state=checked]:bg-[#4C8BF5]"
                 />
               </div>
 
-              {/* Capture Interval */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#1C2233] rounded-lg">
-                    <Clock className="w-5 h-5 text-[#4C8BF5]" />
+              {/* Capture interval setting */}
+              {tempSettings.autoCapture && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-[#1C2233] rounded-lg">
+                      <Clock className="w-5 h-5 text-[#4C8BF5]" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-[#F9FAFB]">Capture Interval</p>
+                      <p className="text-sm text-[#9CA3AF]">
+                        Record automatically every {formatTimeForDisplay(tempSettings.captureInterval)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-[#F9FAFB]">Capture Interval</p>
-                    <p className="text-sm text-[#9CA3AF]">
-                      Record every {formatTimeForDisplay(tempSettings.captureInterval)}
-                    </p>
+                  
+                  <div className="px-4">
+                    <Slider 
+                      min={60}
+                      max={3600}
+                      step={30}
+                      value={[tempSettings.captureInterval]} 
+                      onValueChange={(vals) => setTempSettings({...tempSettings, captureInterval: vals[0]})}
+                    />
+                    <div className="flex justify-between text-xs text-[#9CA3AF] mt-1">
+                      <span>1m</span>
+                      <span>30m</span>
+                      <span>60m</span>
+                    </div>
                   </div>
                 </div>
-                <div className="px-4">
-                  <Slider
-                    min={30}
-                    max={600}
-                    step={30}
-                    value={[tempSettings.captureInterval]}
-                    onValueChange={(value: number[]) =>
-                      setTempSettings({ ...tempSettings, captureInterval: value[0] })
-                    }
-                  />
-                  <div className="flex justify-between text-xs text-[#9CA3AF] mt-2">
-                    <span>30s</span>
-                    <span>5m</span>
-                    <span>10m</span>
-                  </div>
-                </div>
-              </div>
+              )}
 
-              {/* Recording Duration */}
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-[#1C2233] rounded-lg">
-                    <Square className="w-5 h-5 text-[#4C8BF5]" />
+              {/* Recording duration setting */}
+              {tempSettings.autoCapture && (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-[#1C2233] rounded-lg">
+                      <Clock className="w-5 h-5 text-[#4C8BF5]" />
+                    </div>
+                    <div>
+                      <p className="font-medium text-[#F9FAFB]">Recording Duration</p>
+                      <p className="text-sm text-[#9CA3AF]">
+                        Each recording lasts {formatTimeForDisplay(tempSettings.recordingDuration)}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-medium text-[#F9FAFB]">Recording Duration</p>
-                    <p className="text-sm text-[#9CA3AF]">
-                      {formatTimeForDisplay(tempSettings.recordingDuration)} per recording
-                    </p>
+                  
+                  <div className="px-4">
+                    <Slider 
+                      min={5}
+                      max={getMaxRecordingDuration()}
+                      step={5}
+                      value={[tempSettings.recordingDuration]} 
+                      onValueChange={(vals) => setTempSettings({...tempSettings, recordingDuration: vals[0]})}
+                    />
+                    <div className="flex justify-between text-xs text-[#9CA3AF] mt-1">
+                      <span>5s</span>
+                      <span>{formatTimeForDisplay(Math.floor(getMaxRecordingDuration() / 2))}</span>
+                      <span>{formatTimeForDisplay(getMaxRecordingDuration())}</span>
+                    </div>
                   </div>
                 </div>
-                <div className="px-4">
-                  <Slider
-                    min={5}
-                    max={getMaxRecordingDuration()}
-                    step={5}
-                    value={[tempSettings.recordingDuration]}
-                    onValueChange={(value: number[]) =>
-                      setTempSettings({ ...tempSettings, recordingDuration: value[0] })
-                    }
-                  />
-                  <div className="flex justify-between text-xs text-[#9CA3AF] mt-2">
-                    <span>5s</span>
-                    <span>{formatTimeForDisplay(Math.floor(getMaxRecordingDuration() / 2))}</span>
-                    <span>{formatTimeForDisplay(getMaxRecordingDuration())}</span>
-                  </div>
-                </div>
-                <p className="text-xs text-[#9CA3AF] italic">
-                  Maximum recording length is limited to 80% of capture interval.
-                </p>
+              )}
+
+              {/* Actions */}
+              <div className="flex justify-end gap-4 pt-4 border-t border-[#2A3142]">
+                <Button
+                  onClick={() => setShowSettings(false)}
+                  variant="secondary"
+                  disabled={isSavingSettings}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={saveSettings}
+                  variant="default"
+                  disabled={isSavingSettings}
+                >
+                  {isSavingSettings ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Saving...
+                    </>
+                  ) : 'Save Settings'}
+                </Button>
               </div>
-            </div>
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-4 pt-4">
-              <Button onClick={() => setShowSettings(false)} className="btn-secondary">
-                Cancel
-              </Button>
-              <Button onClick={saveSettings} className="btn-primary" disabled={isSavingSettings}>
-                {isSavingSettings ? 'Saving...' : 'Save Settings'}
-              </Button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Recording Controls */}
-      <div className="bg-[#151926] rounded-lg p-6 mb-6">
-        <div className="flex items-center gap-2 mb-5">
-          <Mic className="h-6 w-6 text-blue-400" />
-          <h3 className="text-lg font-semibold text-white">Recording Controls</h3>
-        </div>
-
-        <div className="space-y-3 mb-5">
-          <div className="flex items-center">
-            <span className="text-gray-300 w-14">Status:</span>
-            <span
-              className={cn(
-                isRecording ? (isPaused ? 'text-yellow-500' : 'text-red-500') : 'text-gray-400',
-                'font-medium'
-              )}
+      {/* Manual recording controls */}
+      <div className="card mb-8">
+        <div className="p-6">
+          <h2 className="text-lg font-medium text-[#F9FAFB] mb-4">Manual Recording</h2>
+          
+          <div className="flex flex-wrap gap-4 mb-6">
+            {!isRecording ? (
+              <Button
+                onClick={handleStartRecording}
+                variant="default"
+                className="flex items-center gap-2"
+              >
+                <Play className="w-4 h-4" />
+                Start Recording
+              </Button>
+            ) : (
+              <>
+                <Button
+                  onClick={handlePauseRecording}
+                  className={cn("flex items-center gap-2", 
+                    isPaused && "bg-[#4C8BF5]/10 text-[#4C8BF5] border-[#4C8BF5]/30"
+                  )}
+                  variant="secondary"
+                >
+                  {isPaused ? (
+                    <>
+                      <Play className="w-4 h-4" />
+                      Resume
+                    </>
+                  ) : (
+                    <>
+                      <Pause className="w-4 h-4" />
+                      Pause
+                    </>
+                  )}
+                </Button>
+                
+                <Button
+                  onClick={handleStopRecording}
+                  variant="secondary"
+                  className="flex items-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border-red-500/30"
+                >
+                  <Square className="w-4 h-4" />
+                  Stop
+                </Button>
+              </>
+            )}
+            
+            <Button
+              onClick={handleOpenTerminalForRecording}
+              variant="secondary"
+              className="flex items-center gap-2"
+              title="Open terminal in the recordings directory"
             >
-              {isRecording ? (isPaused ? 'Paused' : 'Recording in progress') : 'Inactive'}
-            </span>
+              <ExternalLink className="w-4 h-4" />
+              Open Directory
+            </Button>
+            
+            <Button
+              onClick={fetchRecordings}
+              variant="secondary"
+              className="flex items-center gap-2"
+            >
+              <svg className="w-4 h-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Refresh
+            </Button>
           </div>
-        </div>
-
-        <div>
-          {!isRecording ? (
-            <div className="flex gap-3">
-              <Button onClick={handleStartRecording} className="btn-primary flex items-center gap-2">
-                <Play className="h-4 w-4" />
-                <span>Start Recording</span>
-              </Button>
+          
+          {isRecording && (
+            <div className="bg-[#1C2233] p-3 rounded-lg flex items-center mb-4">
+              <div className={cn(
+                "w-3 h-3 rounded-full mr-3", 
+                isPaused ? "bg-yellow-500" : "bg-red-500 animate-pulse"
+              )}></div>
+              <p className="text-sm">
+                {isPaused ? "Recording paused" : "Recording in progress..."}
+              </p>
             </div>
-          ) : (
-            <div className="flex gap-3">
-              <Button
-                onClick={handlePauseRecording}
-                className="btn-secondary flex items-center gap-2"
-              >
-                {isPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-                <span>{isPaused ? 'Resume' : 'Pause'}</span>
-              </Button>
-              <Button
-                onClick={handleStopRecording}
-                className="btn-secondary flex items-center gap-2"
-              >
-                <Square className="h-4 w-4" />
-                <span>Stop</span>
-              </Button>
+          )}
+          
+          {settings.enabled && (
+            <div className="bg-[#1C2233] p-3 rounded-lg flex items-center mb-4">
+              <div className="w-3 h-3 rounded-full bg-green-500 mr-3"></div>
+              <p className="text-sm">
+                Auto-recording is active. Capturing for {formatTimeForDisplay(settings.chunk_duration_secs)} every {formatTimeForDisplay(settings.capture_interval_secs)}.
+              </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* Audio Recordings List */}
-      <div className="bg-[#151926] rounded-lg">
-        <div className="flex justify-between items-center p-6 border-b border-gray-800">
-          <h3 className="text-lg font-semibold">Audio Recordings</h3>
-          <Button onClick={fetchRecordings} className="btn-primary">
-                <svg 
-                  xmlns="http://www.w3.org/2000/svg" 
-                  className="h-5 w-5 mr-2" 
-                  fill="none" 
-                  viewBox="0 0 24 24" 
-                  stroke="currentColor"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
-                  />
-                </svg>
-                Refresh
-              </Button>
-        </div>
-
-        <div className="p-10">
+      {/* Recordings list */}
+      <div className="card">
+        <div className="p-6">
+          <h2 className="text-lg font-medium text-[#F9FAFB] mb-4">Recent Recordings</h2>
+          
           {isLoading ? (
-            <div className="flex justify-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-400"></div>
+            <div className="flex flex-col items-center justify-center py-12">
+              <svg className="animate-spin h-10 w-10 text-[#4C8BF5] mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              <p className="text-[#9CA3AF]">Loading recordings...</p>
             </div>
-          ) : recordings.length > 0 ? (
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+          ) : recordings.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-[#9CA3AF]">
+              <Mic className="w-12 h-12 mb-4" />
+              <p className="mb-2">No recordings found</p>
+              <p className="text-sm text-center max-w-md">
+                Start a manual recording or enable auto-recording to capture audio.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
               {recordings.map((recording, index) => (
-                <div key={index} className="flex justify-between items-center p-3 bg-[#1b1f2e] rounded-lg">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">{recording.filename}</span>
-                    <span className="text-xs text-gray-400">
-                      {recording.created_at} • {recording.duration} sec •{' '}
-                      {Math.round(recording.size / 1024)} KB
-                    </span>
+                <div key={index} className="bg-[#1C2233] rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Mic className="w-4 h-4 text-[#4C8BF5]" />
+                      <p className="font-medium text-[#F9FAFB] truncate">{recording.filename}</p>
+                    </div>
+                    <div className="flex flex-wrap text-xs text-[#9CA3AF] gap-x-4">
+                      <span>Duration: {formatTimeForDisplay(recording.duration)}</span>
+                      <span>Size: {formatFileSize(recording.size)}</span>
+                      <span>Created: {new Date(recording.created_at).toLocaleString()}</span>
+                    </div>
                   </div>
-                  <Button variant="ghost" size="icon" className="text-gray-400 hover:text-white">
-                    &#8681;
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      onClick={() => handlePlayRecording(recording)}
+                      variant="default"
+                      title="Play recording"
+                    >
+                      <Play className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center">
-              <div className="text-gray-400 text-center">No recordings found</div>
-            </div>
           )}
         </div>
       </div>
-
-      {errorMessage && (
-        <div className="mt-4 p-3 bg-red-500/20 text-red-400 rounded-lg text-sm">
-          {errorMessage}
-        </div>
-      )}
     </div>
   );
 };

@@ -1,11 +1,27 @@
-import { useState } from "react";
+import { useEffect, useState } from 'react';
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { auth } from './lib/api';
+import { Login } from './components/Login';
+import { Sidebar } from './components/Sidebar';
+import ModulesPanel from './components/ModulesPanel';
+import CameraDashboard from './components/CameraDashboard';
+import MicrophoneDashboard from './components/MicrophoneDashboard';
+import ScreenDashboard from './components/ScreenDashboard';
+import ProcessesDashboard from './components/ProcessesDashboard';
+import SettingsDashboard from './components/SettingsDashboard';
+import TextUploadDashboard from './components/TextUploadDashboard';
+import SearchDashboard from './components/SearchDashboard';
+import AccountDashboard from './components/AccountDashboard';
+import { LayoutDashboard, Activity, Camera, Settings, Search, User } from "lucide-react";
+import FeatureTabs from "./components/FeatureTabs.tsx";
 import { cn } from "./lib/utils";
-import { LayoutDashboard, Activity, Camera, Settings } from "lucide-react";
-import FeatureTabs from "./components/FeatureTabs";
 
-type View = "dashboard" | "settings";
 
-function App() {
+import './App.css';
+
+type View = "dashboard" | "search" | "account" | "settings";
+
+function AppLayout() {
   const [currentView, setCurrentView] = useState<View>("dashboard");
 
   const NavLink = ({
@@ -43,6 +59,8 @@ function App() {
         <nav className="flex-1 flex flex-col">
           <div className="flex flex-col gap-2 mt-4">
             <NavLink view="dashboard" label="Dashboard" icon={LayoutDashboard} />
+            <NavLink view="search" label="Search" icon={Search} />
+            <NavLink view="account" label="Account" icon={User} />
           </div>
           {/* Settings pinned at the bottom */}
           <div className="mt-auto pt-4 border-t border-[#232B3D] flex flex-col gap-2">
@@ -55,6 +73,8 @@ function App() {
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0F111A]">
         <div className="flex-1 overflow-auto">
           {currentView === "dashboard" && <FeatureTabs />}
+          {currentView === "search" && <SearchDashboard />}
+          {currentView === "account" && <AccountDashboard />}
           {currentView === "settings" && (
             <div className="p-8">
               <h2 className="title mb-4">Settings</h2>
@@ -77,6 +97,97 @@ function App() {
         </footer>
       </main>
     </div>
+  );
+}
+
+function App() {
+  const [loading, setLoading] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const checkAuth = () => {
+      try {
+        // For development: bypass authentication
+        const authenticated = true;
+        setIsAuthenticated(authenticated);
+        setLoading(false);
+        
+        const apiUrl = typeof import.meta.env !== 'undefined' 
+          ? import.meta.env.VITE_API_BASE_URL 
+          : 'http://localhost:8080';
+      } catch (err) {
+        console.error('[APP] Auth check error:', err);
+        setError('Authentication check failed');
+        setLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-[#0F1629] text-white p-4">
+        <h1 className="text-xl font-bold mb-4">Something went wrong</h1>
+        <p className="text-red-400 mb-4">{error}</p>
+        <button 
+          className="px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700"
+          onClick={() => window.location.reload()}
+        >
+          Reload Application
+        </button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen bg-[#0F1629] text-white">
+        <div className="text-center space-y-6 max-w-md px-6">
+          {/* Logo */}
+          <div className="mb-8">
+            <h1 className="text-5xl font-bold gradient-text tracking-tight mb-2">LifeLog</h1>
+          </div>
+          
+          {/* Loading text */}
+          <h2 className="text-2xl font-medium text-[#F9FAFB]">
+            Loading Lifelog Dashboard...
+          </h2>
+          
+          {/* Loading indicator */}
+          <div className="w-full h-1.5 bg-[#232B3D] rounded-full overflow-hidden mt-8 mb-4">
+            <div className="h-full bg-[#4C8BF5] rounded-full animate-loading-progress"></div>
+          </div>
+          
+          {/* Error message */}
+          <p className="text-[#9CA3AF] text-sm mt-4">
+            If this message persists, there may be an issue with the application.
+          </p>
+        </div>
+        
+        {/* Version footer */}
+        <div className="absolute bottom-8 text-center">
+          <p className="text-sm text-[#9CA3AF]">Lifelog Interface • Version 0.1.0</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (!isAuthenticated) {
+    return (
+      <BrowserRouter>
+        <div className="flex items-center justify-center h-screen bg-[#0F1629] text-white">
+          <Login />
+        </div>
+      </BrowserRouter>
+    );
+  }
+
+  return (
+    <BrowserRouter>
+      <AppLayout />
+    </BrowserRouter>
   );
 }
 
