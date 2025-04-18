@@ -148,6 +148,9 @@ A server is a component that is a local (but can be remote) server that receives
 - It is run automatically upon boot
 - Uses a queue to define and send out jobs instead of doing it sequenitally
 - It can process the data and do transforms on it.
+  There is a transformation pipeline that is defined for every datatype, it is a DAG where the nodes are intermediate data points or 'actions' and the edges are transformations. The intermediate data points can be stored
+  What is a transformation?
+  A transformation is a function that takes in data of some type and outputs data of another data type where they can be the same data type.
 
 ```rs
 struct Server {
