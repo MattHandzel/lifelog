@@ -19,6 +19,27 @@ Store everything, don't lose anything
 `data-source`
 A data source is one source of data. Some example of data sources are: The camera, the screen, browser history, clipboard history
 
+- Methods:
+
+  - initialization:
+    This function starts up the data source and will "handshake" with the server so that it links up
+
+  - listen:
+    This function listens for any "commit now" or "sample now" commands from the server
+
+  - probe:
+    This function will check that the data source is accessable and (if applicable), check if any changes were made since last probe
+
+  - sample:
+    This function will gather one unit (screenshot, browser history entry, etc) of data from the data source
+
+  - commit:
+    This function will send the gathered data to the remote server
+
+  - stop:
+    This function is run to gracefully stop the data-source, it will notify the collector of its current status
+
+
 `logger`
 A logger is something that logs a datasource, it is used in this project when the target data source is not already stored/logged on device.
 
