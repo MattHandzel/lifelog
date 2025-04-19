@@ -1,6 +1,7 @@
 ## Principles
 
 Store everything, don't lose anything
+Servers are workers, collectors know about servers.
 
 ## Requirements
 

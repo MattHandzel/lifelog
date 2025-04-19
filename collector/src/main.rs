@@ -2,11 +2,11 @@ use config::load_config;
 use lifelog_logger::logger::DataLogger;
 use lifelog_logger::modules::*;
 use lifelog_logger::setup;
+use mobc::Pool;
+use mobc_surrealdb::SurrealDBConnectionManager;
 use std::env;
 use std::process::Command;
 use std::sync::Arc;
-use mobc::Pool;
-use mobc_surrealdb::SurrealDBConnectionManager;
 use std::{thread, time};
 
 #[tokio::main]

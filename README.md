@@ -50,6 +50,7 @@ Use the `flake.nix` 😀
   - [ ] Zsh
   - [ ] Fish
 - [ ] Home assistant devices
+- [ ] Devices networked (using wireshark)
 
 ### Inferences
 
