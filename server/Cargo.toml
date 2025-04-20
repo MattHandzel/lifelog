@@ -7,6 +7,7 @@ description = "A project to log, process, and interact with various sources of d
 [dependencies]
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }
+definitions = { path = "../common/definitions" }
 tokio = { version = "1.44.2", features = ["full", "macros", "rt-multi-thread"] }
 chrono = "0.4"
 thiserror = "2"
@@ -19,6 +20,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 tonic = { version = "0.13.0", features = ["transport"] }
 prost = "0.13.5"
 tonic-reflection = { version = "0.13.0", features = ["server"] }
+dashmap = "6.1.0"
 
 [build-dependencies]
 tonic-build = "0.13"

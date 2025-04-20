@@ -1,20 +1,24 @@
-use target_lexicon::Triple as ComputerTargetTriple;
+include!(concat!(env!("OUT_DIR"), "/data_modality.rs"));
 
-enum PhoneType {
-    Android(AndroidOperatingSystem),
-    IPhone(IPhoneOperatingSystem),
-}
+pub use data_modality::DataModality;
 
-enum ComputerType {
-    Desktop(ComputerTargetTriple),
-    Laptop(ComputerTargetTriple),
-}
-
-enum DeviceType {
-    Phone(PhoneType),
-    Computer(ComputerType),
-}
-
+//use target_lexicon::Triple as ComputerTargetTriple;
+//
+//enum PhoneType {
+//    Android(AndroidOperatingSystem),
+//    IPhone(IPhoneOperatingSystem),
+//}
+//
+//enum ComputerType {
+//    Desktop(ComputerTargetTriple),
+//    Laptop(ComputerTargetTriple),
+//}
+//
+//enum DeviceType {
+//    Phone(PhoneType),
+//    Computer(ComputerType),
+//}
+//
 //struct Collector {
 //    name: String,                                      // name of the collector
 //    device: DeviceType,                                // type of device (phone, computer, etc)

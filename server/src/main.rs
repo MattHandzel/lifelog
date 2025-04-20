@@ -1,4 +1,8 @@
 use async_trait::async_trait;
+use config::CollectorConfig;
+//use config::ServerConfig;
+use dashmap::DashMap;
+use definitions;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -51,14 +55,27 @@ impl Default for ServerConfig<'_> {
     }
 }
 
+type DataSource = String; // Placeholder for actual data source type
+type DataSourceType = String; // Placeholder for actual data source type
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct RegisteredCollector {
+    location: String,
+    //connection
+    sources: Vec<DataSource>,
+    config: config::CollectorConfig,
+}
+
 #[derive(Clone)]
-pub struct LifeLogServer {
+pub struct Server {
     db: Surreal<Db>,
     host: String,
     port: u16,
+    collectors: Vec<RegisteredCollector>,
+    data_source_collector_map: DashMap<DataSourceType, RegisteredCollector>,
 }
 
-impl LifeLogServer {
+impl Server {
     pub async fn new(config: &ServerConfig<'_>) -> Result<Self, ServerError> {
         let db = Surreal::new::<Mem>(()).await?;
         db.use_ns("lifelog").use_db(config.database_name).await?;
@@ -67,12 +84,14 @@ impl LifeLogServer {
             db,
             host: config.host.clone(),
             port: config.port,
+            collectors: Vec::new(),
+            data_source_collector_map: DashMap::new(),
         })
     }
 }
 
 #[tonic::async_trait]
-impl GrpcServerServices for LifeLogServer {
+impl GrpcServerServices for Server {
     async fn register_collector(
         &self,
         request: tonic::Request<CollectorRegistrationRequest>,
@@ -102,7 +121,7 @@ impl GrpcServerServices for LifeLogServer {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ServerConfig::default();
-    let server = LifeLogServer::new(&config).await?;
+    let server = Server::new(&config).await?;
 
     let addr = format!("{}:{}", config.host, config.port).parse()?;
 

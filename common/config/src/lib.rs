@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::env;
 use utils::replace_home_dir_in_path;
 
 // TODO: Implement default for all configs
@@ -31,14 +31,24 @@ pub struct Config {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ServerConfig {
     #[serde(default = "default_server_ip")]
-    pub ip: String,
+    pub host: String,
 
     #[serde(default = "default_server_port")]
     pub port: u16,
 
-    pub folder_dir: PathBuf,
+    #[serde(default = "default_database_path")]
+    pub database_path: String,
+
+    #[serde(default = "default_database_name")]
+    pub database_name: String,
 }
 
+pub fn default_database_path() -> String {
+    "surrealkv://".to_string()
+}
+fn default_database_name() -> String {
+    "main".to_string()
+}
 // Load environment variables for sensitive config values
 fn get_env_var<T: std::str::FromStr>(name: &str, default: T) -> T {
     match env::var(name) {
@@ -525,6 +535,12 @@ fn create_default_config() -> Config {
             fps: default_camera_fps(),
             timestamp_format: default_timestamp_format(),
         },
+        server: ServerConfig {
+            host: default_server_ip(),
+            port: default_server_port(),
+            database_path: default_database_path(),
+            database_name: default_database_name(),
+        },
         microphone: MicrophoneConfig {
             enabled: default_true(),
             output_dir: home_dir.join("lifelog_microphone"),
@@ -595,11 +611,6 @@ fn create_default_config() -> Config {
             log_workspace: default_true(),
             log_active_monitor: default_true(),
             log_devices: default_true(),
-        },
-        server: ServerConfig {
-            ip: default_server_ip(),
-            port: default_server_port(),
-            folder_dir: home_dir.join("lifelog_server"),
         },
         input_logger: InputLoggerConfig {
             output_dir: home_dir.join("lifelog_input"),
@@ -673,3 +684,6 @@ impl ConfigManager {
 pub fn default_microphone_capture_interval_secs() -> u64 {
     300 // Default to capturing every 5 minutes (300 seconds)
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CollectorConfig {}

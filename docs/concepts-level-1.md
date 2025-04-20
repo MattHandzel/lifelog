@@ -17,7 +17,16 @@ Store everything, don't lose anything
 ## Concepts
 
 `data-source`
-A data source is one source of data. Some example of data sources are: The camera, the screen, browser history, clipboard history
+A data source is one source of data. It is something that is very specific and it is a location of where data comes from. A data source has a unique data modality, but a data modality can come from many different sources. Some example of data sources are: computer screen versus laptop screen are both computer screens, but they are different data sources. A data source can be a file on disk, a network connection, a device, etc.
+
+```rs
+struct DataSource {
+    name: String, // human-definable name
+    location: String,
+    device: Device, // the device it is on
+    modality: DataModality, // the type of data modality
+}
+```
 
 - Methods:
 
