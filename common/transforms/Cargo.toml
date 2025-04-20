@@ -1,0 +1,8 @@
+[package]
+name = "transforms"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "2.0.12"
+tesseract = { version = "0.15.2"}

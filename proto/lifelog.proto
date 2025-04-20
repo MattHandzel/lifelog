@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+package lifelog;
+
+service Lifelog {
+    rpc RegisterCollector(CollectorRegistration) returns (RegistrationResponse);
+    rpc SendData(CollectorData) returns (DataAck);
+    rpc GetStatus(CollectorStatusRequest) returns (CollectorStatusResponse);
+    rpc UpdateConfig(CollectorConfig) returns (ConfigAck);
+    rpc QueryDataFromCollector(CollectorQuery) returns (CollectorData);
+}
+
+message CollectorRegistration {
+    string config = 1;
+}
+
+message RegistrationResponse {
+    bool success = 1;
+}
+
+message CollectorData {
+    string id = 1;
+    bytes data = 2;
+}
+
+message 
+
+message DataAck {
+    bool success = 1;
+}
