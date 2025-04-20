@@ -78,9 +78,9 @@
         pname = "lifelog-server";
         binName = "lifelog-server";
       };
-      lifelog-logger = mkRustPackage {
-        pname = "lifelog-logger";
-        binName = "lifelog-logger";
+      lifelog-collector = mkRustPackage {
+        pname = "lifelog-collector";
+        binName = "lifelog-collector";
       };
     });
 

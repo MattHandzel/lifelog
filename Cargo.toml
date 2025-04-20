@@ -1,11 +1,13 @@
 [workspace]
 members = [
-    "logger",
+    "collector",
     "server",
-    "interface/src-tauri",
     "common/utils",
     "common/data-models",
-    "common/config"
+    "common/config",
+    "common/data-models",
+    "common/definitions",
+    "common/transforms"
 ]
 
 resolver = "2"

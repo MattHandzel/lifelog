@@ -16,8 +16,6 @@ pub enum TransformError {
     Unknown,
 }
 
-
-
 enum TextTransformationTypes {
     TextEmbedding,
     EntityExtraction,
@@ -30,7 +28,7 @@ enum ImageTransformationTypes {
     SensitiveContentDetection,
 }
 
-enum TransformTypes {
+enum TransformType {
     TextEmbedding,
     EntityExtraction,
     OCR,
@@ -38,21 +36,13 @@ enum TransformTypes {
     SensitiveContentDetection,
 }
 
-struct TransformResult {
-    schema: DatabaseSchema,
-}
+pub trait Transform {
+    type Input;
+    type Output;
+    type Config;
 
-// F - from type, T - to type
-trait Transform<F: DataType, T:DataType, C: TranformConfig> {
-    // Takes in the input data and outpust the new data type
-    fn apply(&self, input: F) -> Result<T, TransformError>;
-
-    fn new(config: C) -> Self;
-
-    // Returns the name
-    fn name(&self) -> &'static str;
-
-    // Returns the priority of the transform
+    fn apply(&self, input: Self::Input) -> Result<Self::Output, TransformError>;
+    fn transform_type(&self) -> TransformType;
     fn priority(&self) -> u8;
 }
 
@@ -62,8 +52,8 @@ struct TransformGraphEdge {
     transform: Transform,
 }
 
-struct TransformGraphNode {
-    transform: TransformResult,
+struct TransformGraphNode<T> {
+    transform: ,
     edges : Vec<TransformGraphEdge>,
 }
 
@@ -76,11 +66,20 @@ struct TransformPipeline {
     transforms: Vec<Box<dyn Transform>>,
 }
 
-impl TransformPipeline<F: DataType, T:DataType, C: TranformConfig> {
-    fn run(&self, Data) -> Result<Data, String> {
-        for transform in &self.transforms {
-            data = transform.apply(&data)?;
+struct TransformPipeline<F> {
+    transforms: Vec<Box<dyn Transform<F, T>>>,
+}
+
+impl TransformPipeline<F> {
+    fn new(config: TransformConfig) -> Self {
+        let mut transforms = Vec::new();
+        for transform in config.transforms {
+            let transform_instance = transform.new(config);
+            transforms.push(Box::new(transform_instance));
         }
+        Self { transforms }
+    }
+    fn run(&self, F, db : surrealdb::) -> Result<T> {
         Ok(data)
     }
 }

@@ -41,7 +41,6 @@ It defines the binary `lifelog-collector`.
 Collector struct:
 
 ```rs
-
 struct Collector {
     name : String, // name of the collector
     device : DeviceType, // type of device (phone, computer, etc)
@@ -89,7 +88,11 @@ Collector booting:
    If there is a synh event criteria with the server initiate synch procedure
 
 8. Synch procedure:
+
    - Store all data that is in any buffers into the database. Store current timestamp, lock database.
    - Store the current timestamp
    - Look at when the last synchronization was, then run the `SyncRequest` RPC on the server with the sync time and current sync time.
-   - When this RPC is called, the
+   - When this RPC is called, the server will call the QueryDataFromCollector RPC when it is ready to receive data from the collector. The collector is returns to its loop
+
+9. QueryDataFromCollector RPC:
+   - When this is called, it will come with a query that defines when the server wants data from and to, as well as what data types (maybe we do this with a surrealdb query?). This will return the data in the proper formats for the server to add it to its database

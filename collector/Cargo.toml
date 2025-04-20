@@ -1,5 +1,5 @@
 [package]
-name = "lifelog-logger"
+name = "lifelog-collector"
 version = "0.1.0"
 edition = "2021"
 description = "A project to log, process, and interact with various sources of data for your lifelog"

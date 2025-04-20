@@ -39,7 +39,6 @@ A data source is one source of data. Some example of data sources are: The camer
   - stop:
     This function is run to gracefully stop the data-source, it will notify the collector of its current status
 
-
 `logger`
 A logger is something that logs a datasource, it is used in this project when the target data source is not already stored/logged on device.
 
@@ -81,6 +80,40 @@ The server has the same thing on it's end, where it can listen on all of these m
 ### Server
 
 [[./server.md]]
+
+#### Transforms
+
+A transform is something that takes data of one data type A and applies some transformation of it to create something of another data type B, where A could equal B.
+
+Functions:
+
+```rs
+
+// F - from type, T - to type
+trait Transform<F: DataType, T:DataType> {
+    // Takes in the input data and outpust the new data type
+    fn apply(&self, input: F) -> Result<T, TransformError>;
+
+    fn new(config: TransformConfig) -> Self;
+
+    // Returns the name
+    fn name(&self) -> &'static str;
+
+    // Returns the priority of the transform
+    fn priority(&self) -> u8;
+}
+```
+
+For every data type, there can be a transformation pipeline defined for it
+![TransformationGraph.svg](TransformationGraph.svg)
+
+With this pipeline, when the server gets some input data from the collectors it will apply the approriate transformation pipeline to the collector data and then send it to the database.
+
+A transform has a name, and a function `apply` that takes in the input data and then outputs the new data.
+
+##### Transformation Pipeline
+
+A transformation pipeline is a graph of a bunch of transforms. It is a directed acyclic graph and it is defined for one input type (in the future maybe multiple input types?).
 
 ### Interface
 

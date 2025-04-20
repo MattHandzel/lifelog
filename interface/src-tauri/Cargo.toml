@@ -69,11 +69,3 @@ tempfile = "3.8.1"
 default = []
 custom-protocol = ["tauri/custom-protocol"]
 dev = []
-# Machine learning support (disabled by default)
-ml = ["tch"]
-
-# Optional tch dependency for ML features
-[dependencies.tch]
-version = "0.9"
-optional = true
-
