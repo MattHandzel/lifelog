@@ -32,6 +32,9 @@
             xorg.libX11
             xorg.libXtst
             xorg.libXi
+            leptonica
+            tesseract
+            protobuf
           ];
 
         # TODO: Work out dependencies for front end and the rest of the software
@@ -120,8 +123,17 @@
             glib
             gtk3
             atk
+
+            leptonica
+            tesseract
           ];
       };
+
+      LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+      BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.llvmPackages.clang.version}/include";
+      NIX_CFLAGS_COMPILE = "-I${pkgs.glibc.dev}/include";
+      # Tesseract needs these at runtime
+      TESSDATA_PREFIX = "${pkgs.tesseract}/share/tessdata";
     });
   };
 }

@@ -4,6 +4,11 @@ use std::fs;
 use std::path::PathBuf;
 use utils::replace_home_dir_in_path;
 
+mod collector_config;
+mod server_config;
+use crate::collector_config::*;
+use crate::server_config::*;
+
 // TODO: Implement default for all configs
 // TODO: Make it so that there is a default directory
 // TODO: How do other projects do configs
@@ -26,28 +31,6 @@ pub struct Config {
     pub server: ServerConfig,
     pub input_logger: InputLoggerConfig,
     pub text_upload: TextUploadConfig,
-}
-
-pub fn default_database_path() -> String {
-    "surrealkv://".to_string()
-}
-fn default_database_name() -> String {
-    "main".to_string()
-}
-// Load environment variables for sensitive config values
-fn get_env_var<T: std::str::FromStr>(name: &str, default: T) -> T {
-    match env::var(name) {
-        Ok(val) => val.parse::<T>().unwrap_or(default),
-        Err(_) => default,
-    }
-}
-
-fn default_server_ip() -> String {
-    env::var("SERVER_IP").unwrap_or_else(|_| "localhost".to_string())
-}
-
-fn default_server_port() -> u16 {
-    get_env_var::<u16>("SERVER_PORT", 7182)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -668,24 +651,4 @@ impl ConfigManager {
 
 pub fn default_microphone_capture_interval_secs() -> u64 {
     300 // Default to capturing every 5 minutes (300 seconds)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CollectorConfig {
-    name: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerConfig {
-    #[serde(default = "default_server_ip")]
-    pub host: String,
-
-    #[serde(default = "default_server_port")]
-    pub port: u16,
-
-    #[serde(default = "default_database_path")]
-    pub database_path: String,
-
-    #[serde(default = "default_database_name")]
-    pub database_name: String,
 }
