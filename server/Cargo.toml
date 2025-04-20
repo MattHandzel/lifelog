@@ -16,3 +16,9 @@ rust-bert = "0.23.0"
 surrealdb = { version = "2.2.2", features = ["kv-mem", "kv-surrealkv"] }
 async-trait = "0.1.88"
 serde = { version = "1.0.219", features = ["derive"] }
+tonic = { version = "0.13.0", features = ["transport"] }
+prost = "0.13.5"
+tonic-reflection = { version = "0.13.0", features = ["server"] }
+
+[build-dependencies]
+tonic-build = "0.13"

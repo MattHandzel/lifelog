@@ -1,11 +1,11 @@
 [workspace]
 members = [
-    "collector",
+    # "collector",
     "server",
-    "common/utils",
-    "common/config",
-    "common/definitions",
-    "common/transforms"
+    # "common/utils",
+    # "common/config",
+    # "common/definitions",
+    # "common/transforms"
 ]
 
 resolver = "2"

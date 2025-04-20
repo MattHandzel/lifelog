@@ -7,9 +7,18 @@ use surrealdb::engine::local::Db;
 use surrealdb::engine::local::Mem;
 use surrealdb::engine::local::SurrealKV;
 use surrealdb::Connect;
-use surrealdb::Response;
 use surrealdb::Surreal;
 use thiserror::Error;
+use tonic::{transport::Server as TonicServer, Response as TonicResponse, Status as TonicStatus};
+
+use proto::grpc_server_services_server::{GrpcServerServices, GrpcServerServicesServer};
+use proto::{CollectorRegistrationRequest, CollectorRegistrationResponse};
+
+pub mod proto {
+    tonic::include_proto!("lifelog");
+    pub(crate) const FILE_DESCRIPTOR_SET: &[u8] =
+        tonic::include_file_descriptor_set!("lifelog_descriptor");
+}
 
 #[derive(Debug, Error)]
 pub enum ServerError {
@@ -19,6 +28,8 @@ pub enum ServerError {
     ConfigError(String),
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
+    #[error("Tonic transport error: {0}")]
+    TonicError(#[from] tonic::transport::Error),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,41 +51,71 @@ impl Default for ServerConfig<'_> {
     }
 }
 
-pub struct Server {
+#[derive(Clone)]
+pub struct LifeLogServer {
     db: Surreal<Db>,
     host: String,
     port: u16,
 }
 
-impl Server {
+impl LifeLogServer {
     pub async fn new(config: &ServerConfig<'_>) -> Result<Self, ServerError> {
-        // Initialize database
-        let db: Surreal<Db> = (Surreal::new::<Mem>(()).await?);
+        let db = Surreal::new::<Mem>(()).await?;
         db.use_ns("lifelog").use_db(config.database_name).await?;
 
         Ok(Self {
             db,
             host: config.host.clone(),
-            port: config.port.clone(),
+            port: config.port,
         })
     }
 }
 
-// TODO: Add support for CRON-like scheduling for:
-//       - Data processing
-//       - Synching between data sources (cloud data sources, browser history, cliphistory)
-// TODO: Add support for queries for the database
-// TODO: Add support for natural language to query
-//
-//
+#[tonic::async_trait]
+impl GrpcServerServices for LifeLogServer {
+    async fn register_collector(
+        &self,
+        request: tonic::Request<CollectorRegistrationRequest>,
+    ) -> Result<TonicResponse<CollectorRegistrationResponse>, TonicStatus> {
+        let inner = request.into_inner();
+        let config_string = inner.config;
+        let file_type = inner.file_type;
+
+        match file_type.as_str() {
+            "toml" => {
+                // TODO: Parse the config and add it
+            }
+            _ => {
+                return Err(TonicStatus::invalid_argument(format!(
+                    "Unsupported file type {}",
+                    file_type
+                )));
+            }
+        }
+
+        Ok(TonicResponse::new(CollectorRegistrationResponse {
+            success: true,
+        }))
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = ServerConfig::default();
-    let server = Server::new(&config).await?;
+    let server = LifeLogServer::new(&config).await?;
 
-    println!("Server running on {}:{}", server.host, server.port);
+    let addr = format!("{}:{}", config.host, config.port).parse()?;
 
-    // In real implementation, start server listeners here
+    println!("Starting server on {}", addr);
+    let service = tonic_reflection::server::Builder::configure()
+        .register_encoded_file_descriptor_set(proto::FILE_DESCRIPTOR_SET)
+        .build_v1()?;
+
+    TonicServer::builder()
+        .add_service(service)
+        .add_service(GrpcServerServicesServer::new(server))
+        .serve(addr)
+        .await?;
+
     Ok(())
 }

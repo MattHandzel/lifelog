@@ -2,16 +2,41 @@ syntax = "proto3";
 
 package lifelog;
 
-service Lifelog {
+service GRPCServerServices {
     rpc RegisterCollector(CollectorRegistrationRequest) returns (CollectorRegistrationResponse);
-    rpc SendData(CollectorData) returns (DataAck);
+}
+
+service GRPCClientServices {
+
     rpc GetStatus(CollectorStatusRequest) returns (CollectorStatusResponse);
     rpc UpdateConfig(CollectorConfig) returns (ConfigAck);
     rpc QueryDataFromCollector(CollectorQuery) returns (CollectorData);
+  };
+
+message CollectorStatusRequest {
+  // this is empty
+}
+
+message CollectorQuery {
+  string id = 1;
+  string query = 2;
+}
+
+message ConfigAck {
+  bool success = 1;
+}
+
+message CollectorStatusResponse {
+  string status = 1;
+}
+
+message CollectorConfig {
+    string config =1;
 }
 
 message CollectorRegistrationRequest {
-    string config = 1;
+    string file_type = 1;
+    string config = 2;
 }
 
 message CollectorRegistrationResponse {
