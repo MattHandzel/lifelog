@@ -3,18 +3,18 @@ syntax = "proto3";
 package lifelog;
 
 service Lifelog {
-    rpc RegisterCollector(CollectorRegistration) returns (RegistrationResponse);
+    rpc RegisterCollector(CollectorRegistrationRequest) returns (CollectorRegistrationResponse);
     rpc SendData(CollectorData) returns (DataAck);
     rpc GetStatus(CollectorStatusRequest) returns (CollectorStatusResponse);
     rpc UpdateConfig(CollectorConfig) returns (ConfigAck);
     rpc QueryDataFromCollector(CollectorQuery) returns (CollectorData);
 }
 
-message CollectorRegistration {
+message CollectorRegistrationRequest {
     string config = 1;
 }
 
-message RegistrationResponse {
+message CollectorRegistrationResponse {
     bool success = 1;
 }
 
@@ -23,7 +23,6 @@ message CollectorData {
     bytes data = 2;
 }
 
-message 
 
 message DataAck {
     bool success = 1;

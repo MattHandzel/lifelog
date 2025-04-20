@@ -7,12 +7,12 @@ description = "A project to log, process, and interact with various sources of d
 [dependencies]
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }
-tokio-cron-scheduler = "0.13"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.44.2", features = ["full", "macros", "rt-multi-thread"] }
 chrono = "0.4"
 thiserror = "2"
 serde_json = "1.0"
 clap = "4.5.37"
 rust-bert = "0.23.0"
-surrealdb = "2.2.2"
-
+surrealdb = { version = "2.2.2", features = ["kv-mem", "kv-surrealkv"] }
+async-trait = "0.1.88"
+serde = { version = "1.0.219", features = ["derive"] }
