@@ -1,6 +1,13 @@
-include!(concat!(env!("OUT_DIR"), "/data_modality.rs"));
+use serde::{Deserialize, Serialize};
 
-pub use data_modality::DataModality;
+include!(concat!(env!("OUT_DIR"), "/data_modalities.rs"));
+
+#[derive(Debug, Clone, Hash, Deserialize, Serialize)]
+pub struct DataSource {
+    name: String, // human-definable name
+    location: String,
+    modality: DataModality, // the type of data modality
+}
 
 //use target_lexicon::Triple as ComputerTargetTriple;
 //

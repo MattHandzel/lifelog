@@ -28,21 +28,6 @@ pub struct Config {
     pub text_upload: TextUploadConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerConfig {
-    #[serde(default = "default_server_ip")]
-    pub host: String,
-
-    #[serde(default = "default_server_port")]
-    pub port: u16,
-
-    #[serde(default = "default_database_path")]
-    pub database_path: String,
-
-    #[serde(default = "default_database_name")]
-    pub database_name: String,
-}
-
 pub fn default_database_path() -> String {
     "surrealkv://".to_string()
 }
@@ -686,4 +671,21 @@ pub fn default_microphone_capture_interval_secs() -> u64 {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CollectorConfig {}
+pub struct CollectorConfig {
+    name: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfig {
+    #[serde(default = "default_server_ip")]
+    pub host: String,
+
+    #[serde(default = "default_server_port")]
+    pub port: u16,
+
+    #[serde(default = "default_database_path")]
+    pub database_path: String,
+
+    #[serde(default = "default_database_name")]
+    pub database_name: String,
+}

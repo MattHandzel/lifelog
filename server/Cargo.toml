@@ -21,6 +21,7 @@ tonic = { version = "0.13.0", features = ["transport"] }
 prost = "0.13.5"
 tonic-reflection = { version = "0.13.0", features = ["server"] }
 dashmap = "6.1.0"
+toml = { version = "0.8.20"}
 
 [build-dependencies]
 tonic-build = "0.13"
