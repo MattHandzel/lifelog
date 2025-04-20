@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use thiserror::Error;
+use tokio::{task::JoinHandle};
 
 #[derive(Debug, Error)]
 pub enum LoggerError {
@@ -14,6 +15,18 @@ pub enum LoggerError {
 
     #[error("Generic error: {0}")]
     Generic(String),
+}
+
+pub enum LoggerCmd {
+    Pause,
+    Resume,
+    Flush,
+    Shutdown,
+    // etc
+}
+
+pub struct LoggerHandle {
+    pub join: JoinHandle<()>,
 }
 
 // Generic logger trait that data loggers can implement

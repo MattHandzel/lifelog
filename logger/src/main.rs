@@ -1,6 +1,5 @@
 use config::load_config;
-use lifelog_logger::logger::DataLogger;
-use lifelog_logger::modules::*;
+use lifelog_logger::logger_controller::LoggerController;
 use lifelog_logger::setup;
 use std::env;
 use std::sync::Arc;
@@ -33,58 +32,60 @@ async fn main() {
 
     setup::initialize_project(&config).expect("Failed to initialize project");
 
-    let mut tasks = Vec::new();
+    let mut controller = LoggerController::new(config);
 
-    if config.screen.enabled {
-        let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            screen::start_logger(&config_clone.screen).await
-        }));
-    }
-    if config.camera.enabled {
-        let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            camera::start_logger(&config_clone.camera).await
-        }));
-    }
+    // let mut tasks = Vec::new();
 
-    if config.hyprland.enabled {
-        let logger = hyprland::HyprlandLogger::new(config.hyprland.clone()).unwrap();
-        // 2. Initialize the logger
-        if let Err(e) = logger.setup().await {
-            eprintln!("Failed to initialize Hyprland logger: {}", e);
-        }
+    // if config.screen.enabled {
+    //     let config_clone = Arc::clone(&config);
+    //     tasks.push(tokio::spawn(async move {
+    //         screen::start_logger(&config_clone.screen).await
+    //     }));
+    // }
+    // if config.camera.enabled {
+    //     let config_clone = Arc::clone(&config);
+    //     tasks.push(tokio::spawn(async move {
+    //         camera::start_logger(&config_clone.camera).await
+    //     }));
+    // }
 
-        // 3. Spawn the logger task
-        tasks.push(tokio::spawn(async move {
-            match logger.run().await {
-                Ok(_) => println!("Hyprland logger completed successfully"),
-                Err(e) => eprintln!("Hyprland logger failed: {}", e),
-            }
-        }));
-    }
+    // if config.hyprland.enabled {
+    //     let logger = hyprland::HyprlandLogger::new(config.hyprland.clone()).unwrap();
+    //     // 2. Initialize the logger
+    //     if let Err(e) = logger.setup().await {
+    //         eprintln!("Failed to initialize Hyprland logger: {}", e);
+    //     }
 
-    // Add to existing task spawning code
-    if config.processes.enabled {
-        let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            processes::start_logger(&config_clone.processes).await
-        }));
-    }
+    //     // 3. Spawn the logger task
+    //     tasks.push(tokio::spawn(async move {
+    //         match logger.run().await {
+    //             Ok(_) => println!("Hyprland logger completed successfully"),
+    //             Err(e) => eprintln!("Hyprland logger failed: {}", e),
+    //         }
+    //     }));
+    // }
 
-    let user_is_running_wayland = env::var("WAYLAND_DISPLAY").is_ok();
-    if config.input_logger.enabled {
-        let config_clone = Arc::clone(&config);
-        if user_is_running_wayland {
-            tasks.push(tokio::spawn(async move {
-                evdev_input_logger::start_logger(&config.input_logger).await;
-            }));
-        } else {
-            tasks.push(tokio::spawn(async move {
-                input_logger::start_logger(&config.input_logger).await;
-            }));
-        }
-    }
+    // // Add to existing task spawning code
+    // if config.processes.enabled {
+    //     let config_clone = Arc::clone(&config);
+    //     tasks.push(tokio::spawn(async move {
+    //         processes::start_logger(&config_clone.processes).await
+    //     }));
+    // }
+
+    // let user_is_running_wayland = env::var("WAYLAND_DISPLAY").is_ok();
+    // if config.input_logger.enabled {
+    //     let config_clone = Arc::clone(&config);
+    //     if user_is_running_wayland {
+    //         tasks.push(tokio::spawn(async move {
+    //             evdev_input_logger::start_logger(&config.input_logger).await;
+    //         }));
+    //     } else {
+    //         tasks.push(tokio::spawn(async move {
+    //             input_logger::start_logger(&config.input_logger).await;
+    //         }));
+    //     }
+    // }
     //if config.microphone.enabled {
     //    let config_clone = Arc::clone(&config);
     //    tasks.push(tokio::spawn(async move {
@@ -93,7 +94,7 @@ async fn main() {
     //}
 
     // Wait for all tasks to complete
-    for task in tasks {
-        let _ = task.await;
-    }
+    // for task in tasks {
+    //     let _ = task.await;
+    // }
 }

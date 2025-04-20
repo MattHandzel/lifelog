@@ -1,35 +1,50 @@
 use tokio::task::{AbortHandle, JoinHandle};
+use crate::modules::*;
+use std::sync::Arc;
+use config;
 
 pub struct LoggerController {
-    name: String,
     task: Option<AbortHandle>,
-    config: Arc<config::AppConfig>,
+    config: Arc<config::Config>,
 }
 
 impl LoggerController {
-    pub fn new(name: &str, config: Arc<config::AppConfig>) -> Self {
+    pub fn new(config: Arc<config::Config>) -> Self {
         Self {
-            name: name.to_string(),
             task: None,
             config,
         }
     }
 
-    pub fn start(&mut self) {
-        let name = self.name.clone();
+    pub fn handshake(&mut self) {
+
+    }
+
+    pub fn listen(&mut self) {
+
+    }
+
+    pub fn start(&mut self, ) {
         let config = Arc::clone(&self.config);
 
-        let handle = tokio::spawn(async move {
-            match name.as_str() {
-                "screen" => screen::start_logger(&config.screen).await,
-                "microphone" => microphone::start_logger(&config.microphone).await,
-                // ... other loggers
-                _ => panic!("Unknown logger"),
-            }
-        })
-        .abort_handle();
+        self.handshake(); // handle error!
 
-        self.task = Some(handle);
+        let mut handles = Vec::new();
+
+        if config.screen.enabled {
+            let config_clone = Arc::clone(&self.config);
+            handles.push(screen::start_logger(&config_clone.screen));
+        }
+
+        // let handle = tokio::spawn(async move {
+        //     match name.as_str() {
+        //         "screen" => screen::start_logger(&config.screen).await,
+        //         "microphone" => microphone::start_logger(&config.microphone).await,
+        //         // ... other loggers
+        //         _ => panic!("Unknown logger"),
+        //     }
+        // })
+        // .abort_handle();
     }
 
     pub fn stop(&mut self) {
