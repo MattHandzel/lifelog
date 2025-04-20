@@ -1,3 +1,4 @@
+
 [package]
 name = "lifelog-collector"
 version = "0.1.0"
@@ -7,14 +8,12 @@ description = "A project to log, process, and interact with various sources of d
 [dependencies]
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }
-data-models = { path = "../common/data-models" }
 
 sha2 = "0.10"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.5"
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4"
-rusqlite = "0.34.0"    # SQLite database
 evdev = "0.13"         
 thiserror = "1"
 dirs = "4.0"

@@ -3,9 +3,7 @@ members = [
     "collector",
     "server",
     "common/utils",
-    "common/data-models",
     "common/config",
-    "common/data-models",
     "common/definitions",
     "common/transforms"
 ]
@@ -14,3 +12,4 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
+
