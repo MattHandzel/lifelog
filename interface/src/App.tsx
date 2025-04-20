@@ -12,14 +12,15 @@ import SettingsDashboard from './components/SettingsDashboard';
 import TextUploadDashboard from './components/TextUploadDashboard';
 import SearchDashboard from './components/SearchDashboard';
 import AccountDashboard from './components/AccountDashboard';
-import { LayoutDashboard, Activity, Camera, Settings, Search, User } from "lucide-react";
+import { GrpcExample } from './components/ui/GrpcExample';
+import { LayoutDashboard, Activity, Camera, Settings, Search, User, Cpu } from "lucide-react";
 import FeatureTabs from "./components/FeatureTabs.tsx";
 import { cn } from "./lib/utils";
 
 
 import './App.css';
 
-type View = "dashboard" | "search" | "account" | "settings";
+type View = "dashboard" | "search" | "account" | "settings" | "grpc";
 
 function AppLayout() {
   const [currentView, setCurrentView] = useState<View>("dashboard");
@@ -61,6 +62,7 @@ function AppLayout() {
             <NavLink view="dashboard" label="Dashboard" icon={LayoutDashboard} />
             <NavLink view="search" label="Search" icon={Search} />
             <NavLink view="account" label="Account" icon={User} />
+            <NavLink view="grpc" label="gRPC" icon={Cpu} />
           </div>
           {/* Settings pinned at the bottom */}
           <div className="mt-auto pt-4 border-t border-[#232B3D] flex flex-col gap-2">
@@ -75,6 +77,13 @@ function AppLayout() {
           {currentView === "dashboard" && <FeatureTabs />}
           {currentView === "search" && <SearchDashboard />}
           {currentView === "account" && <AccountDashboard />}
+          {currentView === "grpc" && (
+            <div className="p-8">
+              <h2 className="title mb-4">gRPC-Web Demo</h2>
+              <p className="subtitle mb-8">Test the gRPC-Web client implementation</p>
+              <GrpcExample />
+            </div>
+          )}
           {currentView === "settings" && (
             <div className="p-8">
               <h2 className="title mb-4">Settings</h2>

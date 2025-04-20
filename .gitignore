@@ -40,10 +40,6 @@ target/
 *.db-shm
 *.db-wal
 uploads/
-*.jpg
-*.jpeg
-*.png
-*.gif
 *.mp4
 *.wav
 *.mp3

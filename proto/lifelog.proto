@@ -1,0 +1,211 @@
+syntax = "proto3";
+package lifelog;
+
+// The main service for Lifelog application
+service LifelogService {
+  // Search and data retrieval endpoints
+  rpc Search(SearchRequest) returns (SearchResponse);
+  rpc GetScreenshots(TimeRangeRequest) returns (stream ScreenshotData);
+  rpc GetProcesses(TimeRangeRequest) returns (stream ProcessData);
+  rpc GetCameraFrames(TimeRangeRequest) returns (stream CameraFrameData);
+  
+  // Analytics and aggregation endpoints
+  rpc GetActivitySummary(TimeRangeRequest) returns (ActivitySummary);
+  rpc GetProcessStats(ProcessStatsRequest) returns (ProcessStatsResponse);
+  
+  // Authentication and user endpoints
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc GetUserProfile(UserRequest) returns (UserProfile);
+  
+  // System/logger management endpoints
+  rpc GetLoggerStatus(LoggerStatusRequest) returns (LoggerStatusResponse);
+  rpc ToggleLogger(ToggleLoggerRequest) returns (ToggleLoggerResponse);
+  rpc TakeSnapshot(SnapshotRequest) returns (SnapshotResponse);
+}
+
+// Common messages
+message TimeRangeRequest {
+  string start_time = 1;  // ISO 8601 format
+  string end_time = 2;    // ISO 8601 format
+  int32 limit = 3;        // Optional limit
+  int32 offset = 4;       // Optional pagination offset
+}
+
+message TimeStamped {
+  string timestamp = 1;   // ISO 8601 format
+}
+
+// Search related messages
+message SearchRequest {
+  string query = 1;                  // Natural language or structured query
+  repeated string data_sources = 2;  // Which data sources to search (e.g., "screen", "camera", "process")
+  TimeRangeRequest time_range = 3;   // Time range to search within
+  bool use_llm = 4;                  // Whether to use LLM for query processing
+}
+
+message SearchResult {
+  string type = 1;                   // Type of result (e.g., "screenshot", "process", "camera")
+  string timestamp = 2;              // ISO 8601 format
+  string source_id = 3;              // Identifier for the data source
+  map<string, string> metadata = 4;  // Additional metadata
+  oneof data {
+    bytes binary_data = 5;           // For binary data like images
+    string text_data = 6;            // For text data
+  }
+  float relevance_score = 7;         // How relevant this result is to the query
+}
+
+message SearchResponse {
+  repeated SearchResult results = 1;
+  int32 total_results = 2;           // Total count of results (for pagination)
+  string search_id = 3;              // ID for this search session (for pagination/refinement)
+}
+
+// Screenshot related messages
+message ScreenshotData {
+  string id = 1;
+  string timestamp = 2;               // ISO 8601 format
+  bytes image_data = 3;               // Binary image data
+  string mime_type = 4;               // e.g., "image/png", "image/jpeg"
+  map<string, string> metadata = 5;   // Additional metadata
+}
+
+// Process related messages
+message ProcessData {
+  string id = 1;
+  string timestamp = 2;               // ISO 8601 format
+  string process_name = 3;
+  string window_title = 4;
+  int32 pid = 5;
+  float cpu_usage = 6;                // Percentage
+  float memory_usage = 7;             // In MB
+  bool is_focused = 8;                // Whether this process had focus
+}
+
+message ProcessStatsRequest {
+  TimeRangeRequest time_range = 1;
+  string process_name = 2;            // Optional filter by process name
+  bool aggregate = 3;                 // Whether to aggregate stats
+}
+
+message ProcessStatsSummary {
+  string process_name = 1;
+  double total_active_time = 2;       // In seconds
+  double average_cpu_usage = 3;       // Percentage
+  double average_memory_usage = 4;    // In MB
+  int32 focus_count = 5;              // How many times it received focus
+}
+
+message ProcessStatsResponse {
+  repeated ProcessStatsSummary summaries = 1;
+  map<string, double> usage_by_hour = 2;  // Usage patterns by hour
+}
+
+// Camera related messages
+message CameraFrameData {
+  string id = 1;
+  string timestamp = 2;               // ISO 8601 format
+  bytes image_data = 3;               // Binary image data
+  string mime_type = 4;               // e.g., "image/png", "image/jpeg"
+  map<string, string> metadata = 5;   // Additional metadata
+}
+
+// Activity summary
+message ActivitySummary {
+  TimeRangeRequest time_range = 1;
+  repeated ActivityPeriod activity_periods = 2;
+  map<string, double> app_usage = 3;  // App usage percentages
+  int32 total_screenshots = 4;
+  int32 total_camera_frames = 5;
+  map<string, int32> total_by_logger = 6;  // Counts by logger type
+}
+
+message ActivityPeriod {
+  string start_time = 1;              // ISO 8601 format
+  string end_time = 2;                // ISO 8601 format
+  string primary_activity = 3;        // Main activity detected
+  map<string, double> apps_used = 4;  // Apps used during this period
+  double activity_level = 5;          // Activity level (0.0-1.0)
+}
+
+// Authentication related messages
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  string token = 1;
+  bool success = 2;
+  string error_message = 3;
+  UserProfile user_profile = 4;
+}
+
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+  string email = 3;
+  string display_name = 4;
+}
+
+message RegisterResponse {
+  bool success = 1;
+  string error_message = 2;
+  string token = 3;         // Auth token if registration was successful
+}
+
+message UserRequest {
+  string user_id = 1;       // Optional, defaults to current user
+}
+
+message UserProfile {
+  string user_id = 1;
+  string username = 2;
+  string display_name = 3;
+  string email = 4;
+  string created_at = 5;    // ISO 8601 format
+  map<string, bool> settings = 6;  // User settings
+}
+
+// Logger management
+message LoggerStatusRequest {
+  repeated string logger_names = 1;  // Optional filter, empty means all loggers
+}
+
+message LoggerStatus {
+  string name = 1;          // e.g., "screen", "camera", "process"
+  bool enabled = 2;
+  bool running = 3;
+  string last_active = 4;   // ISO 8601 timestamp
+  int64 data_points = 5;    // Number of data points collected
+  string error = 6;         // Any error message, empty if none
+}
+
+message LoggerStatusResponse {
+  repeated LoggerStatus loggers = 1;
+  map<string, string> system_stats = 2;  // System statistics
+}
+
+message ToggleLoggerRequest {
+  string logger_name = 1;   // e.g., "screen", "camera", "process"
+  bool enable = 2;          // true to enable, false to disable
+}
+
+message ToggleLoggerResponse {
+  bool success = 1;
+  string error_message = 2;
+  LoggerStatus status = 3;  // Updated status
+}
+
+message SnapshotRequest {
+  repeated string loggers = 1;  // Which loggers to include, empty means all
+  map<string, string> options = 2;  // Logger-specific options
+}
+
+message SnapshotResponse {
+  string snapshot_id = 1;
+  bool success = 2;
+  string error_message = 3;
+  repeated string triggered_loggers = 4;  // Which loggers were triggered
+} 

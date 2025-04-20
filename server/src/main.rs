@@ -30,6 +30,12 @@ use lifelog_server::handlers::{
 
 use ::config::{Config, HyprlandConfig, ScreenConfig, ProcessesConfig, MicrophoneConfig, CameraConfig};
 
+mod grpc;
+use tonic::transport::Server as TonicServer;
+use grpc::lifelog::lifelog_service_server::LifelogServiceServer;
+use grpc::LifelogGrpcService;
+use tokio::signal;
+
 fn load_env_config() {
     dotenv().ok();
 }
@@ -540,67 +546,38 @@ async fn resume_recording(_data: web::Data<AppState>) -> Result<HttpResponse, Ap
     })))
 }
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Load environment variables
-    dotenv::dotenv().ok();
+    dotenv().ok();
     
     // Initialize logging
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
     
-    // Initialize SurrealDB
-    match db::init_db().await {
-        Ok(_) => tracing::info!("SurrealDB initialized successfully"),
-        Err(e) => {
-            tracing::error!("Failed to initialize SurrealDB: {}", e);
-            std::process::exit(1);
-        }
-    }
+    // Create a temporary database for testing gRPC
+    let db = Arc::new(lifelog_server::Database::new());
     
-    // Create database schemas
-    match LoggerDb::create_schemas().await {
-        Ok(_) => tracing::info!("SurrealDB schemas created successfully"),
-        Err(e) => tracing::warn!("Failed to create SurrealDB schemas: {}", e),
-    }
+    // Set up gRPC server
+    let grpc_addr = format!("{}:{}", 
+        std::env::var("GRPC_SERVER_IP").unwrap_or_else(|_| "127.0.0.1".to_string()),
+        std::env::var("GRPC_SERVER_PORT").unwrap_or_else(|_| "50051".to_string())
+    ).parse()?;
     
-    let server_ip = env::var("SERVER_IP").unwrap_or_else(|_| "127.0.0.1".to_string());
-    let server_port = env::var("SERVER_PORT").unwrap_or_else(|_| "8080".to_string());
+    let lifelog_service = grpc::LifelogGrpcService::new(db);
     
-    tracing::info!("Starting server at {}:{}", server_ip, server_port);
+    // Run gRPC server
+    println!("Starting gRPC server on {}", grpc_addr);
     
-    HttpServer::new(move || {
-        let cors = configure_cors();
-        let auth = HttpAuthentication::bearer(JwtAuth::validator);
-        
-        App::new()
-            .wrap(cors)
-            .wrap(Logger::default())
-            .service(
-                web::scope("/api")
-                    .service(
-                        web::scope("/auth")
-                            .service(auth_handlers::login)
-                            .service(auth_handlers::get_profile)
-                    )
-                    .service(
-                        web::scope("/loggers")
-                            .wrap(auth)
-                            .service(get_logger_config)
-                            .service(update_logger_config)
-                            .service(get_logger_status)
-                            .service(start_logger)
-                            .service(stop_logger)
-                            .route("/{name}/data", web::get().to(handlers::get_logger_data))
-                            .route("/{name}/count", web::get().to(handlers::get_logger_count))
-                            .route("/camera/capture", web::post().to(handlers::insert_camera_frame))
-                            .route("/screen/capture", web::post().to(handlers::insert_screen_capture))
-                            .route("/microphone/record", web::post().to(handlers::insert_microphone_recording))
-                            .route("/processes/data", web::post().to(handlers::insert_process_data))
-                    )
-            )
-            .service(health_check)
-    })
-    .bind(format!("{}:{}", server_ip, server_port))?
-    .run()
-    .await
+    TonicServer::builder()
+        .accept_http1(true)
+        .add_service(tonic_web::enable(
+            grpc::lifelog::lifelog_service_server::LifelogServiceServer::new(lifelog_service)
+        ))
+        .serve_with_shutdown(grpc_addr, async {
+            let _ = signal::ctrl_c().await;
+            println!("Shutting down gRPC server");
+        })
+        .await?;
+    
+    Ok(())
 }

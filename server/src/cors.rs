@@ -8,10 +8,9 @@ use std::env;
 /// This function creates a CORS configuration based on environment variables.
 /// In development mode, it allows all origins, headers and methods for easier debugging.
 /// In production, it follows strict CORS rules based on the configured allowed origins.
-pub fn configure_cors() -> Cors {
-    // Get allowed origins from environment variables
+pub fn cors_config() -> Cors {
     let allowed_origins = env::var("ALLOWED_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:3000,http://localhost:8080".to_string());
+        .unwrap_or_else(|_| "http://localhost:3000,http://localhost:8080,http://localhost:1420".to_string());
     
     let development_mode = env::var("DEVELOPMENT_MODE")
         .unwrap_or_else(|_| "false".to_string())
@@ -25,21 +24,13 @@ pub fn configure_cors() -> Cors {
     
     // In production, configure strict CORS
     let mut cors = Cors::default()
-        .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"])
-        .allowed_headers(vec![
-            header::AUTHORIZATION,
-            header::CONTENT_TYPE,
-            header::ACCEPT,
-            header::ORIGIN,
-        ])
-        .supports_credentials()
+        .allowed_methods(vec!["GET", "POST", "PUT", "DELETE"])
+        .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT, header::CONTENT_TYPE])
         .max_age(3600);
     
-    // Add each allowed origin
+    // Add the allowed origins
     for origin in allowed_origins.split(',') {
-        if !origin.trim().is_empty() {
-            cors = cors.allowed_origin(origin.trim());
-        }
+        cors = cors.allowed_origin(origin.trim());
     }
     
     cors
