@@ -1,4 +1,5 @@
 use chrono;
+use async_trait::async_trait;
 use config::MicrophoneConfig;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{WavSpec, WavWriter};
@@ -6,6 +7,7 @@ use std::fs::{self};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::time::{sleep, Duration};
+use crate::logger::*;
 
 #[cfg(target_os = "macos")]
 use std::process::Command;
@@ -18,72 +20,106 @@ static AUTO_RECORDING_ENABLED: AtomicBool = AtomicBool::new(false);
 // Shared config for updating settings during runtime
 static mut CURRENT_CONFIG: Option<Mutex<MicrophoneConfig>> = None;
 
-pub async fn start_logger(config: &MicrophoneConfig) {
-    println!("Starting microphone logger with config: {:?}", config);
+pub struct MicrophoneLogger {
+    config: MicrophoneConfig,
+}
 
-    // Store config for runtime updates
-    unsafe {
-        CURRENT_CONFIG = Some(Mutex::new(config.clone()));
+impl MicrophoneLogger {
+    pub fn new(config: MicrophoneConfig) -> Result<Self, LoggerError> {
+        Ok(MicrophoneLogger { config })
     }
 
-    // Set initial state based on config
-    AUTO_RECORDING_ENABLED.store(config.enabled, Ordering::SeqCst);
-    RECORDING_ENABLED.store(false, Ordering::SeqCst);
-    RECORDING_PAUSED.store(false, Ordering::SeqCst);
+    pub fn setup(&self) -> Result<LoggerHandle, LoggerError> {
+        DataLogger::setup(self, self.config.clone())
+    }
+}
 
-    // Ensure output directory exists
-    if let Err(e) = fs::create_dir_all(&config.output_dir) {
-        eprintln!("Failed to create output directory: {}", e);
+#[async_trait]
+impl DataLogger for MicrophoneLogger {
+    type Config = MicrophoneConfig;
+
+    fn new(config: MicrophoneConfig) -> Result<Self, LoggerError> {
+        MicrophoneLogger::new(config)
     }
 
-    // Start the auto-recording scheduler
-    let config_clone = config.clone();
-    tokio::spawn(async move {
-        println!("Starting auto-recording scheduler");
+    fn setup(&self, config: MicrophoneConfig) -> Result<LoggerHandle, LoggerError> {
+        let logger = Self::new(config)?;
+        let join = tokio::spawn(async move {
+            let _ = logger.run().await;
+        });
+        Ok(LoggerHandle { join })
+    }
 
-        loop {
-            if !AUTO_RECORDING_ENABLED.load(Ordering::SeqCst) {
-                // If auto-recording is disabled, just check again after a short delay
-                sleep(Duration::from_secs(1)).await;
-                continue;
-            }
+    async fn run(&self) -> Result<(), LoggerError> {
+        let config = self.config.clone();
+        println!("Starting microphone logger with config: {:?}", config);
 
-            // Get the current capture interval (may have been updated)
-            let capture_interval_secs = unsafe {
-                match &CURRENT_CONFIG {
-                    Some(cfg) => cfg.lock().unwrap().capture_interval_secs,
-                    None => config_clone.capture_interval_secs,
-                }
-            };
-
-            // If recording is not already in progress, start a new one
-            if !RECORDING_ENABLED.load(Ordering::SeqCst) {
-                println!("Auto-recording: starting new recording");
-                RECORDING_ENABLED.store(true, Ordering::SeqCst);
-                RECORDING_PAUSED.store(false, Ordering::SeqCst);
-            }
-
-            // Wait for the next scheduled recording time
-            let interval = if capture_interval_secs > 0 {
-                capture_interval_secs
-            } else {
-                300 // Default to 5 minutes
-            };
-            println!("Auto-recording scheduler waiting for {} seconds", interval);
-            sleep(Duration::from_secs(interval)).await;
+        // Store config for runtime updates
+        unsafe {
+            CURRENT_CONFIG = Some(Mutex::new(config.clone()));
         }
-    });
 
-    // Main recording loop
-    #[cfg(not(target_os = "macos"))]
-    cross_platform_recording_loop(config).await;
+        // Initialize flags
+        AUTO_RECORDING_ENABLED.store(config.enabled, Ordering::SeqCst);
+        RECORDING_ENABLED.store(false, Ordering::SeqCst);
+        RECORDING_PAUSED.store(false, Ordering::SeqCst);
 
-    #[cfg(target_os = "macos")]
-    macos_recording_loop(config).await;
+        // Ensure output directory exists
+        if let Err(e) = fs::create_dir_all(&config.output_dir) {
+            eprintln!("Failed to create output directory: {}", e);
+        }
+
+        // Spawn the auto‑recording scheduler
+        {
+            let cfg = config.clone();
+            tokio::spawn(async move {
+                println!("Starting auto‑recording scheduler");
+                loop {
+                    if !AUTO_RECORDING_ENABLED.load(Ordering::SeqCst) {
+                        sleep(Duration::from_secs(1)).await;
+                        continue;
+                    }
+                    // fetch (possibly updated) interval
+                    let interval_secs = unsafe {
+                        CURRENT_CONFIG
+                            .as_ref()
+                            .map(|m| m.lock().unwrap().capture_interval_secs)
+                            .unwrap_or(cfg.capture_interval_secs)
+                    }.max(1);
+
+                    if !RECORDING_ENABLED.load(Ordering::SeqCst) {
+                        println!("Auto‑recording: starting new recording");
+                        RECORDING_ENABLED.store(true, Ordering::SeqCst);
+                        RECORDING_PAUSED.store(false, Ordering::SeqCst);
+                    }
+                    println!("Scheduler waiting {}s", interval_secs);
+                    sleep(Duration::from_secs(interval_secs)).await;
+                }
+            });
+        }
+
+        // Kick off the platform‑specific recording loop and await it
+        #[cfg(not(target_os = "macos"))]
+        cross_platform_recording_loop(config.clone()).await;
+
+        #[cfg(target_os = "macos")]
+        macos_recording_loop(config.clone()).await;
+
+        Ok(())
+    }
+
+    fn stop(&self) {
+        RECORDING_ENABLED.store(false, Ordering::SeqCst);
+        AUTO_RECORDING_ENABLED.store(false, Ordering::SeqCst);
+    }
+
+    async fn log_data(&self) -> Result<(), LoggerError> {
+        Ok(()) //for now
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
-async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
+async fn cross_platform_recording_loop(config: MicrophoneConfig) {
     let host = cpal::default_host();
     let device = match host.default_input_device() {
         Some(d) => d,
@@ -270,7 +306,7 @@ async fn cross_platform_recording_loop(config: &MicrophoneConfig) {
 }
 
 #[cfg(target_os = "macos")]
-async fn macos_recording_loop(config: &MicrophoneConfig) {
+async fn macos_recording_loop(config: MicrophoneConfig) {
     // Check if we have the required command-line tools
     println!("Using macOS-specific recording implementation");
 

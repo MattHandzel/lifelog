@@ -7,6 +7,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
+use tokio::io::join;
 use utils::current_timestamp;
 
 use hyprland::data::{Clients, CursorPosition, Devices, Monitors, Workspace, Workspaces};
@@ -23,10 +24,14 @@ pub struct HyprlandLogger {
 impl DataLogger for HyprlandLogger {
     type Config = HyprlandConfig;
 
-    async fn setup(&self) -> Result<(), LoggerError> {
+    fn setup(&self, config: HyprlandConfig) -> Result<LoggerHandle, LoggerError> {
         setup::setup_hyprland_db(Path::new(&self.config.output_dir))
             .map_err(|e| LoggerError::Database(e));
-        Ok(())
+        let logger = Self::new(config)?;
+        let join = tokio::spawn(async move {
+            let _ = logger.run().await;
+        });
+        Ok(LoggerHandle { join })
     }
 
     async fn run(&self) -> Result<(), LoggerError> {
@@ -64,6 +69,10 @@ impl DataLogger for HyprlandLogger {
 
 // Implementation details
 impl HyprlandLogger {
+    pub fn setup(&self) -> Result<LoggerHandle, LoggerError> {
+        DataLogger::setup(self, self.config.clone())
+    }
+
     async fn log_hypr_data(&self, timestamp: f64) -> Result<(), Box<dyn std::error::Error>> {
         {
             let conn = setup::setup_hyprland_db(Path::new(&self.config.output_dir))
