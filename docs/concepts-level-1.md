@@ -130,6 +130,10 @@ This is the lifelog interface, it will be an interface for the user to be able t
 
 Upon connection to the server, the user must authenticate before accessing the lifelog.
 
+#### Arbitrary interfaces
+
+It would be very cool if for this project we could define an API for other applications to be able to 'query' something abou tthe user. these queries can be things such as 'how prodductive am I at this moment', 'when was I sick' so that other applications or services can use this data. the user can define exactly waht data to shrae and there are strict policies with these applciations. these apps can be only open sourced, or allowed by the user.
+
 ## Adding A New Collector
 
 In a system with $$0-n$$ collectors and 1 server, if we want to add a new collector, we need to do the following:

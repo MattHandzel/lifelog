@@ -1,7 +1,7 @@
 use config::load_config;
-use lifelog_logger::logger::DataLogger;
-use lifelog_logger::modules::*;
-use lifelog_logger::setup;
+use lifelog_collector::logger::DataLogger;
+use lifelog_collector::modules::*;
+use lifelog_collector::setup;
 use mobc::Pool;
 use mobc_surrealdb::SurrealDBConnectionManager;
 use std::env;

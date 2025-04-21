@@ -24,6 +24,7 @@
             pkg-config
             openssl
             sqlite
+            protobuf
           ]
           ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [
             alsa-lib
@@ -34,7 +35,6 @@
             xorg.libXi
             leptonica
             tesseract
-            protobuf
           ];
 
         # TODO: Work out dependencies for front end and the rest of the software
@@ -53,6 +53,8 @@
           ]
           ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [
             alsa-lib
+
+            protobuf # we need this b/c we need to build the proto files
           ];
       };
 
