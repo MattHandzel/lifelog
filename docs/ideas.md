@@ -1,0 +1,1 @@
+- Have a data-modality specific compression algorithm to optimize data transfer and storage. Train models on these data modalities.

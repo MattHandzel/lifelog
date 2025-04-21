@@ -1,7 +1,7 @@
 use config::Config;
 use rusqlite::Connection;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use sysinfo::{ProcessExt, System, SystemExt};
 
 // Ensures the directory exists, creating it if necessary.
@@ -32,14 +32,16 @@ pub fn initialize_project(config: &Config) -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn is_already_running(process_name: &str) -> bool {
+pub fn n_processes_already_running(
+    process_name: &str,
+    num_processes_that_should_be_running: i32,
+) -> bool {
     let system = System::new_all();
     let mut process_count = 0;
     for process in system.processes_by_name(process_name) {
-        println!(process.name());
         if process.name() == process_name {
             process_count += 1;
-            if process_count > 1 {
+            if process_count >= num_processes_that_should_be_running {
                 return true;
             }
         }

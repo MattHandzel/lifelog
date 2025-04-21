@@ -1,8 +1,13 @@
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::env;
 use utils::replace_home_dir_in_path;
+
+mod collector_config;
+mod server_config;
+pub use crate::collector_config::*;
+pub use crate::server_config::*;
 
 // TODO: Implement default for all configs
 // TODO: Make it so that there is a default directory
@@ -26,33 +31,6 @@ pub struct Config {
     pub server: ServerConfig,
     pub input_logger: InputLoggerConfig,
     pub text_upload: TextUploadConfig,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerConfig {
-    #[serde(default = "default_server_ip")]
-    pub ip: String,
-
-    #[serde(default = "default_server_port")]
-    pub port: u16,
-
-    pub folder_dir: PathBuf,
-}
-
-// Load environment variables for sensitive config values
-fn get_env_var<T: std::str::FromStr>(name: &str, default: T) -> T {
-    match env::var(name) {
-        Ok(val) => val.parse::<T>().unwrap_or(default),
-        Err(_) => default,
-    }
-}
-
-fn default_server_ip() -> String {
-    env::var("SERVER_IP").unwrap_or_else(|_| "localhost".to_string())
-}
-
-fn default_server_port() -> u16 {
-    get_env_var::<u16>("SERVER_PORT", 7182)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -525,6 +503,12 @@ fn create_default_config() -> Config {
             fps: default_camera_fps(),
             timestamp_format: default_timestamp_format(),
         },
+        server: ServerConfig {
+            host: default_server_ip(),
+            port: default_server_port(),
+            database_path: default_database_path(),
+            database_name: default_database_name(),
+        },
         microphone: MicrophoneConfig {
             enabled: default_true(),
             output_dir: home_dir.join("lifelog_microphone"),
@@ -595,11 +579,6 @@ fn create_default_config() -> Config {
             log_workspace: default_true(),
             log_active_monitor: default_true(),
             log_devices: default_true(),
-        },
-        server: ServerConfig {
-            ip: default_server_ip(),
-            port: default_server_port(),
-            folder_dir: home_dir.join("lifelog_server"),
         },
         input_logger: InputLoggerConfig {
             output_dir: home_dir.join("lifelog_input"),

@@ -21,7 +21,6 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 utils = {path = "../../common/utils"}
 config = {path = "../../common/config"}
-data-models = {path = "../../common/data-models"}
 
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -69,11 +68,3 @@ tempfile = "3.8.1"
 default = []
 custom-protocol = ["tauri/custom-protocol"]
 dev = []
-# Machine learning support (disabled by default)
-ml = ["tch"]
-
-# Optional tch dependency for ML features
-[dependencies.tch]
-version = "0.9"
-optional = true
-
