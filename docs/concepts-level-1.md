@@ -120,6 +120,14 @@ With this pipeline, when the server gets some input data from the collectors it 
 
 A transform has a name, and a function `apply` that takes in the input data and then outputs the new data.
 
+#### Database
+
+One database for this entire project. It could be moved to separate databases in the future to take advantage of them (a vector specific db for vector queries, a elasticsearch for text-queries).
+
+One table per data source.
+
+Data sources are unique and are based on device + data modality.
+
 ##### Transformation Pipeline
 
 A transformation pipeline is a graph of a bunch of transforms. It is a directed acyclic graph and it is defined for one input type (in the future maybe multiple input types?).

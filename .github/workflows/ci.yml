@@ -36,6 +36,9 @@ jobs:
           choco install -y cmake
 
       # Other OS-specific dependency steps remain the same
+      - name: Install dependencies
+        if: runner.os == 'macOS'
+        run: brew install protobuf
 
       - name: Cache Cargo Dependencies
         uses: Swatinem/rust-cache@v2
