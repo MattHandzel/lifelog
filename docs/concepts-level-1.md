@@ -5,6 +5,7 @@ The vision for the project is a software system that allows users to store infor
 ## Principles
 
 Store everything, don't lose anything
+Everything that is configurable should be configured in a single config.toml file.
 
 ## Requirements
 
@@ -120,6 +121,8 @@ With this pipeline, when the server gets some input data from the collectors it 
 
 A transform has a name, and a function `apply` that takes in the input data and then outputs the new data.
 
+Transforms, like data modalities, should be easily extensible. Other applications should be able to 'register' transforms with the server so it knows they exist and the server can run it. In the future, other applications might want to create their own transforms to extract data from the lifelog.
+
 #### Database
 
 One database for this entire project. It could be moved to separate databases in the future to take advantage of them (a vector specific db for vector queries, a elasticsearch for text-queries).
@@ -127,6 +130,8 @@ One database for this entire project. It could be moved to separate databases in
 One table per data source.
 
 Data sources are unique and are based on device + data modality.
+
+The database is used for persistent storage of the lifelog and other data as well as quick retrieval of data.
 
 ##### Transformation Pipeline
 
