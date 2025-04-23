@@ -1,0 +1,8 @@
+We should talk about whether the controller is the master or slave in the relationship. how we are formulating it right now, the controller is the master but I think the controller should be the slave?
+
+TODOS:
+
+- You're going to define the state of the controller
+- We define a service for sending controller config, you have to be able to take the config from it, write it to disk, and update all data sources and loggers to use the new config.
+- We define a service for the controller to request to send data to the server. How do we formulate this? Should the controller make a request to the server to send data to the server, the server responds with `yes` or `no` and then the controller makes a request to send data to the server. Or, does the collector send a request to the server that it wants to sync, and then the server makes the gRPC request on the controller (when it feels like it) that it wants the data? When the controller makes a request, it can also send it's status and the server can prioritize that controller.
+- We define a service for the server "telling" the collector to do something that isn't in/related to the config? (For example, the sync event). Thinking about making this more abstract in case the server would want to tell the controller something else that isn't sync. That way you would only have to listen for 1 thing instead of n where n is the number of different messages the server dcan send to the controller? Idk if this is the best way. When you receive a sync event, you will then make a `send-data` request to the server and the server will respond. This is not needed if the server is the master

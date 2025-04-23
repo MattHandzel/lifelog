@@ -42,3 +42,22 @@ Server bootign sequence:
 2. Starts database connection (or a pool of connections)
 3. Starts the server for collectors to send data to
 4. Looks at what jobs are defined for the server and start running them
+
+#### Cool Transforms
+
+Agent that takes notes - Define a trasnform that is an agent that maybe can extract key words
+
+#### Policy
+
+The server has a policy that allows it to make decisions for whatever decisions the server needs to make. These decisions include:
+
+- When should I request data from the collectors?
+- How much CPU usage should I use?
+- How much network traffic should I use?
+- For all data sources:
+  - Of the avaliable transforms, what transform should I run at this instance.
+- Should I create a backup, if so, of what data?
+- Should I compress any data?
+- Should I re-transform any data (suppose)
+- Should i train any models of data
+- Does the current query require these data sources that aren't transformed.

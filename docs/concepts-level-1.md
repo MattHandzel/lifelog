@@ -4,7 +4,7 @@ The vision for the project is a software system that allows users to store infor
 
 ## Principles
 
-Store everything, don't lose anything
+Store everything, don't lose anything, don't delete or overwrite anything,
 Everything that is configurable should be configured in a single config.toml file.
 
 ## Requirements
@@ -94,6 +94,8 @@ The server has the same thing on it's end, where it can listen on all of these m
 #### Transforms
 
 A transform is something that takes data of one data type A and applies some transformation of it to create something of another data type B, where A could equal B.
+
+If there is an update to the transform (using a different model) then store the original? or use the original?
 
 Functions:
 
