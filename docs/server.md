@@ -43,10 +43,6 @@ Server bootign sequence:
 3. Starts the server for collectors to send data to
 4. Looks at what jobs are defined for the server and start running them
 
-#### Cool Transforms
-
-Agent that takes notes - Define a trasnform that is an agent that maybe can extract key words
-
 #### Policy
 
 The server has a policy that allows it to make decisions for whatever decisions the server needs to make. These decisions include:

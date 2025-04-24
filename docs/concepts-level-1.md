@@ -95,6 +95,8 @@ The server has the same thing on it's end, where it can listen on all of these m
 
 A transform is something that takes data of one data type A and applies some transformation of it to create something of another data type B, where A could equal B.
 
+A transform is an abstract term. It is any general function. It can be an ML model applied to the data, some filtering/signal processing, it can be an API call to another server to do something with the data. Only thing is that it acts on existing data.
+
 If there is an update to the transform (using a different model) then store the original? or use the original?
 
 Functions:
@@ -124,6 +126,10 @@ With this pipeline, when the server gets some input data from the collectors it 
 A transform has a name, and a function `apply` that takes in the input data and then outputs the new data.
 
 Transforms, like data modalities, should be easily extensible. Other applications should be able to 'register' transforms with the server so it knows they exist and the server can run it. In the future, other applications might want to create their own transforms to extract data from the lifelog.
+
+##### Cool Transforms
+
+Agent that takes notes - Define a trasnform that is an agent that maybe can extract key words
 
 #### Database
 
