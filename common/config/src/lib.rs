@@ -5,8 +5,10 @@ use std::path::PathBuf;
 use utils::replace_home_dir_in_path;
 
 mod collector_config;
+mod policy_config;
 mod server_config;
 pub use crate::collector_config::*;
+pub use crate::policy_config::*;
 pub use crate::server_config::*;
 
 // TODO: Implement default for all configs

@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use config::CollectorConfig;
 //use config::ServerConfig;
 use dashmap::DashMap;
+use definitions::data_sources::DataSource;
 use definitions::*;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
