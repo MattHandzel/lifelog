@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+package controller;
+
+service ControllerService {
+  rpc Handshake (HandshakeRequest) returns (HandshakeResponse);
+
+  rpc ReportStatus (ReportStatusRequest) returns (ReportStatusResponse);
+}
+
+message HandshakeRequest {
+  string client_id = 1;
+}
+
+message HandshakeResponse {
+  bool success = 1;
+  string message = 2;
+  string session_id = 3;
+}
+
+message ReportStatusRequest {
+  string client_id = 1;
+  repeated string active_loggers = 2;
+}
+
+message ReportStatusResponse {
+  bool acknowledged = 1;
+}

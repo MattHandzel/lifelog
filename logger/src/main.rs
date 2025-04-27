@@ -3,6 +3,21 @@ use lifelog_logger::logger_controller::Controller;
 use lifelog_logger::setup;
 use std::env;
 use std::sync::Arc;
+use uuid::Uuid;
+use clap::Parser;
+
+#[derive(Parser, Debug)]
+#[command(author, version, about = "LifeLog Logger Client", long_about = None)]
+struct Cli {
+    #[arg(
+        short = 's',
+        long="--server-address",
+        value_name = "URL",
+        default_value = "http://localhost:50051"
+    )]
+    server_address: String,
+
+}
 
 #[tokio::main]
 async fn main() {
@@ -32,5 +47,18 @@ async fn main() {
 
     setup::initialize_project(&config).expect("Failed to initialize project");
 
-    let controller = Controller::new(config);
+    let cli = Cli::parse();
+
+    let server_addr = cli.server_address;
+    let id = Uuid::new_v4();
+    let client_id = format!("client-{}", id);
+
+    let mut controller = Controller::new(config, server_addr, client_id);
+
+    // if let Err(e) = controller.start().await {
+    //     eprintln!("Failed to start controller: {}", e);
+    //     return Err(Box::new(e));
+    // }
+
+    println!("Controller started successfully.");
 }
