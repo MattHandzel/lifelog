@@ -8,9 +8,9 @@ use utils::replace_home_dir_in_path;
 mod collector_config;
 mod policy_config;
 mod server_config;
-pub use crate::collector_config::*;
-pub use crate::policy_config::*;
-pub use crate::server_config::*;
+pub use collector_config::*;
+pub use policy_config::*;
+pub use server_config::*;
 
 // TODO: Implement default for all configs
 // TODO: Make it so that there is a default directory

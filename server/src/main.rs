@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use config::CollectorConfig;
 //use config::ServerConfig;
 use chrono::{DateTime, Utc};
+use config::ServerConfig;
 use dashmap::DashMap;
 use lifelog_core::*;
 use serde::{Deserialize, Serialize};
@@ -43,26 +44,6 @@ pub enum ServerError {
     #[error("Tonic transport error: {0}")]
     TonicError(#[from] tonic::transport::Error),
 }
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerConfig<'a> {
-    pub database_path: &'a str,
-    pub host: String,
-    pub port: u16,
-    pub database_name: &'a str,
-}
-
-impl Default for ServerConfig<'_> {
-    fn default() -> Self {
-        Self {
-            database_path: "surrealkv://",
-            host: "127.0.0.1".to_string(),
-            port: 8080,
-            database_name: "main",
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct RegisteredCollector {
     location: String,
@@ -80,9 +61,11 @@ pub struct Server {
 }
 
 impl Server {
-    pub async fn new(config: &ServerConfig<'_>) -> Result<Self, ServerError> {
+    pub async fn new(config: &ServerConfig) -> Result<Self, ServerError> {
         let db = Surreal::new::<Mem>(()).await?;
-        db.use_ns("lifelog").use_db(config.database_name).await?;
+        db.use_ns("lifelog")
+            .use_db(config.database_name.clone())
+            .await?;
 
         Ok(Self {
             db,

@@ -7,7 +7,6 @@ service GRPCServerServices {
 }
 
 service GRPCClientServices {
-
     rpc GetStatus(CollectorStatusRequest) returns (CollectorStatusResponse);
     rpc UpdateConfig(CollectorConfig) returns (ConfigAck);
     rpc QueryDataFromCollector(CollectorQuery) returns (CollectorData);
