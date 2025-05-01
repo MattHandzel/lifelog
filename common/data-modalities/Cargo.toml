@@ -8,6 +8,8 @@ lifelog-core= { path = "../lifelog-core" }
 lifelog-macros = { path = "../macros" }
 serde = { version = "1.0", features = ["derive"] }
 
+
+# testing this real quick
 [build-dependencies]
 lifelog-core = { path = "../lifelog-core" }
 anyhow = "1.0"

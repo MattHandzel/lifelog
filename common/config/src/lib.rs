@@ -1,3 +1,4 @@
+use lifelog_macros::lifelog_type;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -15,6 +16,7 @@ pub use crate::server_config::*;
 // TODO: Make it so that there is a default directory
 // TODO: How do other projects do configs
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub timestamp_format: String,
@@ -35,6 +37,7 @@ pub struct Config {
     pub text_upload: TextUploadConfig,
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkConfig {
     #[serde(default = "default_false")]
@@ -50,6 +53,7 @@ fn default_network_interval() -> f64 {
     60.0
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProcessesConfig {
     #[serde(default = "default_true")]
@@ -65,6 +69,7 @@ fn default_processes_interval() -> f64 {
     60.0
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MicrophoneConfig {
     #[serde(default = "default_true")]
@@ -105,6 +110,7 @@ fn default_microphone_channels() -> u32 {
 }
 
 // Add new config structs
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SystemPerformanceConfig {
     #[serde(default = "default_true")]
@@ -126,6 +132,7 @@ fn default_system_performance_interval() -> f64 {
     10.0
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AmbientConfig {
     #[serde(default = "default_false")]
@@ -144,6 +151,7 @@ fn default_ambient_interval() -> f64 {
     60.0
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WeatherConfig {
     #[serde(default = "default_false")]
@@ -169,6 +177,7 @@ fn load_weather_api_key() -> String {
     env::var("WEATHER_API_KEY").unwrap_or_else(|_| "".to_string())
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AudioConfig {
     #[serde(default = "default_true")]
@@ -192,6 +201,7 @@ fn default_audio_chunk_duration_secs() -> u64 {
     300
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GeoConfig {
     #[serde(default = "default_true")]
@@ -211,6 +221,7 @@ fn default_geo_ip_fallback() -> bool {
     true
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WifiConfig {
     #[serde(default = "default_true")]
@@ -231,6 +242,7 @@ fn default_scan_command() -> String {
     "nmcli device wifi list".to_string()
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct KeyboardConfig {
     #[serde(default = "default_true")]
@@ -239,6 +251,7 @@ pub struct KeyboardConfig {
     pub output_dir: PathBuf,
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MouseConfig {
     #[serde(default = "default_true")]
@@ -247,6 +260,7 @@ pub struct MouseConfig {
     pub output_dir: PathBuf,
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenConfig {
     #[serde(default = "default_true")]
@@ -269,6 +283,7 @@ fn default_screen_program() -> String {
     "gnome-screenshot".to_string()
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HyprlandConfig {
     // TODO: Make this be based on OS and DE
@@ -295,6 +310,7 @@ fn default_hyprland_interval() -> f64 {
     1.0
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CameraConfig {
     #[serde(default = "default_false")]
@@ -334,6 +350,7 @@ fn default_camera_fps() -> u32 {
     30
 }
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputLoggerConfig {
     /// Path to store the database file
@@ -392,6 +409,7 @@ fn default_timestamp_format() -> String {
 //    }
 //}
 
+#[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TextUploadConfig {
     #[serde(default = "default_true")]
