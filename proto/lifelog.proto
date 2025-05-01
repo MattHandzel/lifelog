@@ -1,19 +1,40 @@
 syntax = "proto3";
 
 package lifelog;
+import "lifelog_types.proto";
 
-service GRPCServerServices {
+service ServerService {
     rpc RegisterCollector(CollectorRegistrationRequest) returns (CollectorRegistrationResponse);
+    rpc GetConfig() returns (Config);
+    rpc SetConfig(Config) returns (ConfigAck);
+    rpc GetData(Query) returns (LifelogData);
 }
 
-service GRPCClientServices {
-    rpc GetStatus(CollectorStatusRequest) returns (CollectorStatusResponse);
+service CollectorService {
+    rpc GetState(CollectorStateRequest) returns (CollectorStateResponse);
     rpc UpdateConfig(CollectorConfig) returns (ConfigAck);
-    rpc QueryDataFromCollector(CollectorQuery) returns (CollectorData);
+    rpc QueryDataFromCollector(CollectorQuery) returns (LifelogData);
+    rpc Handshake (HandshakeRequest) returns (HandshakeResponse);
+    rpc ReportStatus (ReportStatusRequest) returns (ReportStatusResponse);
   };
 
+
+message HandshakeResponse {
+  bool success = 1;
+  string message = 2;
+  string session_id = 3;
+}
+
+message ReportStatusRequest {
+  string client_id = 1;
+  repeated string active_loggers = 2;
+}
+
+message ReportStatusResponse {
+  bool acknowledged = 1;
+}
+
 message CollectorStatusRequest {
-  // this is empty
 }
 
 message CollectorQuery {
@@ -25,8 +46,8 @@ message ConfigAck {
   bool success = 1;
 }
 
-message CollectorStatusResponse {
-  string status = 1;
+message CollectorStateResponse {
+  CollectorState state = 1;
 }
 
 message CollectorConfig {
@@ -34,20 +55,10 @@ message CollectorConfig {
 }
 
 message CollectorRegistrationRequest {
-    string file_type = 1;
-    string config = 2;
+  Config config = 1;
 }
 
 message CollectorRegistrationResponse {
     bool success = 1;
 }
 
-message CollectorData {
-    string id = 1;
-    bytes data = 2;
-}
-
-
-message DataAck {
-    bool success = 1;
-}

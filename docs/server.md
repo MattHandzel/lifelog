@@ -57,3 +57,7 @@ The server has a policy that allows it to make decisions for whatever decisions 
 - Should I re-transform any data (suppose)
 - Should i train any models of data
 - Does the current query require these data sources that aren't transformed.
+
+#### Rewriting/Modifying data
+
+Whenever there is a modification to data that is not a read or an append the server will ahve some sort of a history so that the user can 1. see that the change happened, and 2. be able to undo it in case something catastrophic happens.
