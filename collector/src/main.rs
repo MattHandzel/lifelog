@@ -1,26 +1,26 @@
+use clap::Parser;
 use config::load_config;
+use lifelog_collector::collector::Collector;
 use lifelog_collector::logger::DataLogger;
 use lifelog_collector::modules::*;
 use lifelog_collector::setup;
-use mobc::Pool;
-use mobc_surrealdb::SurrealDBConnectionManager;
 use std::env;
 use std::process::Command;
 use std::sync::Arc;
+use std::thread;
+use std::time;
 use uuid::Uuid;
-use clap::Parser;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "LifeLog Logger Client", long_about = None)]
 struct Cli {
     #[arg(
         short = 's',
-        long="--server-address",
+        long = "server-address",
         value_name = "URL",
         default_value = "http://localhost:50051"
     )]
     server_address: String,
-
 }
 
 #[tokio::main]
@@ -53,33 +53,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // TODO: add windows support
-    if !setup::n_processes_already_running("surreal", 1) {
-        let home = env::var("HOME").expect("Unable to read home directory");
-        let db_path = format!("rocksdb:{}/lifelog/data/db", home);
-
-        #[cfg(target_os = "macos")]
-        {
-            Command::new("surreal")
-                .arg("start")
-                .arg("--user")
-                .arg("root")
-                .arg("--pass")
-                .arg("root")
-                .arg("--log")
-                .arg("none")
-                .arg("--no-banner")
-                .arg(&db_path)
-                .spawn()
-                .expect("Failed to execute start surrealdb command");
-        }
-    }
+    //if !setup::n_processes_already_running("surreal", 1) {
+    //    let home = env::var("HOME").expect("Unable to read home directory");
+    //    let db_path = format!("rocksdb:{}/lifelog/data/db", home);
+    //
+    //    #[cfg(target_os = "macos")]
+    //    {
+    //        Command::new("surreal")
+    //            .arg("start")
+    //            .arg("--user")
+    //            .arg("root")
+    //            .arg("--pass")
+    //            .arg("root")
+    //            .arg("--log")
+    //            .arg("none")
+    //            .arg("--no-banner")
+    //            .arg(&db_path)
+    //            .spawn()
+    //            .expect("Failed to execute start surrealdb command");
+    //    }
+    //}
 
     // let db spin up
-    thread::sleep(time::Duration::from_millis(1000));
-
-    if !setup::n_processes_already_running("surreal", 1) {
-        panic!("Surreal db auto-launch failed. Please try again.");
-    }
+    //thread::sleep(time::Duration::from_millis(1000));
+    //
+    //if !setup::n_processes_already_running("surreal", 1) {
+    //    panic!("Surreal db auto-launch failed. Please try again.");
+    //}
 
     setup::initialize_project(&config).expect("Failed to initialize project");
 
@@ -89,12 +89,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let id = Uuid::new_v4();
     let client_id = format!("client-{}", id);
 
-    let mut controller = Controller::new(config, server_addr, client_id);
+    let mut collector = Collector::new(config, server_addr, client_id);
+    collector.start().await?;
 
-    // if let Err(e) = controller.start().await {
-    //     eprintln!("Failed to start controller: {}", e);
-    //     return Err(Box::new(e));
-    // }
-
-    println!("Controller started successfully.");
+    println!("collector started successfully.");
+    Ok(())
 }

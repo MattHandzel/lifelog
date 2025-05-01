@@ -237,7 +237,7 @@ pub async fn start_logger(config: &CameraConfig) {
     let camera_config = Config {
         interval: (1, config.fps), // Frame interval
         format: b"MJPG",           // Motion-JPEG format
-        resolution: config.resolution,
+        resolution: (config.resolution.width, config.resolution.height),
         ..Default::default()
     };
 

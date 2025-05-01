@@ -8,6 +8,8 @@ description = "A project to log, process, and interact with various sources of d
 [dependencies]
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }
+lifelog-macros = { path = "../common/macros"}
+lifelog-core = {path="../common/lifelog-core"}
 
 sha2 = "0.10"
 serde = { version = "1.0", features = ["derive"] }
@@ -35,20 +37,22 @@ cpal = "0.15.3"
 async-trait = "0.1"
 surrealdb = "2.2.2"
 mobc = "0.8.5"
+derive_more = { version = "2.0.1", features = ["full"] }
 mobc-surrealdb = "0.2.0"
 
 #gRPC
-tonic = "0.9.2"
-prost = "0.11.9"
+tonic = "0.13.0"
+prost = "0.13.5"
+prost-types = { version = "0.13.5"}
 
 [build-dependencies]
-tonic-build = "0.11"
+tonic-build = "0.13"
 
 [dependencies.uuid]
 version = "1.16.0"
 # Lets you generate random UUIDs
 features = [
-    "v4",
+    "v6",
 ]
 
 [target.'cfg(target_os = "linux")'.dependencies]

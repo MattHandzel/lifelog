@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "common/data-modalities",
-    # "collector",
+    "collector",
     "server",
     "common/utils",
     "common/config",

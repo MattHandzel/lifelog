@@ -1,64 +1,81 @@
 syntax = "proto3";
 
 package lifelog;
-import "lifelog_types.proto";
 
-service ServerService {
-    rpc RegisterCollector(CollectorRegistrationRequest) returns (CollectorRegistrationResponse);
-    rpc GetConfig() returns (Config);
-    rpc SetConfig(Config) returns (ConfigAck);
-    rpc GetData(Query) returns (LifelogData);
+import "google/protobuf/timestamp.proto";
+import "lifelog_types.proto";  // defines Config, LifelogData, etc.
+
+// -----------------------------------------------------------------------------
+// Common RPC request/response messages
+// -----------------------------------------------------------------------------
+
+message RegisterCollectorRequest {
+  Config config = 1;
 }
-
-service CollectorService {
-    rpc GetState(CollectorStateRequest) returns (CollectorStateResponse);
-    rpc UpdateConfig(CollectorConfig) returns (ConfigAck);
-    rpc QueryDataFromCollector(CollectorQuery) returns (LifelogData);
-    rpc Handshake (HandshakeRequest) returns (HandshakeResponse);
-    rpc ReportStatus (ReportStatusRequest) returns (ReportStatusResponse);
-  };
-
-
-message HandshakeResponse {
+message RegisterCollectorResponse {
   bool success = 1;
-  string message = 2;
-  string session_id = 3;
+  uint64 session_id = 2;
 }
 
-message ReportStatusRequest {
-  string client_id = 1;
-  repeated string active_loggers = 2;
-}
-
-message ReportStatusResponse {
-  bool acknowledged = 1;
-}
-
-message CollectorStatusRequest {
-}
-
-message CollectorQuery {
-  string id = 1;
-  string query = 2;
-}
-
-message ConfigAck {
-  bool success = 1;
-}
-
-message CollectorStateResponse {
-  CollectorState state = 1;
-}
-
-message CollectorConfig {
-    string config =1;
-}
-
-message CollectorRegistrationRequest {
+message GetConfigRequest {}
+message GetConfigResponse {
   Config config = 1;
 }
 
-message CollectorRegistrationResponse {
-    bool success = 1;
+message SetConfigRequest {
+  Config config = 1;
+}
+message SetConfigResponse {
+  bool success = 1;
 }
 
+message GetDataRequest {
+  string query = 1;
+}
+message GetDataResponse {
+  LifelogData data = 1;
+}
+
+message GetStateRequest {}
+message GetStateResponse {
+  CollectorState state = 1;
+}
+
+// -----------------------------------------------------------------------------
+// report current collector state back to server
+// -----------------------------------------------------------------------------
+
+message ReportStateRequest {
+  CollectorState state = 1;
+}
+message ReportStateResponse {
+  bool acknowledged = 1;
+}
+
+// -----------------------------------------------------------------------------
+// Domain types
+// -----------------------------------------------------------------------------
+
+message CollectorState {
+  string name = 1;
+  google.protobuf.Timestamp timestamp = 2;
+}
+
+// -----------------------------------------------------------------------------
+// Services
+// -----------------------------------------------------------------------------
+
+service LifelogServerService {
+  rpc RegisterCollector(RegisterCollectorRequest) returns (RegisterCollectorResponse);
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  rpc SetConfig(SetConfigRequest) returns (SetConfigResponse);
+  rpc GetData(GetDataRequest) returns (GetDataResponse);
+  rpc ReportState(ReportStateRequest) returns (ReportStateResponse);
+}
+
+service CollectorService {
+  rpc GetState(GetStateRequest) returns (GetStateResponse);
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  rpc SetConfig(SetConfigRequest) returns (SetConfigResponse);
+  rpc GetData(GetDataRequest) returns (GetDataResponse);
+}
