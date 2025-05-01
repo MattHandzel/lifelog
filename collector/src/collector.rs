@@ -121,6 +121,7 @@ impl From<config::ProcessesConfig> for proto::ProcessesConfig {
 }
 
 #[lifelog_type(None)]
+#[derive(Debug)]
 pub struct CollectorState {
     name: String,
     timestamp: DateTime<Utc>,
