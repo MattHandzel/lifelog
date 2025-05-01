@@ -69,6 +69,12 @@ impl CodeGenerator for TypeScriptGenerator {
                     "Option<i32>" => "number | null".to_string(),
                     "Result<String, String>" => "string".to_string(), // Simplified
                     "serde_json::Value" => "any".to_string(),
+                    // Check to see if the type is a custom data type
+                    t if types.iter().any(|d| d.ident == t) => (t.to_string(), false),
+                    _ => {
+                        println!("Warning: Unsupported Protobuf type: {}", field_type);
+                        ("string".to_string(), false)
+                    }
 
                     // Tuples and complex types
                     t if t.starts_with('(') => "any".to_string(),
