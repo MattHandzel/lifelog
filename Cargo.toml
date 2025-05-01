@@ -4,7 +4,9 @@ members = [
     "server",
     "common/utils",
     "common/config",
-    "common/definitions",
+    "common/lifelog-core",
+    "common/macros",
+    "common/data-modalities",
     # "common/transforms"
 ]
 

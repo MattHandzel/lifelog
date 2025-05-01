@@ -1,9 +1,9 @@
 use async_trait::async_trait;
 use config::CollectorConfig;
 //use config::ServerConfig;
+use chrono::{DateTime, Utc};
 use dashmap::DashMap;
-use definitions::data_sources::DataSource;
-use definitions::*;
+use lifelog_core::*;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -18,8 +18,11 @@ use thiserror::Error;
 use toml;
 use tonic::{transport::Server as TonicServer, Response as TonicResponse, Status as TonicStatus};
 
+use lifelog_macros::lifelog_type;
 use proto::grpc_server_services_server::{GrpcServerServices, GrpcServerServicesServer};
 use proto::{CollectorRegistrationRequest, CollectorRegistrationResponse};
+
+use uuid::Uuid;
 
 use tokio::sync::RwLock;
 
@@ -146,6 +149,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .register_encoded_file_descriptor_set(proto::FILE_DESCRIPTOR_SET)
         .build_v1()?;
 
+    let time: DateTime<Utc> = Utc::now();
+    let uuid = Uuid::new_v4();
     TonicServer::builder()
         .add_service(service)
         .add_service(GrpcServerServicesServer::new(server))

@@ -1,4 +1,4 @@
 use config::policy_config::PolicyConfig;
-use definitions::system_state::SystemState;
+use lifelog-core;:system_state::SystemState;
 
 pub struct Policy {}
