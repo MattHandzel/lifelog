@@ -1,5 +1,6 @@
 use lifelog_core::serde_json;
 use lifelog_core::DataType;
+use lifelog_core::LifelogMacroMetaDataType;
 use proc_macro::TokenStream;
 use quote::quote;
 use quote::ToTokens;
@@ -14,23 +15,17 @@ use syn::{
     token::Comma,
     DeriveInput, Field, FieldsNamed, Ident, ItemStruct, Result, Token,
 };
-enum LifelogMacroDataType {
-    Config,
-    Data,
-    None,
-}
-
 struct MacroOptions {
-    datatype: LifelogMacroDataType,
+    datatype: LifelogMacroMetaDataType,
 }
 
 impl Parse for MacroOptions {
     fn parse(input: ParseStream) -> Result<Self> {
         let type_ident: Ident = input.parse().expect("Failed parsing input to macros");
         let datatype = match type_ident.to_string().as_str() {
-            "Config" => LifelogMacroDataType::Config,
-            "Data" => LifelogMacroDataType::Data,
-            _ => LifelogMacroDataType::None,
+            "Config" => LifelogMacroMetaDataType::Config,
+            "Data" => LifelogMacroMetaDataType::Data,
+            _ => LifelogMacroMetaDataType::None,
         };
         Ok(MacroOptions { datatype })
     }
@@ -64,7 +59,7 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
     // Prepare any extra fields
     let mut extra: Punctuated<Field, Comma> = Punctuated::new();
-    if let LifelogMacroDataType::Data = options.datatype {
+    if let LifelogMacroMetaDataType::Data = options.datatype {
         named.named.insert(
             0,
             parse_quote! {
@@ -93,13 +88,18 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
         .filter_map(|f| {
             f.ident.as_ref().map(|i| {
                 let ty = &f.ty;
-                (i, ty.into_token_stream().to_string())
+                (i, ty.into_token_stream().to_string().replace(" ", ""))
             })
         })
         .collect();
     let meta = serde_json::json!({
         "ident": ident.to_string(),
         "fields": fields_meta.iter().map(|(i,t)| [i.to_string(), t.clone()]).collect::<Vec<_>>(),
+        "metadata_type" : match options.datatype {
+            LifelogMacroMetaDataType::Config => "Config",
+            LifelogMacroMetaDataType::Data => "Data",
+            LifelogMacroMetaDataType::None => "None",
+        },
     });
     let out_dir = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR")
@@ -115,7 +115,7 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     writeln!(file, "{}", meta).expect("failed to write metadata");
 
     // If Data, implement DataType
-    let impl_datatype = if let LifelogMacroDataType::Data = options.datatype {
+    let impl_datatype = if let LifelogMacroMetaDataType::Data = options.datatype {
         let name = &struct_ast.ident;
         Some(quote! {
             impl ::lifelog_core::DataType for #name {

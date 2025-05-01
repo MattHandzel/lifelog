@@ -23,6 +23,14 @@ pub trait DataType {
     fn uuid(&self) -> Uuid;
     fn timestamp(&self) -> DateTime<Utc>;
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub enum LifelogMacroMetaDataType {
+    Config,
+    Data,
+    None,
+}
+
 //use system_state::*;
 
 //use target_lexicon::Triple as ComputerTargetTriple;

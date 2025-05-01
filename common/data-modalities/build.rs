@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use lifelog_core::LifelogMacroMetaDataType;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{
@@ -12,6 +13,7 @@ use walkdir::WalkDir;
 struct DataTypeDefinition {
     ident: String,
     fields: Vec<(String, String)>,
+    metadata_type: LifelogMacroMetaDataType,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -34,11 +36,12 @@ impl CodeGenerator for TypeScriptGenerator {
             output.push_str(&format!("export interface {} {{\n", dtype.ident));
             for (field_name, field_type) in &dtype.fields {
                 let ts_type = match field_type.as_str() {
-                    "uuid::Uuid" => "string",
-                    "chrono::DateTime<chrono::Utc>" => "Date",
+                    "::lifelog_core::uuid::Uuid" => "string",
+                    "::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>" => "Date",
                     "std::path::PathBuf" => "string",
                     "f32" => "number",
                     "u32" => "number",
+                    "u8" => "number",
                     "String" => "string",
                     "Option<bool>" => "boolean | null",
                     t if t.starts_with('(') => "any",
@@ -54,7 +57,7 @@ impl CodeGenerator for TypeScriptGenerator {
 
 impl CodeGenerator for ProtobufGenerator {
     fn generate(&self, types: &[DataTypeDefinition]) -> Result<String> {
-        let mut output = String::from("syntax = \"proto3\";\n\n");
+        let mut output = String::from("syntax = \"proto3\";\npackage = \"lifelog\"\n\n");
 
         for dtype in types {
             output.push_str(&format!("message {} {{\n", dtype.ident));
@@ -62,11 +65,14 @@ impl CodeGenerator for ProtobufGenerator {
 
             for (field_name, field_type) in &dtype.fields {
                 let pb_type = match field_type.as_str() {
-                    "uuid::Uuid" => "string",
-                    "chrono::DateTime<chrono::Utc>" => "google.protobuf.Timestamp",
+                    "::lifelog_core::uuid::Uuid" => "string",
+                    "::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>" => {
+                        "google.protobuf.Timestamp"
+                    }
                     "std::path::PathBuf" => "string",
                     "f32" => "float",
                     "u32" => "uint32",
+                    "u8" => "uint8",
                     "String" => "string",
                     "Option<bool>" => "bool",
                     t if t.starts_with('(') => "string",
@@ -74,13 +80,32 @@ impl CodeGenerator for ProtobufGenerator {
                 };
 
                 output.push_str(&format!(
-                    "  {} {} = {};\n",
+                    "\t{} {} = {};\n",
                     pb_type, field_name, field_number
                 ));
                 field_number += 1;
             }
             output.push_str("}\n\n");
         }
+        // Rest of the messages we want
+
+        output.push_str("message LifelogData {\n");
+
+        let mut field_number = 1;
+        for dtype in types {
+            match dtype.metadata_type {
+                LifelogMacroMetaDataType::Data => output.push_str(&format!(
+                    "\trepeated {} {} = {};\n",
+                    dtype.ident,
+                    dtype.ident.to_lowercase(),
+                    field_number
+                )),
+                _ => println!("Skipping non-data type: {}", dtype.ident),
+            }
+            field_number += 1;
+        }
+        output.push_str("}\n\n");
+
         Ok(output)
     }
 }

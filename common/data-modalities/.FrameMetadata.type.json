@@ -1,1 +1,1 @@
-{"fields":[["uuid",":: lifelog_core :: uuid :: Uuid"],["timestamp",":: lifelog_core :: chrono :: DateTime < :: lifelog_core :: chrono :: Utc >"],["dpi","f32"],["color_depth","u8"],["contains_sensitive","Option < bool >"]],"ident":"FrameMetadata"}
+{"fields":[["uuid","::lifelog_core::uuid::Uuid"],["timestamp","::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>"],["dpi","f32"],["color_depth","u8"],["contains_sensitive","Option<bool>"]],"ident":"FrameMetadata","metadata_type":"Data"}

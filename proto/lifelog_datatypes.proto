@@ -1,2 +1,23 @@
 syntax = "proto3";
+package="lifelog"
+
+message FrameMetadata {
+	string uuid = 1;
+	google.protobuf.Timestamp timestamp = 2;
+	float dpi = 3;
+	uint8 color_depth = 4;
+	bool contains_sensitive = 5;
+}
+
+message ScreenFrame {
+	string uuid = 1;
+	google.protobuf.Timestamp timestamp = 2;
+	string image_path = 3;
+	string resolution = 4;
+}
+
+message LifelogData {
+	repeated FrameMetadata framemetadata = 1;
+	repeated ScreenFrame screenframe = 2;
+}
 
