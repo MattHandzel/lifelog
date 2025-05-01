@@ -1,0 +1,1 @@
+{"fields":[["enabled","bool"],["interval","f64"],["output_dir","PathBuf"],["program","String"],["timestamp_format","String"]],"ident":"ScreenConfig","metadata_type":"Config"}
