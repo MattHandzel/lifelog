@@ -9,7 +9,7 @@ fn main() {
     let dest_path = Path::new(&out_dir).join("data_modalities.rs");
 
     // Get all modality directories
-    let modalities = fs::read_dir("../../data-modalities")
+    let modalities = fs::read_dir("../data-modalities/src")
         .unwrap()
         .filter_map(|e| e.ok())
         .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))

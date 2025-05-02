@@ -5,6 +5,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+lifelog-macros = { path = "../macros" }
 serde = { version = "1.0", features = ["derive"] }
 utils = { path = "../utils" }
 dirs-next = "2.0"
@@ -14,6 +15,7 @@ thiserror = "2"
 serde_json = "1.0"
 anyhow = "1.0"
 cpal = "0.15.3"
+derive_more = { version = "2.0.1", features = ["full"] }
 
 [features]
 dev = []

@@ -1,4 +1,4 @@
-use definitions::*;
+use lifelog-core;:*;
 use tesseract_rs::{LeptonicaPix, Tesseract};
 use thiserror::Error;
 use utils::load_image;

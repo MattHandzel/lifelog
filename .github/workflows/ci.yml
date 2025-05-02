@@ -63,4 +63,4 @@ jobs:
 
       - name: Build the logger with nix build (Linux and macOS)
         if: runner.os == 'Linux'
-        run: nix build .#lifelog-logger
+        run: nix build .#lifelog-collector

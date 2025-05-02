@@ -1,97 +1,94 @@
-use chrono;
+use crate::logger::*;
+use async_trait::async_trait;
+use chrono::Local;
 use config::ScreenConfig;
+use rusqlite::params;
+use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::time::{sleep, Duration};
-use surrealdb::Surreal;
-use surrealdb::sql::{Object, Value};
-use surrealdb::Connection;
-use serde::{Deserialize, Serialize};
-use surrealdb::RecordId;
+
+use crate::setup::setup_screen_db;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
-
-#[derive(Deserialize)]
-struct Record {
-    id: RecordId,
-    datetime: f64,
-    path: String
+pub struct ScreenLogger {
+    config: ScreenConfig,
 }
 
-#[derive(Serialize)]
-struct ScreenLog {
-    datetime: f64,
-    path: String,
-}
-
-pub async fn start_logger<C>(config: &ScreenConfig,  db: &Surreal<C>) -> surrealdb::Result<()> where
-C: Connection, {
-    // Check if already running
-    if RUNNING.swap(true, Ordering::SeqCst) {
-        return Ok(());
+impl ScreenLogger {
+    pub fn new(config: ScreenConfig) -> Result<Self, LoggerError> {
+        Ok(ScreenLogger { config })
     }
-    loop {
-        // Check if we should stop
-        if !RUNNING.load(Ordering::SeqCst) {
-            break Ok (());
+
+    pub fn setup(&self) -> Result<LoggerHandle, LoggerError> {
+        DataLogger::setup(self, self.config.clone())
+    }
+}
+
+#[async_trait]
+impl DataLogger for ScreenLogger {
+    type Config = ScreenConfig;
+
+    fn new(config: ScreenConfig) -> Result<Self, LoggerError> {
+        ScreenLogger::new(config)
+    }
+
+    fn setup(&self, config: ScreenConfig) -> Result<LoggerHandle, LoggerError> {
+        let logger = Self::new(config)?;
+        let join = tokio::spawn(async move {
+            let _ = logger.run().await;
+        });
+
+        Ok(LoggerHandle { join })
+    }
+
+    async fn run(&self) -> Result<(), LoggerError> {
+        RUNNING.store(true, Ordering::SeqCst);
+        while RUNNING.load(Ordering::SeqCst) {
+            self.log_data().await?;
+            sleep(Duration::from_secs_f64(self.config.interval)).await;
         }
+        Ok(())
+    }
 
-        let now = chrono::Local::now();
-        let timestamp =
-            now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
-        let datetime = now.format(config.timestamp_format.as_str());
-        let output_path = format!("{}/{}.png", config.output_dir.to_string_lossy(), datetime);
+    fn stop(&self) {
+        RUNNING.store(false, Ordering::SeqCst);
+    }
 
-        #[cfg(target_os = "linux")]
-        let command = "grim";
+    async fn log_data(&self) -> Result<(), LoggerError> {
+        let conn = setup_screen_db(Path::new(&self.config.output_dir))?;
+        let now = Local::now();
+        let ts = now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1e9;
+        let ts_fmt = now.format(&self.config.timestamp_format);
+        let out = format!("{}/{}.png", self.config.output_dir.display(), ts_fmt);
 
-        #[cfg(target_os = "macos")]
-        let command = "screencapture";
-
-        #[cfg(target_os = "windows")]
-        let command = "screenshot.exe";
-
-        // Create platform-specific command with appropriate arguments
         #[cfg(target_os = "macos")]
         {
-            // On macOS, add the silent mode flag
-            Command::new(command)
-                .arg("-x") // Silent mode, no UI sounds or visual feedback
+            Command::new("screencapture")
+                .arg("-x")
                 .arg("-t")
                 .arg("png")
-                .arg(&output_path)
+                .arg(&out)
                 .status()
-                .expect("Failed to execute screenshot command");
+                .map_err(LoggerError::Io)?;
         }
         #[cfg(not(target_os = "macos"))]
         {
-            // Original command for Linux and Windows
-            Command::new(command)
+            let cmd = if cfg!(target_os = "linux") {
+                "grim"
+            } else {
+                "screenshot.exe"
+            };
+            Command::new(cmd)
                 .arg("-t")
                 .arg("png")
-                .arg(&output_path)
+                .arg(&out)
                 .status()
-                .expect("Failed to execute screenshot command");
+                .map_err(LoggerError::Io)?;
         }
 
-        let _: Vec<Record> = db.upsert("screen").content(ScreenLog {
-            datetime: timestamp,
-            path: Value::from(output_path).to_string(),
-        })
-        .await?;
-
-        // EXAMPLE simple query
-        // let records: Vec<Record> = db.select("screen").await?;
-        // for record in records {
-        //     println!("Record ID: {:?} datetime: {}", record.id, record.datetime);
-        // }
-        // println!("");
-
-        sleep(Duration::from_secs_f64(config.interval)).await;
+        conn.execute("INSERT INTO screen VALUES (?1)", params![ts])?;
+        Ok(())
     }
-}
-
-pub fn stop_logger() {
-    RUNNING.store(false, Ordering::SeqCst);
 }

@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use thiserror::Error;
+use tokio::{task::JoinHandle};
 
 #[derive(Debug, Error)]
 pub enum LoggerError {
@@ -16,6 +17,10 @@ pub enum LoggerError {
     Generic(String),
 }
 
+pub struct LoggerHandle {
+    pub join: JoinHandle<()>,
+}
+
 // Generic logger trait that data loggers can implement
 #[async_trait]
 pub trait DataLogger: Sized + Send + Sync {
@@ -23,7 +28,7 @@ pub trait DataLogger: Sized + Send + Sync {
     // This function should be called the first time the logger is created on the machine, this function contains
     // code to set up database tables, create directories if necessary, etc.
     // things such as setting up database tables, directories
-    async fn setup(&self) -> Result<(), LoggerError>;
+    fn setup(&self, config: Self::Config) -> Result<LoggerHandle, LoggerError>;
 
     // This function should be called to start the logger
     // It should be able to run on multiple operating systems

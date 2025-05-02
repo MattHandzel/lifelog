@@ -1,10 +1,12 @@
 [workspace]
 members = [
+    "common/data-modalities",
     "collector",
     "server",
     "common/utils",
     "common/config",
-    "common/definitions",
+    "common/lifelog-core",
+    "common/macros",
     # "common/transforms"
 ]
 

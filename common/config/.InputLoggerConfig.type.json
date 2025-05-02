@@ -1,0 +1,1 @@
+{"fields":[["output_dir","PathBuf"],["enabled","bool"],["log_keyboard","bool"],["log_mouse_buttons","bool"],["log_mouse_movement","bool"],["log_mouse_wheel","bool"],["log_devices","bool"],["mouse_interval","f64"]],"ident":"InputLoggerConfig","metadata_type":"Config"}

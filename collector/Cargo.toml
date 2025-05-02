@@ -8,6 +8,8 @@ description = "A project to log, process, and interact with various sources of d
 [dependencies]
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }
+lifelog-macros = { path = "../common/macros"}
+lifelog-core = {path="../common/lifelog-core"}
 
 sha2 = "0.10"
 serde = { version = "1.0", features = ["derive"] }
@@ -23,7 +25,8 @@ sysinfo = "0.24"
 hound = "3.5.1"
 serde_json = "1.0"
 reqwest = { version = "0.11", features = ["json"] }
-clap = "3.2.25"
+rocket = "0.5.1"
+clap = { version = "4.5", features = ["derive"] } 
 crossbeam-channel = "0.5"
 rdev = "0.5"
 anyhow = "1.0"
@@ -34,8 +37,23 @@ cpal = "0.15.3"
 async-trait = "0.1"
 surrealdb = "2.2.2"
 mobc = "0.8.5"
+derive_more = { version = "2.0.1", features = ["full"] }
 mobc-surrealdb = "0.2.0"
 
+#gRPC
+tonic = "0.13.0"
+prost = "0.13.5"
+prost-types = { version = "0.13.5"}
+
+[build-dependencies]
+tonic-build = "0.13"
+
+[dependencies.uuid]
+version = "1.16.0"
+# Lets you generate random UUIDs
+features = [
+    "v6",
+]
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rscam = { version = "0.5.5"}

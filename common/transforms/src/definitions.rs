@@ -1,5 +1,5 @@
 
-use definitions::*;
+use lifelog-core;:*;
 use thiserror::Error;
 use std::fmt;
 

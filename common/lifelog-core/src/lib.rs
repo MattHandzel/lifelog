@@ -1,11 +1,36 @@
 use serde::{Deserialize, Serialize};
 
+pub use anyhow;
+pub use chrono;
+pub use chrono::{DateTime, Utc};
+pub use pretty_assertions;
+pub use proptest;
+pub use serde;
+pub use serde_json;
+pub use thiserror;
+pub use tracing;
+pub use uuid;
+pub use uuid::Uuid;
+
 pub mod data_sources;
 pub mod database_state;
 //pub mod system_state;
 
-use data_sources::*;
-use database_state::*;
+pub use data_sources::*;
+pub use database_state::*;
+
+pub trait DataType {
+    fn uuid(&self) -> Uuid;
+    fn timestamp(&self) -> DateTime<Utc>;
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub enum LifelogMacroMetaDataType {
+    Config,
+    Data,
+    None,
+}
+
 //use system_state::*;
 
 //use target_lexicon::Triple as ComputerTargetTriple;

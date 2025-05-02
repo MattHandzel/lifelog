@@ -1,0 +1,1 @@
+{"fields":[["enabled","bool"],["interval","f64"],["output_dir","PathBuf"]],"ident":"ProcessesConfig","metadata_type":"Config"}

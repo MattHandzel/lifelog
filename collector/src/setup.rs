@@ -17,15 +17,15 @@ pub fn initialize_project(config: &Config) -> std::io::Result<()> {
     // TODO: These should be moved inside their respective loggers
 
     ensure_directory(Path::new(&config.screen.output_dir))?;
-    ensure_directory(Path::new(&config.system_performance.output_dir))?;
-    ensure_directory(Path::new(&config.ambient.output_dir))?;
-    ensure_directory(Path::new(&config.weather.output_dir))?;
-    ensure_directory(Path::new(&config.audio.output_dir))?;
-    ensure_directory(Path::new(&config.geolocation.output_dir))?;
-    ensure_directory(Path::new(&config.wifi.output_dir))?;
+    //ensure_directory(Path::new(&config.system_performance.output_dir))?;
+    //ensure_directory(Path::new(&config.ambient.output_dir))?;
+    //ensure_directory(Path::new(&config.weather.output_dir))?;
+    //ensure_directory(Path::new(&config.audio.output_dir))?;
+    //ensure_directory(Path::new(&config.geolocation.output_dir))?;
+    //ensure_directory(Path::new(&config.wifi.output_dir))?;
     ensure_directory(Path::new(&config.camera.output_dir))?;
     ensure_directory(Path::new(&config.microphone.output_dir))?;
-    ensure_directory(Path::new(&config.input_logger.output_dir))?;
+    //ensure_directory(Path::new(&config.input_logger.output_dir))?;
 
     //let keyboard_db = setup_keyboard_db(output_dir)?;
     //let mouse_db = setup_mouse_db(output_dir)?;
