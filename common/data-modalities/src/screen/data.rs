@@ -10,14 +10,6 @@ pub struct ScreenFrame {
     pub resolution: (u32, u32),
 }
 
-#[lifelog_type(Data)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FrameMetadata {
-    pub dpi: f32,
-    pub color_depth: u8,
-    pub contains_sensitive: Option<bool>,
-}
-
 //impl crate::common::data_models::DataSchema for ScreenFrame {
 //    fn table_name() -> &'static str {
 //        "screen_frames"
