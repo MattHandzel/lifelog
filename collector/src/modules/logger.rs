@@ -17,8 +17,9 @@ pub enum LoggerError {
     Generic(String),
 }
 
+#[derive(Debug)]
 pub struct LoggerHandle {
-    pub join: JoinHandle<()>,
+    pub join: JoinHandle<Result<(), LoggerError>>,
 }
 
 // Generic logger trait that data loggers can implement

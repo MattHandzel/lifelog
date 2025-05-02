@@ -9,8 +9,100 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::time::{sleep, Duration};
 
 use crate::setup::setup_screen_db;
+use crate::data_source::DataSource;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
+
+#[derive(Debug, thiserror::Error)]
+pub enum ScreenDataSourceError {
+    #[error("Screen Logger Error: {0}")]
+    LoggerError(#[from] LoggerError),
+
+    #[error("Logger task panicked or was cancelled: {0}")]
+    JoinError(#[from] tokio::task::JoinError),
+
+    #[error("Logger is already running.")]
+    AlreadyRunning,
+
+    #[error("Logger is not running.")]
+    NotRunning,
+
+    #[error("Failed to create logger instance during start.")]
+    InitializationError(LoggerError),
+}
+
+#[derive(Debug)]
+pub struct ScreenDataSource {
+    config: ScreenConfig,
+    handle: Option<LoggerHandle>,
+}
+
+impl ScreenDataSource {
+    pub fn new(config: ScreenConfig) -> Self {
+        ScreenDataSource {
+            config,
+            handle: None,
+        }
+    }
+}
+
+#[async_trait]
+impl DataSource for ScreenDataSource {
+    type Config = ScreenConfig;
+    type Error = ScreenDataSourceError;
+
+    fn start(&mut self) -> Result<(), Self::Error> {
+        if self.handle.is_some() {
+            eprintln!("ScreenDataSource: Start called but logger is already running.");
+            return Err(ScreenDataSourceError::AlreadyRunning);
+        }
+
+        println!("ScreenDataSource: Starting logger...");
+        let logger = ScreenLogger::new(self.config.clone())
+            .map_err(ScreenDataSourceError::InitializationError)?;
+
+        let handle = logger.setup()
+             .map_err(ScreenDataSourceError::LoggerError)?;
+        self.handle = Some(handle);
+
+        println!("ScreenDataSource: Logger started successfully.");
+        Ok(())
+    }
+
+    async fn stop(&mut self) -> Result<(), Self::Error> {
+        if let Some(handle) = self.handle.take() {
+            println!("ScreenDataSource: Stopping logger...");
+
+            RUNNING.store(false, Ordering::SeqCst);
+            match handle.join.await {
+                Ok(Ok(())) => {
+                    println!("ScreenDataSource: Logger stopped successfully (task returned Ok).");
+                    Ok(())
+                }
+                Ok(Err(logger_err)) => {
+                    eprintln!("ScreenDataSource: Logger task finished with error: {}", logger_err);
+                    Err(ScreenDataSourceError::LoggerError(logger_err))
+                }
+
+                Err(join_err) => {
+                    eprintln!("ScreenDataSource: Logger task failed to join (panic/cancel): {}", join_err);
+                    Err(ScreenDataSourceError::JoinError(join_err))
+                }
+            }
+        } else {
+            eprintln!("ScreenDataSource: Stop called but logger was not running.");
+            Err(ScreenDataSourceError::NotRunning)
+        }
+    }
+
+    fn is_running(&self) -> bool {
+        self.handle.is_some()
+    }
+
+    fn get_config(&self) -> Self::Config {
+        self.config.clone()
+    }
+}
 
 pub struct ScreenLogger {
     config: ScreenConfig,
@@ -37,7 +129,12 @@ impl DataLogger for ScreenLogger {
     fn setup(&self, config: ScreenConfig) -> Result<LoggerHandle, LoggerError> {
         let logger = Self::new(config)?;
         let join = tokio::spawn(async move {
-            let _ = logger.run().await;
+
+            let task_result = logger.run().await;
+
+            println!("[Task] Background task finished with result: {:?}", task_result);
+
+            task_result
         });
 
         Ok(LoggerHandle { join })
