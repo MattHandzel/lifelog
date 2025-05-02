@@ -128,7 +128,7 @@ impl CodeGenerator for ProtobufGenerator {
                     "&str" => ("string".to_string(), false),
 
                     // Common Rust types
-                    "DateTime<Utc>" =>("google.protobuf.Timestamp".to_string(), false), 
+                    "DateTime<Utc>" => ("google.protobuf.Timestamp".to_string(), false),
                     "::lifelog_core::uuid::Uuid" => ("string".to_string(), false),
                     "::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>" => {
                         ("google.protobuf.Timestamp".to_string(), false)
@@ -215,15 +215,17 @@ impl CodeGenerator for ProtobufGenerator {
         let mut field_number = 1;
         for dtype in types {
             match dtype.metadata_type {
-                LifelogMacroMetaDataType::Data => output.push_str(&format!(
-                    "\trepeated {} {} = {};\n",
-                    dtype.ident,
-                    dtype.ident.to_lowercase(),
-                    field_number
-                )),
+                LifelogMacroMetaDataType::Data => {
+                    field_number += 1;
+                    output.push_str(&format!(
+                        "\trepeated {} {} = {};\n",
+                        dtype.ident,
+                        dtype.ident.to_lowercase(),
+                        field_number
+                    ))
+                }
                 _ => println!("Skipping non-data type: {}", dtype.ident),
             }
-            field_number += 1;
         }
         output.push_str("}\n\n");
 
