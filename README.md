@@ -50,6 +50,7 @@ Use the `flake.nix` 😀
   - [ ] Zsh
   - [ ] Fish
 - [ ] Home assistant devices
+- [ ] Devices networked (using wireshark)
 
 ### Inferences
 
@@ -104,6 +105,7 @@ Images:
 
 - [ ] Object recognition
 - [ ] OCR
+- [ ]
 
 Audio:
 
@@ -113,6 +115,7 @@ Audio:
 Text:
 
 - [ ] Sentiment analysis
+- [ ] Named Entity Recognition
 - [ ] Text embedding
 
 Location:

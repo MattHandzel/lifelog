@@ -24,6 +24,7 @@
             pkg-config
             openssl
             sqlite
+            protobuf
           ]
           ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [
             alsa-lib
@@ -32,6 +33,8 @@
             xorg.libX11
             xorg.libXtst
             xorg.libXi
+            leptonica
+            tesseract
           ];
 
         # TODO: Work out dependencies for front end and the rest of the software
@@ -50,6 +53,8 @@
           ]
           ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [
             alsa-lib
+
+            protobuf # we need this b/c we need to build the proto files
           ];
       };
 
@@ -78,9 +83,9 @@
         pname = "lifelog-server";
         binName = "lifelog-server";
       };
-      lifelog-logger = mkRustPackage {
-        pname = "lifelog-logger";
-        binName = "lifelog-logger";
+      lifelog-collector = mkRustPackage {
+        pname = "lifelog-collector";
+        binName = "lifelog-collector";
       };
     });
 
@@ -120,8 +125,17 @@
             glib
             gtk3
             atk
+
+            leptonica
+            tesseract
           ];
       };
+
+      LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
+      BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.llvmPackages.clang.version}/include";
+      NIX_CFLAGS_COMPILE = "-I${pkgs.glibc.dev}/include";
+      # Tesseract needs these at runtime
+      TESSDATA_PREFIX = "${pkgs.tesseract}/share/tessdata";
     });
   };
 }

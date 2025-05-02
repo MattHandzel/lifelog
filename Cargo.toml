@@ -1,14 +1,17 @@
 [workspace]
 members = [
-    "logger",
+    "common/data-modalities",
+    "collector",
     "server",
-    "interface/src-tauri",
     "common/utils",
-    "common/data-models",
-    "common/config"
+    "common/config",
+    "common/lifelog-core",
+    "common/macros",
+    # "common/transforms"
 ]
 
 resolver = "2"
 
 [workspace.package]
 edition = "2021"
+

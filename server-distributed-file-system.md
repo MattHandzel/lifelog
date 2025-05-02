@@ -270,7 +270,7 @@ Answer from Perplexity: pplx.ai/share
 - **Node Roles**:
   - **Edge Nodes**: Deployed on user-owned devices (laptops, phones). Run lightweight agents for data ingestion, client-side encryption, and local querying.
   - **Core Nodes**: Cloud-based or on-premises servers handling long-term storage, replication, and compute-heavy tasks (e.g., erasure coding, federated learning).
-  - **Metadata Controllers**: Dedicated nodes running Byzantine Fault Tolerant (BFT) consensus (e.g., **PBFT** or **HotStuff**) to manage:
+  - **Metadata Collectors**: Dedicated nodes running Byzantine Fault Tolerant (BFT) consensus (e.g., **PBFT** or **HotStuff**) to manage:
     - Shard maps (consistent hashing with **Rendezvous Hashing**).
     - Key management (integration with **Hashicorp Vault** or **AWS KMS**).
     - Access control policies (ABAC/RBAC).
@@ -312,7 +312,7 @@ Answer from Perplexity: pplx.ai/share
   - **Local Zone**: 3 replicas across edge nodes (sync via CRDTs for conflict-free merging).
   - **Global**: 2 replicas + erasure-coded fragments on core nodes.
 - **Anti-Entropy**:
-  - **Merkle Patricia Trie**: Per-node Merkle trees for chunk validation; root hashes stored in metadata controllers.
+  - **Merkle Patricia Trie**: Per-node Merkle trees for chunk validation; root hashes stored in metadata Collectors.
   - **Gossip Protocol**: Nodes exchange Merkle roots hourly to detect/correct drift.
 
 ---
@@ -335,7 +335,7 @@ Answer from Perplexity: pplx.ai/share
 #### **5. Consensus & Coordination**
 
 - **Metadata Consensus**:
-  - **HotStuff BFT**: Metadata controllers run HotStuff for high-throughput, low-latency consensus.
+  - **HotStuff BFT**: Metadata Collectors run HotStuff for high-throughput, low-latency consensus.
   - **Proof of Storage**: Nodes submit **Provable Data Possession (PDP)** proofs every 4 hours.
 - **Conflict Resolution**:
   - **CRDTs for File Metadata**:

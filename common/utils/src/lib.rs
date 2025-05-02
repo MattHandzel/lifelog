@@ -1,5 +1,6 @@
 use chrono::{DateTime, Local, TimeZone};
 use dirs_next;
+use image;
 
 pub fn replace_home_dir_in_path(path: String) -> String {
     let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
@@ -19,4 +20,8 @@ pub fn timestamp_to_epoch(timestamp: &str) -> Result<i64, &'static str> {
 pub fn current_timestamp() -> f64 {
     let now = Local::now();
     now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1_000_000_000.0
+}
+
+pub fn load_image(path: &str) -> Result<image::DynamicImage, String> {
+    image::open(path).map_err(|e| format!("Failed to load image: {}", e))
 }

@@ -1,61 +1,46 @@
+use lifelog_macros::lifelog_type;
 use serde::{Deserialize, Serialize};
+use std::env;
 use std::fs;
 use std::path::PathBuf;
-use std::env;
 use utils::replace_home_dir_in_path;
+
+mod collector_config;
+mod policy_config;
+mod server_config;
+pub use collector_config::*;
+pub use policy_config::*;
+pub use server_config::*;
+
+use derive_more::From;
 
 // TODO: Implement default for all configs
 // TODO: Make it so that there is a default directory
 // TODO: How do other projects do configs
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct Config {
     pub timestamp_format: String,
     pub screen: ScreenConfig,
     pub camera: CameraConfig,
     pub microphone: MicrophoneConfig,
-    pub network: NetworkConfig,
+    //pub network: NetworkConfig,
     pub processes: ProcessesConfig,
-    pub system_performance: SystemPerformanceConfig,
-    pub ambient: AmbientConfig,
-    pub weather: WeatherConfig,
-    pub audio: AudioConfig,
-    pub geolocation: GeoConfig,
-    pub wifi: WifiConfig,
+    //pub system_performance: SystemPerformanceConfig,
+    //pub ambient: AmbientConfig,
+    //pub weather: WeatherConfig,
+    //pub audio: AudioConfig,
+    //pub geolocation: GeoConfig,
+    //pub wifi: WifiConfig,
     pub hyprland: HyprlandConfig,
-    pub server: ServerConfig,
-    pub input_logger: InputLoggerConfig,
-    pub text_upload: TextUploadConfig,
+    //pub server: ServerConfig,
+    //pub input_logger: InputLoggerConfig,
+    //pub text_upload: TextUploadConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerConfig {
-    #[serde(default = "default_server_ip")]
-    pub ip: String,
-
-    #[serde(default = "default_server_port")]
-    pub port: u16,
-
-    pub folder_dir: PathBuf,
-}
-
-// Load environment variables for sensitive config values
-fn get_env_var<T: std::str::FromStr>(name: &str, default: T) -> T {
-    match env::var(name) {
-        Ok(val) => val.parse::<T>().unwrap_or(default),
-        Err(_) => default,
-    }
-}
-
-fn default_server_ip() -> String {
-    env::var("SERVER_IP").unwrap_or_else(|_| "localhost".to_string())
-}
-
-fn default_server_port() -> u16 {
-    get_env_var::<u16>("SERVER_PORT", 7182)
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct NetworkConfig {
     #[serde(default = "default_false")]
     pub enabled: bool,
@@ -70,7 +55,8 @@ fn default_network_interval() -> f64 {
     60.0
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct ProcessesConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -85,7 +71,8 @@ fn default_processes_interval() -> f64 {
     60.0
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct MicrophoneConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -125,7 +112,8 @@ fn default_microphone_channels() -> u32 {
 }
 
 // Add new config structs
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct SystemPerformanceConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -146,7 +134,8 @@ fn default_system_performance_interval() -> f64 {
     10.0
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct AmbientConfig {
     #[serde(default = "default_false")]
     pub enabled: bool,
@@ -164,7 +153,8 @@ fn default_ambient_interval() -> f64 {
     60.0
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct WeatherConfig {
     #[serde(default = "default_false")]
     pub enabled: bool,
@@ -189,7 +179,8 @@ fn load_weather_api_key() -> String {
     env::var("WEATHER_API_KEY").unwrap_or_else(|_| "".to_string())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct AudioConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -212,7 +203,8 @@ fn default_audio_chunk_duration_secs() -> u64 {
     300
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct GeoConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -231,7 +223,8 @@ fn default_geo_ip_fallback() -> bool {
     true
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct WifiConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -251,7 +244,8 @@ fn default_scan_command() -> String {
     "nmcli device wifi list".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct KeyboardConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -259,7 +253,8 @@ pub struct KeyboardConfig {
     pub output_dir: PathBuf,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct MouseConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -267,7 +262,8 @@ pub struct MouseConfig {
     pub output_dir: PathBuf,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct ScreenConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -289,7 +285,8 @@ fn default_screen_program() -> String {
     "gnome-screenshot".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct HyprlandConfig {
     // TODO: Make this be based on OS and DE
     #[serde(default = "default_false")]
@@ -315,7 +312,8 @@ fn default_hyprland_interval() -> f64 {
     1.0
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct CameraConfig {
     #[serde(default = "default_false")]
     pub enabled: bool,
@@ -326,11 +324,18 @@ pub struct CameraConfig {
     #[serde(default = "default_camera_device")]
     pub device: String,
     #[serde(default = "default_camera_resolution")]
-    pub resolution: (u32, u32),
+    pub resolution: Resolution,
     #[serde(default = "default_camera_fps")]
     pub fps: u32,
     #[serde(default = "default_timestamp_format")]
     pub timestamp_format: String,
+}
+
+#[lifelog_type(None)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
+pub struct Resolution {
+    pub width: u32,
+    pub height: u32,
 }
 
 fn default_camera_interval() -> f64 {
@@ -346,15 +351,19 @@ fn default_camera_device() -> String {
     "/dev/video0".to_string()
 }
 
-fn default_camera_resolution() -> (u32, u32) {
-    (640, 480)
+fn default_camera_resolution() -> Resolution {
+    Resolution {
+        width: 640,
+        height: 480,
+    }
 }
 
 fn default_camera_fps() -> u32 {
     30
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct InputLoggerConfig {
     /// Path to store the database file
     pub output_dir: PathBuf,
@@ -412,7 +421,8 @@ fn default_timestamp_format() -> String {
 //    }
 //}
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct TextUploadConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -525,6 +535,12 @@ fn create_default_config() -> Config {
             fps: default_camera_fps(),
             timestamp_format: default_timestamp_format(),
         },
+        //server: ServerConfig {
+        //    host: default_server_ip(),
+        //    port: default_server_port(),
+        //    database_path: default_database_path(),
+        //    database_name: default_database_name(),
+        //},
         microphone: MicrophoneConfig {
             enabled: default_true(),
             output_dir: home_dir.join("lifelog_microphone"),
@@ -535,57 +551,57 @@ fn create_default_config() -> Config {
             channels: default_microphone_channels(),
             capture_interval_secs: default_microphone_capture_interval_secs(),
         },
-        network: NetworkConfig {
-            enabled: default_false(),
-            interval: default_network_interval(),
-            output_dir: home_dir.join("lifelog_network"),
-        },
+        //network: NetworkConfig {
+        //    enabled: default_false(),
+        //    interval: default_network_interval(),
+        //    output_dir: home_dir.join("lifelog_network"),
+        //},
         processes: ProcessesConfig {
             enabled: default_true(),
             interval: default_processes_interval(),
             output_dir: home_dir.join("lifelog_processes"),
         },
-        system_performance: SystemPerformanceConfig {
-            enabled: default_true(),
-            interval: default_system_performance_interval(),
-            output_dir: home_dir.join("lifelog_system"),
-            log_cpu: default_true(),
-            log_memory: default_true(),
-            log_disk: default_true(),
-        },
-        ambient: AmbientConfig {
-            enabled: default_false(),
-            interval: default_ambient_interval(),
-            output_dir: home_dir.join("lifelog_ambient"),
-            temperature_sensor_path: None,
-            humidity_sensor_path: None,
-        },
-        weather: WeatherConfig {
-            enabled: default_false(),
-            interval: default_weather_interval(),
-            output_dir: home_dir.join("lifelog_weather"),
-            api_key: load_weather_api_key(),
-            latitude: 0.0,
-            longitude: 0.0,
-        },
-        audio: AudioConfig {
-            enabled: default_true(),
-            output_dir: home_dir.join("lifelog_audio"),
-            sample_rate: default_audio_sample_rate(),
-            chunk_duration_secs: default_audio_chunk_duration_secs(),
-        },
-        geolocation: GeoConfig {
-            enabled: default_true(),
-            interval: default_geo_interval(),
-            output_dir: home_dir.join("lifelog_geo"),
-            use_ip_fallback: default_geo_ip_fallback(),
-        },
-        wifi: WifiConfig {
-            enabled: default_true(),
-            interval: default_wifi_interval(),
-            output_dir: home_dir.join("lifelog_wifi"),
-            scan_command: default_scan_command(),
-        },
+        //system_performance: SystemPerformanceConfig {
+        //    enabled: default_true(),
+        //    interval: default_system_performance_interval(),
+        //    output_dir: home_dir.join("lifelog_system"),
+        //    log_cpu: default_true(),
+        //    log_memory: default_true(),
+        //    log_disk: default_true(),
+        //},
+        //ambient: AmbientConfig {
+        //    enabled: default_false(),
+        //    interval: default_ambient_interval(),
+        //    output_dir: home_dir.join("lifelog_ambient"),
+        //    temperature_sensor_path: None,
+        //    humidity_sensor_path: None,
+        //},
+        //weather: WeatherConfig {
+        //    enabled: default_false(),
+        //    interval: default_weather_interval(),
+        //    output_dir: home_dir.join("lifelog_weather"),
+        //    api_key: load_weather_api_key(),
+        //    latitude: 0.0,
+        //    longitude: 0.0,
+        //},
+        //audio: AudioConfig {
+        //    enabled: default_true(),
+        //    output_dir: home_dir.join("lifelog_audio"),
+        //    sample_rate: default_audio_sample_rate(),
+        //    chunk_duration_secs: default_audio_chunk_duration_secs(),
+        //},
+        //geolocation: GeoConfig {
+        //    enabled: default_true(),
+        //    interval: default_geo_interval(),
+        //    output_dir: home_dir.join("lifelog_geo"),
+        //    use_ip_fallback: default_geo_ip_fallback(),
+        //},
+        //wifi: WifiConfig {
+        //    enabled: default_true(),
+        //    interval: default_wifi_interval(),
+        //    output_dir: home_dir.join("lifelog_wifi"),
+        //    scan_command: default_scan_command(),
+        //},
         hyprland: HyprlandConfig {
             enabled: default_false(),
             interval: default_hyprland_interval(),
@@ -596,32 +612,27 @@ fn create_default_config() -> Config {
             log_active_monitor: default_true(),
             log_devices: default_true(),
         },
-        server: ServerConfig {
-            ip: default_server_ip(),
-            port: default_server_port(),
-            folder_dir: home_dir.join("lifelog_server"),
-        },
-        input_logger: InputLoggerConfig {
-            output_dir: home_dir.join("lifelog_input"),
-            enabled: default_true(),
-            log_keyboard: default_true(),
-            log_mouse_buttons: default_true(),
-            log_mouse_movement: default_true(),
-            log_mouse_wheel: default_true(),
-            log_devices: default_true(),
-            mouse_interval: default_mouse_interval(),
-        },
-        text_upload: TextUploadConfig {
-            enabled: default_true(),
-            output_dir: home_dir.join("lifelog_text"),
-            max_file_size_mb: 10,
-            supported_formats: vec![
-                "txt".to_string(),
-                "md".to_string(),
-                "json".to_string(),
-                "csv".to_string(),
-            ],
-        },
+        //input_logger: InputLoggerConfig {
+        //    output_dir: home_dir.join("lifelog_input"),
+        //    enabled: default_true(),
+        //    log_keyboard: default_true(),
+        //    log_mouse_buttons: default_true(),
+        //    log_mouse_movement: default_true(),
+        //    log_mouse_wheel: default_true(),
+        //    log_devices: default_true(),
+        //    mouse_interval: default_mouse_interval(),
+        //},
+        //text_upload: TextUploadConfig {
+        //    enabled: default_true(),
+        //    output_dir: home_dir.join("lifelog_text"),
+        //    max_file_size_mb: 10,
+        //    supported_formats: vec![
+        //        "txt".to_string(),
+        //        "md".to_string(),
+        //        "json".to_string(),
+        //        "csv".to_string(),
+        //    ],
+        //},
     }
 }
 
