@@ -5,6 +5,8 @@ use chrono::{DateTime, Utc};
 use config::ServerConfig;
 use dashmap::DashMap;
 use lifelog_core::*;
+use lifelog_types::CollectorState;
+use lifelog_types::*;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -49,20 +51,29 @@ pub enum ServerError {
     #[error("Tonic transport error: {0}")]
     TonicError(#[from] tonic::transport::Error),
 }
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct RegisteredCollector {
-    location: String,
-    //connection
     sources: Vec<DataSource>,
-    config: config::CollectorConfig,
+    config: config::Config,
+    state: CollectorState,
+    server_address: String,
+    client_id: String,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+struct RegisteredInterface {
+    address: String,
+    client_id: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct Server {
     db: Surreal<Db>,
     host: String,
     port: u16,
     collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
+    interfaces: Arc<RwLock<Vec<RegisteredInterface>>>,
 }
 
 impl Server {
@@ -77,39 +88,11 @@ impl Server {
             host: config.host.clone(),
             port: config.port,
             collectors: Arc::new(RwLock::new(Vec::new())),
+            interfaces: Arc::new(RwLock::new(Vec::new())),
         })
     }
 }
 
-//763 | /         async fn get_config(                                                                                                 ▐
-//764 | |             &self,                                                                                                           ▐
-//765 | |             request: tonic::Request<super::GetConfigRequest>,                                                                ▐
-//766 | |         ) -> std::result::Result<                                                                                            ▐
-//767 | |             tonic::Response<super::GetConfigResponse>,
-//768 | |             tonic::Status,
-//769 | |         >;
-//    | |__________- `get_config` from trait
-//770 | /         async fn set_config(
-//771 | |             &self,
-//772 | |             request: tonic::Request<super::SetConfigRequest>,
-//773 | |         ) -> std::result::Result<
-//774 | |             tonic::Response<super::SetConfigResponse>,
-//775 | |             tonic::Status,
-//776 | |         >;
-//    | |__________- `set_config` from trait
-//777 | /         async fn get_data(
-//778 | |             &self,
-//779 | |             request: tonic::Request<super::GetDataRequest>,
-//780 | |         ) -> std::result::Result<tonic::Response<super::GetDataResponse>, tonic::Status>;
-//    | |_________________________________________________________________________________________- `get_data` from trait
-//781 | /         async fn report_state(
-//782 | |             &self,
-//783 | |             request: tonic::Request<super::ReportStateRequest>,
-//784 | |         ) -> std::result::Result<
-//785 | |             tonic::Response<super::ReportStateResponse>,
-//786 | |             tonic::Status,
-//787 | |         >;
-//    | |__________- `report_state` from trait
 #[tonic::async_trait]
 impl LifelogServerService for Server {
     async fn register_collector(

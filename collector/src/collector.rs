@@ -8,6 +8,7 @@ use std::sync::Arc;
 use tokio::task::{AbortHandle, JoinHandle};
 use tokio::time::Duration;
 
+use lifelog_types::CollectorState;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 
@@ -118,13 +119,6 @@ impl From<config::ProcessesConfig> for proto::ProcessesConfig {
             output_dir: config.output_dir.to_str().unwrap_or("").to_string(),
         }
     }
-}
-
-#[lifelog_type(None)]
-#[derive(Debug)]
-pub struct CollectorState {
-    name: String,
-    timestamp: DateTime<Utc>,
 }
 
 impl From<CollectorState> for proto::CollectorState {

@@ -1,6 +1,4 @@
-use lifelog_core::serde_json;
-use lifelog_core::DataType;
-use lifelog_core::LifelogMacroMetaDataType;
+use lifelog_core::*;
 use proc_macro::TokenStream;
 use quote::quote;
 use quote::ToTokens;
@@ -15,6 +13,7 @@ use syn::{
     token::Comma,
     DeriveInput, Field, FieldsNamed, Ident, ItemStruct, Result, Token,
 };
+
 struct MacroOptions {
     datatype: LifelogMacroMetaDataType,
 }
