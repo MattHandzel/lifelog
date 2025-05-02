@@ -212,7 +212,7 @@ impl CodeGenerator for ProtobufGenerator {
 
         // Main LifelogData message
         output.push_str("message LifelogData {\n");
-        let mut field_number = 1;
+        let mut field_number = 0;
         for dtype in types {
             match dtype.metadata_type {
                 LifelogMacroMetaDataType::Data => {
