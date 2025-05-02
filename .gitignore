@@ -68,3 +68,6 @@ config.toml
 other-projects.md
 lifelogging.md
 node_modules/
+
+# auto generated types
+*.type.json 
