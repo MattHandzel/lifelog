@@ -1,4 +1,4 @@
-use lifelog_types::*;
+use lifelog_core::*;
 use proc_macro::TokenStream;
 use quote::quote;
 use quote::ToTokens;
@@ -62,13 +62,13 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
         named.named.insert(
             0,
             parse_quote! {
-                pub uuid: ::uuid::Uuid
+                pub uuid: ::lifelog_core::uuid::Uuid
             },
         );
         named.named.insert(
             1,
             parse_quote! {
-                pub timestamp: ::chrono::DateTime<::chrono::Utc>
+                pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>
             },
         );
     }
@@ -117,11 +117,11 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     let impl_datatype = if let LifelogMacroMetaDataType::Data = options.datatype {
         let name = &struct_ast.ident;
         Some(quote! {
-            impl ::lifelog_types::DataType for #name {
-                fn uuid(&self) -> ::uuid::Uuid {
+            impl ::lifelog_core::DataType for #name {
+                fn uuid(&self) -> ::lifelog_core::uuid::Uuid {
                     self.uuid
                 }
-                fn timestamp(&self) -> ::chrono::DateTime<::chrono::Utc> {
+                fn timestamp(&self) -> ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc> {
                     self.timestamp
                 }
             }
@@ -138,8 +138,8 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     let where_clause = &struct_ast.generics.where_clause;
 
     let expanded = quote! {
-        #vis struct #ident #generics #fields #where_clause
         #(#attrs)*
+        #vis struct #ident #generics #fields #where_clause
 
         #impl_datatype
     };

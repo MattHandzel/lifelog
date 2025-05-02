@@ -15,5 +15,3 @@ uuid = { version = "1.16.0", features = ["v6"] }
 tracing = { version = "0.1", features = ["log"] }
 pretty_assertions = { version = "1.4.1", features = ["std"] }
 dashmap = { version = "6.1.0", features = ["serde"] }
-lifelog-macros = { path = "../macros" }
-lifelog-types = { path = "../lifelog-types" }

@@ -4,8 +4,9 @@ use config::CollectorConfig;
 use chrono::{DateTime, Utc};
 use config::ServerConfig;
 use dashmap::DashMap;
-use lifelog_core::CollectorState;
 use lifelog_core::*;
+use lifelog_types::CollectorState;
+use lifelog_types::*;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -66,7 +67,7 @@ struct RegisteredInterface {
     client_id: String,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, Clone)]
+#[derive(Clone, Debug)]
 pub struct Server {
     db: Surreal<Db>,
     host: String,
@@ -87,6 +88,7 @@ impl Server {
             host: config.host.clone(),
             port: config.port,
             collectors: Arc::new(RwLock::new(Vec::new())),
+            interfaces: Arc::new(RwLock::new(Vec::new())),
         })
     }
 }

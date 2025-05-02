@@ -19,44 +19,22 @@ pub mod system_state;
 
 pub use data_sources::*;
 pub use database_state::*;
-pub use lifelog_types::*;
 pub use system_state::*;
-
-use lifelog_macros::*;
 
 use dashmap::DashMap;
 
-#[lifelog_type(None)]
-#[derive(Debug, Clone)]
-pub struct CollectorState {
-    name: String,
-    timestamp: DateTime<Utc>,
+pub trait DataType {
+    fn uuid(&self) -> Uuid;
+    fn timestamp(&self) -> DateTime<Utc>;
 }
 
-#[lifelog_type(None)]
-#[derive(Debug, Clone)]
-pub struct InterfaceState {}
-
-#[lifelog_type(None)]
-#[derive(Clone, Debug)]
-pub struct ServerState {
-    name: String,
-    timestamp: DateTime<Utc>,
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+pub enum LifelogMacroMetaDataType {
+    Config,
+    Data,
+    None,
 }
 
-type CollectorId = String;
-type InterfaceId = String;
-type ServerId = String;
-
-// TODO: We need to model other applications/api's state so they can be used by the server to make
-// decisions
-pub struct SystemState {
-    pub timestamp: DateTime<Utc>,
-    pub collector_states: DashMap<CollectorId, CollectorState>,
-    pub interface_states: DashMap<InterfaceId, InterfaceState>,
-    pub server_states: DashMap<ServerId, ServerState>, // There is only 1 server in this model, but maybe we want
-                                                       // to have more servers in the future
-}
 //use system_state::*;
 
 //use target_lexicon::Triple as ComputerTargetTriple;

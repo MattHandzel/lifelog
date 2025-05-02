@@ -1,4 +1,5 @@
-use lifelog_core::chrono::{DateTime, Utc};
+use lifelog_core::*;
+
 use lifelog_macros::lifelog_type;
 use serde::{Deserialize, Serialize};
 

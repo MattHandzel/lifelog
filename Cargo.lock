@@ -2932,6 +2932,7 @@ dependencies = [
  "image",
  "lifelog-core",
  "lifelog-macros",
+ "lifelog-types",
  "log",
  "mobc",
  "mobc-surrealdb",
@@ -2965,8 +2966,6 @@ dependencies = [
  "anyhow",
  "chrono",
  "dashmap 6.1.0",
- "lifelog-macros",
- "lifelog-types",
  "pretty_assertions",
  "proptest",
  "serde",
@@ -2981,7 +2980,7 @@ name = "lifelog-macros"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "lifelog-types",
+ "lifelog-core",
  "proc-macro2",
  "quote",
  "serde_json",
@@ -3000,6 +2999,7 @@ dependencies = [
  "dashmap 6.1.0",
  "lifelog-core",
  "lifelog-macros",
+ "lifelog-types",
  "prost",
  "prost-types",
  "serde",
@@ -3019,6 +3019,9 @@ name = "lifelog-types"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "dashmap 6.1.0",
+ "lifelog-core",
+ "lifelog-macros",
  "serde",
  "uuid",
 ]

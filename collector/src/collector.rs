@@ -8,7 +8,7 @@ use std::sync::Arc;
 use tokio::task::{AbortHandle, JoinHandle};
 use tokio::time::Duration;
 
-use lifelog_core::CollectorState;
+use lifelog_types::CollectorState;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 
