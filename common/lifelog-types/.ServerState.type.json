@@ -1,1 +1,1 @@
-{"fields":[["name","String"],["timestamp","DateTime<Utc>"]],"ident":"ServerState","metadata_type":"None"}
+{"fields":[["name","String"],["timestamp","DateTime<Utc>"],["cpu_usage","UsageType"],["memory_usage","UsageType"],["threads","UsageType"]],"ident":"ServerState","metadata_type":"None"}

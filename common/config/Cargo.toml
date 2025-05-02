@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 lifelog-macros = { path = "../macros" }
+lifelog-types = {path = "../lifelog-types"}
 serde = { version = "1.0", features = ["derive"] }
 utils = { path = "../utils" }
 dirs-next = "2.0"
