@@ -52,14 +52,7 @@ message ReportStateResponse {
   bool acknowledged = 1;
 }
 
-// -----------------------------------------------------------------------------
-// Domain types
-// -----------------------------------------------------------------------------
 
-message CollectorState {
-  string name = 1;
-  google.protobuf.Timestamp timestamp = 2;
-}
 
 // -----------------------------------------------------------------------------
 // Services

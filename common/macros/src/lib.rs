@@ -1,6 +1,4 @@
-use lifelog_core::serde_json;
-use lifelog_core::DataType;
-use lifelog_core::LifelogMacroMetaDataType;
+use lifelog_types::*;
 use proc_macro::TokenStream;
 use quote::quote;
 use quote::ToTokens;
@@ -15,6 +13,7 @@ use syn::{
     token::Comma,
     DeriveInput, Field, FieldsNamed, Ident, ItemStruct, Result, Token,
 };
+
 struct MacroOptions {
     datatype: LifelogMacroMetaDataType,
 }
@@ -63,13 +62,13 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
         named.named.insert(
             0,
             parse_quote! {
-                pub uuid: ::lifelog_core::uuid::Uuid
+                pub uuid: ::uuid::Uuid
             },
         );
         named.named.insert(
             1,
             parse_quote! {
-                pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>
+                pub timestamp: ::chrono::DateTime<::chrono::Utc>
             },
         );
     }
@@ -118,11 +117,11 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     let impl_datatype = if let LifelogMacroMetaDataType::Data = options.datatype {
         let name = &struct_ast.ident;
         Some(quote! {
-            impl ::lifelog_core::DataType for #name {
-                fn uuid(&self) -> ::lifelog_core::uuid::Uuid {
+            impl ::lifelog_types::DataType for #name {
+                fn uuid(&self) -> ::uuid::Uuid {
                     self.uuid
                 }
-                fn timestamp(&self) -> ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc> {
+                fn timestamp(&self) -> ::chrono::DateTime<::chrono::Utc> {
                     self.timestamp
                 }
             }
@@ -139,8 +138,8 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     let where_clause = &struct_ast.generics.where_clause;
 
     let expanded = quote! {
-        #(#attrs)*
         #vis struct #ident #generics #fields #where_clause
+        #(#attrs)*
 
         #impl_datatype
     };

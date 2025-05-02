@@ -1348,6 +1348,7 @@ dependencies = [
  "lock_api",
  "once_cell",
  "parking_lot_core",
+ "serde",
 ]
 
 [[package]]
@@ -2963,6 +2964,9 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "dashmap 6.1.0",
+ "lifelog-macros",
+ "lifelog-types",
  "pretty_assertions",
  "proptest",
  "serde",
@@ -2977,7 +2981,7 @@ name = "lifelog-macros"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "lifelog-core",
+ "lifelog-types",
  "proc-macro2",
  "quote",
  "serde_json",
@@ -3008,6 +3012,15 @@ dependencies = [
  "tonic-build",
  "tonic-reflection",
  "utils",
+]
+
+[[package]]
+name = "lifelog-types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "serde",
+ "uuid",
 ]
 
 [[package]]

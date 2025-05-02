@@ -46,6 +46,7 @@ impl CodeGenerator for TypeScriptGenerator {
                     "&str" => "string".to_string(),
 
                     // Common Rust types
+                    "DateTime<Utc>" => "Date".to_string(),
                     "::lifelog_core::uuid::Uuid" => "string".to_string(),
                     "::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>" => {
                         "Date".to_string()
@@ -127,6 +128,7 @@ impl CodeGenerator for ProtobufGenerator {
                     "&str" => ("string".to_string(), false),
 
                     // Common Rust types
+                    "DateTime<Utc>" =>("google.protobuf.Timestamp".to_string(), false), 
                     "::lifelog_core::uuid::Uuid" => ("string".to_string(), false),
                     "::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>" => {
                         ("google.protobuf.Timestamp".to_string(), false)
