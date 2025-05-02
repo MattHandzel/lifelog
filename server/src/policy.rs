@@ -1,4 +1,5 @@
-use config::policy_config::PolicyConfig;
-use lifelog-core;:system_state::SystemState;
-
-pub struct Policy {}
+pub trait Policy {
+    type StateType;
+    type ActionType;
+    fn get_action(&self, state: &Self::StateType) -> Self::ActionType;
+}

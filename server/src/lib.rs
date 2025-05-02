@@ -8,6 +8,8 @@
 //pub mod db_config;
 //pub mod handlers;
 //
+pub mod policy;
+pub mod server;
 
 // Re-export key types for convenience
 //pub use auth::{Claims, JwtAuth};

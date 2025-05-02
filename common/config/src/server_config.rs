@@ -15,6 +15,9 @@ pub struct ServerConfig {
 
     #[serde(default = "default_database_name")]
     pub database_name: String,
+
+    #[serde(default = "default_server_name")]
+    pub server_name: String,
 }
 
 impl Default for ServerConfig {
@@ -24,8 +27,13 @@ impl Default for ServerConfig {
             port: default_server_port(),
             database_path: default_database_path(),
             database_name: default_database_name(),
+            server_name: default_server_name(),
         }
     }
+}
+
+pub fn default_server_name() -> String {
+    "LifelogServer".to_string()
 }
 
 pub fn default_database_path() -> String {
