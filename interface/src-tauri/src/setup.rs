@@ -1,4 +1,4 @@
-use config::Config;
+use config::CollectorConfig;
 use rusqlite::Connection;
 use std::fs;
 use std::path::{Path, PathBuf};

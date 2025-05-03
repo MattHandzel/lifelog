@@ -1,4 +1,5 @@
 use lifelog_macros::lifelog_type;
+use lifelog_types::CollectorId;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -8,6 +9,7 @@ use utils::replace_home_dir_in_path;
 mod collector_config;
 mod policy_config;
 mod server_config;
+use dashmap::DashMap;
 pub use collector_config::*;
 pub use policy_config::*;
 pub use server_config::*;
@@ -20,7 +22,7 @@ use derive_more::From;
 
 #[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
-pub struct Config {
+pub struct CollectorConfig {
     pub timestamp_format: String,
     pub screen: ScreenConfig,
     pub camera: CameraConfig,
@@ -431,7 +433,7 @@ pub struct TextUploadConfig {
     pub supported_formats: Vec<String>,
 }
 
-pub fn load_config() -> Config {
+pub fn load_config() -> CollectorConfig {
     let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
     let lifelog_home_dir = env::var("LIFELOG_HOME_DIR")
         .map(PathBuf::from)
@@ -480,7 +482,7 @@ pub fn load_config() -> Config {
     };
 
     // Try to parse the config file, but provide defaults if parsing fails
-    match toml::from_str::<Config>(&replace_home_dir_in_path(config_str)) {
+    match toml::from_str::<CollectorConfig>(&replace_home_dir_in_path(config_str)) {
         Ok(config) => config,
         Err(e) => {
             println!(
@@ -514,10 +516,10 @@ pub fn load_config() -> Config {
 }
 
 // Function to create a default configuration
-fn create_default_config() -> Config {
+fn create_default_config() -> CollectorConfig {
     let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
 
-    Config {
+    CollectorConfig {
         timestamp_format: default_timestamp_format(),
         screen: ScreenConfig {
             enabled: true,
@@ -637,7 +639,7 @@ fn create_default_config() -> Config {
 }
 
 pub struct ConfigManager {
-    config: Config,
+    config: CollectorConfig,
 }
 
 impl ConfigManager {
@@ -647,7 +649,7 @@ impl ConfigManager {
         }
     }
 
-    pub fn get_config(&self) -> &Config {
+    pub fn get_config(&self) -> &CollectorConfig {
         &self.config
     }
 
@@ -683,4 +685,11 @@ impl ConfigManager {
 
 pub fn default_microphone_capture_interval_secs() -> u64 {
     300 // Default to capturing every 5 minutes (300 seconds)
+}
+
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemConfig {
+    pub server: ServerConfig,
+    pub collectors: DashMap<CollectorId, CollectorConfig>,
 }

@@ -17,28 +17,61 @@ message RegisterCollectorResponse {
   uint64 session_id = 2;
 }
 
-message GetConfigRequest {}
-message GetConfigResponse {
+message GetCollectorConfigRequest {}
+message GetCollectorConfigResponse {
   Config config = 1;
 }
 
-message SetConfigRequest {
-  Config config = 1;
+
+message GetSystemConfigRequest {}
+message GetSystemConfigResponse {
+  SystemConfig config = 1;
 }
-message SetConfigResponse {
+
+message SetSystemConfigRequest {
+  CollectorConfig config = 1;
+}
+message SetSystemConfigResponse {
+  bool success = 1;
+}
+
+message SetCollectorConfigRequest {
+  CollectorConfig config = 1;
+}
+message SetCollectorConfigResponse {
   bool success = 1;
 }
 
 message GetDataRequest {
-  string query = 1;
+  repeated string uuids = 1;
 }
+
+  
 message GetDataResponse {
-  LifelogData data = 1;
+  repeated LifelogData data = 1;
+}
+message Query {
+  string query = 1; // TODO: Change this to be the query data type we define
+  }
+
+  message UUID {
+    string uuid = 1;
+  }
+
+message QueryRequest {
+  Query query = 1; // TODO: Change this to be the query data type we define
+  }
+message QueryResponse {
+  repeated UUID uuids = 1; // TODO: Change this to be the query data type we define
 }
 
 message GetStateRequest {}
-message GetStateResponse {
+message GetCollectorStateResponse {
   CollectorState state = 1;
+}
+
+message GetSystemStateResponse {
+  ServerState state = 1;
 }
 
 // -----------------------------------------------------------------------------
@@ -58,17 +91,41 @@ message ReportStateResponse {
 // Services
 // -----------------------------------------------------------------------------
 
+// This is a service that the lifelog server will implement
 service LifelogServerService {
+  // This is a service that the collectors call to be registered to the server. This is required because server is unaware of what collectors exist. Once a collector is added, the server can request data from the collector when it has a convenient time to do so
   rpc RegisterCollector(RegisterCollectorRequest) returns (RegisterCollectorResponse);
-  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
-  rpc SetConfig(SetConfigRequest) returns (SetConfigResponse);
+
+  // This simply returns the configuration of the WHOLE system. It will return the configuration of the server as well as all collectors. This can be used to see how the system is configured
+  rpc GetConfig(GetSystemConfigRequest) returns (GetSystemConfigResponse);
+
+  // This is used to update the configuration of the WHOLE system. You will pass in a SystemConfig and the system will forward the new config to any collectors.
+  rpc SetConfig(SetSystemConfigRequest) returns (SetSystemConfigResponse);
+
+  // This is a service where some program requests uuid's of the data types it wants from the server and the server will graciously respond with a lifelog array that contains them
   rpc GetData(GetDataRequest) returns (GetDataResponse);
+
+  // This service will be used for the user to be able to enact a specific query, the query will respond with the uuid's of data types that match the query. You can pair this with `GetData` to have the server run a query and then respond with the data the query selects. Having it be split this way gives the client more control over what data they request/how much they get/when they get their data.
+  rpc Query(QueryRequest) returns (QueryResponse);
+
+  // This is used by collectors to report their state to the server. The server will use this to keep track of the state of each collector. This is useful for debugging and monitoring purposes.
   rpc ReportState(ReportStateRequest) returns (ReportStateResponse);
+
+  // This will be used to get the state of the WHOLE system, it will include the state of the server and the state of the collectors as well.
+  rpc GetState(GetStateRequest) returns (GetSystemStateResponse);
 }
 
+// This is a service that each collector will implement
 service CollectorService {
-  rpc GetState(GetStateRequest) returns (GetStateResponse);
-  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
-  rpc SetConfig(SetConfigRequest) returns (SetConfigResponse);
+  // This rpc will return the state of the collector when an entity requests it
+  rpc GetState(GetStateRequest) returns (GetCollectorStateResponse);
+
+  // This rpc gets the collector's config
+  rpc GetConfig(GetCollectorConfigRequest) returns (GetCollectorConfigResponse);
+
+  // This rpc sets the collector's config
+  rpc SetConfig(SetCollectorConfigRequest) returns (SetCollectorConfigResponse);
+
+  // This rpc will be used to get the data from the collector. The collector will respond with the data that it has. This is useful for when the server wants to get data from the collector.
   rpc GetData(GetDataRequest) returns (GetDataResponse);
 }

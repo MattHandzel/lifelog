@@ -22,9 +22,10 @@ use proto::collector_service_server::{CollectorService, CollectorServiceServer};
 use proto::lifelog_server_service_client::LifelogServerServiceClient;
 
 use proto::{
-    GetConfigRequest, GetConfigResponse, GetDataRequest, GetDataResponse, GetStateRequest,
-    GetStateResponse, RegisterCollectorRequest, RegisterCollectorResponse, ReportStateRequest,
-    ReportStateResponse, SetConfigRequest, SetConfigResponse,
+    GetCollectorConfigRequest, GetCollectorConfigResponse, GetCollectorStateResponse,
+    GetDataRequest, GetDataResponse, GetStateRequest, RegisterCollectorRequest,
+    RegisterCollectorResponse, ReportStateRequest, ReportStateResponse, SetCollectorConfigRequest,
+    SetCollectorConfigResponse,
 };
 
 use lifelog_core::DateTime;
@@ -33,8 +34,8 @@ use lifelog_macros::lifelog_type;
 
 use derive_more::{From, Into};
 
-impl From<config::Config> for proto::Config {
-    fn from(config: config::Config) -> Self {
+impl From<config::CollectorConfig> for proto::Config {
+    fn from(config: config::CollectorConfig) -> Self {
         proto::Config {
             timestamp_format: config.timestamp_format,
             screen: Some(config.screen.into()),
@@ -195,7 +196,7 @@ impl From<tonic::Status> for CollectorError {
 
 pub struct Collector<T> {
     task: Option<AbortHandle>,
-    config: Arc<config::Config>,
+    config: Arc<config::CollectorConfig>,
     handles: HashMap<String, T>,
 
     grpc_client: Option<LifelogServerServiceClient<Channel>>,
@@ -204,7 +205,11 @@ pub struct Collector<T> {
 }
 
 impl Collector<LoggerHandle> {
-    pub fn new(config: Arc<config::Config>, server_address: String, client_id: String) -> Self {
+    pub fn new(
+        config: Arc<config::CollectorConfig>,
+        server_address: String,
+        client_id: String,
+    ) -> Self {
         Self {
             task: None,
             config,
