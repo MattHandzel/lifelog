@@ -1,11 +1,10 @@
-mod server;
-
 use chrono::{DateTime, Utc};
 use config::ServerConfig;
 use lifelog_core::uuid::Uuid;
-use server::proto::lifelog_server_service_server::LifelogServerServiceServer;
-use server::proto::FILE_DESCRIPTOR_SET;
-use server::Server as LifelogServer;
+use lifelog_server::server::proto::lifelog_server_service_server::LifelogServerServiceServer;
+use lifelog_server::server::proto::FILE_DESCRIPTOR_SET;
+use lifelog_server::server::Server as LifelogServer;
+use tokio;
 use tonic::transport::Server as TonicServer;
 use tonic_reflection::server::Builder;
 
@@ -23,6 +22,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let time: DateTime<Utc> = Utc::now();
     let uuid = Uuid::new_v4();
+
+    let clonned_server = server.clone(); // TODO REMOVE THIS CLONE
+    tokio::task::spawn(async move {
+        clonned_server.policy_loop().await;
+    });
+
     TonicServer::builder()
         .add_service(service)
         .add_service(LifelogServerServiceServer::new(server))
