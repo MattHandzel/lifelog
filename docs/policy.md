@@ -56,3 +56,6 @@ enum Action {
     SendData,
 }
 ```
+
+Here is some pipeline:
+Suppose the current state contains information about how much data there is in the database, what data modalities there are, how many of them haven't been transformed yet etc. The policy can return an action, which is the TransformData() action and it contains the uuids of the data the policy thinks need to be transformed right now (these could be maybe datas that are in in an important time frame, or datas that are the oldest, newest, etc.)
