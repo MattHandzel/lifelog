@@ -21,7 +21,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 tonic = { version = "0.13.0", features = ["transport"] }
 prost = "0.13.5"
 prost-types = { version = "0.13.5"}
-tonic-reflection = { version = "0.13.0", features = ["server"] }
+tonic-reflection = { version = "0.13.0"}
 dashmap = "6.1.0"
 toml = { version = "0.8.20"}
 lifelog-types = {path = "../common/lifelog-types/"}

@@ -16,9 +16,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = format!("{}:{}", config.host, config.port).parse()?;
 
     println!("Starting server on {}", addr);
-    let service = Builder::configure()
+    let reflection_service = Builder::configure()
         .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
-        .build_v1()?;
+        .build_v1alpha()?;
 
     let time: DateTime<Utc> = Utc::now();
     let uuid = Uuid::new_v4();
@@ -29,7 +29,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     TonicServer::builder()
-        .add_service(service)
+        .add_service(reflection_service)
         .add_service(LifelogServerServiceServer::new(server))
         .serve(addr)
         .await?;

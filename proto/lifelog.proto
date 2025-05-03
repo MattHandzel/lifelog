@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+// TODO: Splitting the proto file up into the collector and server services will allow us to decrease compilation time (i think) as we can specify what we want to compile
+
 package lifelog;
 
 import "google/protobuf/timestamp.proto";
