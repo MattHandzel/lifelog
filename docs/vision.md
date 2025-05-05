@@ -1,6 +1,20 @@
+## Lifelog System
+
+This system gives a super-power to the user, the ability for them to store arbitrary data about themselves, instantly retrieve anything about themselves, run data transforms on their data, and have any application leverage this data to improve their lives.
+
+There are three entities in this system, collectors, server, and agents.
+
+#### Collectors
+
+Collectors are device-specific programs that collect data about the user. The user installs these collectors per device and configures them to collect the information they want about themselves. [[./collector.md]]
+
+#### Server
+
+Server is a central server that stores the data collected by the collectors and responds to requests by agents. It does data processing, synchronization, data management. [[./server.md]]
+
 #### Agents
 
-Agents are entities that can permissions to read and write into the lifelog system. They can leverage the lifelog system to improve their own function (such as external apps), or they can add information to the lifelog. The permissions they can have are:
+Agents are applications that can permissions to read and write into the lifelog system. They can leverage the lifelog system to improve their own function (such as external apps), or they can add information to the lifelog. The permissions they can have are:
 
 - Read
 - Append
@@ -13,9 +27,7 @@ They can append information to your lifelog (such as a doctor writing a note abo
 
 They can write information to your lifelog such as rewriting your medical history if you thought you had some disease but it later is revealed you had another disease.
 
-#### System
-
-This system gives a super power to the user, the ability for them to store arbitrary data about themselves, instantly retrieve anything about themselves, run data transforms on their data, and have any application leverage this data to improve their lives.
+#### System Properties
 
 - This software sets up a system that has the following properties:
   - Easy to setup per device, even non-technically savvy users can set it up
