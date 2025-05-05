@@ -1,4 +1,3 @@
-
 [package]
 name = "lifelog-collector"
 version = "0.1.0"
@@ -12,27 +11,33 @@ lifelog-macros = { path = "../common/macros"}
 lifelog-core = {path="../common/lifelog-core"}
 lifelog-types = {path="../common/lifelog-types"}
 
+# Inherit workspace dependencies where possible
+tonic = { workspace = true }
+prost = { workspace = true }
+tokio = { workspace = true, features = ["full"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+log = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+rusqlite = { workspace = true, features = ["bundled"] } # Inherit from workspace
+
 sha2 = "0.10"
-serde = { version = "1.0", features = ["derive"] }
 toml = "0.5"
-tokio = { version = "1", features = ["full"] }
-chrono = "0.4"
 evdev = "0.13"         
-thiserror = "1"
 dirs = "4.0"
 hyprland = "0.4.0-beta.1"
 users = "0.11"
-sysinfo = "0.24"
+sysinfo = "0.29"
 hound = "3.5.1"
-serde_json = "1.0"
 reqwest = { version = "0.11", features = ["json"] }
 rocket = "0.5.1"
-clap = { version = "4.5", features = ["derive"] } 
+clap = { version = "4", features = ["derive"] } 
 crossbeam-channel = "0.5"
 rdev = "0.5"
-anyhow = "1.0"
-log = "0.4"
-rusqlite = "0.34.0"    # SQLite database
 image = "0.25"
 cpal = "0.15.3"
 async-trait = "0.1"
@@ -42,12 +47,11 @@ derive_more = { version = "2.0.1", features = ["full"] }
 mobc-surrealdb = "0.2.0"
 
 #gRPC
-tonic = "0.13.0"
-prost = "0.13.5"
 prost-types = { version = "0.13.5"}
 
 [build-dependencies]
-tonic-build = "0.13"
+# Specify version directly, don't inherit from workspace dependencies
+tonic-build = "0.9" # Match version used in interface
 
 [dependencies.uuid]
 version = "1.16.0"
@@ -68,3 +72,6 @@ dev= []
 
 [dev-dependencies]
 anyhow = "1"
+
+# Collector-specific dependencies (if any remain)
+dashmap = "5.5"
