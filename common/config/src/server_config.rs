@@ -10,8 +10,8 @@ pub struct ServerConfig {
     #[serde(default = "default_server_port")]
     pub port: u16,
 
-    #[serde(default = "default_database_path")]
-    pub database_path: String,
+    #[serde(default = "default_database_endpoint")]
+    pub database_endpoint: String,
 
     #[serde(default = "default_database_name")]
     pub database_name: String,
@@ -20,12 +20,16 @@ pub struct ServerConfig {
     pub server_name: String,
 }
 
+pub fn default_database_endpoint() -> String {
+    "127.0.0.1:7183".to_string()
+}
+
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
             host: default_server_ip(),
             port: default_server_port(),
-            database_path: default_database_path(),
+            database_endpoint: default_database_endpoint(),
             database_name: default_database_name(),
             server_name: default_server_name(),
         }

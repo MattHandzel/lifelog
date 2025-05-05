@@ -12,8 +12,8 @@ use std::{
     collections::VecDeque,
     sync::{Arc, Condvar, Mutex},
 };
-use surrealdb::engine::local::Db;
-use surrealdb::engine::local::Mem;
+use surrealdb::engine::remote::ws::{Client, Ws};
+use surrealdb::opt::auth::Root;
 use surrealdb::Surreal;
 use thiserror::Error;
 use tokio::sync::{mpsc, RwLock};
@@ -112,7 +112,7 @@ pub enum ServerAction {
 // TDOO: ADD A CHANNEL FOR COMMS
 #[derive(Clone, Debug)]
 pub struct Server {
-    db: Surreal<Db>,
+    db: Surreal<Client>,
     host: String,
     port: u16,
     state: Arc<RwLock<SystemState>>,
@@ -128,7 +128,13 @@ const SERVER_COMMAND_CHANNEL_BUFFER_SIZE: usize = 100;
 
 impl Server {
     pub async fn new(config: &ServerConfig) -> Result<Self, ServerError> {
-        let db = Surreal::new::<Mem>(()).await?;
+        let db = Surreal::new::<Ws>(&config.database_endpoint).await?;
+        db.signin(Root {
+            username: "root",
+            password: "root",
+        })
+        .await?;
+
         db.use_ns("lifelog")
             .use_db(config.database_name.clone())
             .await?;
@@ -343,7 +349,6 @@ impl Server {
             ServerAction::Sleep(duration) => {
                 // Sleep for a certain amount of time
                 tokio::time::sleep(duration).await;
-                println!("sleeping");
             }
             _ => todo!(),
         }

@@ -15,7 +15,7 @@ thiserror = "2"
 serde_json = "1.0"
 clap = "4.5.37"
 # rust-bert = "0.23.0"
-surrealdb = { version = "2.2.2", features = ["kv-mem", "kv-surrealkv"] }
+surrealdb = { version = "2.2.2"}
 async-trait = "0.1.88"
 serde = { version = "1.0.219", features = ["derive"] }
 tonic = { version = "0.13.0", features = ["transport"] }

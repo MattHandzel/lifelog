@@ -1,1 +1,1 @@
-{"fields":[["host","String"],["port","u16"],["database_path","String"],["database_name","String"],["server_name","String"]],"ident":"ServerConfig","metadata_type":"Config"}
+{"fields":[["host","String"],["port","u16"],["database_endpoint","String"],["database_name","String"],["server_name","String"]],"ident":"ServerConfig","metadata_type":"Config"}
