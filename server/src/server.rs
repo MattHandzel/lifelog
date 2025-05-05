@@ -336,6 +336,7 @@ impl Server {
         println!("Adding audit log for action: {:?}", action);
     }
 
+    // TODO: Maybe i can use rayon for automatic parallelism?
     async fn do_action(&self, action: ServerAction, state: SystemState) {
         // Perform the action
         match action {
@@ -344,9 +345,7 @@ impl Server {
                 tokio::time::sleep(duration).await;
                 println!("sleeping");
             }
-            _ => {
-                println!("Action not supported yet");
-            }
+            _ => todo!(),
         }
     }
 }
