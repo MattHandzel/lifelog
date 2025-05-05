@@ -36,3 +36,5 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
+
+//cargo build --release  4924.87s user 148.41s system 962% cpu 8:47.36 total
