@@ -14,10 +14,14 @@ pub use uuid::Uuid;
 
 pub mod data_sources;
 pub mod database_state;
+pub mod system_state;
 //pub mod system_state;
 
 pub use data_sources::*;
 pub use database_state::*;
+pub use system_state::*;
+
+use dashmap::DashMap;
 
 pub trait DataType {
     fn uuid(&self) -> Uuid;

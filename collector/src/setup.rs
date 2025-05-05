@@ -1,4 +1,4 @@
-use config::Config;
+use config::CollectorConfig;
 use rusqlite::Connection;
 use std::fs;
 use std::path::Path;
@@ -12,7 +12,7 @@ pub fn ensure_directory(path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn initialize_project(config: &Config) -> std::io::Result<()> {
+pub fn initialize_project(config: &CollectorConfig) -> std::io::Result<()> {
     // TODO: Check to see if all of these things exist or not
     // TODO: These should be moved inside their respective loggers
 

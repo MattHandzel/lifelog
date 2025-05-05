@@ -10,6 +10,7 @@ utils = { path = "../common/utils" }
 config = { path = "../common/config" }
 lifelog-macros = { path = "../common/macros"}
 lifelog-core = {path="../common/lifelog-core"}
+lifelog-types = {path="../common/lifelog-types"}
 
 sha2 = "0.10"
 serde = { version = "1.0", features = ["derive"] }

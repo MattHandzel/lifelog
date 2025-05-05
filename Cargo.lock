@@ -1062,9 +1062,11 @@ dependencies = [
  "anyhow",
  "chrono",
  "cpal",
+ "dashmap 6.1.0",
  "derive_more 2.0.1",
  "dirs-next",
  "lifelog-macros",
+ "lifelog-types",
  "serde",
  "serde_json",
  "thiserror 2.0.12",
@@ -1348,6 +1350,7 @@ dependencies = [
  "lock_api",
  "once_cell",
  "parking_lot_core",
+ "serde",
 ]
 
 [[package]]
@@ -2931,6 +2934,7 @@ dependencies = [
  "image",
  "lifelog-core",
  "lifelog-macros",
+ "lifelog-types",
  "log",
  "mobc",
  "mobc-surrealdb",
@@ -2963,6 +2967,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "dashmap 6.1.0",
  "pretty_assertions",
  "proptest",
  "serde",
@@ -2996,6 +3001,7 @@ dependencies = [
  "dashmap 6.1.0",
  "lifelog-core",
  "lifelog-macros",
+ "lifelog-types",
  "prost",
  "prost-types",
  "serde",
@@ -3008,6 +3014,18 @@ dependencies = [
  "tonic-build",
  "tonic-reflection",
  "utils",
+]
+
+[[package]]
+name = "lifelog-types"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dashmap 6.1.0",
+ "lifelog-core",
+ "lifelog-macros",
+ "serde",
+ "uuid",
 ]
 
 [[package]]
