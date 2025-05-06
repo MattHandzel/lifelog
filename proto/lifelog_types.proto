@@ -5,39 +5,8 @@ import "google/protobuf/timestamp.proto";
 import "google/protobuf/any.proto";
 import "google/protobuf/wrappers.proto";
 
-message InterfaceState {
-}
-
-message InputLoggerConfig {
-  string output_dir = 1;
-  bool enabled = 2;
-  bool log_keyboard = 3;
-  bool log_mouse_buttons = 4;
-  bool log_mouse_movement = 5;
-  bool log_mouse_wheel = 6;
-  bool log_devices = 7;
-  double mouse_interval = 8;
-}
-
-enum ServerCommand {
-  RegisterCollector = 0;
-  GetConfig = 1;
-  SetConfig = 2;
-  GetData = 3;
-  Query = 4;
-  ReportState = 5;
-  GetState = 6;
-}
-
-message HyprlandConfig {
-  bool enabled = 1;
-  double interval = 2;
-  string output_dir = 3;
-  bool log_clients = 4;
-  bool log_activewindow = 5;
-  bool log_workspace = 6;
-  bool log_active_monitor = 7;
-  bool log_devices = 8;
+enum DataModality {
+  Screen = 0;
 }
 
 message MicrophoneConfig {
@@ -57,46 +26,28 @@ message MouseConfig {
   string output_dir = 3;
 }
 
-message LifelogDataKey {
-  string uuid = 1;
-}
-
-message AmbientConfig {
-  bool enabled = 1;
-  double interval = 2;
-  string output_dir = 3;
-  google.protobuf.StringValue temperature_sensor_path = 4;
-  google.protobuf.StringValue humidity_sensor_path = 5;
-}
-
-message WifiConfig {
-  bool enabled = 1;
-  double interval = 2;
-  string output_dir = 3;
-  string scan_command = 4;
-}
-
-message ScreenFrame {
-  string uuid = 1;
-  google.protobuf.Timestamp timestamp = 2;
-  string image_path = 3;
-  uint32 width = 4;
-  uint32 height = 5;
-}
-
-message ServerState {
-  string name = 1;
-  google.protobuf.Timestamp timestamp = 2;
-  float cpu_usage = 3;
-  float memory_usage = 4;
-  float threads = 5;
-  repeated string pending_commands = 6;
-}
-
 message KeyboardConfig {
   bool enabled = 1;
   double interval = 2;
   string output_dir = 3;
+}
+
+message InputLoggerConfig {
+  string output_dir = 1;
+  bool enabled = 2;
+  bool log_keyboard = 3;
+  bool log_mouse_buttons = 4;
+  bool log_mouse_movement = 5;
+  bool log_mouse_wheel = 6;
+  bool log_devices = 7;
+  double mouse_interval = 8;
+}
+
+message GeoConfig {
+  bool enabled = 1;
+  double interval = 2;
+  string output_dir = 3;
+  bool use_ip_fallback = 4;
 }
 
 message CameraConfig {
@@ -110,11 +61,12 @@ message CameraConfig {
   string timestamp_format = 8;
 }
 
-message GeoConfig {
-  bool enabled = 1;
-  double interval = 2;
-  string output_dir = 3;
-  bool use_ip_fallback = 4;
+message ServerConfig {
+  string host = 1;
+  uint32 port = 2;
+  string database_endpoint = 3;
+  string database_name = 4;
+  string server_name = 5;
 }
 
 message NetworkConfig {
@@ -128,35 +80,26 @@ message SystemConfig {
   CollectorConfig collector = 2;
 }
 
-message TextUploadConfig {
-  bool enabled = 1;
-  string output_dir = 2;
-  uint32 max_file_size_mb = 3;
-  repeated string supported_formats = 4;
-}
-
-message SystemPerformanceConfig {
-  bool enabled = 1;
-  double interval = 2;
-  string output_dir = 3;
-  bool log_cpu = 4;
-  bool log_memory = 5;
-  bool log_disk = 6;
-}
-
-enum DataModality {
-  Screen = 0;
-}
-
-message ProcessesConfig {
-  bool enabled = 1;
-  double interval = 2;
-  string output_dir = 3;
-}
-
 message DataSource {
   string mac = 1;
   DataModality modality = 2;
+}
+
+message InterfaceState {
+}
+
+message LifelogDataKey {
+  string uuid = 1;
+}
+
+enum ServerCommand {
+  RegisterCollector = 0;
+  GetConfig = 1;
+  SetConfig = 2;
+  GetData = 3;
+  Query = 4;
+  ReportState = 5;
+  GetState = 6;
 }
 
 message CollectorConfig {
@@ -171,19 +114,51 @@ message CollectorConfig {
   HyprlandConfig hyprland = 9;
 }
 
-message AudioConfig {
+message ScreenConfig {
   bool enabled = 1;
-  string output_dir = 2;
-  uint32 sample_rate = 3;
-  uint64 chunk_duration_secs = 4;
+  double interval = 2;
+  string output_dir = 3;
+  string program = 4;
+  string timestamp_format = 5;
 }
 
-message ServerConfig {
-  string host = 1;
-  uint32 port = 2;
-  string database_endpoint = 3;
-  string database_name = 4;
-  string server_name = 5;
+message WifiConfig {
+  bool enabled = 1;
+  double interval = 2;
+  string output_dir = 3;
+  string scan_command = 4;
+}
+
+message TextUploadConfig {
+  bool enabled = 1;
+  string output_dir = 2;
+  uint32 max_file_size_mb = 3;
+  repeated string supported_formats = 4;
+}
+
+message ProcessesConfig {
+  bool enabled = 1;
+  double interval = 2;
+  string output_dir = 3;
+}
+
+message ScreenFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string image_path = 3;
+  uint32 width = 4;
+  uint32 height = 5;
+}
+
+message HyprlandConfig {
+  bool enabled = 1;
+  double interval = 2;
+  string output_dir = 3;
+  bool log_clients = 4;
+  bool log_activewindow = 5;
+  bool log_workspace = 6;
+  bool log_active_monitor = 7;
+  bool log_devices = 8;
 }
 
 message CollectorState {
@@ -191,12 +166,20 @@ message CollectorState {
   google.protobuf.Timestamp timestamp = 2;
 }
 
-message ScreenConfig {
+message ServerState {
+  string name = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  float cpu_usage = 3;
+  float memory_usage = 4;
+  float threads = 5;
+  repeated string pending_commands = 6;
+}
+
+message AudioConfig {
   bool enabled = 1;
-  double interval = 2;
-  string output_dir = 3;
-  string program = 4;
-  string timestamp_format = 5;
+  string output_dir = 2;
+  uint32 sample_rate = 3;
+  uint64 chunk_duration_secs = 4;
 }
 
 message WeatherConfig {
@@ -206,6 +189,23 @@ message WeatherConfig {
   string api_key = 4;
   double latitude = 5;
   double longitude = 6;
+}
+
+message AmbientConfig {
+  bool enabled = 1;
+  double interval = 2;
+  string output_dir = 3;
+  google.protobuf.StringValue temperature_sensor_path = 4;
+  google.protobuf.StringValue humidity_sensor_path = 5;
+}
+
+message SystemPerformanceConfig {
+  bool enabled = 1;
+  double interval = 2;
+  string output_dir = 3;
+  bool log_cpu = 4;
+  bool log_memory = 5;
+  bool log_disk = 6;
 }
 
 message LifelogData {

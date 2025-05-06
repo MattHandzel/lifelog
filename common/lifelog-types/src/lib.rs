@@ -1,7 +1,6 @@
 use lifelog_core::*;
 use lifelog_macros::lifelog_type;
 use lifelog_proto::collector_service_client::CollectorServiceClient;
-use lifelog_proto::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use strum_macros::EnumIter;

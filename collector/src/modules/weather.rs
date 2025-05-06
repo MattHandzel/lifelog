@@ -3,13 +3,11 @@ use chrono::Utc;
 use config::WeatherConfig;
 use reqwest::Client;
 use rusqlite::params;
-use rusqlite::Connection;
 use serde_json::Value;
 use std::env;
 use std::path::Path;
 use std::time::Duration as StdDuration;
 use tokio::time::sleep;
-use tokio::time::Duration;
 
 // Function to get API key from environment if available
 fn get_weather_api_key(config_api_key: &str) -> String {

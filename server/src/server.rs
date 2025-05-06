@@ -1,31 +1,22 @@
 use crate::policy::*;
-use async_trait::async_trait;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use config::ServerConfig;
 use config::ServerPolicyConfig;
-use dashmap::DashMap;
 use lifelog_core::*;
-use lifelog_types::CollectorState;
 use lifelog_types::*;
-use serde::{Deserialize, Serialize};
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Condvar, Mutex},
-};
+use std::sync::Arc;
 use surrealdb::engine::remote::ws::{Client, Ws};
 use surrealdb::opt::auth::Root;
 use surrealdb::Surreal;
 use thiserror::Error;
-use tokio::sync::{mpsc, RwLock};
+use tokio::sync::RwLock;
 use tonic::{Request as TonicRequest, Response as TonicResponse, Status as TonicStatus};
 
 use std::time;
 use strum::IntoEnumIterator;
 
 use config::CollectorConfig;
-use data_modalities::screen::ScreenFrame;
 use lifelog_proto::lifelog_server_service_server::LifelogServerService;
-use lifelog_proto::LifelogData;
 use lifelog_proto::{
     GetDataRequest, GetDataResponse, GetStateRequest, GetSystemConfigRequest,
     GetSystemConfigResponse, GetSystemStateResponse, QueryRequest, QueryResponse,
@@ -36,11 +27,7 @@ use lifelog_types::DataModality;
 
 use lifelog_proto::collector_service_client::CollectorServiceClient;
 
-use tokio::sync::oneshot;
-
-use sysinfo::{Components, Disks, Networks, System};
-
-use once_cell::sync::Lazy;
+use sysinfo::System;
 
 //type Loader = fn(&Surreal<Client>, &[Uuid]) -> anyhow::Result<Vec<LifelogData>>;
 
@@ -187,13 +174,18 @@ impl LifelogServerService for Server {
                 let channel = endpoint.connect().await.map_err(|e| {
                     TonicStatus::internal(format!("Failed to connect to endpoint: {}", e))
                 })?;
-                let mut client = CollectorServiceClient::new(channel);
+                let client = CollectorServiceClient::new(channel);
 
                 let collector = RegisteredCollector {
                     id: collector_config.id.clone(),
                     address: collector_ip.to_string(),
                     grpc_client: client.clone(),
                 };
+                println!("Collector: {:?}", collector);
+                self.register_collectors
+                    .write()
+                    .await
+                    .push(collector.clone());
                 println!("Registering collector: {:?}", collector);
 
                 Ok(TonicResponse::new(RegisterCollectorResponse {
@@ -389,7 +381,20 @@ impl Server {
             }
             ServerAction::SyncData(query) => {
                 // Get the target data modalities(s) from the query
-
+                let collectors = self.register_collectors.read().await;
+                println!("Syncing data with collectors: {:?}", collectors);
+                //for collector in   {
+                //    println!("Syncing data with collector: {:?}", collector);
+                //    let data = collector
+                //        .grpc_client
+                //        .get_data(GetDataRequest {
+                //            uuids: vec![query.clone().into()],
+                //        })
+                //        .await
+                //        .unwrap();
+                //    println!("Data: {:?}", data);
+                //}
+                //
                 // For now, assume we want to sync all data modalities
 
                 // Ask the collectors to send data

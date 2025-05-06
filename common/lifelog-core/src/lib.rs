@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 
 pub use anyhow;
 pub use chrono;
@@ -17,13 +16,9 @@ pub mod database_state;
 pub mod system_state;
 //pub mod system_state;
 
-pub use data_sources::*;
-pub use database_state::*;
-pub use system_state::*;
 
 pub use tonic;
 
-use dashmap::DashMap;
 
 pub trait DataType {
     fn uuid(&self) -> Uuid;
@@ -37,7 +32,6 @@ pub enum LifelogMacroMetaDataType {
     None,
 }
 
-use lifelog_proto::LifelogData;
 use serde::de::DeserializeOwned;
 
 pub trait Modality: Sized + Send + Sync + 'static + DeserializeOwned {

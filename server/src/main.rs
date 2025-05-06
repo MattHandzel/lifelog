@@ -3,7 +3,6 @@ use config::ServerConfig;
 use lifelog_core::uuid::Uuid;
 use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
 
-use lifelog_proto::collector_service_client::CollectorServiceClient;
 
 use lifelog_proto::FILE_DESCRIPTOR_SET;
 use lifelog_server::server::Server as LifelogServer;

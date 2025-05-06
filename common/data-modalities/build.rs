@@ -3,7 +3,6 @@ use lifelog_core::LifelogMacroMetaDataType;
 use maplit::hashmap;
 use serde::{Deserialize, Serialize};
 use std::{
-    borrow::Cow,
     collections::HashMap,
     fs,
     path::{Path, PathBuf},

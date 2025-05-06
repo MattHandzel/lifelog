@@ -1,5 +1,4 @@
 use lifelog_macros::lifelog_type;
-use lifelog_types::CollectorId;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::fs;
@@ -8,11 +7,9 @@ use utils::replace_home_dir_in_path;
 
 mod policy_config;
 mod server_config;
-use dashmap::DashMap;
 use derive_more::From;
 pub use policy_config::*;
 pub use server_config::*;
-use std::collections::BTreeMap;
 
 // TODO: Implement default for all configs
 // TODO: Make it so that there is a default directory

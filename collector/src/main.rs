@@ -1,18 +1,15 @@
 use clap::Parser;
 use config::load_config;
 use lifelog_collector::collector::Collector;
+use lifelog_collector::collector::CollectorHandle;
 use lifelog_collector::collector::GRPCServerCollectorService;
 use lifelog_collector::logger::DataLogger;
-use lifelog_collector::modules::*;
 use lifelog_collector::setup;
 use lifelog_core::uuid::Uuid;
-use lifelog_proto::collector_service_server::{CollectorService, CollectorServiceServer};
+use lifelog_proto::collector_service_server::CollectorServiceServer;
 use lifelog_proto::FILE_DESCRIPTOR_SET;
 use std::sync::Arc;
-use std::thread;
-use std::time;
 use tokio;
-use tonic::transport::Server as TonicServer;
 use tonic_reflection::server::Builder;
 
 #[derive(Parser, Debug)]
@@ -103,8 +100,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         server_addr,
         client_id,
     )));
-    let grpc_server = GRPCServerCollectorService {
+    let collector_handle = CollectorHandle {
         collector: collector.clone(),
+    };
+    let collector_handle2 = collector_handle.clone();
+    let grpc_server = GRPCServerCollectorService {
+        collector: collector_handle,
     };
     //let cloned_collector = collector;
 
@@ -119,11 +120,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .await
     });
 
-    let collector_handle = tokio::spawn(async move { (*collector).write().await.start().await });
+    let collector_handle = tokio::spawn(async move {
+        collector_handle2.start().await;
+        collector_handle2.r#loop().await
+    });
 
     use tokio::try_join;
 
-    try_join!(server_handle)?; // or handle each individually
+    try_join!(server_handle, collector_handle)?; // or handle each individually
 
     println!("collector started successfully.");
     Ok(())

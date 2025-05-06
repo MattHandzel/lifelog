@@ -5,7 +5,7 @@ use crate::modules::{
 use config;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::task::{AbortHandle, JoinHandle};
+use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
 use lifelog_types::CollectorState;
@@ -13,21 +13,14 @@ use tokio::sync::RwLock;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 
-use lifelog_proto::collector_service_server::{CollectorService, CollectorServiceServer};
+use lifelog_proto::collector_service_server::CollectorService;
 use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
 
 use lifelog_proto::{
     GetCollectorConfigRequest, GetCollectorConfigResponse, GetCollectorStateResponse,
-    GetDataRequest, GetDataResponse, GetStateRequest, RegisterCollectorRequest,
-    RegisterCollectorResponse, ReportStateRequest, ReportStateResponse, SetCollectorConfigRequest,
-    SetCollectorConfigResponse,
+    GetDataRequest, GetDataResponse, GetStateRequest, RegisterCollectorRequest, ReportStateRequest,
+    SetCollectorConfigRequest, SetCollectorConfigResponse,
 };
-
-use lifelog_core::DateTime;
-use lifelog_core::Utc;
-use lifelog_macros::lifelog_type;
-
-use derive_more::{From, Into};
 
 //impl From<config::CollectorConfig> for lifelog_proto::Config {
 //    fn from(config: config::CollectorConfig) -> Self {
@@ -167,8 +160,8 @@ impl From<tonic::Status> for CollectorError {
     }
 }
 
-pub struct GRPCServerCollectorService<T> {
-    pub collector: Arc<RwLock<Collector<T>>>,
+pub struct GRPCServerCollectorService {
+    pub collector: CollectorHandle,
 }
 
 pub struct Collector<T> {
@@ -181,9 +174,47 @@ pub struct Collector<T> {
     client_id: String,
 }
 
+#[derive(Clone)]
+pub struct CollectorHandle {
+    pub collector: Arc<RwLock<Collector<LoggerHandle>>>,
+}
+
+impl CollectorHandle {
+    pub fn new(collector: Collector<LoggerHandle>) -> Self {
+        Self {
+            collector: Arc::new(RwLock::new(collector)),
+        }
+    }
+
+    pub async fn start(&self) -> Result<(), CollectorError> {
+        let collector = self.collector.clone();
+        let mut collector = collector.write().await;
+        collector.start().await
+    }
+
+    // NOTE: It is required to have this method grab the write lock every time so we don't have to
+    // wait forever for the lock
+    // TODO: Refacotr this function, it is just a dummy function right now
+    pub async fn r#loop(&self) {
+        let collector = self.collector.clone();
+        loop {
+            let mut collector = collector.write().await;
+            if let Err(e) = collector.report_state().await {
+                eprintln!("Failed to report state: {}", e);
+            }
+            tokio::time::sleep(Duration::from_secs(5)).await;
+        }
+    }
+
+    pub async fn get_config(&self) -> Arc<config::CollectorConfig> {
+        self.collector.read().await.config.clone()
+    }
+}
+
 // TODO: There needs to be some serious refactoring going on here or some better thinking. Right
 // now I am just trying to gegt it to work but there the collector needs to be around a RWLock so
 // the server can do stuff like editing it's config so these methods need to be refactored
+// TODO: Implement pinging the server & re-trying upon disconnection
 impl Collector<LoggerHandle> {
     pub fn new(
         config: Arc<config::CollectorConfig>,
@@ -389,7 +420,7 @@ impl Collector<LoggerHandle> {
 }
 
 #[tonic::async_trait]
-impl CollectorService for GRPCServerCollectorService<LoggerHandle> {
+impl CollectorService for GRPCServerCollectorService {
     async fn get_state(
         &self,
         _request: tonic::Request<GetStateRequest>,
@@ -409,11 +440,11 @@ impl CollectorService for GRPCServerCollectorService<LoggerHandle> {
     ) -> Result<tonic::Response<GetCollectorConfigResponse>, tonic::Status> {
         //  CollectorConfig ↦ proto type conversion already used in `handshake`
         //  (so we can rely on the existing `Into` impl). :contentReference[oaicite:2]{index=2}:contentReference[oaicite:3]{index=3}
-        let collector = self.collector.read().await;
-        let config: lifelog_proto::CollectorConfig = (*collector.config).clone().into();
+
+        let cfg_proto = self.collector.get_config().await.as_ref().clone().into();
 
         Ok(tonic::Response::new(GetCollectorConfigResponse {
-            config: Some(config),
+            config: Some(cfg_proto),
         }))
     }
 
