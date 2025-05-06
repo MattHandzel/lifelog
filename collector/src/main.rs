@@ -1,6 +1,7 @@
 use clap::Parser;
 use config::load_config;
 use lifelog_collector::collector::Collector;
+use lifelog_collector::collector::GRPCServerCollectorService;
 use lifelog_collector::logger::DataLogger;
 use lifelog_collector::modules::*;
 use lifelog_collector::setup;
@@ -97,7 +98,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let client_id = format!("client-{}", id);
 
     let addr = format!("{}:{}", config.host.clone(), config.port.clone()).parse()?;
-    let collector = Arc::new(Collector::new(config, server_addr, client_id));
+    let collector = Arc::new(tokio::sync::RwLock::new(Collector::new(
+        config,
+        server_addr,
+        client_id,
+    )));
+    let grpc_server = GRPCServerCollectorService {
+        collector: collector.clone(),
+    };
     //let cloned_collector = collector;
 
     // NOTE: CollectorServiceServer should be started before collector tries to connect to the
@@ -106,12 +114,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Starting collector on {}", addr);
         tonic::transport::Server::builder()
             .add_service(reflection_service)
-            .add_service(CollectorServiceServer::new(*collector.clone()))
+            .add_service(CollectorServiceServer::new(grpc_server))
             .serve(addr)
             .await
     });
 
-    let collector_handle = tokio::spawn(async move { (*collector.clone()).start().await });
+    let collector_handle = tokio::spawn(async move { (*collector).write().await.start().await });
 
     use tokio::try_join;
 

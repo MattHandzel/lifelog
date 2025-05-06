@@ -9,6 +9,7 @@ use tokio::task::{AbortHandle, JoinHandle};
 use tokio::time::Duration;
 
 use lifelog_types::CollectorState;
+use tokio::sync::RwLock;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 
@@ -166,6 +167,10 @@ impl From<tonic::Status> for CollectorError {
     }
 }
 
+pub struct GRPCServerCollectorService<T> {
+    pub collector: Arc<RwLock<Collector<T>>>,
+}
+
 pub struct Collector<T> {
     task: Option<AbortHandle>,
     config: Arc<config::CollectorConfig>,
@@ -176,6 +181,9 @@ pub struct Collector<T> {
     client_id: String,
 }
 
+// TODO: There needs to be some serious refactoring going on here or some better thinking. Right
+// now I am just trying to gegt it to work but there the collector needs to be around a RWLock so
+// the server can do stuff like editing it's config so these methods need to be refactored
 impl Collector<LoggerHandle> {
     pub fn new(
         config: Arc<config::CollectorConfig>,
@@ -381,7 +389,7 @@ impl Collector<LoggerHandle> {
 }
 
 #[tonic::async_trait]
-impl CollectorService for Collector<LoggerHandle> {
+impl CollectorService for GRPCServerCollectorService<LoggerHandle> {
     async fn get_state(
         &self,
         _request: tonic::Request<GetStateRequest>,
@@ -401,10 +409,11 @@ impl CollectorService for Collector<LoggerHandle> {
     ) -> Result<tonic::Response<GetCollectorConfigResponse>, tonic::Status> {
         //  CollectorConfig ↦ proto type conversion already used in `handshake`
         //  (so we can rely on the existing `Into` impl). :contentReference[oaicite:2]{index=2}:contentReference[oaicite:3]{index=3}
-        let cfg: lifelog_proto::CollectorConfig = (*self.config).clone().into();
+        let collector = self.collector.read().await;
+        let config: lifelog_proto::CollectorConfig = (*collector.config).clone().into();
 
         Ok(tonic::Response::new(GetCollectorConfigResponse {
-            config: Some(cfg),
+            config: Some(config),
         }))
     }
 

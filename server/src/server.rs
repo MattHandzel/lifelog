@@ -153,6 +153,10 @@ impl Server {
     }
 }
 
+//struct LifelogServerServiceGRPCServer {
+//    server: Arc<RwLock<Server>>,
+//}
+
 #[tonic::async_trait]
 impl LifelogServerService for Server {
     async fn register_collector(
