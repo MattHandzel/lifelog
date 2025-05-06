@@ -44,12 +44,9 @@ message SetCollectorConfigResponse {
   bool success = 1;
 }
 
-message LifelogDataKey {
-  string uuid = 1;
-}
 
 message GetDataRequest {
-  repeated LifelogDataKey keys = 1;
+  repeated string uuids = 1;
 }
 
   

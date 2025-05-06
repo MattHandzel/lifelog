@@ -687,9 +687,10 @@ pub fn default_microphone_capture_interval_secs() -> u64 {
     300 // Default to capturing every 5 minutes (300 seconds)
 }
 
-//#[lifelog_type(Config)]
-//#[derive(Debug, Clone, Serialize, Deserialize)]
-//pub struct SystemConfig {
-//    pub server: ServerConfig,
-//    pub collectors: BTreeMap<String, CollectorConfig>,
-//}
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SystemConfig {
+    pub server: ServerConfig,
+    pub collector: CollectorConfig,
+    //pub collectors: BTreeMap<String, CollectorConfig>,
+}

@@ -37,6 +37,15 @@ pub enum LifelogMacroMetaDataType {
     None,
 }
 
+use lifelog_proto::LifelogData;
+use serde::de::DeserializeOwned;
+
+pub trait Modality: Sized + Send + Sync + 'static + DeserializeOwned {
+    const TABLE: &'static str;
+    fn into_payload(self) -> lifelog_proto::lifelog_data::Payload;
+    fn id(&self) -> String;
+}
+
 //use system_state::*;
 
 //use target_lexicon::Triple as ComputerTargetTriple;
@@ -68,3 +77,4 @@ pub enum LifelogMacroMetaDataType {
 //    command_tx: mpsc::Sender<CollectorCommand>, // commands to send between threads
 //    command_rx: mpsc::Receiver<CollectorCommand>, // commands to send between threads
 //}
+//

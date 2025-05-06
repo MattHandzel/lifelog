@@ -22,9 +22,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let time: DateTime<Utc> = Utc::now();
     let uuid = Uuid::new_v4();
+    let cloned_server = server.clone();
 
     tokio::task::spawn(async move {
-        server.r#loop().await;
+        cloned_server.r#loop().await;
     });
 
     TonicServer::builder()

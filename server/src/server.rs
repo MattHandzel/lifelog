@@ -19,15 +19,40 @@ use thiserror::Error;
 use tokio::sync::{mpsc, RwLock};
 use tonic::{Request as TonicRequest, Response as TonicResponse, Status as TonicStatus};
 
+use strum::IntoEnumIterator;
+
 use config::CollectorConfig;
+use data_modalities::screen::ScreenFrame;
 use lifelog_proto::lifelog_server_service_server::LifelogServerService;
+use lifelog_proto::LifelogData;
 use lifelog_proto::{
     GetDataRequest, GetDataResponse, GetStateRequest, GetSystemConfigRequest,
     GetSystemConfigResponse, GetSystemStateResponse, QueryRequest, QueryResponse,
     RegisterCollectorRequest, RegisterCollectorResponse, ReportStateRequest, ReportStateResponse,
     SetSystemConfigRequest, SetSystemConfigResponse,
 };
+use lifelog_types::DataModality;
 use tokio::sync::oneshot;
+
+use once_cell::sync::Lazy;
+
+//type Loader = fn(&Surreal<Client>, &[Uuid]) -> anyhow::Result<Vec<LifelogData>>;
+
+//static MODALITY_REGISTRY: Lazy<DashMap<DataModality, Loader>> =
+//    Lazy::new(|| DashMap::from([(DataModality::Screen, load::<ScreenFrame> as Loader)]));
+
+//async fn load<T: Modality>(
+//    db: &Surreal<Client>,
+//    uuids: &[Uuid],
+//) -> anyhow::Result<Vec<LifelogData>> {
+//    let rows: Vec<T> = db.select::<Vec<T>>(T::TABLE).await?; // filter by uuids
+//    Ok(rows
+//        .into_iter()
+//        .map(|r| LifelogData {
+//            payload: Some(r.into_payload()),
+//        })
+//        .collect())
+//}
 
 #[derive(Debug, Error)]
 pub enum ServerError {
@@ -64,7 +89,7 @@ pub enum ServerError {
 //}
 
 // TDOO: ADD A CHANNEL FOR COMMS
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Server {
     db: Surreal<Client>,
     host: String,
@@ -153,20 +178,16 @@ impl LifelogServerService for Server {
         request: TonicRequest<GetDataRequest>,
     ) -> Result<TonicResponse<GetDataResponse>, TonicStatus> {
         let req = request.into_inner();
-
-        // Search the database for the UUIDs, and return the data
-        let uuids = req.keys;
-        println!("Received a get data request! {:?}", uuids);
-        // 1) get the data from the database
-        // TODO: this should be a query to the database
-        println!("Getting data for uuids: {:?}", uuids);
-        let mut data = vec![];
-
-        // 4) turn it into a gRPC response
-        match result {
-            Ok(resp) => Ok(TonicResponse::new(resp)),
-            Err(stat) => Err(TonicStatus::internal(stat.to_string())),
+        let chunks: Vec<lifelog_proto::lifelog_data::Payload> = Vec::new();
+        for modality in DataModality::iter() {
+            // Find the uuids in the data base
         }
+        // 4) turn it into a gRPC response
+        //match result {
+        //Ok(resp) => Ok(TonicResponse::new(resp)),
+        //    Err(stat) => Err(TonicStatus::internal(stat.to_string())),
+        //}
+        Ok(TonicResponse::new(GetDataResponse { data: vec![] }))
     }
 
     async fn report_state(
@@ -228,7 +249,15 @@ impl Policy for ServerPolicy {
 
         // See what the current client requests are
 
-        let action = ServerAction::Sleep(tokio::time::Duration::from_secs(1));
+        // TODO: Look at the collector states and when a collector is more than 60 seconds out of
+        // sync ask it for more data
+        println!(state.server_state.timestamp.timestamp());
+        let action = if state.server_state.timestamp.timestamp() % 10 == 0 {
+            // TODO: Add the specific data modality here
+            ServerAction::SyncData("SELECT * FROM screen".to_string())
+        } else {
+            ServerAction::Sleep(tokio::time::Duration::from_millis(100))
+        };
 
         action
     }
@@ -253,7 +282,6 @@ impl Server {
             //Add to audit log
             self.add_audit_log(&action).await;
             self.do_action(action, state).await;
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }
     }
 
@@ -264,7 +292,14 @@ impl Server {
 
     async fn get_state(&self) -> SystemState {
         // Estimate the state in this function
-
+        {
+            let mut state = self.state.write().await;
+            state.timestamp = Utc::now();
+            state.server_state.cpu_usage = 0.0; // TODO: Get the real CPU usage
+            state.server_state.memory_usage = 0.0; // TODO: Get the real memory usage
+            state.server_state.threads = 0.0; // TODO: Get the real number of threads
+        } // Release the lock here
+          // TODO: There is a race condition here, someone can grab the lock before we can grab it
         return self.state.read().await.clone();
     }
 
@@ -279,6 +314,13 @@ impl Server {
             ServerAction::Sleep(duration) => {
                 // Sleep for a certain amount of time
                 tokio::time::sleep(duration).await;
+            }
+            ServerAction::SyncData(query) => {
+                // Get the target data modalities(s) from the query
+
+                // For now, assume we want to sync all data modalities
+
+                // Ask the collectors to send data
             }
             _ => todo!(),
         }

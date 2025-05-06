@@ -3,6 +3,7 @@ use lifelog_macros::lifelog_type;
 use lifelog_proto::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use strum_macros::EnumIter;
 use tokio;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -94,12 +95,6 @@ impl Default for ServerState {
 
 include!(concat!(env!("OUT_DIR"), "/data_modalities.rs"));
 
-#[lifelog_type(None)]
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct LifelogDataKey {
-    uuid: String,
-}
-
 #[derive(Clone, Debug)]
 pub struct RegisteredCollector {
     id: CollectorId,
@@ -138,9 +133,11 @@ impl Default for SystemState {
     }
 }
 
-#[lifelog_type(None)]
 #[derive(Debug, Clone, Hash, Deserialize, Serialize)]
 pub struct DataSource {
     mac: String,            // MAC address of the data source
     modality: DataModality, // the type of data modality
 }
+
+// TODO: autogenerate this
+//

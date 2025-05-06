@@ -12,6 +12,17 @@ pub struct ScreenFrame {
     pub height: u32,
 }
 
+impl Modality for ScreenFrame {
+    const TABLE: &'static str = "screen";
+    fn into_payload(self) -> lifelog_proto::lifelog_data::Payload {
+        lifelog_proto::lifelog_data::Payload::Screenframe(self.into()) // TODO: refactor code so this is
+                                                                       // the same as screenframe
+    }
+    fn id(&self) -> String {
+        self.uuid.to_string()
+    }
+}
+
 //impl crate::common::data_models::DataSchema for ScreenFrame {
 //    fn table_name() -> &'static str {
 //        "screen_frames"

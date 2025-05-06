@@ -15,4 +15,4 @@ tracing = { version = "0.1", features = ["log"] }
 pretty_assertions = { version = "1.4.1", features = ["std"] }
 dashmap = { version = "6.1.0", features = ["serde"] }
 tonic = { version = "0.13.1" }
-
+lifelog-proto = { path = "../lifelog-proto" }
