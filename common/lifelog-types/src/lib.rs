@@ -115,7 +115,6 @@ pub type ServerId = String;
 // decisions
 #[derive(Clone, Debug)]
 pub struct SystemState {
-    pub timestamp: DateTime<Utc>,
     pub collector_states: BTreeMap<CollectorId, CollectorState>,
     pub interface_states: BTreeMap<InterfaceId, InterfaceState>,
     pub server_state: ServerState, // There is only 1 server in this model, but maybe we want
@@ -125,7 +124,6 @@ pub struct SystemState {
 impl Default for SystemState {
     fn default() -> Self {
         SystemState {
-            timestamp: Utc::now(),
             collector_states: BTreeMap::new(),
             interface_states: BTreeMap::new(),
             server_state: ServerState::default(),

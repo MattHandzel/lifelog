@@ -26,6 +26,11 @@ tonic-reflection = { version = "0.13.0"}
 dashmap = "6.1.0"
 toml = { version = "0.8.20"}
 lifelog-types = {path = "../common/lifelog-types/"}
+data-modalities = { path = "../common/data-modalities" } # TODO: refactor, we shouldn't be needing to import this
+once_cell = "1.21.3"
+strum = { version = "0.27.1", features = ["derive"] }
+sysinfo = { version = "0.35.0", features = ["network", "multithread"] }
+
 
 [build-dependencies]
 tonic-build = "0.13"

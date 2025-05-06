@@ -118,7 +118,6 @@ impl Server {
         let state = SystemState {
             server_state: ServerState {
                 name: config.server_name.clone(),
-                timestamp: Utc::now(),
                 ..Default::default()
             },
             ..Default::default()
@@ -251,7 +250,7 @@ impl Policy for ServerPolicy {
 
         // TODO: Look at the collector states and when a collector is more than 60 seconds out of
         // sync ask it for more data
-        println!(state.server_state.timestamp.timestamp());
+        println!("{:?}", state.server_state.timestamp.timestamp());
         let action = if state.server_state.timestamp.timestamp() % 10 == 0 {
             // TODO: Add the specific data modality here
             ServerAction::SyncData("SELECT * FROM screen".to_string())
@@ -282,6 +281,7 @@ impl Server {
             //Add to audit log
             self.add_audit_log(&action).await;
             self.do_action(action, state).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // TODO: Remove
         }
     }
 
@@ -292,15 +292,13 @@ impl Server {
 
     async fn get_state(&self) -> SystemState {
         // Estimate the state in this function
-        {
-            let mut state = self.state.write().await;
-            state.timestamp = Utc::now();
-            state.server_state.cpu_usage = 0.0; // TODO: Get the real CPU usage
-            state.server_state.memory_usage = 0.0; // TODO: Get the real memory usage
-            state.server_state.threads = 0.0; // TODO: Get the real number of threads
-        } // Release the lock here
-          // TODO: There is a race condition here, someone can grab the lock before we can grab it
-        return self.state.read().await.clone();
+        let mut state = self.state.write().await;
+        state.server_state.timestamp = Utc::now();
+        state.server_state.cpu_usage = 0.0; // TODO: Get the real CPU usage
+        state.server_state.memory_usage = 0.0; // TODO: Get the real memory usage
+        state.server_state.threads = 0.0; // TODO: Get the real number of threads
+                                          // TODO: There is a race condition here, someone can grab the lock before we can grab it
+        state.clone()
     }
 
     async fn add_audit_log(&self, action: &ServerAction) {
