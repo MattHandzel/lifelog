@@ -102,8 +102,11 @@ impl ServerHandle {
     }
 
     pub async fn r#loop(&self) {
-        let server = self.server.write().await;
-        server.r#loop().await;
+        loop {
+            let server = self.server.write().await;
+            server.step().await;
+            tokio::time::sleep(time::Duration::from_millis(100)).await;
+        }
     }
 
     pub async fn get_db(&self) -> Surreal<Client> {
@@ -112,6 +115,7 @@ impl ServerHandle {
     }
 
     pub async fn register_collector(&self, collector: RegisteredCollector) {
+        println!("Trying to register collector: {:?}", collector);
         let mut server = self.server.write().await;
         server.register_collectors.write().await.push(collector);
     }
@@ -189,7 +193,8 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         let inner = request.into_inner();
         let collector_config: CollectorConfig = inner.config.unwrap().into();
         let collector_ip = format!(
-            "{}:{}",
+            "http://{}:{}", // TODO: I shouldn't explicitly write http here, it should either be
+            // defined in the config or the protocol should be
             collector_config.host.clone(),
             collector_config.port.clone()
         );
@@ -210,7 +215,6 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             Ok(endpoint) => {
                 println!("Trying to connect to endpoint: {:?}", endpoint);
                 let endpoint = endpoint.connect_timeout(time::Duration::from_secs(10));
-
 
                 let channel = endpoint.connect().await.map_err(|e| {
                     TonicStatus::internal(format!("Failed to connect to endpoint: {}", e))
@@ -340,27 +344,27 @@ impl Policy for ServerPolicy {
     }
 }
 
+// TODO: refactor the server to be an actor model instead of RwLock
+// https://softwarepatternslexicon.com/patterns-rust/9/14/
 impl Server {
     /// This function will be run upon startup, it will handle the server's main loop of doing
     /// actions
-    pub async fn r#loop(&self) -> ! {
-        // Set up command tokio channel
-        let policy = self.get_policy();
 
-        loop {
-            let state = self.get_state().await;
-            let action = policy.read().await.get_action(&state);
+    // TODO: Refactor this so do_action (a blocking task) isn't running here, we don't wanna hold
+    // onto the lock
+    pub async fn step(&self) -> () {
+        let state = self.get_state().await;
+        let action = self.policy.read().await.get_action(&state); // TODO: REFACTOR this so policy is
+                                                                  // normal variable
 
-            // Perform the action
-            // TODO: Czy mam problem że akcje byś mogły trwać długo? Jak to rozwiązać
+        // Perform the action
+        // TODO: Czy mam problem że akcje byś mogły trwać długo? Jak to rozwiązać
 
-            // TODO: dodaj parallelizm do tego, żeby nie czekać na zakończenie akcji
-            //tokio::task::spawn(async move {
-            //Add to audit log
-            self.add_audit_log(&action).await;
-            self.do_action(action, state).await;
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await; // TODO: Remove
-        }
+        // TODO: dodaj parallelizm do tego, żeby nie czekać na zakończenie akcji
+        //tokio::task::spawn(async move {
+        //Add to audit log
+        self.add_audit_log(&action).await;
+        self.do_action(action, state).await;
     }
 
     fn get_policy(&self) -> Arc<RwLock<ServerPolicy>> {

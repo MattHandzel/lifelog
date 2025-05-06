@@ -114,6 +114,7 @@ impl CollectorHandle {
             if let Err(e) = collector.report_state().await {
                 eprintln!("Failed to report state: {}", e);
             }
+
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
     }
