@@ -21,6 +21,7 @@ use std::collections::BTreeMap;
 #[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct CollectorConfig {
+    pub id: String, // This is a human-readable ID for the collector, like "laptop" or "phone"
     pub timestamp_format: String,
     pub screen: ScreenConfig,
     pub camera: CameraConfig,
@@ -519,6 +520,7 @@ fn create_default_config() -> CollectorConfig {
     let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
 
     CollectorConfig {
+        id: "implement_this".to_string(),
         timestamp_format: default_timestamp_format(),
         screen: ScreenConfig {
             enabled: true,

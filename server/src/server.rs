@@ -19,6 +19,7 @@ use thiserror::Error;
 use tokio::sync::{mpsc, RwLock};
 use tonic::{Request as TonicRequest, Response as TonicResponse, Status as TonicStatus};
 
+use std::time;
 use strum::IntoEnumIterator;
 
 use config::CollectorConfig;
@@ -32,6 +33,9 @@ use lifelog_proto::{
     SetSystemConfigRequest, SetSystemConfigResponse,
 };
 use lifelog_types::DataModality;
+
+use lifelog_proto::collector_service_client::CollectorServiceClient;
+
 use tokio::sync::oneshot;
 
 use sysinfo::{Components, Disks, Networks, System};
@@ -155,12 +159,44 @@ impl LifelogServerService for Server {
         &self,
         request: TonicRequest<RegisterCollectorRequest>,
     ) -> Result<TonicResponse<RegisterCollectorResponse>, TonicStatus> {
+        let collector_ip = request.remote_addr();
         let inner = request.into_inner();
-        Ok(TonicResponse::new(RegisterCollectorResponse {
-            success: true,
-            session_id: chrono::Utc::now().timestamp_subsec_nanos() as u64
-                + chrono::Utc::now().timestamp() as u64,
-        }))
+        if let None = collector_ip {
+            panic!("Received a register collector request from unknown IP");
+        }
+        let ip = collector_ip.unwrap();
+        println!("Received a register collector request from: {:?}", ip);
+        let collector_config: CollectorConfig = inner.config.unwrap().into();
+
+        let endpoint =
+            tonic::transport::Endpoint::from_shared("http://".to_owned() + &ip.to_string());
+        match endpoint {
+            Err(e) => Err(TonicStatus::internal(format!(
+                "Failed to create endpoint: {}",
+                e
+            ))),
+            Ok(endpoint) => {
+                let endpoint = endpoint.connect_timeout(time::Duration::from_secs(10));
+
+                let channel = endpoint.connect().await.map_err(|e| {
+                    TonicStatus::internal(format!("Failed to connect to endpoint: {}", e))
+                })?;
+                let mut client = CollectorServiceClient::new(channel);
+
+                let collector = RegisteredCollector {
+                    id: collector_config.id.clone(),
+                    address: ip.to_string(),
+                    grpc_client: client.clone(),
+                };
+                println!("Registering collector: {:?}", collector);
+
+                Ok(TonicResponse::new(RegisterCollectorResponse {
+                    success: true,
+                    session_id: chrono::Utc::now().timestamp_subsec_nanos() as u64
+                        + chrono::Utc::now().timestamp() as u64,
+                }))
+            }
+        }
     }
 
     async fn get_config(

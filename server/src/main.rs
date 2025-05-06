@@ -2,6 +2,9 @@ use chrono::{DateTime, Utc};
 use config::ServerConfig;
 use lifelog_core::uuid::Uuid;
 use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
+
+use lifelog_proto::collector_service_client::CollectorServiceClient;
+
 use lifelog_proto::FILE_DESCRIPTOR_SET;
 use lifelog_server::server::Server as LifelogServer;
 use tokio;
@@ -22,8 +25,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let time: DateTime<Utc> = Utc::now();
     let uuid = Uuid::new_v4();
-    let cloned_server = server.clone();
 
+    let cloned_server = server.clone();
     tokio::task::spawn(async move {
         cloned_server.r#loop().await;
     });

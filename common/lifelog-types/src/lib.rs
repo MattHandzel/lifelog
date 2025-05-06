@@ -1,5 +1,6 @@
 use lifelog_core::*;
 use lifelog_macros::lifelog_type;
+use lifelog_proto::collector_service_client::CollectorServiceClient;
 use lifelog_proto::*;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -97,14 +98,15 @@ include!(concat!(env!("OUT_DIR"), "/data_modalities.rs"));
 
 #[derive(Clone, Debug)]
 pub struct RegisteredCollector {
-    id: CollectorId,
-    address: String,
+    pub id: CollectorId,
+    pub address: String,
+    pub grpc_client: CollectorServiceClient<tonic::transport::Channel>,
 }
 
 #[derive(Clone, Debug)]
 pub struct RegisteredInterface {
-    id: InterfaceId,
-    address: String,
+    pub id: InterfaceId,
+    pub address: String,
 }
 
 pub type CollectorId = String;

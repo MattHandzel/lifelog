@@ -1,48 +1,13 @@
 // Auto‐generated types
 
-export interface HyprlandConfig {
-  enabled: boolean;
-  interval: number;
-  output_dir: string;
-  log_clients: boolean;
-  log_activewindow: boolean;
-  log_workspace: boolean;
-  log_active_monitor: boolean;
-  log_devices: boolean;
-}
-
-export interface InputLoggerConfig {
-  output_dir: string;
-  enabled: boolean;
-  log_keyboard: boolean;
-  log_mouse_buttons: boolean;
-  log_mouse_movement: boolean;
-  log_mouse_wheel: boolean;
-  log_devices: boolean;
-  mouse_interval: number;
-}
-
-export interface ScreenConfig {
-  enabled: boolean;
-  interval: number;
-  output_dir: string;
-  program: string;
+export interface CollectorConfig {
+  id: string;
   timestamp_format: string;
-}
-
-export interface ServerConfig {
-  host: string;
-  port: number;
-  database_endpoint: string;
-  database_name: string;
-  server_name: string;
-}
-
-export interface GeoConfig {
-  enabled: boolean;
-  interval: number;
-  output_dir: string;
-  use_ip_fallback: boolean;
+  screen: ScreenConfig;
+  camera: CameraConfig;
+  microphone: MicrophoneConfig;
+  processes: ProcessesConfig;
+  hyprland: HyprlandConfig;
 }
 
 export interface WeatherConfig {
@@ -52,73 +17,6 @@ export interface WeatherConfig {
   api_key: string;
   latitude: number;
   longitude: number;
-}
-
-export interface SystemConfig {
-  server: ServerConfig;
-  collector: CollectorConfig;
-}
-
-export interface MouseConfig {
-  enabled: boolean;
-  interval: number;
-  output_dir: string;
-}
-
-export interface NetworkConfig {
-  enabled: boolean;
-  interval: number;
-  output_dir: string;
-}
-
-export interface SystemPerformanceConfig {
-  enabled: boolean;
-  interval: number;
-  output_dir: string;
-  log_cpu: boolean;
-  log_memory: boolean;
-  log_disk: boolean;
-}
-
-export interface LifelogDataKey {
-  uuid: string;
-}
-
-export interface CollectorConfig {
-  timestamp_format: string;
-  screen: ScreenConfig;
-  camera: CameraConfig;
-  microphone: MicrophoneConfig;
-  processes: ProcessesConfig;
-  hyprland: HyprlandConfig;
-}
-
-export interface ServerState {
-  name: string;
-  timestamp: Date;
-  cpu_usage: number;
-  memory_usage: number;
-  threads: number;
-  pending_commands: any[];
-}
-
-export interface MicrophoneConfig {
-  enabled: boolean;
-  output_dir: string;
-  sample_rate: number;
-  chunk_duration_secs: number;
-  timestamp_format: string;
-  bits_per_sample: number;
-  channels: number;
-  capture_interval_secs: number;
-}
-
-export interface AmbientConfig {
-  enabled: boolean;
-  interval: number;
-  output_dir: string;
-  temperature_sensor_path: string | null;
-  humidity_sensor_path: string | null;
 }
 
 export interface WifiConfig {
@@ -133,17 +31,43 @@ export interface CollectorState {
   timestamp: Date;
 }
 
-export interface AudioConfig {
-  enabled: boolean;
-  output_dir: string;
-  sample_rate: number;
-  chunk_duration_secs: number;
-}
+export type DataModality = "Screen";
 
-export interface KeyboardConfig {
+export type ServerCommand = "RegisterCollector" | "GetConfig" | "SetConfig" | "GetData" | "Query" | "ReportState" | "GetState";
+
+export interface HyprlandConfig {
   enabled: boolean;
   interval: number;
   output_dir: string;
+  log_clients: boolean;
+  log_activewindow: boolean;
+  log_workspace: boolean;
+  log_active_monitor: boolean;
+  log_devices: boolean;
+}
+
+export interface GeoConfig {
+  enabled: boolean;
+  interval: number;
+  output_dir: string;
+  use_ip_fallback: boolean;
+}
+
+export interface ScreenConfig {
+  enabled: boolean;
+  interval: number;
+  output_dir: string;
+  program: string;
+  timestamp_format: string;
+}
+
+export interface LifelogDataKey {
+  uuid: string;
+}
+
+export interface SystemConfig {
+  server: ServerConfig;
+  collector: CollectorConfig;
 }
 
 export interface TextUploadConfig {
@@ -153,12 +77,76 @@ export interface TextUploadConfig {
   supported_formats: string[];
 }
 
+export interface ServerState {
+  name: string;
+  timestamp: Date;
+  cpu_usage: number;
+  memory_usage: number;
+  threads: number;
+  pending_commands: any[];
+}
+
+export interface MouseConfig {
+  enabled: boolean;
+  interval: number;
+  output_dir: string;
+}
+
+export interface KeyboardConfig {
+  enabled: boolean;
+  interval: number;
+  output_dir: string;
+}
+
 export interface ScreenFrame {
   uuid: string;
   timestamp: Date;
   image_path: string;
   width: number;
   height: number;
+}
+
+export interface SystemPerformanceConfig {
+  enabled: boolean;
+  interval: number;
+  output_dir: string;
+  log_cpu: boolean;
+  log_memory: boolean;
+  log_disk: boolean;
+}
+
+export interface AudioConfig {
+  enabled: boolean;
+  output_dir: string;
+  sample_rate: number;
+  chunk_duration_secs: number;
+}
+
+export interface MicrophoneConfig {
+  enabled: boolean;
+  output_dir: string;
+  sample_rate: number;
+  chunk_duration_secs: number;
+  timestamp_format: string;
+  bits_per_sample: number;
+  channels: number;
+  capture_interval_secs: number;
+}
+
+export interface DataSource {
+  mac: string;
+  modality: DataModality;
+}
+
+export interface InterfaceState {
+}
+
+export interface AmbientConfig {
+  enabled: boolean;
+  interval: number;
+  output_dir: string;
+  temperature_sensor_path: string | null;
+  humidity_sensor_path: string | null;
 }
 
 export interface ProcessesConfig {
@@ -178,15 +166,28 @@ export interface CameraConfig {
   timestamp_format: string;
 }
 
-export type DataModality = "Screen";
-
-export interface DataSource {
-  mac: string;
-  modality: DataModality;
+export interface ServerConfig {
+  host: string;
+  port: number;
+  database_endpoint: string;
+  database_name: string;
+  server_name: string;
 }
 
-export interface InterfaceState {
+export interface NetworkConfig {
+  enabled: boolean;
+  interval: number;
+  output_dir: string;
 }
 
-export type ServerCommand = "RegisterCollector" | "GetConfig" | "SetConfig" | "GetData" | "Query" | "ReportState" | "GetState";
+export interface InputLoggerConfig {
+  output_dir: string;
+  enabled: boolean;
+  log_keyboard: boolean;
+  log_mouse_buttons: boolean;
+  log_mouse_movement: boolean;
+  log_mouse_wheel: boolean;
+  log_devices: boolean;
+  mouse_interval: number;
+}
 
