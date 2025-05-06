@@ -34,6 +34,8 @@ use lifelog_proto::{
 use lifelog_types::DataModality;
 use tokio::sync::oneshot;
 
+use sysinfo::{Components, Disks, Networks, System};
+
 use once_cell::sync::Lazy;
 
 //type Loader = fn(&Surreal<Client>, &[Uuid]) -> anyhow::Result<Vec<LifelogData>>;
@@ -100,6 +102,8 @@ pub struct Server {
     policy: Arc<RwLock<ServerPolicy>>,
 }
 
+static mut SYS: Option<sysinfo::System> = None;
+
 const SERVER_COMMAND_CHANNEL_BUFFER_SIZE: usize = 100;
 
 impl Server {
@@ -127,6 +131,9 @@ impl Server {
         let policy = Arc::new(RwLock::new(ServerPolicy {
             config: ServerPolicyConfig::default(),
         }));
+        unsafe {
+            SYS = Some(System::new_all());
+        }
 
         let s = Self {
             db,
@@ -250,7 +257,6 @@ impl Policy for ServerPolicy {
 
         // TODO: Look at the collector states and when a collector is more than 60 seconds out of
         // sync ask it for more data
-        println!("{:?}", state.server_state.timestamp.timestamp());
         let action = if state.server_state.timestamp.timestamp() % 10 == 0 {
             // TODO: Add the specific data modality here
             ServerAction::SyncData("SELECT * FROM screen".to_string())
@@ -291,14 +297,40 @@ impl Server {
     }
 
     async fn get_state(&self) -> SystemState {
-        // Estimate the state in this function
-        let mut state = self.state.write().await;
-        state.server_state.timestamp = Utc::now();
-        state.server_state.cpu_usage = 0.0; // TODO: Get the real CPU usage
-        state.server_state.memory_usage = 0.0; // TODO: Get the real memory usage
-        state.server_state.threads = 0.0; // TODO: Get the real number of threads
-                                          // TODO: There is a race condition here, someone can grab the lock before we can grab it
-        state.clone()
+        unsafe {
+            // TODO: refactor this to be safe
+            let sys = SYS.as_mut().expect("System info is not initialized");
+            sys.refresh_all();
+
+            let cpu_usage = (sys.global_cpu_usage() as f32) / 100.0; // [0-1]
+
+            let total_mem = sys.total_memory() as f32; // KiB
+            let used_mem = sys.used_memory() as f32;
+            let memory_usage = if total_mem > 0.0 {
+                used_mem / total_mem
+            } else {
+                0.0
+            };
+
+            let processes = sys.processes().len() as i32;
+
+            //let total_disk: u64 = sys.disks().iter().map(|d| d.total_space()).sum();
+            //let free_disk: u64 = sys.disks().iter().map(|d| d.available_space()).sum();
+            //let disk_usage = if total_disk > 0 {
+            //    (total_disk - free_disk) as f64 / total_disk as f64
+            //} else {
+            //    0.0
+            //};
+
+            // Estimate the state in this function
+            let mut state = self.state.write().await;
+            state.server_state.cpu_usage = cpu_usage; // TODO: Get the real CPU usage
+            state.server_state.timestamp = Utc::now();
+            state.server_state.memory_usage = memory_usage; // TODO: Get the real memory usage
+                                                            //state.server_state.threads = 0.0; // TODO: Get the real number of threads
+                                                            //                                  // TODO: There is a race condition here, someone can grab the lock before we can grab it
+            state.clone()
+        }
     }
 
     async fn add_audit_log(&self, action: &ServerAction) {
