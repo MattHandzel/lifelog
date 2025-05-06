@@ -8,6 +8,7 @@ description = "A project to log, process, and interact with various sources of d
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }
 lifelog-core = {path = "../common/lifelog-core/"}
+lifelog-proto = { path = "../common/lifelog-proto" }
 lifelog-macros = { path = "../common/macros" }
 tokio = { version = "1.44.2", features = ["full", "macros", "rt-multi-thread"] }
 chrono = "0.4"

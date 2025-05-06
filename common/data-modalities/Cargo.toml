@@ -6,8 +6,11 @@ version="0.1.0"
 [dependencies]
 lifelog-core= { path = "../lifelog-core" }
 lifelog-macros = { path = "../macros" }
+lifelog-proto = { path = "../lifelog-proto" }
 serde = { version = "1.0", features = ["derive"] }
 
+prost-types = { version = "0.13.5"}
+tonic = { version = "0.13.1"}
 
 # testing this real quick
 [build-dependencies]
@@ -17,3 +20,4 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 walkdir = "2.3"
 maplit = "1.0"
+tonic-build = { version = "0.13.1" }

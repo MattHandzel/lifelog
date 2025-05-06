@@ -10,3 +10,5 @@ serde = { version = "1.0", features = ["derive"] }
 lifelog-core = { path = "../lifelog-core" }
 lifelog-macros = { path = "../macros" }
 dashmap = { version = "6.1", features = ["serde"] }
+lifelog-proto = { path = "../lifelog-proto" }
+prost-types = { version = "0.13.5"}
