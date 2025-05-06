@@ -1,1 +1,1 @@
-{"fields":[["enabled","bool"],["interval","f64"],["output_dir","PathBuf"],["temperature_sensor_path","Option<String>"],["humidity_sensor_path","Option<String>"]],"ident":"AmbientConfig","metadata_type":"Config"}
+{"fields":[["enabled","bool"],["interval","f64"],["output_dir","PathBuf"],["temperature_sensor_path","Option<String>"],["humidity_sensor_path","Option<String>"]],"ident":"AmbientConfig","metadata_type":"Config","variants":[]}

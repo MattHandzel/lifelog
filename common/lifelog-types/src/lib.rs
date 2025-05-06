@@ -44,18 +44,20 @@ type Query = String;
 
 // TODO: Automatically generate the RPCs for this code so that every action is it's own RPC,
 // automatically generate the code for every RPC as they are the exact same code!
+
+#[lifelog_type(None)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerCommand {
     // These are commands to the servers, each of them can result in [0-n] actions. If it is
     // something that can be immediately resolved (such as registering a collector) then it will
     // result in no actions done,
-    RegisterCollector(RegisterCollectorRequest),
-    GetConfig(GetSystemConfigRequest),
-    SetConfig(SetSystemConfigRequest),
-    GetData(GetDataRequest),
-    Query(QueryRequest),
-    ReportState(ReportStateRequest),
-    GetState(GetStateRequest),
+    RegisterCollector,
+    GetConfig,
+    SetConfig,
+    GetData,
+    Query,
+    ReportState,
+    GetState,
 }
 
 #[derive(Debug, Clone)]
@@ -90,7 +92,15 @@ impl Default for ServerState {
     }
 }
 
+include!(concat!(env!("OUT_DIR"), "/data_modalities.rs"));
+
+#[lifelog_type(None)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LifelogDataKey {
+    uuid: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct RegisteredCollector {
     id: CollectorId,
     address: String,
@@ -108,7 +118,7 @@ pub type ServerId = String;
 
 // TODO: We need to model other applications/api's state so they can be used by the server to make
 // decisions
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct SystemState {
     pub timestamp: DateTime<Utc>,
     pub collector_states: BTreeMap<CollectorId, CollectorState>,
@@ -126,4 +136,11 @@ impl Default for SystemState {
             server_state: ServerState::default(),
         }
     }
+}
+
+#[lifelog_type(None)]
+#[derive(Debug, Clone, Hash, Deserialize, Serialize)]
+pub struct DataSource {
+    mac: String,            // MAC address of the data source
+    modality: DataModality, // the type of data modality
 }

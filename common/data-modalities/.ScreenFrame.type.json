@@ -1,1 +1,1 @@
-{"fields":[["uuid","::lifelog_core::uuid::Uuid"],["timestamp","::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>"],["image_path","String"],["width","u32"],["height","u32"]],"ident":"ScreenFrame","metadata_type":"Data"}
+{"fields":[["uuid","::lifelog_core::uuid::Uuid"],["timestamp","::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>"],["image_path","String"],["width","u32"],["height","u32"]],"ident":"ScreenFrame","metadata_type":"Data","variants":[]}

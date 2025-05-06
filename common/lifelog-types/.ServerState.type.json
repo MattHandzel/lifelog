@@ -1,1 +1,1 @@
-{"fields":[["name","String"],["timestamp","DateTime<Utc>"],["cpu_usage","f32"],["memory_usage","f32"],["threads","f32"],["pending_commands","Vec<ServerCommand>"]],"ident":"ServerState","metadata_type":"None"}
+{"fields":[["name","String"],["timestamp","DateTime<Utc>"],["cpu_usage","f32"],["memory_usage","f32"],["threads","f32"],["pending_commands","Vec<ServerCommand>"]],"ident":"ServerState","metadata_type":"None","variants":[]}

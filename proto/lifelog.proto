@@ -44,24 +44,25 @@ message SetCollectorConfigResponse {
   bool success = 1;
 }
 
+message LifelogDataKey {
+  string uuid = 1;
+}
+
 message GetDataRequest {
-  repeated string uuids = 1;
+  repeated LifelogDataKey keys = 1;
 }
 
   
 message GetDataResponse {
   repeated LifelogData data = 1;
 }
-message Query {
-  string query = 1; // TODO: Change this to be the query data type we define
-  }
 
   message UUID {
     string uuid = 1;
   }
 
 message QueryRequest {
-  Query query = 1; // TODO: Change this to be the query data type we define
+  string query = 1; // TODO: Change this to be the query data type we define
   }
 message QueryResponse {
   repeated UUID uuids = 1; // TODO: Change this to be the query data type we define

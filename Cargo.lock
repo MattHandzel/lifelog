@@ -2848,7 +2848,6 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.12",
  "tonic",
- "tonic-build",
  "tracing",
  "uuid",
 ]
@@ -2915,6 +2914,7 @@ dependencies = [
  "prost-types",
  "serde",
  "tokio",
+ "tonic-build",
  "uuid",
 ]
 

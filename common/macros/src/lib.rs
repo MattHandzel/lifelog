@@ -5,10 +5,12 @@ use quote::{quote, ToTokens};
 use serde_json::json;
 use std::{env, fs::OpenOptions, io::Write, path::PathBuf};
 use syn::{
-    parse::Parse, parse::ParseStream, parse_macro_input, parse_quote, Fields, Ident, Item,
-    ItemEnum, ItemStruct, Result,
+    parse::Parse, parse::ParseStream, parse_macro_input, parse_quote,
+    AngleBracketedGenericArguments, Fields, GenericArgument, Ident, Item, PathArguments, Result,
+    Type,
 };
 
+/// `#[lifelog_type(...)]` accepts `Data`, `Config`, or else = `None`
 struct MacroOptions {
     datatype: LifelogMacroMetaDataType,
 }
@@ -27,12 +29,13 @@ impl Parse for MacroOptions {
 
 #[proc_macro_attribute]
 pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
+    // 1) parse args + keep original tokens
     let options = parse_macro_input!(attr as MacroOptions);
-    let original = item.clone();
+    let original: proc_macro2::TokenStream = item.clone().into();
     let ast = parse_macro_input!(item as Item);
 
-    // build metadata
-    let (ident_str, fields_meta, variants_meta) = match &ast {
+    // 2) extract ident, fields, variants
+    let (ident_str, mut fields_meta, variants_meta) = match &ast {
         Item::Struct(s) => {
             let f = if let Fields::Named(named) = &s.fields {
                 named
@@ -57,10 +60,26 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
         _ => {
             return syn::Error::new_spanned(&ast, "only structs or enums")
                 .to_compile_error()
-                .into();
+                .into()
         }
     };
 
+    // 3) inject uuid/timestamp into JSON metadata for `Data`
+    if let LifelogMacroMetaDataType::Data = options.datatype {
+        fields_meta.insert(
+            0,
+            (
+                "timestamp".to_string(),
+                "::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>".to_string(),
+            ),
+        );
+        fields_meta.insert(
+            0,
+            ("uuid".to_string(), "::lifelog_core::uuid::Uuid".to_string()),
+        );
+    }
+
+    // 4) write .type.json
     let meta = json!({
         "ident": ident_str,
         "fields": fields_meta,
@@ -71,7 +90,6 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
             LifelogMacroMetaDataType::None   => "None",
         }
     });
-
     let out_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let mut file = OpenOptions::new()
         .create(true)
@@ -81,10 +99,10 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
         .unwrap();
     writeln!(file, "{}", meta).unwrap();
 
-    // re-emit with struct impls or verbatim enum
+    // 5) re-emit with struct impls or enum impls
     let expanded = match ast {
         Item::Struct(mut s) => {
-            // named fields only
+            // only named structs
             let named = if let Fields::Named(n) = &mut s.fields {
                 n
             } else {
@@ -93,36 +111,47 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                     .into();
             };
 
-            // inject uuid/timestamp on Data
+            // inject Rust-side uuid+timestamp for Data
             if let LifelogMacroMetaDataType::Data = options.datatype {
                 named
                     .named
                     .insert(0, parse_quote! { pub uuid: ::lifelog_core::uuid::Uuid });
                 named.named.insert(
                     1,
-                    parse_quote! { pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc> },
+                    parse_quote! {
+                        pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>
+                    },
                 );
             }
 
             let ident = &s.ident;
+
+            // DataType impl
             let impl_datatype = if let LifelogMacroMetaDataType::Data = options.datatype {
                 quote! {
                     impl ::lifelog_core::DataType for #ident {
                         fn uuid(&self) -> ::lifelog_core::uuid::Uuid { self.uuid }
-                        fn timestamp(&self) -> ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc> { self.timestamp }
+                        fn timestamp(&self) -> ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc> {
+                            self.timestamp
+                        }
                     }
                 }
             } else {
                 quote! {}
             };
 
-            // From<proto> → Self
-            let from_proto_fields = named.named.iter().map(|f| {
-                let n = f.ident.as_ref().unwrap();
-                if n == "uuid" {
-                    quote! { uuid: ::lifelog_core::uuid::Uuid::parse_str(&p.uuid).expect("invalid uuid") }
-                } else if n == "timestamp" {
-                    quote! {
+            // From<proto> -> Self
+            let from_fields = named.named.iter().map(|f| {
+                let name = f.ident.as_ref().unwrap();
+                // uuid
+                if name == "uuid" {
+                    return quote! {
+                        uuid: ::lifelog_core::uuid::Uuid::parse_str(&p.uuid).expect("invalid uuid")
+                    };
+                }
+                // timestamp
+                if name == "timestamp" {
+                    return quote! {
                         timestamp: {
                             let ts = p.timestamp.unwrap_or_default();
                             ::lifelog_core::chrono::DateTime::<::lifelog_core::chrono::Utc>::from_utc(
@@ -130,43 +159,142 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                                 ::lifelog_core::chrono::Utc,
                             )
                         }
-                    }
-                } else {
-                    quote! { #n: p.#n.into() }
+                    };
                 }
+                // Vec<Enum> or Vec<String>
+                if let Type::Path(typepath) = &f.ty {
+                    if typepath.path.segments.len() == 1 && typepath.path.segments[0].ident == "Vec" {
+                        if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
+                            &typepath.path.segments[0].arguments
+                        {
+                            if let Some(GenericArgument::Type(Type::Path(inner))) = args.first() {
+                                let inner_ident = &inner.path.segments.last().unwrap().ident;
+                                // assume inner is parseable from String
+                                return quote! {
+                                    #name: p.#name.into_iter().map(|s| s.parse().unwrap()).collect()
+                                };
+                            }
+                        }
+                    }
+                let seg = typepath.path.segments.last().unwrap().ident.to_string();
+                    if seg == "PathBuf" {
+                        return quote! { #name: std::path::PathBuf::from(p.#name) }
+                    } else if seg.contains("Config") {
+                        return quote! { #name: p.#name.expect(concat!("missing ", stringify!(#name))).into() }
+                    } else if seg == "HashMap" {
+                        return quote! {
+                            #name: p.#name.into_iter()
+                                .map(|(k,v)| (k, v.into()))
+                                .collect::<std::collections::BTreeMap<_,_>>()
+                        }
+                }
+
+                    // Option<Enum>
+                    if typepath.path.segments.len() == 1 && typepath.path.segments[0].ident == "Option" {
+                        if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
+                            &typepath.path.segments[0].arguments
+                        {
+                            if let Some(GenericArgument::Type(Type::Path(inner))) = args.first() {
+                                let _inner_ident = &inner.path.segments.last().unwrap().ident;
+                                return quote! {
+                                    #name: p.#name.map(|s| s.parse().unwrap())
+                                };
+                            }
+                        }
+                    }
+                }
+                // fallback
+                quote! { #name: p.#name.into() }
             });
             let from_impl = quote! {
                 impl From<lifelog_proto::#ident> for #ident {
                     fn from(p: lifelog_proto::#ident) -> Self {
-                        #ident { #(#from_proto_fields),* }
+                        #ident { #(#from_fields),* }
                     }
                 }
             };
 
-            // Self → proto
-            let into_proto_fields = named.named.iter().map(|f| {
-                let n = f.ident.as_ref().unwrap();
-                if n == "uuid" {
-                    quote! { uuid: s.uuid.to_string() }
-                } else if n == "timestamp" {
-                    quote! {
+            // Self -> proto
+            let into_fields = named.named.iter().map(|f| {
+                let name = f.ident.as_ref().unwrap();
+                // uuid
+                if name == "uuid" {
+                    return quote! { uuid: s.uuid.to_string() };
+                }
+                // timestamp
+                if name == "timestamp" {
+                    return quote! {
                         timestamp: Some(::prost_types::Timestamp {
                             seconds: s.timestamp.timestamp(),
                             nanos: s.timestamp.timestamp_subsec_nanos() as i32,
                         })
-                    }
-                } else {
-                    quote! { #n: s.#n.into() }
+                    };
                 }
+                // Vec<Enum> -> Vec<String>
+                if let Type::Path(typepath) = &f.ty {
+                    if typepath.path.segments.len() == 1 && typepath.path.segments[0].ident == "Vec"
+                    {
+                        if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                            args,
+                            ..
+                        }) = &typepath.path.segments[0].arguments
+                        {
+                            if let Some(GenericArgument::Type(Type::Path(_inner))) = args.first() {
+                                return quote! {
+                                    #name: s.#name.iter().map(|e| e.to_string()).collect()
+                                };
+                            }
+                        }
+                    }
+
+                    if typepath.path.segments[typepath.path.segments.len() - 1]
+                        .ident
+                        .to_string()
+                        .contains("Config")
+                    {
+                        // Vec<String> -> Vec<Enum>
+                        return quote! {
+                            #name: Some(s.#name.into())
+                        };
+                    }
+
+                    // Option<Enum> -> Option<String>
+                    if typepath.path.segments.len() == 1
+                        && typepath.path.segments[0].ident == "Option"
+                    {
+                        if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                            args,
+                            ..
+                        }) = &typepath.path.segments[0].arguments
+                        {
+                            if let Some(GenericArgument::Type(Type::Path(_inner))) = args.first() {
+                                return quote! {
+                                    #name: s.#name.as_ref().map(|e| e.to_string())
+                                };
+                            }
+                        }
+                    }
+                    let seg = typepath.path.segments.last().unwrap().ident.to_string();
+                    if seg == "PathBuf" {
+                        return quote! { #name: s.#name.display().to_string() };
+                    } else if seg.ends_with("Config") {
+                        return quote! { #name: Some(s.#name.into()) };
+                    } else {
+                        return quote! { #name: s.#name.into() };
+                    }
+                }
+                // fallback
+                quote! { #name: s.#name.into() }
             });
             let into_impl = quote! {
                 impl From<#ident> for lifelog_proto::#ident {
                     fn from(s: #ident) -> Self {
-                        lifelog_proto::#ident { #(#into_proto_fields),* }
+                        lifelog_proto::#ident { #(#into_fields),* }
                     }
                 }
             };
 
+            // re-emit struct + all impls
             let attrs = &s.attrs;
             let vis = &s.vis;
             let gens = &s.generics;
@@ -181,10 +309,42 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                 #into_impl
             }
         }
-        Item::Enum(_) => {
-            // emit enums verbatim
-            proc_macro2::TokenStream::from(original)
+
+        Item::Enum(e) => {
+            let name = &e.ident;
+            let variants: Vec<&Ident> = e.variants.iter().map(|v| &v.ident).collect();
+
+            quote! {
+                // re-emit enum
+                #original
+
+                // parse from string
+                impl std::str::FromStr for #name {
+                    type Err = ();
+                    fn from_str(input: &str) -> Result<#name, Self::Err> {
+                        match input {
+                            #(
+                                stringify!(#variants) => Ok(#name::#variants),
+                            )*
+                            _ => Err(()),
+                        }
+                    }
+                }
+
+                // to string
+                impl std::fmt::Display for #name {
+                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        let s = match self {
+                            #(
+                                #name::#variants => stringify!(#variants),
+                            )*
+                        };
+                        write!(f, "{}", s)
+                    }
+                }
+            }
         }
+
         _ => unreachable!(),
     };
 

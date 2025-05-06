@@ -45,27 +45,27 @@ pub enum ServerError {
 
 // Convert server commands to action
 
-impl ServerCommand {
-    pub fn to_actions(&self) -> Vec<ServerAction> {
-        match self {
-            ServerCommand::RegisterCollector(request) => {
-                vec![]
-            }
-            ServerCommand::GetConfig(_) => {
-                vec![]
-            }
-            ServerCommand::SetConfig(_) => vec![],
-            ServerCommand::Query(request) => vec![ServerAction::Query(request.clone())],
-            _ => {
-                panic!("Command {:?} not implemented yet", self);
-            }
-        }
-    }
-}
+//impl ServerCommand {
+//    pub fn to_actions(&self) -> Vec<ServerAction> {
+//        match self {
+//            ServerCommand::RegisterCollector(request) => {
+//                vec![]
+//            }
+//            ServerCommand::GetConfig(_) => {
+//                vec![]
+//            }
+//            ServerCommand::SetConfig(_) => vec![],
+//            ServerCommand::Query(request) => vec![ServerAction::Query(request.clone())],
+//            _ => {
+//                panic!("Command {:?} not implemented yet", self);
+//            }
+//        }
+//    }
+//}
 
 // TDOO: ADD A CHANNEL FOR COMMS
 #[derive(Debug)]
-pub struct Server<'a> {
+pub struct Server {
     db: Surreal<Client>,
     host: String,
     port: u16,
@@ -73,8 +73,6 @@ pub struct Server<'a> {
     register_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
     register_interfaces: Arc<RwLock<Vec<RegisteredInterface>>>,
     policy: Arc<RwLock<ServerPolicy>>,
-
-    pending_commands: Arc<RwLock<Vec<ServerCommand>>>,
 }
 
 const SERVER_COMMAND_CHANNEL_BUFFER_SIZE: usize = 100;
@@ -106,8 +104,6 @@ impl Server {
             config: ServerPolicyConfig::default(),
         }));
 
-        let (cmd_tx, mut cmd_rx) = mpsc::channel(SERVER_COMMAND_CHANNEL_BUFFER_SIZE);
-
         let s = Self {
             db,
             host: config.host.clone(),
@@ -116,9 +112,6 @@ impl Server {
             register_collectors: Arc::new(RwLock::new(vec![])),
             register_interfaces: Arc::new(RwLock::new(vec![])),
             policy,
-            pending_commands: Arc::new(RwLock::new(vec![])),
-            cmd_tx: cmd_tx,
-            cmd_rx: cmd_rx,
         };
 
         Ok(s)
@@ -161,22 +154,13 @@ impl LifelogServerService for Server {
     ) -> Result<TonicResponse<GetDataResponse>, TonicStatus> {
         let req = request.into_inner();
 
-        // 1) make a oneshot pair
-        let (tx, rx) = oneshot::channel::<Result<GetDataResponse, ServerError>>();
-
-        // 2) send the command + responder out to your scheduler
-        self.cmd_tx
-            .as_ref()
-            .expect("Scheduler not started")
-            .send(ServerCommand::GetData(req, tx))
-            .await
-            .map_err(|_| TonicStatus::internal("scheduler down"))?;
-
-        // 3) WAIT here for the scheduler to run it and send you back the response
-        let result = rx
-            .await
-            .map_err(|_| TonicStatus::internal("worker dropped without answering"))
-            .map_err(|e| TonicStatus::internal(e.to_string()))?;
+        // Search the database for the UUIDs, and return the data
+        let uuids = req.keys;
+        println!("Received a get data request! {:?}", uuids);
+        // 1) get the data from the database
+        // TODO: this should be a query to the database
+        println!("Getting data for uuids: {:?}", uuids);
+        let mut data = vec![];
 
         // 4) turn it into a gRPC response
         match result {
@@ -255,31 +239,11 @@ impl Server {
     /// actions
     pub async fn r#loop(&self) -> ! {
         // Set up command tokio channel
-        let pending_commands = self.pending_commands.clone();
-        tokio::task::spawn(async move {
-            while let Some(command) = &self.cmd_rx.recv().await {
-                println!("Got Command {:?}", command);
-                match command {
-                    ServerCommand::GetData(ref req, ref tx) => {
-                        pending_commands.write().await.push(command);
-                    }
-                    _ => todo!(),
-                }
-            }
-        });
         let policy = self.get_policy();
 
         loop {
             let state = self.get_state().await;
-
-            let mut pending_commands_vec = self.pending_commands.write().await;
-            let action = if pending_commands_vec.len() > 0 {
-                // TODO: REFACTOR TO SUPPORT MULTI-ACTION COMMANDS
-                let command = pending_commands_vec.pop().unwrap();
-                command.to_actions()[0].clone()
-            } else {
-                policy.read().await.get_action(&state)
-            };
+            let action = policy.read().await.get_action(&state);
 
             // Perform the action
             // TODO: Czy mam problem że akcje byś mogły trwać długo? Jak to rozwiązać

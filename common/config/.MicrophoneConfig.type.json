@@ -1,1 +1,1 @@
-{"fields":[["enabled","bool"],["output_dir","PathBuf"],["sample_rate","u32"],["chunk_duration_secs","u64"],["timestamp_format","String"],["bits_per_sample","u32"],["channels","u32"],["capture_interval_secs","u64"]],"ident":"MicrophoneConfig","metadata_type":"Config"}
+{"fields":[["enabled","bool"],["output_dir","PathBuf"],["sample_rate","u32"],["chunk_duration_secs","u64"],["timestamp_format","String"],["bits_per_sample","u32"],["channels","u32"],["capture_interval_secs","u64"]],"ident":"MicrophoneConfig","metadata_type":"Config","variants":[]}

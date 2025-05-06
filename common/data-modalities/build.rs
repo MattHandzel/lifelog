@@ -214,21 +214,21 @@ import "google/protobuf/wrappers.proto";
         }
 
         // top‐level container for all Data‐annotated types
-        output.push_str("message LifelogData {\n");
+        output.push_str("message LifelogData {\n  oneof payload {\n");
         let mut idx = 1;
         for dtype in types
             .iter()
             .filter(|d| matches!(d.metadata_type, LifelogMacroMetaDataType::Data))
         {
             output.push_str(&format!(
-                "  repeated {} {} = {};\n",
+                "    {} {} = {};\n",
                 dtype.ident,
                 dtype.ident.to_lowercase(),
                 idx,
             ));
             idx += 1;
         }
-        output.push_str("}\n");
+        output.push_str("  }\n}\n");
 
         Ok(output)
     }
