@@ -21,6 +21,8 @@ pub use data_sources::*;
 pub use database_state::*;
 pub use system_state::*;
 
+pub use tonic;
+
 use dashmap::DashMap;
 
 pub trait DataType {

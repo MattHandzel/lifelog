@@ -1,13 +1,15 @@
 use lifelog_core::*;
 
 use lifelog_macros::lifelog_type;
+use lifelog_proto;
 use serde::{Deserialize, Serialize};
 
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenFrame {
-    pub image_path: std::path::PathBuf,
-    pub resolution: (u32, u32),
+    pub image_path: String,
+    pub width: u32,
+    pub height: u32,
 }
 
 //impl crate::common::data_models::DataSchema for ScreenFrame {

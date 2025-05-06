@@ -20,20 +20,14 @@ use tokio::sync::{mpsc, RwLock};
 use tonic::{Request as TonicRequest, Response as TonicResponse, Status as TonicStatus};
 
 use config::CollectorConfig;
-use proto::lifelog_server_service_server::LifelogServerService;
-use proto::{
+use lifelog_proto::lifelog_server_service_server::LifelogServerService;
+use lifelog_proto::{
     GetDataRequest, GetDataResponse, GetStateRequest, GetSystemConfigRequest,
     GetSystemConfigResponse, GetSystemStateResponse, QueryRequest, QueryResponse,
     RegisterCollectorRequest, RegisterCollectorResponse, ReportStateRequest, ReportStateResponse,
     SetSystemConfigRequest, SetSystemConfigResponse,
 };
 use tokio::sync::oneshot;
-
-pub mod proto {
-    tonic::include_proto!("lifelog");
-    pub const FILE_DESCRIPTOR_SET: &[u8] =
-        tonic::include_file_descriptor_set!("lifelog_descriptor");
-}
 
 #[derive(Debug, Error)]
 pub enum ServerError {
@@ -47,27 +41,6 @@ pub enum ServerError {
     TonicError(#[from] tonic::transport::Error),
     #[error("Internal error: {0}")]
     InternalError(String),
-}
-
-type Query = String;
-
-// TODO: Automatically generate the RPCs for this code so that every action is it's own RPC,
-// automatically generate the code for every RPC as they are the exact same code!
-#[derive(Debug)]
-pub enum ServerCommand {
-    // These are commands to the servers, each of them can result in [0-n] actions. If it is
-    // something that can be immediately resolved (such as registering a collector) then it will
-    // result in no actions done,
-    RegisterCollector(RegisterCollectorRequest),
-    GetConfig(GetSystemConfigRequest),
-    SetConfig(SetSystemConfigRequest),
-    GetData(
-        GetDataRequest,
-        oneshot::Sender<Result<GetDataResponse, ServerError>>,
-    ),
-    Query(QueryRequest),
-    ReportState(ReportStateRequest),
-    GetState(GetStateRequest),
 }
 
 // Convert server commands to action
@@ -90,28 +63,9 @@ impl ServerCommand {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ActorConfig;
-
-// TODO: Add all actions to a swervice so any program can tell the server to do anything
-
-#[derive(Debug, Clone)]
-pub enum ServerAction {
-    Sleep(tokio::time::Duration), // Sleep for a certain amount of time)
-    Query(proto::QueryRequest),
-    GetData(proto::GetDataRequest), // TODO: Wouldn't it be cool if the system could specify exactly what data
-    // it wanted from the collector so when it has a query it doesn't need to process everything?
-    SyncData(Query),
-    HealthCheck,
-    ReceiveData(Vec<Uuid>),
-    CompressData(Vec<Uuid>),
-    TransformData(Vec<Uuid>),
-    RegisterActor(ActorConfig),
-}
-
 // TDOO: ADD A CHANNEL FOR COMMS
-#[derive(Clone, Debug)]
-pub struct Server {
+#[derive(Debug)]
+pub struct Server<'a> {
     db: Surreal<Client>,
     host: String,
     port: u16,
@@ -120,7 +74,6 @@ pub struct Server {
     register_interfaces: Arc<RwLock<Vec<RegisteredInterface>>>,
     policy: Arc<RwLock<ServerPolicy>>,
 
-    cmd_tx: mpsc::Sender<ServerCommand>,
     pending_commands: Arc<RwLock<Vec<ServerCommand>>>,
 }
 
@@ -128,7 +81,7 @@ const SERVER_COMMAND_CHANNEL_BUFFER_SIZE: usize = 100;
 
 impl Server {
     pub async fn new(config: &ServerConfig) -> Result<Self, ServerError> {
-        let db = Surreal::new::<Ws>(&config.database_endpoint).await?;
+        let db = Surreal::new::<Ws>(&config.database_endpoint).await.expect("Could not connect to the database, do you have it running? surreal start --user root --pass root --log debug rocksdb://~/lifelog/database --bind \"127.0.0.1:7183\"");
         db.signin(Root {
             username: "root",
             password: "root",
@@ -138,21 +91,6 @@ impl Server {
         db.use_ns("lifelog")
             .use_db(config.database_name.clone())
             .await?;
-
-        let (cmd_tx, mut cmd_rx) =
-            mpsc::channel::<ServerCommand>(SERVER_COMMAND_CHANNEL_BUFFER_SIZE);
-
-        tokio::task::spawn(async move {
-            while let Some(command) = cmd_rx.recv().await {
-                println!("Got Command {:?}", command);
-                match command {
-                    ServerCommand::GetData(req, tx) => {
-                        tx.send(Ok(GetDataResponse::default()));
-                    }
-                    _ => todo!(),
-                }
-            }
-        });
 
         let state = SystemState {
             server_state: ServerState {
@@ -168,17 +106,22 @@ impl Server {
             config: ServerPolicyConfig::default(),
         }));
 
-        Ok(Self {
+        let (cmd_tx, mut cmd_rx) = mpsc::channel(SERVER_COMMAND_CHANNEL_BUFFER_SIZE);
+
+        let s = Self {
             db,
             host: config.host.clone(),
-            port: config.port,
+            port: config.port as u16,
             state,
             register_collectors: Arc::new(RwLock::new(vec![])),
             register_interfaces: Arc::new(RwLock::new(vec![])),
             policy,
             pending_commands: Arc::new(RwLock::new(vec![])),
-            cmd_tx,
-        })
+            cmd_tx: cmd_tx,
+            cmd_rx: cmd_rx,
+        };
+
+        Ok(s)
     }
 }
 
@@ -223,6 +166,8 @@ impl LifelogServerService for Server {
 
         // 2) send the command + responder out to your scheduler
         self.cmd_tx
+            .as_ref()
+            .expect("Scheduler not started")
             .send(ServerCommand::GetData(req, tx))
             .await
             .map_err(|_| TonicStatus::internal("scheduler down"))?;
@@ -263,7 +208,7 @@ impl LifelogServerService for Server {
         let inner = request.into_inner();
         println!("Received a query request! {:?}", inner.query);
         Ok(TonicResponse::new(QueryResponse {
-            uuids: vec![proto::Uuid {
+            uuids: vec![lifelog_proto::Uuid {
                 uuid: "2b6e8293-1300-4318-9196-f8fed905b499".to_string(),
             }],
         }))
@@ -276,7 +221,7 @@ impl LifelogServerService for Server {
         println!("Received a get state request!");
         let state = self.state.read().await.clone();
         Ok(TonicResponse::new(GetSystemStateResponse {
-            state: Some(proto::ServerState::default()), // TODO: replace this with an .into for the
+            state: Some(ServerState::default().into()), // TODO: replace this with an .into for the
                                                         // server state
         }))
     }
@@ -308,12 +253,33 @@ impl Policy for ServerPolicy {
 impl Server {
     /// This function will be run upon startup, it will handle the server's main loop of doing
     /// actions
-    pub async fn policy_loop(&self) {
+    pub async fn r#loop(&self) -> ! {
+        // Set up command tokio channel
+        let pending_commands = self.pending_commands.clone();
+        tokio::task::spawn(async move {
+            while let Some(command) = &self.cmd_rx.recv().await {
+                println!("Got Command {:?}", command);
+                match command {
+                    ServerCommand::GetData(ref req, ref tx) => {
+                        pending_commands.write().await.push(command);
+                    }
+                    _ => todo!(),
+                }
+            }
+        });
         let policy = self.get_policy();
 
         loop {
             let state = self.get_state().await;
-            let action = policy.read().await.get_action(&state);
+
+            let mut pending_commands_vec = self.pending_commands.write().await;
+            let action = if pending_commands_vec.len() > 0 {
+                // TODO: REFACTOR TO SUPPORT MULTI-ACTION COMMANDS
+                let command = pending_commands_vec.pop().unwrap();
+                command.to_actions()[0].clone()
+            } else {
+                policy.read().await.get_action(&state)
+            };
 
             // Perform the action
             // TODO: Czy mam problem że akcje byś mogły trwać długo? Jak to rozwiązać

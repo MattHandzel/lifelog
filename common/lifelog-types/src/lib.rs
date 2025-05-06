@@ -1,7 +1,9 @@
-use dashmap::DashMap;
 use lifelog_core::*;
 use lifelog_macros::lifelog_type;
+use lifelog_proto::*;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use tokio;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Unit {
@@ -31,9 +33,48 @@ pub struct InterfaceState {}
 pub struct ServerState {
     pub name: String,
     pub timestamp: DateTime<Utc>,
-    pub cpu_usage: UsageType,
-    pub memory_usage: UsageType,
-    pub threads: UsageType,
+    pub cpu_usage: f32,    // TODO: REFACTOR TO USE USAGE TYPE
+    pub memory_usage: f32, // TODO: REFACTOR TO USE USAGE TYPE
+    pub threads: f32,      // TODO: REFACTOR TO USE USAGE TYPE
+
+    pub pending_commands: Vec<ServerCommand>,
+}
+
+type Query = String;
+
+// TODO: Automatically generate the RPCs for this code so that every action is it's own RPC,
+// automatically generate the code for every RPC as they are the exact same code!
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ServerCommand {
+    // These are commands to the servers, each of them can result in [0-n] actions. If it is
+    // something that can be immediately resolved (such as registering a collector) then it will
+    // result in no actions done,
+    RegisterCollector(RegisterCollectorRequest),
+    GetConfig(GetSystemConfigRequest),
+    SetConfig(SetSystemConfigRequest),
+    GetData(GetDataRequest),
+    Query(QueryRequest),
+    ReportState(ReportStateRequest),
+    GetState(GetStateRequest),
+}
+
+#[derive(Debug, Clone)]
+pub struct ActorConfig;
+
+// TODO: Add all actions to a swervice so any program can tell the server to do anything
+
+#[derive(Debug, Clone)]
+pub enum ServerAction {
+    Sleep(tokio::time::Duration), // Sleep for a certain amount of time)
+    Query(lifelog_proto::QueryRequest),
+    GetData(lifelog_proto::GetDataRequest), // TODO: Wouldn't it be cool if the system could specify exactly what data
+    // it wanted from the collector so when it has a query it doesn't need to process everything?
+    SyncData(Query),
+    HealthCheck,
+    ReceiveData(Vec<lifelog_proto::Uuid>),
+    CompressData(Vec<lifelog_proto::Uuid>),
+    TransformData(Vec<lifelog_proto::Uuid>),
+    RegisterActor(ActorConfig),
 }
 
 impl Default for ServerState {
@@ -41,9 +82,10 @@ impl Default for ServerState {
         ServerState {
             name: "LifelogServer".to_string(),
             timestamp: Utc::now(),
-            cpu_usage: UsageType::Percentage(0.),
-            memory_usage: UsageType::Percentage(0.),
-            threads: UsageType::RealValue(1, Unit::Count),
+            cpu_usage: 0.,    // TODO: REFACTOR TO USE USAGE TYPE
+            memory_usage: 0., // TODO: REFACTOR TO USE USAGE TYPE
+            threads: 0.,      // TODO: REFACTOR TO USE USAGE TYPE
+            pending_commands: vec![],
         }
     }
 }
@@ -69,8 +111,8 @@ pub type ServerId = String;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SystemState {
     pub timestamp: DateTime<Utc>,
-    pub collector_states: DashMap<CollectorId, CollectorState>,
-    pub interface_states: DashMap<InterfaceId, InterfaceState>,
+    pub collector_states: BTreeMap<CollectorId, CollectorState>,
+    pub interface_states: BTreeMap<InterfaceId, InterfaceState>,
     pub server_state: ServerState, // There is only 1 server in this model, but maybe we want
                                    // to have more servers in the future
 }
@@ -79,8 +121,8 @@ impl Default for SystemState {
     fn default() -> Self {
         SystemState {
             timestamp: Utc::now(),
-            collector_states: DashMap::new(),
-            interface_states: DashMap::new(),
+            collector_states: BTreeMap::new(),
+            interface_states: BTreeMap::new(),
             server_state: ServerState::default(),
         }
     }

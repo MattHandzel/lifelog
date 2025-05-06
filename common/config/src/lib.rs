@@ -6,15 +6,13 @@ use std::fs;
 use std::path::PathBuf;
 use utils::replace_home_dir_in_path;
 
-mod collector_config;
 mod policy_config;
 mod server_config;
 use dashmap::DashMap;
-pub use collector_config::*;
+use derive_more::From;
 pub use policy_config::*;
 pub use server_config::*;
-
-use derive_more::From;
+use std::collections::BTreeMap;
 
 // TODO: Implement default for all configs
 // TODO: Make it so that there is a default directory
@@ -325,15 +323,16 @@ pub struct CameraConfig {
     pub output_dir: PathBuf,
     #[serde(default = "default_camera_device")]
     pub device: String,
-    #[serde(default = "default_camera_resolution")]
-    pub resolution: Resolution,
+
+    pub resolution_x: u32,
+    pub resolution_y: u32,
     #[serde(default = "default_camera_fps")]
     pub fps: u32,
     #[serde(default = "default_timestamp_format")]
     pub timestamp_format: String,
 }
 
-#[lifelog_type(None)]
+//#[lifelog_type(None)]
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct Resolution {
     pub width: u32,
@@ -533,7 +532,8 @@ fn create_default_config() -> CollectorConfig {
             interval: default_camera_interval(),
             output_dir: default_camera_output_dir(),
             device: default_camera_device(),
-            resolution: default_camera_resolution(),
+            resolution_x: default_camera_resolution().width,
+            resolution_y: default_camera_resolution().height,
             fps: default_camera_fps(),
             timestamp_format: default_timestamp_format(),
         },
@@ -687,9 +687,9 @@ pub fn default_microphone_capture_interval_secs() -> u64 {
     300 // Default to capturing every 5 minutes (300 seconds)
 }
 
-#[lifelog_type(Config)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SystemConfig {
-    pub server: ServerConfig,
-    pub collectors: DashMap<CollectorId, CollectorConfig>,
-}
+//#[lifelog_type(Config)]
+//#[derive(Debug, Clone, Serialize, Deserialize)]
+//pub struct SystemConfig {
+//    pub server: ServerConfig,
+//    pub collectors: BTreeMap<String, CollectorConfig>,
+//}

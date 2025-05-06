@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use lifelog_core::LifelogMacroMetaDataType;
+use maplit::hashmap;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::{
+    borrow::Cow,
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
@@ -13,6 +14,8 @@ use walkdir::WalkDir;
 struct DataTypeDefinition {
     ident: String,
     fields: Vec<(String, String)>,
+    #[serde(default)]
+    variants: Vec<String>,
     metadata_type: LifelogMacroMetaDataType,
 }
 
@@ -30,178 +33,178 @@ struct ProtobufGenerator;
 
 impl CodeGenerator for TypeScriptGenerator {
     fn generate(&self, types: &[DataTypeDefinition]) -> Result<String> {
-        let mut output = String::from("// Auto-generated types\n\n");
+        let mut output = String::from("// Auto‐generated types\n\n");
 
         for dtype in types {
+            // enum as TS string‐union
+            if !dtype.variants.is_empty() {
+                let union = dtype
+                    .variants
+                    .iter()
+                    .map(|v| format!("\"{}\"", v))
+                    .collect::<Vec<_>>()
+                    .join(" | ");
+                output.push_str(&format!("export type {} = {};\n\n", dtype.ident, union));
+                continue;
+            }
+
+            // struct as interface
             output.push_str(&format!("export interface {} {{\n", dtype.ident));
             for (field_name, field_type) in &dtype.fields {
                 let ts_type = match field_type.as_str() {
-                    // Primitive types
-                    "bool" => "boolean".to_string(),
-                    "i8" | "i16" | "i32" | "i64" | "isize" => "number".to_string(),
-                    "u8" | "u16" | "u32" | "u64" | "usize" => "number".to_string(),
-                    "f32" | "f64" => "number".to_string(),
-                    "char" => "string".to_string(),
-                    "String" => "string".to_string(),
-                    "&str" => "string".to_string(),
-
-                    // Common Rust types
-                    "DateTime<Utc>" => "Date".to_string(),
-                    "::lifelog_core::uuid::Uuid" => "string".to_string(),
+                    "bool" => "boolean".into(),
+                    "i8" | "i16" | "i32" | "i64" | "isize" => "number".into(),
+                    "u8" | "u16" | "u32" | "u64" | "usize" => "number".into(),
+                    "f32" | "f64" => "number".into(),
+                    "char" | "String" | "&str" => "string".into(),
+                    "DateTime<Utc>" => "Date".into(),
+                    "::lifelog_core::uuid::Uuid" => "string".into(),
                     "::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>" => {
-                        "Date".to_string()
+                        "Date".into()
                     }
-                    "::lifelog_core::chrono::NaiveDate" => "Date".to_string(),
-                    "::lifelog_core::chrono::NaiveDateTime" => "Date".to_string(),
-                    "std::path::PathBuf" => "string".to_string(),
-                    "std::net::IpAddr" => "string".to_string(),
-                    "std::net::SocketAddr" => "string".to_string(),
-                    "std::collections::HashMap<String, String>" => {
-                        "Record<string, string>".to_string()
-                    }
-                    "std::collections::BTreeMap<String, String>" => {
-                        "Record<string, string>".to_string()
-                    }
-                    "Vec<u8>" => "Uint8Array".to_string(),
-                    "Vec<String>" => "string[]".to_string(),
-                    "Vec<i32>" => "number[]".to_string(),
-                    "Option<String>" => "string | null".to_string(),
-                    "Option<bool>" => "boolean | null".to_string(),
-                    "Option<i32>" => "number | null".to_string(),
-                    "Result<String, String>" => "string".to_string(), // Simplified
-                    "serde_json::Value" => "any".to_string(),
-                    // Check to see if the type is a custom data type
+                    "::lifelog_core::chrono::NaiveDate" => "Date".into(),
+                    "::lifelog_core::chrono::NaiveDateTime" => "Date".into(),
+                    "std::path::PathBuf" | "PathBuf" => "string".into(),
+                    "std::net::IpAddr" | "std::net::SocketAddr" => "string".into(),
+                    "std::collections::HashMap<String,String>"
+                    | "std::collections::BTreeMap<String,String>" => "Record<string,string>".into(),
+                    "Vec<u8>" => "Uint8Array".into(),
+                    "Vec<String>" => "string[]".into(),
+                    "Vec<i32>" => "number[]".into(),
+                    "Option<String>" => "string | null".into(),
+                    "Option<bool>" => "boolean | null".into(),
+                    "Option<i32>" => "number | null".into(),
+                    "serde_json::Value" => "any".into(),
                     t if types.iter().any(|d| d.ident == t) => t.to_string(),
-
-                    // Tuples and complex types
-                    t if t.starts_with('(') => "any".to_string(),
+                    t if t.starts_with('(') => "any".into(),
                     t if t.contains("Vec<") => {
-                        let inner = t.replace("Vec<", "").replace('>', "");
-                        match inner.as_str() {
-                            "u8" => "Uint8Array".to_string(),
-                            _ => format!("{}[]", map_ts_type(&inner)),
+                        let inner = t.trim_start_matches("Vec<").trim_end_matches('>');
+                        if inner == "u8" {
+                            "Uint8Array".into()
+                        } else {
+                            format!("{}[]", map_ts_type(inner))
                         }
                     }
                     t if t.contains("Option<") => {
-                        let inner = t.replace("Option<", "").replace('>', "");
-                        format!("{} | null", map_ts_type(&inner))
+                        let inner = t.trim_start_matches("Option<").trim_end_matches('>');
+                        format!("{} | null", map_ts_type(inner))
                     }
                     t if t.contains("HashMap<") || t.contains("BTreeMap<") => {
-                        "Record<string, any>".to_string()
+                        "Record<string, any>".into()
                     }
                     _ => {
-                        println!("Warning: Unsupported TypeScript type: {}", field_type);
-                        "any".to_string()
+                        println!("Warning: unsupported TS type `{}`", field_type);
+                        "any".into()
                     }
                 };
                 output.push_str(&format!("  {}: {};\n", field_name, ts_type));
             }
             output.push_str("}\n\n");
         }
+
         Ok(output)
     }
 }
 
 impl CodeGenerator for ProtobufGenerator {
     fn generate(&self, types: &[DataTypeDefinition]) -> Result<String> {
-        let mut output = String::from("syntax = \"proto3\";\npackage lifelog;\n\n");
-        output.push_str("import \"google/protobuf/timestamp.proto\";\n");
-        output.push_str("import \"google/protobuf/any.proto\";\n");
-        output.push_str("import \"google/protobuf/wrappers.proto\";\n\n");
+        let mut output = String::from(
+            r#"syntax = "proto3";
+package lifelog;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/wrappers.proto";
+
+"#,
+        );
 
         for dtype in types {
+            // enum as proto enum
+            if !dtype.variants.is_empty() {
+                output.push_str(&format!("enum {} {{\n", dtype.ident));
+                for (i, v) in dtype.variants.iter().enumerate() {
+                    output.push_str(&format!("  {} = {};\n", v, i));
+                }
+                output.push_str("}\n\n");
+                continue;
+            }
+
+            // struct as message
             output.push_str(&format!("message {} {{\n", dtype.ident));
             let mut field_number = 1;
-
             for (field_name, field_type) in &dtype.fields {
-                let (pb_type, is_repeated) = match field_type.as_str() {
-                    // Primitive types
-                    "bool" => ("bool".to_string(), false),
-                    "i8" | "i16" | "i32" => ("int32".to_string(), false),
-                    "i64" | "isize" => ("int64".to_string(), false),
-                    "u8" | "u16" | "u32" => ("uint32".to_string(), false),
-                    "u64" | "usize" => ("uint64".to_string(), false),
-                    "f32" => ("float".to_string(), false),
-                    "f64" => ("double".to_string(), false),
-                    "char" => ("string".to_string(), false),
-                    "String" => ("string".to_string(), false),
-                    "&str" => ("string".to_string(), false),
-
-                    // Common Rust types
-                    "DateTime<Utc>" => ("google.protobuf.Timestamp".to_string(), false),
-                    "::lifelog_core::uuid::Uuid" => ("string".to_string(), false),
-                    "::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>" => {
-                        ("google.protobuf.Timestamp".to_string(), false)
+                let (pb_type, repeated): (&str, bool) = match field_type.as_str() {
+                    "bool" => ("bool", false),
+                    "i8" | "i16" | "i32" => ("int32", false),
+                    "i64" | "isize" => ("int64", false),
+                    "u8" | "u16" | "u32" => ("uint32", false),
+                    "u64" | "usize" => ("uint64", false),
+                    "f32" => ("float", false),
+                    "f64" => ("double", false),
+                    "char" | "String" | "&str" => ("string", false),
+                    "PathBuf" => ("string", false),
+                    "DateTime<Utc>"
+                    | "::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>"
+                    | "::lifelog_core::chrono::NaiveDate"
+                    | "::lifelog_core::chrono::NaiveDateTime" => {
+                        ("google.protobuf.Timestamp", false)
                     }
-                    "::lifelog_core::chrono::NaiveDate" => {
-                        ("google.protobuf.Timestamp".to_string(), false)
-                    }
-                    "::lifelog_core::chrono::NaiveDateTime" => {
-                        ("google.protobuf.Timestamp".to_string(), false)
-                    }
-                    "std::path::PathBuf" => ("string".to_string(), false),
-                    "std::net::IpAddr" => ("string".to_string(), false),
-                    "std::net::SocketAddr" => ("string".to_string(), false),
-                    "std::collections::HashMap<String, String>" => {
-                        ("map<string, string>".to_string(), false)
-                    }
-                    "std::collections::BTreeMap<String, String>" => {
-                        ("map<string, string>".to_string(), false)
-                    }
-                    "Vec<u8>" => ("bytes".to_string(), false),
-                    "Vec<String>" => ("string".to_string(), true),
-                    "Vec<i32>" => ("int32".to_string(), true),
-                    "Option<String>" => ("google.protobuf.StringValue".to_string(), false),
-                    "Option<bool>" => ("google.protobuf.BoolValue".to_string(), false),
-                    "Option<i32>" => ("google.protobuf.Int32Value".to_string(), false),
-                    "Result<String, String>" => ("string".to_string(), false),
-                    "serde_json::Value" => ("google.protobuf.Any".to_string(), false),
-
-                    // Complex types
-                    t if t.starts_with('(') => ("string".to_string(), false),
+                    "::lifelog_core::uuid::Uuid" => ("string", false),
+                    "std::net::IpAddr" | "std::net::SocketAddr" => ("string", false),
+                    "std::collections::HashMap<String,String>"
+                    | "std::collections::BTreeMap<String,String>" => ("map<string,string>", false),
+                    "Vec<u8>" => ("bytes", false),
+                    "Vec<String>" => ("string", true),
+                    "Vec<i32>" => ("int32", true),
+                    "Option<String>" => ("google.protobuf.StringValue", false),
+                    "Option<bool>" => ("google.protobuf.BoolValue", false),
+                    "Option<i32>" => ("google.protobuf.Int32Value", false),
+                    "serde_json::Value" => ("google.protobuf.Any", false),
+                    t if t.starts_with('(') => ("string", false),
                     t if t.contains("Vec<") => {
-                        let inner = t.replace("Vec<", "").replace('>', "");
-                        (map_protobuf_type(&inner).to_string(), true)
+                        let inner = t.trim_start_matches("Vec<").trim_end_matches('>');
+                        (map_protobuf_type(inner), true)
                     }
                     t if t.contains("Option<") => {
-                        let inner = t.replace("Option<", "").replace('>', "");
+                        let inner = t.trim_start_matches("Option<").trim_end_matches('>');
                         (
-                            format!("google.protobuf.{}Value", map_wrapper_type(&inner)),
+                            // e.g. google.protobuf.StringValue
+                            &*format!("google.protobuf.{}Value", map_wrapper_type(inner)),
                             false,
                         )
                     }
                     t if t.contains("HashMap<") || t.contains("BTreeMap<") => {
-                        let parts: Vec<&str> = t.split('<').collect();
-                        if parts.len() > 1 {
-                            let inner = parts[1].replace('>', "");
-                            let key_value: Vec<&str> = inner.split(',').collect();
-                            if key_value.len() == 2 {
-                                let key_type = map_protobuf_type(key_value[0].trim());
-                                let value_type = map_protobuf_type(key_value[1].trim());
-                                (format!("map<{}, {}>", key_type, value_type), false)
-                            } else {
-                                ("map<string, string>".to_string(), false)
-                            }
+                        // parse key/value
+                        let parts: Vec<&str> = t.trim_end_matches('>').split('<').collect();
+                        let kv: Vec<&str> = parts[1].split(',').map(str::trim).collect();
+                        let key = if types.iter().any(|d| d.ident == kv[0]) {
+                            kv[0]
                         } else {
-                            ("map<string, string>".to_string(), false)
-                        }
+                            map_protobuf_type(kv[0])
+                        };
+                        let val = if types.iter().any(|d| d.ident == kv[1]) {
+                            kv[1]
+                        } else {
+                            map_protobuf_type(kv[1])
+                        };
+                        // leak to 'static str and then coerce to &str
+                        let leaked: &'static mut str =
+                            Box::leak(format!("map<{},{}>", key, val).into_boxed_str());
+                        (&*leaked, false)
                     }
-                    // Check to see if the type is a custom data type
-                    t if types.iter().any(|d| d.ident == t) => (t.to_string(), false),
-                    _ => {
-                        println!("Warning: Unsupported Protobuf type: {}", field_type);
-                        ("string".to_string(), false)
-                    }
+                    t if types.iter().any(|d| d.ident == t) => (t, false),
+                    other => panic!("Unsupported Protobuf type `{}`", other),
                 };
 
-                if is_repeated {
+                if repeated {
                     output.push_str(&format!(
-                        "\trepeated {} {} = {};\n",
+                        "  repeated {} {} = {};\n",
                         pb_type, field_name, field_number
                     ));
                 } else {
                     output.push_str(&format!(
-                        "\t{} {} = {};\n",
+                        "  {} {} = {};\n",
                         pb_type, field_name, field_number
                     ));
                 }
@@ -210,24 +213,22 @@ impl CodeGenerator for ProtobufGenerator {
             output.push_str("}\n\n");
         }
 
-        // Main LifelogData message
+        // top‐level container for all Data‐annotated types
         output.push_str("message LifelogData {\n");
-        let mut field_number = 0;
-        for dtype in types {
-            match dtype.metadata_type {
-                LifelogMacroMetaDataType::Data => {
-                    field_number += 1;
-                    output.push_str(&format!(
-                        "\trepeated {} {} = {};\n",
-                        dtype.ident,
-                        dtype.ident.to_lowercase(),
-                        field_number
-                    ))
-                }
-                _ => println!("Skipping non-data type: {}", dtype.ident),
-            }
+        let mut idx = 1;
+        for dtype in types
+            .iter()
+            .filter(|d| matches!(d.metadata_type, LifelogMacroMetaDataType::Data))
+        {
+            output.push_str(&format!(
+                "  repeated {} {} = {};\n",
+                dtype.ident,
+                dtype.ident.to_lowercase(),
+                idx,
+            ));
+            idx += 1;
         }
-        output.push_str("}\n\n");
+        output.push_str("}\n");
 
         Ok(output)
     }
@@ -275,12 +276,8 @@ fn map_wrapper_type(ty: &str) -> &str {
 fn find_metadata_files(root: &Path) -> Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     for entry in WalkDir::new(root).into_iter().filter_map(|e| e.ok()) {
-        if entry
-            .file_name()
-            .to_str()
-            .expect("Unable to convert file name to string while walking through directory")
-            .contains(".type.json")
-        {
+        let name = entry.file_name().to_string_lossy();
+        if name.contains(".type.json") {
             files.push(entry.path().to_path_buf());
         }
     }
@@ -289,16 +286,14 @@ fn find_metadata_files(root: &Path) -> Result<Vec<PathBuf>> {
 
 fn parse_metadata_files(files: &[PathBuf]) -> Result<Vec<DataTypeDefinition>> {
     let mut types = HashMap::new();
-
     for file in files {
         let content = fs::read_to_string(file)?;
         for line in content.lines() {
             let dtype: DataTypeDefinition = serde_json::from_str(line)
-                .with_context(|| format!("Failed to parse line in {}", file.display()))?;
+                .with_context(|| format!("failed to parse {}", file.display()))?;
             types.insert(dtype.ident.clone(), dtype);
         }
     }
-
     Ok(types.into_values().collect())
 }
 
@@ -307,12 +302,11 @@ fn generate_and_write(
     generators: &[(String, Box<dyn CodeGenerator>)],
     output_paths: &HashMap<String, PathBuf>,
 ) -> Result<()> {
-    for (lang, generator) in generators {
+    for (lang, gen) in generators {
         if let Some(path) = output_paths.get(lang) {
-            let content = generator.generate(types)?;
-            println!("Writing to {}", path.display());
-            fs::write(path, content)
-                .with_context(|| format!("Failed to write {}", path.display()))?;
+            let out = gen.generate(types)?;
+            println!("Writing {}", path.display());
+            fs::write(path, out).with_context(|| format!("failed to write {}", path.display()))?;
         }
     }
     Ok(())
@@ -321,21 +315,20 @@ fn generate_and_write(
 fn main() -> Result<()> {
     println!("cargo:rerun-if-changed=../../");
     let config = Config {
-        output_paths: maplit::hashmap! {
+        output_paths: hashmap! {
             "typescript".into() => PathBuf::from("../../interface/src/auto_generated_types.ts"),
-            "protobuf".into() => PathBuf::from("../../proto/lifelog_types.proto"),
+            "protobuf".into()  => PathBuf::from("../../proto/lifelog_types.proto"),
         },
     };
 
-    let generators: Vec<(String, Box<dyn CodeGenerator>)> = vec![
+    let gens: Vec<(String, Box<dyn CodeGenerator>)> = vec![
         ("typescript".into(), Box::new(TypeScriptGenerator)),
         ("protobuf".into(), Box::new(ProtobufGenerator)),
     ];
 
-    let mut metadata_files = find_metadata_files(Path::new(".."))?;
-    metadata_files.sort();
-    let types = parse_metadata_files(&metadata_files)?;
-    generate_and_write(&types, &generators, &config.output_paths)?;
-
+    let mut files = find_metadata_files(Path::new(".."))?;
+    files.sort();
+    let types = parse_metadata_files(&files)?;
+    generate_and_write(&types, &gens, &config.output_paths)?;
     Ok(())
 }

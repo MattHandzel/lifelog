@@ -1,17 +1,12 @@
-use lifelog_core::*;
+// src/lib.rs
+use lifelog_core::LifelogMacroMetaDataType;
 use proc_macro::TokenStream;
-use quote::quote;
-use quote::ToTokens;
-use std::env;
-use std::fs::OpenOptions;
-use std::io::Write;
-use std::path::PathBuf;
+use quote::{quote, ToTokens};
+use serde_json::json;
+use std::{env, fs::OpenOptions, io::Write, path::PathBuf};
 use syn::{
-    parse::{Parse, ParseStream},
-    parse_macro_input, parse_quote,
-    punctuated::Punctuated,
-    token::Comma,
-    DeriveInput, Field, FieldsNamed, Ident, ItemStruct, Result, Token,
+    parse::Parse, parse::ParseStream, parse_macro_input, parse_quote, Fields, Ident, Item,
+    ItemEnum, ItemStruct, Result,
 };
 
 struct MacroOptions {
@@ -20,7 +15,7 @@ struct MacroOptions {
 
 impl Parse for MacroOptions {
     fn parse(input: ParseStream) -> Result<Self> {
-        let type_ident: Ident = input.parse().expect("Failed parsing input to macros");
+        let type_ident: Ident = input.parse()?;
         let datatype = match type_ident.to_string().as_str() {
             "Config" => LifelogMacroMetaDataType::Config,
             "Data" => LifelogMacroMetaDataType::Data,
@@ -33,115 +28,164 @@ impl Parse for MacroOptions {
 #[proc_macro_attribute]
 pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     let options = parse_macro_input!(attr as MacroOptions);
+    let original = item.clone();
+    let ast = parse_macro_input!(item as Item);
 
-    // Parse the original struct
-    let mut struct_ast = parse_macro_input!(item as ItemStruct);
-
-    // Only proceed if it's a named‐field struct
-    let named: &mut FieldsNamed = match &mut struct_ast.fields {
-        syn::Fields::Named(f) => f,
+    // build metadata
+    let (ident_str, fields_meta, variants_meta) = match &ast {
+        Item::Struct(s) => {
+            let f = if let Fields::Named(named) = &s.fields {
+                named
+                    .named
+                    .iter()
+                    .filter_map(|f| {
+                        f.ident.as_ref().map(|i| {
+                            let ty = f.ty.to_token_stream().to_string().replace(' ', "");
+                            (i.to_string(), ty)
+                        })
+                    })
+                    .collect()
+            } else {
+                Vec::new()
+            };
+            (s.ident.to_string(), f, Vec::new())
+        }
+        Item::Enum(e) => {
+            let v = e.variants.iter().map(|v| v.ident.to_string()).collect();
+            (e.ident.to_string(), Vec::new(), v)
+        }
         _ => {
-            return syn::Error::new_spanned(
-                &struct_ast.ident,
-                "#[lifelog_type] only supports structs with named fields",
-            )
-            .to_compile_error()
-            .into();
+            return syn::Error::new_spanned(&ast, "only structs or enums")
+                .to_compile_error()
+                .into();
         }
     };
 
-    let named: &mut syn::FieldsNamed = match &mut struct_ast.fields {
-        syn::Fields::Named(f) => f,
-        _ => {
-            panic!("Expected named fields")
-        }
-    };
-    // Prepare any extra fields
-    let mut extra: Punctuated<Field, Comma> = Punctuated::new();
-    if let LifelogMacroMetaDataType::Data = options.datatype {
-        named.named.insert(
-            0,
-            parse_quote! {
-                pub uuid: ::lifelog_core::uuid::Uuid
-            },
-        );
-        named.named.insert(
-            1,
-            parse_quote! {
-                pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>
-            },
-        );
-    }
-
-    // Prepend extra fields so they appear before the user’s fields,
-    // or push them after if you prefer.
-    for f in extra.into_iter().rev() {
-        named.named.insert(0, f);
-    }
-
-    // Write metadata JSON
-    let ident = &struct_ast.ident;
-    let fields_meta: Vec<(&Ident, String)> = named
-        .named
-        .iter()
-        .filter_map(|f| {
-            f.ident.as_ref().map(|i| {
-                let ty = &f.ty;
-                (i, ty.into_token_stream().to_string().replace(" ", ""))
-            })
-        })
-        .collect();
-    let meta = serde_json::json!({
-        "ident": ident.to_string(),
-        "fields": fields_meta.iter().map(|(i,t)| [i.to_string(), t.clone()]).collect::<Vec<_>>(),
-        "metadata_type" : match options.datatype {
+    let meta = json!({
+        "ident": ident_str,
+        "fields": fields_meta,
+        "variants": variants_meta,
+        "metadata_type": match options.datatype {
             LifelogMacroMetaDataType::Config => "Config",
-            LifelogMacroMetaDataType::Data => "Data",
-            LifelogMacroMetaDataType::None => "None",
-        },
+            LifelogMacroMetaDataType::Data   => "Data",
+            LifelogMacroMetaDataType::None   => "None",
+        }
     });
-    let out_dir = PathBuf::from(
-        env::var("CARGO_MANIFEST_DIR")
-            .expect("Unable to get CARGO_MANIFEST_DIR environment variable"),
-    );
-    let meta_path = out_dir.join(format!(".{}.type.json", &struct_ast.ident));
+
+    let out_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let mut file = OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
-        .open(&meta_path)
-        .expect("could not open metadata file");
-    writeln!(file, "{}", meta).expect("failed to write metadata");
+        .open(out_dir.join(format!(".{}.type.json", meta["ident"].as_str().unwrap())))
+        .unwrap();
+    writeln!(file, "{}", meta).unwrap();
 
-    // If Data, implement DataType
-    let impl_datatype = if let LifelogMacroMetaDataType::Data = options.datatype {
-        let name = &struct_ast.ident;
-        Some(quote! {
-            impl ::lifelog_core::DataType for #name {
-                fn uuid(&self) -> ::lifelog_core::uuid::Uuid {
-                    self.uuid
-                }
-                fn timestamp(&self) -> ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc> {
-                    self.timestamp
-                }
+    // re-emit with struct impls or verbatim enum
+    let expanded = match ast {
+        Item::Struct(mut s) => {
+            // named fields only
+            let named = if let Fields::Named(n) = &mut s.fields {
+                n
+            } else {
+                return syn::Error::new_spanned(&s.ident, "only named structs")
+                    .to_compile_error()
+                    .into();
+            };
+
+            // inject uuid/timestamp on Data
+            if let LifelogMacroMetaDataType::Data = options.datatype {
+                named
+                    .named
+                    .insert(0, parse_quote! { pub uuid: ::lifelog_core::uuid::Uuid });
+                named.named.insert(
+                    1,
+                    parse_quote! { pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc> },
+                );
             }
-        })
-    } else {
-        None
-    };
 
-    // Re-emit the struct exactly as parsed (with added fields) plus impl
-    let attrs = &struct_ast.attrs;
-    let vis = &struct_ast.vis;
-    let generics = &struct_ast.generics;
-    let fields = &struct_ast.fields;
-    let where_clause = &struct_ast.generics.where_clause;
+            let ident = &s.ident;
+            let impl_datatype = if let LifelogMacroMetaDataType::Data = options.datatype {
+                quote! {
+                    impl ::lifelog_core::DataType for #ident {
+                        fn uuid(&self) -> ::lifelog_core::uuid::Uuid { self.uuid }
+                        fn timestamp(&self) -> ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc> { self.timestamp }
+                    }
+                }
+            } else {
+                quote! {}
+            };
 
-    let expanded = quote! {
-        #(#attrs)*
-        #vis struct #ident #generics #fields #where_clause
+            // From<proto> → Self
+            let from_proto_fields = named.named.iter().map(|f| {
+                let n = f.ident.as_ref().unwrap();
+                if n == "uuid" {
+                    quote! { uuid: ::lifelog_core::uuid::Uuid::parse_str(&p.uuid).expect("invalid uuid") }
+                } else if n == "timestamp" {
+                    quote! {
+                        timestamp: {
+                            let ts = p.timestamp.unwrap_or_default();
+                            ::lifelog_core::chrono::DateTime::<::lifelog_core::chrono::Utc>::from_utc(
+                                ::lifelog_core::chrono::NaiveDateTime::from_timestamp(ts.seconds, ts.nanos as u32),
+                                ::lifelog_core::chrono::Utc,
+                            )
+                        }
+                    }
+                } else {
+                    quote! { #n: p.#n.into() }
+                }
+            });
+            let from_impl = quote! {
+                impl From<lifelog_proto::#ident> for #ident {
+                    fn from(p: lifelog_proto::#ident) -> Self {
+                        #ident { #(#from_proto_fields),* }
+                    }
+                }
+            };
 
-        #impl_datatype
+            // Self → proto
+            let into_proto_fields = named.named.iter().map(|f| {
+                let n = f.ident.as_ref().unwrap();
+                if n == "uuid" {
+                    quote! { uuid: s.uuid.to_string() }
+                } else if n == "timestamp" {
+                    quote! {
+                        timestamp: Some(::prost_types::Timestamp {
+                            seconds: s.timestamp.timestamp(),
+                            nanos: s.timestamp.timestamp_subsec_nanos() as i32,
+                        })
+                    }
+                } else {
+                    quote! { #n: s.#n.into() }
+                }
+            });
+            let into_impl = quote! {
+                impl From<#ident> for lifelog_proto::#ident {
+                    fn from(s: #ident) -> Self {
+                        lifelog_proto::#ident { #(#into_proto_fields),* }
+                    }
+                }
+            };
+
+            let attrs = &s.attrs;
+            let vis = &s.vis;
+            let gens = &s.generics;
+            let fields = &s.fields;
+            let where_clause = &s.generics.where_clause;
+            quote! {
+                #(#attrs)*
+                #vis struct #ident #gens #fields #where_clause
+
+                #impl_datatype
+                #from_impl
+                #into_impl
+            }
+        }
+        Item::Enum(_) => {
+            // emit enums verbatim
+            proc_macro2::TokenStream::from(original)
+        }
+        _ => unreachable!(),
     };
 
     expanded.into()

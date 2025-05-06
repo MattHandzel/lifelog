@@ -5,14 +5,14 @@ syntax = "proto3";
 package lifelog;
 
 import "google/protobuf/timestamp.proto";
-import "lifelog_types.proto";  // defines Config, LifelogData, etc.
+import "lifelog_types.proto";
 
 // -----------------------------------------------------------------------------
 // Common RPC request/response messages
 // -----------------------------------------------------------------------------
 
 message RegisterCollectorRequest {
-  Config config = 1;
+  CollectorConfig config = 1;
 }
 message RegisterCollectorResponse {
   bool success = 1;
@@ -21,7 +21,7 @@ message RegisterCollectorResponse {
 
 message GetCollectorConfigRequest {}
 message GetCollectorConfigResponse {
-  Config config = 1;
+  CollectorConfig config = 1;
 }
 
 
