@@ -159,17 +159,19 @@ impl LifelogServerService for Server {
         &self,
         request: TonicRequest<RegisterCollectorRequest>,
     ) -> Result<TonicResponse<RegisterCollectorResponse>, TonicStatus> {
-        let collector_ip = request.remote_addr();
         let inner = request.into_inner();
-        if let None = collector_ip {
-            panic!("Received a register collector request from unknown IP");
-        }
-        let ip = collector_ip.unwrap();
-        println!("Received a register collector request from: {:?}", ip);
         let collector_config: CollectorConfig = inner.config.unwrap().into();
+        let collector_ip = format!(
+            "{}:{}",
+            collector_config.host.clone(),
+            collector_config.port.clone()
+        );
+        println!(
+            "Received a register collector request from: {:?}",
+            collector_ip
+        );
 
-        let endpoint =
-            tonic::transport::Endpoint::from_shared("http://".to_owned() + &ip.to_string());
+        let endpoint = tonic::transport::Endpoint::from_shared(collector_ip.clone());
         match endpoint {
             Err(e) => Err(TonicStatus::internal(format!(
                 "Failed to create endpoint: {}",
@@ -185,7 +187,7 @@ impl LifelogServerService for Server {
 
                 let collector = RegisteredCollector {
                     id: collector_config.id.clone(),
-                    address: ip.to_string(),
+                    address: collector_ip.to_string(),
                     grpc_client: client.clone(),
                 };
                 println!("Registering collector: {:?}", collector);

@@ -40,6 +40,7 @@ surrealdb = "2.2.2"
 mobc = "0.8.5"
 derive_more = { version = "2.0.1", features = ["full"] }
 mobc-surrealdb = "0.2.0"
+tonic-reflection = { version = "0.13.1", features = ["server"] }
 
 #gRPC
 tonic = "0.13.0"
@@ -49,22 +50,14 @@ prost-types = { version = "0.13.5"}
 [build-dependencies]
 tonic-build = "0.13"
 
-[dependencies.uuid]
-version = "1.16.0"
-# Lets you generate random UUIDs
-features = [
-    "v6",
-]
-
 [target.'cfg(target_os = "linux")'.dependencies]
 rscam = { version = "0.5.5"}
-
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tempfile = "3.8.1"
 
 [features]
-dev= []
+dev= ["config/dev"]
 
 [dev-dependencies]
 anyhow = "1"

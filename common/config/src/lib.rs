@@ -22,6 +22,9 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
 pub struct CollectorConfig {
     pub id: String, // This is a human-readable ID for the collector, like "laptop" or "phone"
+    pub host: String,
+    pub port: u32, //TODO: Refactor code base so this can be u16 instead of u32, this will be the
+    //port gRPC server will run on
     pub timestamp_format: String,
     pub screen: ScreenConfig,
     pub camera: CameraConfig,
@@ -442,6 +445,21 @@ pub fn load_config() -> CollectorConfig {
     #[cfg(feature = "dev")]
     let config_path: PathBuf = "dev-config.toml".into();
 
+    #[cfg(feature = "dev")]
+    {
+        if !config_path.exists() {
+            // If this doesn't exist, create a new config using default
+            let default_config = create_default_config();
+            let config_str = toml::to_string(&default_config).unwrap_or_else(|e| {
+                println!("Warning: Failed to serialize default config: {}", e);
+                "".to_string()
+            });
+            fs::write(&config_path, config_str).unwrap();
+        } else {
+            println!("Config file exists");
+        }
+    }
+
     #[cfg(not(feature = "dev"))]
     let config_path: PathBuf = [home_dir.to_str().unwrap(), ".config/lifelog/config.toml"]
         .iter()
@@ -454,7 +472,6 @@ pub fn load_config() -> CollectorConfig {
         panic!("Config file does not exist at {:?}", config_path);
     }
 
-    // Try to read the config file, but provide defaults if it doesn't exist
     let config_str = match fs::read_to_string(&config_path) {
         Ok(content) => content,
         Err(e) => {
@@ -485,32 +502,34 @@ pub fn load_config() -> CollectorConfig {
     match toml::from_str::<CollectorConfig>(&replace_home_dir_in_path(config_str)) {
         Ok(config) => config,
         Err(e) => {
-            println!(
-                "Failed to parse config.toml: {}. Using default config instead.",
-                e
-            );
-            let default_config = create_default_config();
+            panic!("Failed to parse config file: {}", e);
 
-            // Try to save the default config to help the user
-            let config_str = toml::to_string(&default_config).unwrap_or_else(|e| {
-                println!("Warning: Failed to serialize default config: {}", e);
-                "".to_string()
-            });
-
-            let backup_path = config_path.with_extension("toml.bak");
-            if let Err(e) = fs::copy(&config_path, &backup_path) {
-                println!("Warning: Failed to create backup of original config: {}", e);
-            } else {
-                println!("Created backup of original config at {:?}", backup_path);
-            }
-
-            if let Err(e) = fs::write(&config_path, &config_str) {
-                println!("Warning: Failed to write fixed config: {}", e);
-            } else {
-                println!("Wrote fixed config to {:?}", config_path);
-            }
-
-            default_config
+            //println!(
+            //    "Failed to parse config.toml: {}. Using default config instead.",
+            //    e
+            //);
+            //let default_config = create_default_config();
+            //
+            //// Try to save the default config to help the user
+            //let config_str = toml::to_string(&default_config).unwrap_or_else(|e| {
+            //    println!("Warning: Failed to serialize default config: {}", e);
+            //    "".to_string()
+            //});
+            //
+            //let backup_path = config_path.with_extension("toml.bak");
+            //if let Err(e) = fs::copy(&config_path, &backup_path) {
+            //    println!("Warning: Failed to create backup of original config: {}", e);
+            //} else {
+            //    println!("Created backup of original config at {:?}", backup_path);
+            //}
+            //
+            //if let Err(e) = fs::write(&config_path, &config_str) {
+            //    println!("Warning: Failed to write fixed config: {}", e);
+            //} else {
+            //    println!("Wrote fixed config to {:?}", config_path);
+            //}
+            //
+            //default_config
         }
     }
 }
@@ -518,14 +537,17 @@ pub fn load_config() -> CollectorConfig {
 // Function to create a default configuration
 fn create_default_config() -> CollectorConfig {
     let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
+    let lifelog_dir = home_dir.join("lifelog");
 
     CollectorConfig {
         id: "implement_this".to_string(),
+        host: "127.0.0.1".to_string(),
+        port: 7190,
         timestamp_format: default_timestamp_format(),
         screen: ScreenConfig {
             enabled: true,
             interval: default_screen_interval(),
-            output_dir: home_dir.join("lifelog_screenshots"),
+            output_dir: lifelog_dir.join("screen"),
             program: default_screen_program(),
             timestamp_format: default_timestamp_format(),
         },
@@ -541,13 +563,13 @@ fn create_default_config() -> CollectorConfig {
         },
         //server: ServerConfig {
         //    host: default_server_ip(),
-        //    port: default_server_port(),
+        //    port: , features = default_server_port(),
         //    database_path: default_database_path(),
         //    database_name: default_database_name(),
         //},
         microphone: MicrophoneConfig {
             enabled: default_true(),
-            output_dir: home_dir.join("lifelog_microphone"),
+            output_dir: lifelog_dir.join("microphone"),
             sample_rate: default_microphone_sample_rate(),
             chunk_duration_secs: default_microphone_chunk_duration_secs(),
             timestamp_format: default_timestamp_format(),
@@ -563,7 +585,7 @@ fn create_default_config() -> CollectorConfig {
         processes: ProcessesConfig {
             enabled: default_true(),
             interval: default_processes_interval(),
-            output_dir: home_dir.join("lifelog_processes"),
+            output_dir: lifelog_dir.join("processes"),
         },
         //system_performance: SystemPerformanceConfig {
         //    enabled: default_true(),
@@ -666,6 +688,7 @@ impl ConfigManager {
     pub fn save(&self) -> Result<(), std::io::Error> {
         let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
 
+        // Dev feature is used for testing
         #[cfg(feature = "dev")]
         let config_path: PathBuf = "dev-config.toml".into();
 

@@ -379,3 +379,54 @@ impl Collector<LoggerHandle> {
         self.start().await
     }
 }
+
+#[tonic::async_trait]
+impl CollectorService for Collector<LoggerHandle> {
+    async fn get_state(
+        &self,
+        _request: tonic::Request<GetStateRequest>,
+    ) -> Result<tonic::Response<GetCollectorStateResponse>, tonic::Status> {
+        // we already have a helper that builds a CollectorState for us
+        //let state: lifelog_proto::CollectorState = self._get_state().into();
+        let state = lifelog_proto::CollectorState::default();
+
+        Ok(tonic::Response::new(GetCollectorStateResponse {
+            state: Some(state),
+        }))
+    }
+
+    async fn get_config(
+        &self,
+        _request: tonic::Request<GetCollectorConfigRequest>,
+    ) -> Result<tonic::Response<GetCollectorConfigResponse>, tonic::Status> {
+        //  CollectorConfig ↦ proto type conversion already used in `handshake`
+        //  (so we can rely on the existing `Into` impl). :contentReference[oaicite:2]{index=2}:contentReference[oaicite:3]{index=3}
+        let cfg: lifelog_proto::CollectorConfig = (*self.config).clone().into();
+
+        Ok(tonic::Response::new(GetCollectorConfigResponse {
+            config: Some(cfg),
+        }))
+    }
+
+    async fn set_config(
+        &self,
+        request: tonic::Request<SetCollectorConfigRequest>,
+    ) -> Result<tonic::Response<SetCollectorConfigResponse>, tonic::Status> {
+        // TODO: Implement Full hot‑reload; for now we just acknowledge receipt.
+
+        Ok(tonic::Response::new(SetCollectorConfigResponse {
+            success: true,
+        }))
+    }
+
+    // TODO: Refactor this so it's a stream?
+    async fn get_data(
+        &self,
+        _request: tonic::Request<GetDataRequest>,
+    ) -> Result<tonic::Response<GetDataResponse>, tonic::Status> {
+        // When data‑retrieval is wired up, replace this with a real stream.
+        // For now we return an empty stream so the call completes gracefully.
+
+        Ok(tonic::Response::new(GetDataResponse { data: vec![] }))
+    }
+}
