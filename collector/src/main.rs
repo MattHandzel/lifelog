@@ -127,7 +127,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     use tokio::try_join;
 
-    try_join!(server_handle, collector_handle)?; // or handle each individually
+    try_join!(server_handle)?; // or handle each individually
 
     println!("collector started successfully.");
     Ok(())

@@ -81,6 +81,42 @@ pub enum ServerError {
 //    }
 //}
 
+#[derive(Clone)]
+pub struct ServerHandle {
+    pub server: Arc<RwLock<Server>>,
+}
+
+impl ServerHandle {
+    pub fn new(server: Arc<RwLock<Server>>) -> Self {
+        Self { server: server }
+    }
+
+    pub async fn get_state(&self) -> SystemState {
+        let server = self.server.read().await;
+        server.get_state().await // TODO: This could be refacotred to just use the system state
+                                 // instead of recomputing the state. There is a discrepency in use.
+    }
+    pub async fn get_policy(&self) -> Arc<RwLock<ServerPolicy>> {
+        let server = self.server.read().await;
+        server.get_policy()
+    }
+
+    pub async fn r#loop(&self) {
+        let server = self.server.write().await;
+        server.r#loop().await;
+    }
+
+    pub async fn get_db(&self) -> Surreal<Client> {
+        let server = self.server.read().await;
+        server.db.clone()
+    }
+
+    pub async fn register_collector(&self, collector: RegisteredCollector) {
+        let mut server = self.server.write().await;
+        server.register_collectors.write().await.push(collector);
+    }
+}
+
 // TDOO: ADD A CHANNEL FOR COMMS
 #[derive(Debug, Clone)]
 pub struct Server {
@@ -140,12 +176,12 @@ impl Server {
     }
 }
 
-//struct LifelogServerServiceGRPCServer {
-//    server: Arc<RwLock<Server>>,
-//}
+pub struct GRPCServerLifelogServerService {
+    pub server: ServerHandle,
+}
 
 #[tonic::async_trait]
-impl LifelogServerService for Server {
+impl LifelogServerService for GRPCServerLifelogServerService {
     async fn register_collector(
         &self,
         request: TonicRequest<RegisterCollectorRequest>,
@@ -164,12 +200,17 @@ impl LifelogServerService for Server {
 
         let endpoint = tonic::transport::Endpoint::from_shared(collector_ip.clone());
         match endpoint {
-            Err(e) => Err(TonicStatus::internal(format!(
-                "Failed to create endpoint: {}",
-                e
-            ))),
+            Err(ref e) => {
+                println!("Endpoint: {:?}", endpoint);
+                Err(TonicStatus::internal(format!(
+                    "Failed to create endpoint: {}",
+                    e
+                )))
+            }
             Ok(endpoint) => {
+                println!("Trying to connect to endpoint: {:?}", endpoint);
                 let endpoint = endpoint.connect_timeout(time::Duration::from_secs(10));
+
 
                 let channel = endpoint.connect().await.map_err(|e| {
                     TonicStatus::internal(format!("Failed to connect to endpoint: {}", e))
@@ -182,10 +223,7 @@ impl LifelogServerService for Server {
                     grpc_client: client.clone(),
                 };
                 println!("Collector: {:?}", collector);
-                self.register_collectors
-                    .write()
-                    .await
-                    .push(collector.clone());
+                self.server.register_collector(collector.clone()).await;
                 println!("Registering collector: {:?}", collector);
 
                 Ok(TonicResponse::new(RegisterCollectorResponse {
@@ -264,10 +302,10 @@ impl LifelogServerService for Server {
         _request: tonic::Request<GetStateRequest>,
     ) -> Result<TonicResponse<GetSystemStateResponse>, TonicStatus> {
         println!("Received a get state request!");
-        let state = self.state.read().await.clone();
+        let state = self.server.get_state().await;
         Ok(TonicResponse::new(GetSystemStateResponse {
-            state: Some(ServerState::default().into()), // TODO: replace this with an .into for the
-                                                        // server state
+            state: Some(state.server_state.into()), // TODO: Replace this with the system state
+                                                    // instead of the server state (i need some work with the proto files)
         }))
     }
 }

@@ -2,7 +2,8 @@ use chrono::{DateTime, Utc};
 use config::ServerConfig;
 use lifelog_core::uuid::Uuid;
 use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
-
+use lifelog_server::server::GRPCServerLifelogServerService;
+use lifelog_server::server::ServerHandle as LifelogServerHandle;
 
 use lifelog_proto::FILE_DESCRIPTOR_SET;
 use lifelog_server::server::Server as LifelogServer;
@@ -25,14 +26,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let time: DateTime<Utc> = Utc::now();
     let uuid = Uuid::new_v4();
 
-    let cloned_server = server.clone();
+    let server_handle =
+        LifelogServerHandle::new(std::sync::Arc::new(tokio::sync::RwLock::new(server)));
+    let server_handle2 = server_handle.clone();
+
     tokio::task::spawn(async move {
-        cloned_server.r#loop().await;
+        server_handle.r#loop().await;
     });
 
     TonicServer::builder()
         .add_service(reflection_service)
-        .add_service(LifelogServerServiceServer::new(server))
+        .add_service(LifelogServerServiceServer::new(
+            GRPCServerLifelogServerService {
+                server: server_handle2,
+            },
+        ))
         .serve(addr)
         .await?;
 

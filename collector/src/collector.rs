@@ -22,94 +22,6 @@ use lifelog_proto::{
     SetCollectorConfigRequest, SetCollectorConfigResponse,
 };
 
-//impl From<config::CollectorConfig> for lifelog_proto::Config {
-//    fn from(config: config::CollectorConfig) -> Self {
-//        lifelog_proto::Config {
-//            timestamp_format: config.timestamp_format,
-//            screen: Some(config.screen.into()),
-//            microphone: Some(config.microphone.into()),
-//            hyprland: Some(config.hyprland.into()),
-//            processes: Some(config.processes.into()),
-//            camera: Some(config.camera.into()),
-//        }
-//    }
-//}
-//
-//impl From<config::ScreenConfig> for lifelog_proto::ScreenConfig {
-//    fn from(config: config::ScreenConfig) -> Self {
-//        lifelog_proto::ScreenConfig {
-//            enabled: config.enabled,
-//            interval: config.interval,
-//            output_dir: config.output_dir.to_str().unwrap_or("").to_string(),
-//            program: config.program,
-//            timestamp_format: config.timestamp_format,
-//        }
-//    }
-//}
-//
-//impl From<config::MicrophoneConfig> for lifelog_proto::MicrophoneConfig {
-//    fn from(config: config::MicrophoneConfig) -> Self {
-//        lifelog_proto::MicrophoneConfig {
-//            enabled: config.enabled,
-//            output_dir: config.output_dir.to_str().unwrap_or("").to_string(),
-//            sample_rate: config.sample_rate,
-//            chunk_duration_secs: config.chunk_duration_secs,
-//            timestamp_format: config.timestamp_format,
-//            bits_per_sample: config.bits_per_sample,
-//            channels: config.channels,
-//            capture_interval_secs: config.capture_interval_secs,
-//        }
-//    }
-//}
-//
-//impl From<config::HyprlandConfig> for lifelog_proto::HyprlandConfig {
-//    fn from(config: config::HyprlandConfig) -> Self {
-//        lifelog_proto::HyprlandConfig {
-//            enabled: config.enabled,
-//            interval: config.interval,
-//            output_dir: config.output_dir.to_str().unwrap_or("").to_string(),
-//            log_clients: config.log_clients,
-//            log_activewindow: config.log_activewindow,
-//            log_workspace: config.log_workspace,
-//            log_active_monitor: config.log_active_monitor,
-//            log_devices: config.log_devices,
-//        }
-//    }
-//}
-//
-//impl From<config::CameraConfig> for lifelog_proto::CameraConfig {
-//    fn from(config: config::CameraConfig) -> Self {
-//        lifelog_proto::CameraConfig {
-//            enabled: config.enabled,
-//            interval: config.interval,
-//            output_dir: config.output_dir.to_str().unwrap_or("").to_string(),
-//            device: config.device,
-//            resolution: Some(config.resolution.into()),
-//            fps: config.fps,
-//            timestamp_format: config.timestamp_format,
-//        }
-//    }
-//}
-//
-//impl From<config::Resolution> for lifelog_proto::Resolution {
-//    fn from(resolution: config::Resolution) -> Self {
-//        lifelog_proto::Resolution {
-//            width: resolution.width,
-//            height: resolution.height,
-//        }
-//    }
-//}
-//
-//impl From<config::ProcessesConfig> for lifelog_proto::ProcessesConfig {
-//    fn from(config: config::ProcessesConfig) -> Self {
-//        lifelog_proto::ProcessesConfig {
-//            enabled: config.enabled,
-//            interval: config.interval,
-//            output_dir: config.output_dir.to_str().unwrap_or("").to_string(),
-//        }
-//    }
-//}
-
 #[derive(Debug)]
 pub enum CollectorError {
     LoggerSetupError(String, Box<dyn std::error::Error + Send + Sync>),
@@ -208,6 +120,10 @@ impl CollectorHandle {
 
     pub async fn get_config(&self) -> Arc<config::CollectorConfig> {
         self.collector.read().await.config.clone()
+    }
+
+    pub async fn get_state(&self) -> CollectorState {
+        self.collector.read().await._get_state()
     }
 }
 
@@ -427,7 +343,7 @@ impl CollectorService for GRPCServerCollectorService {
     ) -> Result<tonic::Response<GetCollectorStateResponse>, tonic::Status> {
         // we already have a helper that builds a CollectorState for us
         //let state: lifelog_proto::CollectorState = self._get_state().into();
-        let state = lifelog_proto::CollectorState::default();
+        let state = self.collector.get_state().await.into();
 
         Ok(tonic::Response::new(GetCollectorStateResponse {
             state: Some(state),
