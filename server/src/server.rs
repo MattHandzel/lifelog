@@ -44,13 +44,19 @@ static CREATED_TABLES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
 
 // TODO: Refactor into am acro to automatically generate this
 const SCREENFRAME_SCHEMA: &str = r#"
-    DEFINE FIELD uuid       ON {table} TYPE string;
-    DEFINE FIELD timestamp  ON {table} TYPE string;
+    DEFINE FIELD timestamp  ON {table} TYPE datetime;
     DEFINE FIELD width      ON {table} TYPE int;
     DEFINE FIELD height     ON {table} TYPE int;
+    DEFINE FIELD image_bytes ON {table} TYPE bytes;
+    DEFINE FIELD mime_type  ON {table} TYPE string;
 "#;
 
-// TODO: Refactor the timestamp so it uses datetime instead of string, same with uuid
+// TODO: Refactor the timestamp so it uses datetime instead of string, same with uuid, refactor it
+// so it doesn't use image_bytes but instead uses a file path to the image
+// Maybe have a custom struct for data retrievals and parse it to the actual representation?
+// So when we get a struct ScreenFrame from the client, we might want to store the file onto some
+// database, get that file path, create a new struct ScreenFrameSurreal that has the surrealdb
+// types?
 
 async fn ensure_table(
     db: &Surreal<Client>,
@@ -538,9 +544,11 @@ impl Server {
                             .with_nanosecond(chunk.timestamp.timestamp_subsec_micros() * 1000)
                             .unwrap();
                         println!("Adding {:?} to table {}", chunk.uuid, table);
-                        let _: ScreenFrame = self
+                        let uuid = chunk.uuid;
+                        let chunk: ScreenFrameSurreal = chunk.into();
+                        let _: ScreenFrameSurreal = self
                             .db
-                            .create((table.as_str(), chunk.uuid))
+                            .create((table.as_str(), uuid.to_string()))
                             .content(chunk)
                             .await
                             .unwrap()
@@ -622,4 +630,27 @@ impl Server {
     //) -> surrealdb::Result<impl Stream<Item = surrealdb::Result<serde_json::Value>>> {
     //    db.select_live(format!("LIVE SELECT * FROM {table}")).await
     //}
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ScreenFrameSurreal {
+    //pub uuid: surrealdb::Uuid,
+    pub timestamp: surrealdb::Datetime,
+    pub width: i32,
+    pub height: i32,
+    pub image_bytes: surrealdb::sql::Bytes,
+    pub mime_type: String,
+}
+
+impl From<ScreenFrame> for ScreenFrameSurreal {
+    fn from(frame: ScreenFrame) -> Self {
+        Self {
+            //uuid: surrealdb::Uuid::from_u128_le(frame.uuid.to_u128_le()),
+            timestamp: frame.timestamp.into(),
+            width: frame.width as i32,
+            height: frame.height as i32,
+            image_bytes: frame.image_bytes.into(),
+            mime_type: frame.mime_type,
+        }
+    }
 }
