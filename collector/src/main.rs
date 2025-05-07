@@ -1,15 +1,16 @@
 use clap::Parser;
 use config::load_config;
 use lifelog_collector::collector::Collector;
+use lifelog_collector::collector::CollectorHandle;
+use lifelog_collector::collector::GRPCServerCollectorService;
 use lifelog_collector::logger::DataLogger;
-use lifelog_collector::modules::*;
 use lifelog_collector::setup;
-use std::env;
-use std::process::Command;
+use lifelog_core::uuid::Uuid;
+use lifelog_proto::collector_service_server::CollectorServiceServer;
+use lifelog_proto::FILE_DESCRIPTOR_SET;
 use std::sync::Arc;
-use std::thread;
-use std::time;
-use uuid::Uuid;
+use tokio;
+use tonic_reflection::server::Builder;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "LifeLog Logger Client", long_about = None)]
@@ -83,14 +84,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     setup::initialize_project(&config).expect("Failed to initialize project");
 
+    let reflection_service = Builder::configure()
+        .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
+        .build_v1alpha()?;
+
     let cli = Cli::parse();
 
     let server_addr = cli.server_address;
-    let id = Uuid::new_v4();
-    let client_id = format!("client-{}", id);
+    let client_id = config.id.clone();
 
-    let mut collector = Collector::new(config, server_addr, client_id);
-    collector.start().await?;
+    let addr = format!("{}:{}", config.host.clone(), config.port.clone()).parse()?;
+    let collector = Arc::new(tokio::sync::RwLock::new(Collector::new(
+        config,
+        server_addr,
+        client_id,
+    )));
+    let collector_handle = CollectorHandle {
+        collector: collector.clone(),
+    };
+    let collector_handle2 = collector_handle.clone();
+    let grpc_server = GRPCServerCollectorService {
+        collector: collector_handle,
+    };
+    //let cloned_collector = collector;
+
+    // NOTE: CollectorServiceServer should be started before collector tries to connect to the
+    // Server because the server is expecting to be able to connect to the collector
+    let server_handle = tokio::spawn(async move {
+        println!("Starting collector on {}", addr);
+        tonic::transport::Server::builder()
+            .add_service(reflection_service)
+            .add_service(CollectorServiceServer::new(grpc_server))
+            .serve(addr)
+            .await
+    });
+
+    let collector_handle = tokio::spawn(async move {
+        collector_handle2.start().await;
+        collector_handle2.r#loop().await
+    });
+
+    use tokio::try_join;
+
+    try_join!(server_handle)?; // or handle each individually
 
     println!("collector started successfully.");
     Ok(())

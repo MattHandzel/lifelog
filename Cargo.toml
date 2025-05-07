@@ -1,12 +1,13 @@
 [workspace]
 members = [
+    "common/config",
     "common/data-modalities",
     "collector",
     "server",
     "common/utils",
-    "common/config",
     "common/lifelog-core",
     "common/macros",
+    "common/lifelog-proto",
     # "common/transforms"
 ]
 
@@ -14,4 +15,3 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
-

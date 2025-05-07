@@ -1,0 +1,1 @@
+{"fields":[["id","String"],["host","String"],["port","u32"],["timestamp_format","String"],["screen","ScreenConfig"],["camera","CameraConfig"],["microphone","MicrophoneConfig"],["processes","ProcessesConfig"],["hyprland","HyprlandConfig"]],"ident":"CollectorConfig","metadata_type":"Config","variants":[]}

@@ -1,1 +1,0 @@
-{"fields":[["timestamp_format","String"],["screen","ScreenConfig"],["camera","CameraConfig"],["microphone","MicrophoneConfig"],["processes","ProcessesConfig"],["hyprland","HyprlandConfig"]],"ident":"Config","metadata_type":"Config"}

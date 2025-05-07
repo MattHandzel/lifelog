@@ -103,6 +103,10 @@ Functions:
 
 ```rs
 
+struct Transform{
+    query: Query, // The query the transform runs on the database, defaults to *, can be a custom query
+}
+
 // F - from type, T - to type
 trait Transform<F: DataType, T:DataType> {
     // Takes in the input data and outpust the new data type
@@ -126,6 +130,10 @@ With this pipeline, when the server gets some input data from the collectors it 
 A transform has a name, and a function `apply` that takes in the input data and then outputs the new data.
 
 Transforms, like data modalities, should be easily extensible. Other applications should be able to 'register' transforms with the server so it knows they exist and the server can run it. In the future, other applications might want to create their own transforms to extract data from the lifelog.
+
+A transform should also define some query parameters with it, so it only transforms data that matches that query. For example, it only transforms data when the weekday was a Sunday.
+
+When interfacing with the transformed data, one can interface with it using
 
 ##### Cool Transforms
 

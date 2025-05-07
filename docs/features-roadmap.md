@@ -67,7 +67,7 @@ It should be able to work with software services and allow the user to select wh
 
 Features:
 
-- [ ] Connects with a database on device
+- [ ] Connects with a database
 - [x] Communicate with collectors over a network
 - [ ] Collectors can send data to server
   - [ ] Automatically create into and from's for prost OR refactor code to use prost types and define them all in proto files

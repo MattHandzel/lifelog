@@ -1,8 +1,11 @@
 use chrono::{DateTime, Utc};
 use config::ServerConfig;
 use lifelog_core::uuid::Uuid;
-use lifelog_server::server::proto::lifelog_server_service_server::LifelogServerServiceServer;
-use lifelog_server::server::proto::FILE_DESCRIPTOR_SET;
+use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
+use lifelog_server::server::GRPCServerLifelogServerService;
+use lifelog_server::server::ServerHandle as LifelogServerHandle;
+
+use lifelog_proto::FILE_DESCRIPTOR_SET;
 use lifelog_server::server::Server as LifelogServer;
 use tokio;
 use tonic::transport::Server as TonicServer;
@@ -23,18 +26,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let time: DateTime<Utc> = Utc::now();
     let uuid = Uuid::new_v4();
 
-    let clonned_server = server.clone(); // TODO REMOVE THIS CLONE
+    let server_handle =
+        LifelogServerHandle::new(std::sync::Arc::new(tokio::sync::RwLock::new(server)));
+    let server_handle2 = server_handle.clone();
+
     tokio::task::spawn(async move {
-        clonned_server.policy_loop().await;
+        server_handle.r#loop().await;
     });
 
     TonicServer::builder()
         .add_service(reflection_service)
-        .add_service(LifelogServerServiceServer::new(server))
+        .add_service(LifelogServerServiceServer::new(
+            GRPCServerLifelogServerService {
+                server: server_handle2,
+            },
+        ))
         .serve(addr)
         .await?;
 
     Ok(())
 }
-
-//cargo build --release  4924.87s user 148.41s system 962% cpu 8:47.36 total
