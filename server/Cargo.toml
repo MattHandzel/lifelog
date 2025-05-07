@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 description = "A project to log, process, and interact with various sources of data for your lifelog"
 
+[[bin]]
+name = "lifelog-server-backend"
+path = "src/main.rs"
+
 [dependencies]
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }
@@ -18,13 +22,13 @@ clap = "4.5.37"
 surrealdb = { version = "2.2.2", features = ["kv-mem", "kv-surrealkv"] }
 async-trait = "0.1.88"
 serde = { version = "1.0.219", features = ["derive"] }
-tonic = { version = "0.13.0", features = ["transport"] }
-prost = "0.13.5"
-prost-types = { version = "0.13.5"}
-tonic-reflection = { version = "0.13.0"}
+tonic = { workspace = true, features = ["transport"] }
+prost = { workspace = true }
+prost-types = { workspace = true }
+tonic-reflection = { version = "0.9.2"}
 dashmap = "6.1.0"
 toml = { version = "0.8.20"}
 lifelog-types = {path = "../common/lifelog-types/"}
 
 [build-dependencies]
-tonic-build = "0.13"
+tonic-build = "0.9.2"

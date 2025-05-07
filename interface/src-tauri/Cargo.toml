@@ -4,7 +4,10 @@ version = "0.1.0"
 description = "UI Interface for Lifelog"
 authors = ["you"]
 edition = "2021"
-default-run = "lifelog-interface"
+
+[[bin]]
+name = "lifelog-server-frontend"
+path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
