@@ -14,6 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "../../proto/lifelog_types.proto",
             ],
             &["../../proto"],
-        )?;
+        )
+        .expect("Failed to compile proto files. IF THIS IS HAPPENING TO YOU BECUASE SOME MESSAGES ARE NOT DEFINED, THEN IT MEANS THE MESSAGES AREN'T BEING AUTOMATICALLY CREATED, TO FIX THIS, COMMENT OUT THIS BUILD SCRIPT (from the tonic_build:configure() to this line) AND BUILD");
     Ok(())
 }

@@ -117,7 +117,7 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                     0,
                     parse_quote! {
 
-                        #[serde(serialize_with = "lifelog_core::serialize_uuids", deserialize_with = "lifelog_core::deserialize_uuids")]
+                        //#[serde(serialize_with = "lifelog_core::serialize_uuids", deserialize_with = "lifelog_core::deserialize_uuids")]
                         pub uuid: ::lifelog_core::uuid::Uuid
                     },
                 );
