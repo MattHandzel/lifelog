@@ -1,4 +1,5 @@
 name: "🐛 Bug report"
+description: "Suggest an idea or improvement."
 title: "[Bug]: <short summary>"
 labels: ["kind/bug", "status/needs-triage"]
 assignees: []
