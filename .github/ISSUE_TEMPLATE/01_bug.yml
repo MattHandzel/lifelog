@@ -1,0 +1,55 @@
+name: "🐛 Bug report"
+about: "Something that used to work – or _should_ work – doesn’t."
+title: "[Bug]: <short summary>"
+labels: ["kind/bug", "status/needs-triage"]
+assignees: []
+body:
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How bad is it?
+      options:
+        - S0 – crashes / data‑loss
+        - S1 – blocks a feature
+        - S2 – minor / cosmetic
+    validations:
+      required: true
+  - type: dropdown 
+    id: component
+    attributes:
+      label: What component did this bug occur on?
+      options:
+        - Server
+        - Collector
+        - Interface
+  - type: input
+    id: version
+    attributes:
+      label: Which Lifelog version?
+      placeholder: "0.1.0"      
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |-
+        1. …
+        2. …
+        3. See error …
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+      placeholder: "A clear and concise description…"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs / screenshots
+      description: "Drag‑drop or paste. Collapse large sections with <details>."
+      render: shell
+    validations:
+      required: false
