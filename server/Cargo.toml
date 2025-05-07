@@ -5,8 +5,8 @@ edition = "2021"
 description = "A project to log, process, and interact with various sources of data for your lifelog"
 
 [dependencies]
-utils = { path = "../common/utils" }
 config = { path = "../common/config" }
+utils = { path = "../common/utils" }
 lifelog-core = {path = "../common/lifelog-core/"}
 lifelog-proto = { path = "../common/lifelog-proto" }
 lifelog-macros = { path = "../common/macros" }
