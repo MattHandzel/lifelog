@@ -113,12 +113,19 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
 
             // inject Rust-side uuid+timestamp for Data
             if let LifelogMacroMetaDataType::Data = options.datatype {
-                named
-                    .named
-                    .insert(0, parse_quote! { pub uuid: ::lifelog_core::uuid::Uuid });
+                named.named.insert(
+                    0,
+                    parse_quote! {
+
+                        //#[serde(with = "lifelog_core::serialize_uuids")]
+                        pub uuid: ::lifelog_core::uuid::Uuid
+                    },
+                );
                 named.named.insert(
                     1,
                     parse_quote! {
+
+
                         pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>
                     },
                 );
@@ -243,7 +250,7 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                     return quote! {
                         timestamp: Some(::prost_types::Timestamp {
                             seconds: s.timestamp.timestamp(),
-                            nanos: s.timestamp.timestamp_subsec_nanos() as i32,
+                            nanos: 1000 * (s.timestamp.timestamp_subsec_nanos() / 1000) as i32,
                         })
                     };
                 }

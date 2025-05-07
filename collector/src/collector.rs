@@ -92,6 +92,9 @@ pub struct Collector<T> {
     client_id: String,
 }
 
+/// The CollectorHandle is a struct that is used right now to abstract away how the collector
+/// works. Right now, it is using a read-write lock but in the future I might want to change this
+/// to the actor model.
 #[derive(Clone)]
 pub struct CollectorHandle {
     pub collector: Arc<RwLock<Collector<LoggerHandle>>>,
@@ -402,6 +405,7 @@ impl CollectorService for GRPCServerCollectorService {
         let (tx, rx) = tokio::sync::mpsc::channel(8);
 
         let mut rng = rand::rng();
+        // TODO: Replace this fake data with the real data buffer.
         let fake_data: Vec<ScreenFrame> = rand::distr::StandardUniform
             .sample_iter(&mut rng)
             .take(16)
@@ -409,9 +413,8 @@ impl CollectorService for GRPCServerCollectorService {
                         // fake images
         tokio::spawn(async move {
             // TODO: For all messages we want to send, raise an error if the message is larger than
-            // 4 MB. (TCP limit). We want to raise error here and not in production.
+            // 4 MB. (TCP limit). We want to raise error here (how to fix that)
             for f in fake_data {
-                println!("Sending data: {:?}", f);
                 let _ = tx
                     .send(Ok(lifelog_proto::LifelogData {
                         payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(f.into())), // TODO:

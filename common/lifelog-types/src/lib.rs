@@ -99,6 +99,7 @@ include!(concat!(env!("OUT_DIR"), "/data_modalities.rs"));
 pub struct RegisteredCollector {
     pub id: CollectorId,
     pub address: String,
+    pub mac: String,
     pub grpc_client: CollectorServiceClient<tonic::transport::Channel>,
 }
 

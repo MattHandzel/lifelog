@@ -1,10 +1,9 @@
-
 pub use anyhow;
 pub use chrono;
 pub use chrono::{DateTime, Utc};
 pub use pretty_assertions;
 pub use proptest;
-pub use serde;
+//pub use serde;
 pub use serde_json;
 pub use thiserror;
 pub use tracing;
@@ -16,24 +15,28 @@ pub mod database_state;
 pub mod system_state;
 //pub mod system_state;
 
-
+pub use serde;
+pub use serde::Deserialize;
+pub use serde::Serialize;
 pub use tonic;
 
+//pub use serde::de::Deserialize;
+//pub use serde::ser::Serialize;
+//use surrealdb::sql::serde; // TODO: Refactor this please
 
 pub trait DataType {
     fn uuid(&self) -> Uuid;
     fn timestamp(&self) -> DateTime<Utc>;
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum LifelogMacroMetaDataType {
     Config,
     Data,
     None,
 }
 
-use serde::de::DeserializeOwned;
-
+use ::serde::de::DeserializeOwned;
 pub trait Modality: Sized + Send + Sync + 'static + DeserializeOwned {
     const TABLE: &'static str;
     fn into_payload(self) -> lifelog_proto::lifelog_data::Payload;

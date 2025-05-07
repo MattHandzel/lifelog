@@ -1,4 +1,5 @@
 use crate::policy::*;
+use chrono::Timelike;
 use chrono::Utc;
 use config::ServerConfig;
 use config::ServerPolicyConfig;
@@ -27,11 +28,50 @@ use lifelog_types::DataModality;
 
 use lifelog_proto::collector_service_client::CollectorServiceClient;
 
+use data_modalities::screen::*;
 use sysinfo::System;
 
 use futures_core::Stream;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+
+use dashmap::DashSet;
+use once_cell::sync::Lazy;
+use serde::{de::DeserializeOwned, Serialize};
+use surrealdb::sql::Thing;
+
+static CREATED_TABLES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
+
+// TODO: Refactor into am acro to automatically generate this
+const SCREENFRAME_SCHEMA: &str = r#"
+    DEFINE FIELD uuid       ON {table} TYPE string;
+    DEFINE FIELD timestamp  ON {table} TYPE string;
+    DEFINE FIELD width      ON {table} TYPE int;
+    DEFINE FIELD height     ON {table} TYPE int;
+"#;
+
+// TODO: Refactor the timestamp so it uses datetime instead of string, same with uuid
+
+async fn ensure_table(
+    db: &Surreal<Client>,
+    table: &str,
+    schema_tpl: &str,
+) -> surrealdb::Result<()> {
+    if CREATED_TABLES.contains(table) {
+        return Ok(());
+    }
+    let ddl = schema_tpl.replace("{table}", table);
+    db.query(format!(
+        r#"
+        DEFINE TABLE {table} SCHEMAFULL;
+        {ddl}
+        DEFINE INDEX {table}_ts_idx ON {table} FIELDS timestamp;
+    "#
+    ))
+    .await?;
+    CREATED_TABLES.insert(table.to_owned());
+    Ok(())
+}
 
 //type Loader = fn(&Surreal<Client>, &[Uuid]) -> anyhow::Result<Vec<LifelogData>>;
 
@@ -231,6 +271,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
 
                 let collector = RegisteredCollector {
                     id: collector_config.id.clone(),
+                    mac: "FF:FF:FF:FF:FF:FF".to_string().replace(":", ""), // TODO: Implement this on the collector
                     address: collector_ip.to_string(),
                     grpc_client: client.clone(),
                 };
@@ -349,7 +390,9 @@ impl Policy for ServerPolicy {
         // TODO: Look at the collector states and when a collector is more than 60 seconds out of
         // sync ask it for more data
         let SYNC_INTERVAL = 5; // TODO: Refactor this into policy
-        let action = if state.server_state.timestamp.timestamp() % SYNC_INTERVAL == 0 {
+        let action = if true
+        /*state.server_state.timestamp.timestamp() % SYNC_INTERVAL == 0*/
+        {
             // TODO: Add the specific data modality here
             ServerAction::SyncData("SELECT * FROM screen".to_string())
         } else {
@@ -469,16 +512,52 @@ impl Server {
                         .unwrap()
                         .into_inner();
                     println!("Defined the stream here...");
+                    let mut data = vec![];
 
                     while let Some(chunk) = stream.next().await {
-                        println!(
-                            "Received {:?} from {}",
-                            chunk.unwrap().payload,
-                            collector.id
-                        );
-                        // TODO: add to database
+                        data.push(chunk.unwrap().payload);
                     }
                     println!("Done receiving data");
+                    let mac = collector.mac.clone();
+
+                    // TODO: REFACTOR THIS FUNCTION
+                    let table = format!("{}_screen", mac);
+
+                    ensure_table(&self.db, &table, SCREENFRAME_SCHEMA)
+                        .await
+                        .unwrap();
+                    for chunk in data {
+                        // record id = random UUID
+                        let chunk = chunk.unwrap();
+                        let mut chunk: ScreenFrame = match chunk {
+                            lifelog_proto::lifelog_data::Payload::Screenframe(c) => c.into(),
+                            _ => unimplemented!(),
+                        };
+                        chunk.timestamp = chunk
+                            .timestamp
+                            .with_nanosecond(chunk.timestamp.timestamp_subsec_micros() * 1000)
+                            .unwrap();
+                        println!("Adding {:?} to table {}", chunk.uuid, table);
+                        let _: ScreenFrame = self
+                            .db
+                            .create((table.as_str(), chunk.uuid))
+                            .content(chunk)
+                            .await
+                            .unwrap()
+                            .expect(
+                                format!("Unable to create row in table {}", table.as_str())
+                                    .as_str(),
+                            );
+
+                        //db.create("audit_log")
+                        //  .content(json!({
+                        //      "ts": chrono::Utc::now(),
+                        //      "actor": msg.source_mac,
+                        //      "action": "ingest",
+                        //      "detail": { "table": table }
+                        //  }))
+                        //  .await?;
+                    }
                 }
                 tokio::time::sleep(tokio::time::Duration::from_millis(1100)).await;
 
@@ -489,4 +568,58 @@ impl Server {
             _ => todo!(),
         }
     }
+
+    //pub async fn get_tables(db: &Surreal<Client>) -> surrealdb::Result<Vec<String>> {
+    //    #[derive(serde::Deserialize)]
+    //    struct Info {
+    //        tables: std::collections::HashMap<String, serde_json::Value>,
+    //    }
+    //
+    //    let info: Info = db.query("INFO FOR DB").await?.take(0)?;
+    //    Ok(info.tables.keys().cloned().collect())
+    //}
+    //
+    //pub async fn fetch_latest<T>(
+    //    db: &Surreal<Client>,
+    //    table: &str,
+    //    limit: u32,
+    //) -> surrealdb::Result<Vec<T>>
+    //where
+    //    T: DeserializeOwned,
+    //{
+    //    db.query(format!(
+    //        "SELECT * FROM {table} ORDER BY timestamp DESC LIMIT {limit}"
+    //    ))
+    //    .await?
+    //    .take(0)
+    //}
+
+    //pub async fn fetch_by_id<T>(
+    //    db: &Surreal<Client>,
+    //    table: &str,
+    //    id: &str,
+    //) -> surrealdb::Result<Option<T>>
+    //where
+    //    T: DeserializeOwned,
+    //{
+    //    let rid = Thing::from((table, id));
+    //    db.select((table, id)).await
+    //}
+    //pub async fn count_table(db: &Surreal<Client>, table: &str) -> surrealdb::Result<u64> {
+    //    #[derive(serde::Deserialize)]
+    //    struct Cnt {
+    //        count: u64,
+    //    }
+    //    let cnt: Cnt = db
+    //        .query(format!("SELECT count() AS count FROM {table}"))
+    //        .await?
+    //        .take(0)?;
+    //    Ok(cnt.count)
+    //}
+    //pub async fn live_select(
+    //    db: &Surreal<Client>,
+    //    table: &str,
+    //) -> surrealdb::Result<impl Stream<Item = surrealdb::Result<serde_json::Value>>> {
+    //    db.select_live(format!("LIVE SELECT * FROM {table}")).await
+    //}
 }

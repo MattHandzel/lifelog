@@ -6,6 +6,7 @@ use rand::distr::{Alphanumeric, Distribution, StandardUniform};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
+
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenFrame {
@@ -15,6 +16,7 @@ pub struct ScreenFrame {
     pub mime_type: String, // TODO: Refactor this to use mime type object, not doing it rn because
                            // macro is a pain
 }
+
 
 impl Modality for ScreenFrame {
     const TABLE: &'static str = "screen";
@@ -34,8 +36,8 @@ impl Distribution<ScreenFrame> for StandardUniform {
             .take(10)
             .map(char::from)
             .collect();
-        let width = rng.random_range(10..100); // TODO: REFACTOR THIS RANGE TO BE REALISTIC
-        let height = rng.random_range(10..100); //TODO: REFACTOR THIS RANGE TO BE REALISTIC
+        let width = rng.random_range(640..1920);
+        let height = rng.random_range(480..1080);
         let uuid = Uuid::new_v4(); // TODO: REfactor to use v6 (one version througohut the entire
                                    // project)
         let timestamp = Utc::now();

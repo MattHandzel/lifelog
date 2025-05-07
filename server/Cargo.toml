@@ -16,7 +16,7 @@ thiserror = "2"
 serde_json = "1.0"
 clap = "4.5.37"
 # rust-bert = "0.23.0"
-surrealdb = { version = "2.2.2"}
+surrealdb = { version = "2.3.0"}
 async-trait = "0.1.88"
 serde = { version = "1.0.219", features = ["derive"] }
 tonic = { version = "0.13.0", features = ["transport"] }
@@ -32,6 +32,7 @@ strum = { version = "0.27.1", features = ["derive"] }
 sysinfo = { version = "0.35.0", features = ["network", "multithread", "disk"] }
 tokio-stream = { version = "0.1.17", features = ["full"] }
 futures-core = "0.3.31"
+
 
 
 [build-dependencies]
