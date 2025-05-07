@@ -1,6 +1,6 @@
 name: "✅ Task / TODO"
 description: "Track a discrete engineering chore or internal task."
-title: ""
+title: "[TODO]: "
 labels: ["todo"]
 body:
   - type: textarea
