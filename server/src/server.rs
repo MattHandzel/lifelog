@@ -114,10 +114,16 @@ impl ServerHandle {
         server.db.clone()
     }
 
+    // TODO: Refactor having to define all of these functions... I am not a fan of them...
     pub async fn register_collector(&self, collector: RegisteredCollector) {
         println!("Trying to register collector: {:?}", collector);
         let mut server = self.server.write().await;
         server.register_collectors.write().await.push(collector);
+    }
+
+    pub async fn contains_collector(&self, collector_name: String) -> bool {
+        let server = self.server.read().await;
+        server.contains_collector(collector_name).await
     }
 }
 
@@ -272,20 +278,28 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         Ok(TonicResponse::new(GetDataResponse { data: vec![] }))
     }
 
+    // TODO: Refactor ALL functions to include this check to see if the thing doing the requesting
+    // has been registered or not. I want to refactor my server to only think about clients.
     async fn report_state(
         &self,
         _request: tonic::Request<ReportStateRequest>,
     ) -> Result<TonicResponse<ReportStateResponse>, TonicStatus> {
         let state = _request.into_inner().state.unwrap();
-
         println!(
             "Received a get state request! {} {:?}",
             state.name,
             state.timestamp.unwrap()
         );
-        Ok(TonicResponse::new(ReportStateResponse {
-            acknowledged: true,
-        }))
+        // Ensure we got a state reported by a registered collector, if not then we ignore it
+        match self.server.contains_collector(state.name.clone()).await {
+            true => Ok(TonicResponse::new(ReportStateResponse {
+                acknowledged: true,
+            })),
+            false => Err(TonicStatus::internal(format!(
+                "Collector {} is not registered",
+                state.name
+            ))),
+        }
     }
 
     async fn query(
@@ -333,7 +347,8 @@ impl Policy for ServerPolicy {
 
         // TODO: Look at the collector states and when a collector is more than 60 seconds out of
         // sync ask it for more data
-        let action = if state.server_state.timestamp.timestamp() % 10 == 0 {
+        let SYNC_INTERVAL = 5; // TODO: Refactor this into policy
+        let action = if state.server_state.timestamp.timestamp() % SYNC_INTERVAL == 0 {
             // TODO: Add the specific data modality here
             ServerAction::SyncData("SELECT * FROM screen".to_string())
         } else {
@@ -370,6 +385,16 @@ impl Server {
     fn get_policy(&self) -> Arc<RwLock<ServerPolicy>> {
         // Get the policy from the config
         return self.policy.clone();
+    }
+
+    async fn contains_collector(&self, collector_name: String) -> bool {
+        let collectors = self.register_collectors.read().await;
+        for collector in collectors.iter() {
+            if collector.id == collector_name {
+                return true;
+            }
+        }
+        false
     }
 
     async fn get_state(&self) -> SystemState {
