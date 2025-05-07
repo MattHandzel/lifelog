@@ -1,5 +1,4 @@
 name: "🐛 Bug report"
-about: "Something that used to work – or _should_ work – doesn’t."
 title: "[Bug]: <short summary>"
 labels: ["kind/bug", "status/needs-triage"]
 assignees: []

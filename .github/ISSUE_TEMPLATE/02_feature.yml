@@ -1,5 +1,4 @@
 name: "✨ Feature request"
-about: "Suggest an idea or improvement."
 title: "[Feature]: <short summary>"
 labels: ["kind/feature", "status/needs-triage"]
 body:
@@ -8,8 +7,8 @@ body:
     attributes:
       label: Problem
       description: "What pain point are you trying to solve?"
-    # validations:
-    #   required: false
+    validations:
+      required: false
   - type: textarea
     id: solution
     attributes:
