@@ -1,0 +1,34 @@
+name: "✅ Task / TODO"
+description: "Track a discrete engineering chore or internal task."
+title: ""
+labels: ["todo"]
+body:
+  - type: textarea
+    id: task
+    attributes:
+      label: Task details
+      placeholder: "Describe what needs to be done."
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Component / area
+      options:
+        - collector
+        - server
+        - interface
+        - docs
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0 – must be done before next release
+        - P1 – high
+        - P2 – normal
+        - P3 – low
+  - type: input
+    id: due
+    attributes:
+      label: Optional due date (YYYY-MM-DD)

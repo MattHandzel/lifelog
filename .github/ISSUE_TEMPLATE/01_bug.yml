@@ -1,7 +1,7 @@
 name: "🐛 Bug report"
-description: "Suggest an idea or improvement."
-title: "[Bug]: <short summary>"
-labels: ["kind/bug", "status/needs-triage"]
+description: "Something isn't working as it should"
+title: ""
+labels: ["bug"]
 assignees: []
 body:
   - type: dropdown
@@ -22,11 +22,12 @@ body:
         - Server
         - Collector
         - Interface
-  - type: input
+  - type: dropdown
     id: version
     attributes:
       label: Which Lifelog version?
-      placeholder: "0.1.0"      
+      options: 
+        - 0.1.0
     validations:
       required: true
   - type: textarea

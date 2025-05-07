@@ -1,7 +1,7 @@
 name: "✨ Feature request"
 description: "Suggest an idea or improvement."
-title: "[Feature]: <short summary>"
-labels: ["kind/feature", "status/needs-triage"]
+title: ""
+labels: ["feature"]
 body:
   - type: textarea
     id: problem
