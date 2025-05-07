@@ -6,7 +6,6 @@ use rand::distr::{Alphanumeric, Distribution, StandardUniform};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
-
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenFrame {
@@ -16,7 +15,6 @@ pub struct ScreenFrame {
     pub mime_type: String, // TODO: Refactor this to use mime type object, not doing it rn because
                            // macro is a pain
 }
-
 
 impl Modality for ScreenFrame {
     const TABLE: &'static str = "screen";

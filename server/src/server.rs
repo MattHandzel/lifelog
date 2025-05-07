@@ -527,7 +527,9 @@ impl Server {
                     let mac = collector.mac.clone();
 
                     // TODO: REFACTOR THIS FUNCTION
-                    let table = format!("{}_screen", mac);
+
+                    let data_modality_str = "screen";
+                    let table = format!("{}___{}", mac, data_modality_str);
 
                     ensure_table(&self.db, &table, SCREENFRAME_SCHEMA)
                         .await
@@ -535,6 +537,8 @@ impl Server {
                     for chunk in data {
                         // record id = random UUID
                         let chunk = chunk.unwrap();
+
+                        // TODO: Repeat for every data type, just do the old c.into()
                         let mut chunk: ScreenFrame = match chunk {
                             lifelog_proto::lifelog_data::Payload::Screenframe(c) => c.into(),
                             _ => unimplemented!(),
@@ -544,6 +548,7 @@ impl Server {
                             .with_nanosecond(chunk.timestamp.timestamp_subsec_micros() * 1000)
                             .unwrap();
                         println!("Adding {:?} to table {}", chunk.uuid, table);
+
                         let uuid = chunk.uuid;
                         let chunk: ScreenFrameSurreal = chunk.into();
                         let _: ScreenFrameSurreal = self
@@ -567,7 +572,6 @@ impl Server {
                         //  .await?;
                     }
                 }
-                tokio::time::sleep(tokio::time::Duration::from_millis(1100)).await;
 
                 // For now, assume we want to sync all data modalities
 
@@ -632,6 +636,7 @@ impl Server {
     //}
 }
 
+// TODO: Complete this for every data type
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ScreenFrameSurreal {
     //pub uuid: surrealdb::Uuid,
@@ -642,6 +647,7 @@ pub struct ScreenFrameSurreal {
     pub mime_type: String,
 }
 
+// TDOO: Do this for every datatype
 impl From<ScreenFrame> for ScreenFrameSurreal {
     fn from(frame: ScreenFrame) -> Self {
         Self {
