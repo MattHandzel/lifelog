@@ -448,20 +448,20 @@ impl Server {
             }
             ServerAction::SyncData(query) => {
                 // Get the target data modalities(s) from the query
-                let collectors = self.register_collectors.read().await;
+                let mut collectors = self.register_collectors.write().await;
                 println!("Syncing data with collectors: {:?}", collectors);
-                //for collector in   {
-                //    println!("Syncing data with collector: {:?}", collector);
-                //    let data = collector
-                //        .grpc_client
-                //        .get_data(GetDataRequest {
-                //            uuids: vec![query.clone().into()],
-                //        })
-                //        .await
-                //        .unwrap();
-                //    println!("Data: {:?}", data);
-                //}
-                //
+                for collector in collectors.iter_mut() {
+                    println!("Syncing data with collector: {:?}", collector);
+                    let data = collector
+                        .grpc_client
+                        .get_data(GetDataRequest {
+                            uuids: vec![query.clone().into()],
+                        })
+                        .await
+                        .unwrap();
+                    println!("Data: {:?}", data);
+                }
+
                 // For now, assume we want to sync all data modalities
 
                 // Ask the collectors to send data

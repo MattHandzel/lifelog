@@ -3,6 +3,7 @@ use crate::modules::{
     hyprland::HyprlandLogger, microphone::MicrophoneLogger, screen::ScreenLogger,
 };
 use config;
+use data_modalities::screen::ScreenFrame;
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::task::AbortHandle;
@@ -18,9 +19,11 @@ use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
 
 use lifelog_proto::{
     GetCollectorConfigRequest, GetCollectorConfigResponse, GetCollectorStateResponse,
-    GetDataRequest, GetDataResponse, GetStateRequest, RegisterCollectorRequest, ReportStateRequest,
-    SetCollectorConfigRequest, SetCollectorConfigResponse,
+    GetDataRequest, GetDataResponse, GetStateRequest, LifelogData, RegisterCollectorRequest,
+    ReportStateRequest, SetCollectorConfigRequest, SetCollectorConfigResponse,
 };
+
+use rand::distr::Distribution; // import the distribution trait o.w. our sampling doesn't work
 
 #[derive(Debug)]
 pub enum CollectorError {
@@ -390,6 +393,26 @@ impl CollectorService for GRPCServerCollectorService {
         // When data‑retrieval is wired up, replace this with a real stream.
         // For now we return an empty stream so the call completes gracefully.
 
-        Ok(tonic::Response::new(GetDataResponse { data: vec![] }))
+        // TODO: Read the current data buffer and write all the data here to send
+        // TODO: How to ensure the data was actually received? Maybe the server can send a command
+        // to erase data with specific uuids and then the collector can listen?
+
+        let mut rng = rand::rng();
+        let fake_data: Vec<ScreenFrame> = rand::distr::StandardUniform
+            .sample_iter(&mut rng)
+            .take(16)
+            .collect(); // 16
+                        // fake images
+
+        // TODO: Message size limit is ~4 MB, we might need to do some streaming...
+        Ok(tonic::Response::new(GetDataResponse {
+            data: fake_data
+                .into_iter()
+                .map(|i| lifelog_proto::LifelogData {
+                    payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(i.into())), // TODO:
+                                                                                                // change name of screenframe so it matches the type
+                })
+                .collect(),
+        }))
     }
 }

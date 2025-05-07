@@ -161,22 +161,39 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                         }
                     };
                 }
+
                 // Vec<Enum> or Vec<String>
                 if let Type::Path(typepath) = &f.ty {
+                    let seg = typepath.path.segments.last().unwrap().ident.to_string();
+                    // Check to see if it a Vec<u8> (aka bytes) vector
+                    if seg == "Vec" {
+                        if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
+                            &typepath.path.segments[0].arguments
+                        {
+                            if let Some(GenericArgument::Type(Type::Path(inner))) = args.first() {
+                                let inner_ident = &inner.path.segments.last().unwrap().ident;
+                                if inner_ident == "u8" {
+                                    return quote! { #name: p.#name.to_vec() };
+                                }
+                            }
+                        }
+                    }
                     if typepath.path.segments.len() == 1 && typepath.path.segments[0].ident == "Vec" {
                         if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
                             &typepath.path.segments[0].arguments
                         {
                             if let Some(GenericArgument::Type(Type::Path(inner))) = args.first() {
                                 let inner_ident = &inner.path.segments.last().unwrap().ident;
-                                // assume inner is parseable from String
+                                if inner_ident == "u8" {
+                                    return quote! { #name: p.#name.to_vec() };
+                                }
                                 return quote! {
                                     #name: p.#name.into_iter().map(|s| s.parse().unwrap()).collect()
                                 };
                             }
                         }
                     }
-                let seg = typepath.path.segments.last().unwrap().ident.to_string();
+
                     if seg == "PathBuf" {
                         return quote! { #name: std::path::PathBuf::from(p.#name) }
                     } else if seg.contains("Config") {
@@ -240,6 +257,10 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                         }) = &typepath.path.segments[0].arguments
                         {
                             if let Some(GenericArgument::Type(Type::Path(_inner))) = args.first() {
+                                let inner_ident = &_inner.path.segments.last().unwrap().ident;
+                                if inner_ident == "u8" {
+                                    return quote! { #name: s.#name.into() }; // Vec<u8> to bytes
+                                }
                                 return quote! {
                                     #name: s.#name.iter().map(|e| e.to_string()).collect()
                                 };
@@ -275,6 +296,7 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                         }
                     }
                     let seg = typepath.path.segments.last().unwrap().ident.to_string();
+
                     if seg == "PathBuf" {
                         return quote! { #name: s.#name.display().to_string() };
                     } else if seg.ends_with("Config") {

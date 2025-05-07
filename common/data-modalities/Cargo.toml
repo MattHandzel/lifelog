@@ -8,6 +8,7 @@ lifelog-core= { path = "../lifelog-core" }
 lifelog-macros = { path = "../macros" }
 lifelog-proto = { path = "../lifelog-proto" }
 serde = { version = "1.0", features = ["derive"] }
+rand = "0.9.1"
 
 prost-types = { version = "0.13.5"}
 tonic = { version = "0.13.1"}
