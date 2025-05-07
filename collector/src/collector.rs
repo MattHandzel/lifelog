@@ -113,6 +113,12 @@ impl CollectorHandle {
             let mut collector = collector.write().await;
             if let Err(e) = collector.report_state().await {
                 eprintln!("Failed to report state: {}", e);
+                // Try and handshake again
+                if let Err(e) = collector.handshake().await {
+                    eprintln!("Failed to re-establish connection: {}", e);
+                } else {
+                    println!("Re-established connection.");
+                }
             }
 
             tokio::time::sleep(Duration::from_secs(5)).await;
@@ -183,8 +189,8 @@ impl Collector<LoggerHandle> {
     pub fn listen(&mut self) {}
 
     pub async fn start(&mut self) -> Result<(), CollectorError> {
-        // need to handle error!
-        self.handshake().await?;
+        self.handshake().await?; // TODO: Refactor, this, we shouldn't require a handshake in order
+                                 // to start logging, also, should we move control to the loop function>
 
         let config = Arc::clone(&self.config);
 
