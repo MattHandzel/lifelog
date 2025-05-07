@@ -1,1 +1,1 @@
-{"fields":[["enabled","bool"],["interval","f64"],["output_dir","PathBuf"],["device","String"],["resolution","Resolution"],["fps","u32"],["timestamp_format","String"]],"ident":"CameraConfig","metadata_type":"Config"}
+{"fields":[["enabled","bool"],["interval","f64"],["output_dir","PathBuf"],["device","String"],["resolution_x","u32"],["resolution_y","u32"],["fps","u32"],["timestamp_format","String"]],"ident":"CameraConfig","metadata_type":"Config","variants":[]}

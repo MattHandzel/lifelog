@@ -1,5 +1,5 @@
 // Export all modules
-pub mod camera;
+//pub mod camera;
 pub mod evdev_input_logger;
 pub mod hyprland;
 pub mod input_logger;
@@ -10,4 +10,3 @@ pub mod screen;
 pub mod text_upload;
 pub mod wayland_input_logger;
 pub mod weather;
-

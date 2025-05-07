@@ -7,7 +7,6 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
-use tokio::io::join;
 use utils::current_timestamp;
 
 use hyprland::data::{Clients, CursorPosition, Devices, Monitors, Workspace, Workspaces};

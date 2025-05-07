@@ -9,9 +9,10 @@ name = "lifelog-server-backend"
 path = "src/main.rs"
 
 [dependencies]
-utils = { path = "../common/utils" }
 config = { path = "../common/config" }
+utils = { path = "../common/utils" }
 lifelog-core = {path = "../common/lifelog-core/"}
+lifelog-proto = { path = "../common/lifelog-proto" }
 lifelog-macros = { path = "../common/macros" }
 tokio = { version = "1.44.2", features = ["full", "macros", "rt-multi-thread"] }
 chrono = "0.4"
@@ -19,16 +20,22 @@ thiserror = "2"
 serde_json = "1.0"
 clap = "4.5.37"
 # rust-bert = "0.23.0"
-surrealdb = { version = "2.2.2", features = ["kv-mem", "kv-surrealkv"] }
+surrealdb = {workspace = true}
 async-trait = "0.1.88"
-serde = { version = "1.0.219", features = ["derive"] }
+serde = { workspace = true, features = ["derive"] }
 tonic = { workspace = true, features = ["transport"] }
 prost = { workspace = true }
 prost-types = { workspace = true }
-tonic-reflection = { version = "0.9.2"}
-dashmap = "6.1.0"
-toml = { version = "0.8.20"}
+tonic-reflection = {workspace = true}
+dashmap = {workspace = true}
 lifelog-types = {path = "../common/lifelog-types/"}
+data-modalities = { path = "../common/data-modalities" } # TODO: refactor, we shouldn't be needing to import this
+toml = {workspace = true}
+once_cell = {workspace = true}
+futures-core = {workspace = true}
+strum = { version = "0.27.1", features = ["derive"] }
+sysinfo = { version = "0.35.0", features = ["network", "multithread", "disk"] }
+tokio-stream = {workspace = true}
 
 [build-dependencies]
-tonic-build = "0.9.2"
+tonic-build = {workspace = true}

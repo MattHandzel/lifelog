@@ -1,1 +1,1 @@
-{"fields":[["enabled","bool"],["output_dir","PathBuf"],["max_file_size_mb","u32"],["supported_formats","Vec<String>"]],"ident":"TextUploadConfig","metadata_type":"Config"}
+{"fields":[["enabled","bool"],["output_dir","PathBuf"],["max_file_size_mb","u32"],["supported_formats","Vec<String>"]],"ident":"TextUploadConfig","metadata_type":"Config","variants":[]}

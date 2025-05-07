@@ -4,7 +4,6 @@ use std::fs;
 use tokio::time::{sleep, Duration};
 use users::{Users, UsersCache};
 use surrealdb::Surreal;
-use surrealdb::sql::{Object, Value};
 use surrealdb::Connection;
 use serde::{Deserialize, Serialize};
 use surrealdb::RecordId;
@@ -57,7 +56,7 @@ C: Connection, {
 
         if let Ok(processes) = get_process_info(&users_cache) {
             for process in processes {
-                let _: Vec<Record> = db.upsert(("screen")).content(ProcessLog {
+                let _: Vec<Record> = db.upsert("screen").content(ProcessLog {
                     timestamp: timestamp,
                     pid: process.pid,
                     ppid: process.ppid,

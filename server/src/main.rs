@@ -1,8 +1,11 @@
 use chrono::{DateTime, Utc};
 use config::ServerConfig;
 use lifelog_core::uuid::Uuid;
-use lifelog_server::server::proto::lifelog_server_service_server::LifelogServerServiceServer;
-use lifelog_server::server::proto::FILE_DESCRIPTOR_SET;
+use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
+use lifelog_server::server::GRPCServerLifelogServerService;
+use lifelog_server::server::ServerHandle as LifelogServerHandle;
+
+use lifelog_proto::FILE_DESCRIPTOR_SET;
 use lifelog_server::server::Server as LifelogServer;
 use tokio;
 use tonic::transport::Server as TonicServer;
@@ -18,19 +21,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting server on {}", addr);
     let reflection_service = Builder::configure()
         .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
-        .build_v1alpha()?;
+        .build_v1alpha()?; // This should be build_v1alpha otherwise the reflection gRPC service
+                           // won't work with clients such as grpcui, it could be changed in the future
 
     let time: DateTime<Utc> = Utc::now();
     let uuid = Uuid::new_v4();
 
-    let clonned_server = server.clone(); // TODO REMOVE THIS CLONE
+    let server_handle =
+        LifelogServerHandle::new(std::sync::Arc::new(tokio::sync::RwLock::new(server)));
+    let server_handle2 = server_handle.clone();
+
     tokio::task::spawn(async move {
-        clonned_server.policy_loop().await;
+        server_handle.r#loop().await;
     });
 
     TonicServer::builder()
         .add_service(reflection_service)
-        .add_service(LifelogServerServiceServer::new(server))
+        .add_service(LifelogServerServiceServer::new(
+            GRPCServerLifelogServerService {
+                server: server_handle2,
+            },
+        ))
         .serve(addr)
         .await?;
 

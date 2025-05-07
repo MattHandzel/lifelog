@@ -96,3 +96,19 @@ Collector booting:
 
 9. QueryDataFromCollector RPC:
    - When this is called, it will come with a query that defines when the server wants data from and to, as well as what data types (maybe we do this with a surrealdb query?). This will return the data in the proper formats for the server to add it to its database
+
+#### Collector Config
+
+Here is an example of a collector config file for a laptop
+
+```toml
+# Name of the device to show up in the lifelog
+device_name = "laptop"
+
+[screen]
+
+
+
+
+
+```

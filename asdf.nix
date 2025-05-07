@@ -1,21 +1,22 @@
-{pkgs ? import <nixpkgs> {}}:
-pkgs.mkShell {
-  nativeBuildInputs = with pkgs; [
-    cargo
-    rustc
-    pkg-config
-    leptonica
-    clang
-    # Add any other dependencies your project needs
-    tesseract
-    glibc
-  ];
-
-  # Set environment variables needed for bindgen
-  LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-  BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.llvmPackages.clang.version}/include";
-
-  NIX_CFLAGS_COMPILE = "-I${pkgs.glibc.dev}/include";
-  # Tesseract needs these at runtime
-  TESSDATA_PREFIX = "${pkgs.tesseract}/share/tessdata";
-}
+# {pkgs ? import <nixpkgs> {}}:
+# with pkgs;
+#   mkShell {
+#     name = "lifelog-shell";
+#
+#     buildInputs = [
+#       glib
+#       clang
+#       llvmPackages.libcxxClang
+#       libclang.lib
+#       pkg-config
+#     ];
+#
+#     BINDGEN_EXTRA_CLANG_ARGS = "-isystem ${llvmPackages.libclang.lib}/lib/clang/${lib.versions.major (lib.getVersion clang)}/include";
+#     LIBCLANG_PATH = "${libclang.lib}/lib";
+#
+#     shellHook = ''
+#       # Mirror what gcc-wrapper would do:
+#       export CFLAGS="$(< ${stdenv.cc}/nix-support/cc-cflags)"
+#       export CXXFLAGS="$(< ${stdenv.cc}/nix-support/libcxx-cxxflags)"
+#     '';
+#   }

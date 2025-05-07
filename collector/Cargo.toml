@@ -10,6 +10,8 @@ config = { path = "../common/config" }
 lifelog-macros = { path = "../common/macros"}
 lifelog-core = {path="../common/lifelog-core"}
 lifelog-types = {path="../common/lifelog-types"}
+lifelog-proto = { path = "../common/lifelog-proto" }
+data-modalities = { path = "../common/data-modalities" } 
 
 # Inherit workspace dependencies where possible
 tonic = { workspace = true }
@@ -23,7 +25,7 @@ anyhow = { workspace = true }
 log = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-rusqlite = { workspace = true, features = ["bundled"] } # Inherit from workspace
+rusqlite = { workspace = true, features = ["bundled"] } 
 
 sha2 = "0.10"
 toml = "0.5"
@@ -31,11 +33,10 @@ evdev = "0.13"
 dirs = "4.0"
 hyprland = "0.4.0-beta.1"
 users = "0.11"
-sysinfo = "0.29"
+sysinfo = "0.24" # TODO: Change this to version 0.35 and refactor the other code
 hound = "3.5.1"
 reqwest = { version = "0.11", features = ["json"] }
-rocket = "0.5.1"
-clap = { version = "4", features = ["derive"] } 
+clap = { version = "4.5", features = ["derive"] } 
 crossbeam-channel = "0.5"
 rdev = "0.5"
 image = "0.25"
@@ -45,33 +46,28 @@ surrealdb = "2.2.2"
 mobc = "0.8.5"
 derive_more = { version = "2.0.1", features = ["full"] }
 mobc-surrealdb = "0.2.0"
+tonic-reflection = { version = "0.13.1", features = ["server"] }
+rand = "0.9.1"
+tokio-stream = { version = "0.1.17", features = ["full"] }
+futures-core = "0.3.31"
 
-#gRPC
+
+dashmap = {workspace = true}
+
 prost-types = { workspace = true }
 
 [build-dependencies]
-# Specify version directly, don't inherit from workspace dependencies
-tonic-build = "0.9" # Match version used in interface
-
-[dependencies.uuid]
-version = "1.16.0"
-# Lets you generate random UUIDs
-features = [
-    "v6",
-]
+tonic-build = {workspace = true}
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rscam = { version = "0.5.5"}
-
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tempfile = "3.8.1"
 
 [features]
-dev= []
+dev= ["config/dev"]
 
 [dev-dependencies]
 anyhow = "1"
 
-# Collector-specific dependencies (if any remain)
-dashmap = "5.5"

@@ -1,1 +1,1 @@
-{"fields":[["name","String"],["timestamp","DateTime<Utc>"]],"ident":"CollectorState","metadata_type":"None"}
+{"fields":[["name","String"],["timestamp","DateTime<Utc>"]],"ident":"CollectorState","metadata_type":"None","variants":[]}
