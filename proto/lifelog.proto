@@ -127,5 +127,5 @@ service CollectorService {
   rpc SetConfig(SetCollectorConfigRequest) returns (SetCollectorConfigResponse);
 
   // This rpc will be used to get the data from the collector. The collector will respond with the data that it has. This is useful for when the server wants to get data from the collector.
-  rpc GetData(GetDataRequest) returns (GetDataResponse);
+  rpc GetData(GetDataRequest) returns (stream LifelogData);
 }

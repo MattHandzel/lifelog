@@ -9,8 +9,11 @@ use std::sync::Arc;
 use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
+use futures_core::Stream;
 use lifelog_types::CollectorState;
 use tokio::sync::RwLock;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 
@@ -386,16 +389,17 @@ impl CollectorService for GRPCServerCollectorService {
     }
 
     // TODO: Refactor this so it's a stream?
+    type GetDataStream = ReceiverStream<Result<LifelogData, tonic::Status>>;
+
+    // NOTE: This utilizes a stream which, for large data sends (over 1MB) it is cheaper than doing
+    // a unary RPC. Maybe in future don't stream all data.
+    // TODO: Refactor this function so we can send data that is larger than 4MB (for example,
+    // screenshots can easily get above 4MB)
     async fn get_data(
         &self,
         _request: tonic::Request<GetDataRequest>,
-    ) -> Result<tonic::Response<GetDataResponse>, tonic::Status> {
-        // When data‑retrieval is wired up, replace this with a real stream.
-        // For now we return an empty stream so the call completes gracefully.
-
-        // TODO: Read the current data buffer and write all the data here to send
-        // TODO: How to ensure the data was actually received? Maybe the server can send a command
-        // to erase data with specific uuids and then the collector can listen?
+    ) -> Result<tonic::Response<Self::GetDataStream>, tonic::Status> {
+        let (tx, rx) = tokio::sync::mpsc::channel(8);
 
         let mut rng = rand::rng();
         let fake_data: Vec<ScreenFrame> = rand::distr::StandardUniform
@@ -403,16 +407,21 @@ impl CollectorService for GRPCServerCollectorService {
             .take(16)
             .collect(); // 16
                         // fake images
+        tokio::spawn(async move {
+            // TODO: For all messages we want to send, raise an error if the message is larger than
+            // 4 MB. (TCP limit). We want to raise error here and not in production.
+            for f in fake_data {
+                println!("Sending data: {:?}", f);
+                let _ = tx
+                    .send(Ok(lifelog_proto::LifelogData {
+                        payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(f.into())), // TODO:
+                                                                                                    // change name of screenframe so it matches the type
+                    }))
+                    .await
+                    .unwrap();
+            }
+        });
 
-        // TODO: Message size limit is ~4 MB, we might need to do some streaming...
-        Ok(tonic::Response::new(GetDataResponse {
-            data: fake_data
-                .into_iter()
-                .map(|i| lifelog_proto::LifelogData {
-                    payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(i.into())), // TODO:
-                                                                                                // change name of screenframe so it matches the type
-                })
-                .collect(),
-        }))
+        Ok(tonic::Response::new(ReceiverStream::new(rx)))
     }
 }

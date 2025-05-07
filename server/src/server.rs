@@ -29,6 +29,10 @@ use lifelog_proto::collector_service_client::CollectorServiceClient;
 
 use sysinfo::System;
 
+use futures_core::Stream;
+use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+
 //type Loader = fn(&Surreal<Client>, &[Uuid]) -> anyhow::Result<Vec<LifelogData>>;
 
 //static MODALITY_REGISTRY: Lazy<DashMap<DataModality, Loader>> =
@@ -116,7 +120,6 @@ impl ServerHandle {
 
     // TODO: Refactor having to define all of these functions... I am not a fan of them...
     pub async fn register_collector(&self, collector: RegisteredCollector) {
-        println!("Trying to register collector: {:?}", collector);
         let mut server = self.server.write().await;
         server.register_collectors.write().await.push(collector);
     }
@@ -219,7 +222,6 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 )))
             }
             Ok(endpoint) => {
-                println!("Trying to connect to endpoint: {:?}", endpoint);
                 let endpoint = endpoint.connect_timeout(time::Duration::from_secs(10));
 
                 let channel = endpoint.connect().await.map_err(|e| {
@@ -232,7 +234,6 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                     address: collector_ip.to_string(),
                     grpc_client: client.clone(),
                 };
-                println!("Collector: {:?}", collector);
                 self.server.register_collector(collector.clone()).await;
                 println!("Registering collector: {:?}", collector);
 
@@ -387,8 +388,15 @@ impl Server {
         return self.policy.clone();
     }
 
+    // NOTE: This function makes an assumption that each collector's name is unique. If the
+    // collector has a different name then they are different collectors, same name means same
+    // collector. Are there any problems with this?
     async fn contains_collector(&self, collector_name: String) -> bool {
         let collectors = self.register_collectors.read().await;
+        println!(
+            "Checking if collector {} is registered: {:?}",
+            collector_name, collectors
+        );
         for collector in collectors.iter() {
             if collector.id == collector_name {
                 return true;
@@ -435,7 +443,7 @@ impl Server {
     }
 
     async fn add_audit_log(&self, action: &ServerAction) {
-        println!("Adding audit log for action: {:?}", action);
+        //println!("Adding audit log for action: {:?}", action);
     }
 
     // TODO: Maybe i can use rayon for automatic parallelism?
@@ -449,18 +457,30 @@ impl Server {
             ServerAction::SyncData(query) => {
                 // Get the target data modalities(s) from the query
                 let mut collectors = self.register_collectors.write().await;
-                println!("Syncing data with collectors: {:?}", collectors);
                 for collector in collectors.iter_mut() {
                     println!("Syncing data with collector: {:?}", collector);
-                    let data = collector
+                    // TODO: This code can fail here (notice the unwraps, I should handle it.
+                    let mut stream = collector
                         .grpc_client
                         .get_data(GetDataRequest {
                             uuids: vec![query.clone().into()],
                         })
                         .await
-                        .unwrap();
-                    println!("Data: {:?}", data);
+                        .unwrap()
+                        .into_inner();
+                    println!("Defined the stream here...");
+
+                    while let Some(chunk) = stream.next().await {
+                        println!(
+                            "Received {:?} from {}",
+                            chunk.unwrap().payload,
+                            collector.id
+                        );
+                        // TODO: add to database
+                    }
+                    println!("Done receiving data");
                 }
+                tokio::time::sleep(tokio::time::Duration::from_millis(1100)).await;
 
                 // For now, assume we want to sync all data modalities
 

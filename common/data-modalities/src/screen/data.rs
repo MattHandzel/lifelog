@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 pub struct ScreenFrame {
     pub width: u32,
     pub height: u32,
-    pub image: Vec<u8>,
+    pub image_bytes: Vec<u8>,
+    pub mime_type: String, // TODO: Refactor this to use mime type object, not doing it rn because
+                           // macro is a pain
 }
 
 impl Modality for ScreenFrame {
@@ -33,7 +35,7 @@ impl Distribution<ScreenFrame> for StandardUniform {
             .map(char::from)
             .collect();
         let width = rng.random_range(10..100); // TODO: REFACTOR THIS RANGE TO BE REALISTIC
-        let height = rng.random_range(10..100); //TODO: REFACTOR THIS RANGE TO BE REALISTIC 
+        let height = rng.random_range(10..100); //TODO: REFACTOR THIS RANGE TO BE REALISTIC
         let uuid = Uuid::new_v4(); // TODO: REfactor to use v6 (one version througohut the entire
                                    // project)
         let timestamp = Utc::now();
@@ -43,7 +45,9 @@ impl Distribution<ScreenFrame> for StandardUniform {
             timestamp,
             width,
             height,
-            image,
+            image_bytes: image,
+            mime_type: "image/png".to_string(), // TODO: Refactor this to use mime type object, not doing it
+                                                // rn because macro is a pain
         }
     }
 }

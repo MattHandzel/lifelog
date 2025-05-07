@@ -2805,6 +2805,7 @@ dependencies = [
  "derive_more 2.0.1",
  "dirs",
  "evdev",
+ "futures-core",
  "hound",
  "hyprland",
  "image",
@@ -2830,6 +2831,7 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
+ "tokio-stream",
  "toml 0.5.11",
  "tonic",
  "tonic-build",
@@ -2889,6 +2891,7 @@ dependencies = [
  "config",
  "dashmap 6.1.0",
  "data-modalities",
+ "futures-core",
  "lifelog-core",
  "lifelog-macros",
  "lifelog-proto",
@@ -2903,6 +2906,7 @@ dependencies = [
  "sysinfo 0.35.0",
  "thiserror 2.0.12",
  "tokio",
+ "tokio-stream",
  "toml 0.8.22",
  "tonic",
  "tonic-build",
@@ -5729,6 +5733,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]

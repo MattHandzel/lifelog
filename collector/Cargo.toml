@@ -43,6 +43,8 @@ derive_more = { version = "2.0.1", features = ["full"] }
 mobc-surrealdb = "0.2.0"
 tonic-reflection = { version = "0.13.1", features = ["server"] }
 rand = "0.9.1"
+tokio-stream = { version = "0.1.17", features = ["full"] }
+futures-core = "0.3.31"
 
 #gRPC
 tonic = "0.13.0"

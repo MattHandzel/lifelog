@@ -30,6 +30,8 @@ data-modalities = { path = "../common/data-modalities" } # TODO: refactor, we sh
 once_cell = "1.21.3"
 strum = { version = "0.27.1", features = ["derive"] }
 sysinfo = { version = "0.35.0", features = ["network", "multithread", "disk"] }
+tokio-stream = { version = "0.1.17", features = ["full"] }
+futures-core = "0.3.31"
 
 
 [build-dependencies]

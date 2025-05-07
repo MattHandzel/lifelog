@@ -91,8 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     let server_addr = cli.server_address;
-    let id = Uuid::new_v4();
-    let client_id = format!("client-{}", id);
+    let client_id = config.id.clone();
 
     let addr = format!("{}:{}", config.host.clone(), config.port.clone()).parse()?;
     let collector = Arc::new(tokio::sync::RwLock::new(Collector::new(
