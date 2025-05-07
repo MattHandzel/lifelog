@@ -1,11 +1,6 @@
-use lifelog_interface_lib::config::load_config;
-use lifelog_interface_lib::modules::*;
+use config::load_config;
 use lifelog_interface_lib::setup;
-use std::env;
 use std::sync::Arc;
-use tokio::join;
-use tokio::sync::RwLock;
-use tokio::task;
 
 #[tokio::main]
 async fn main() {
@@ -23,7 +18,7 @@ async fn main() {
         .unwrap_or_else(|| "unknown".to_string());
 
     println!("Starting Life Logger! Binary: {}", binary_name);
-    let config = Arc::new(load_config());
+    let _config = Arc::new(load_config());
 
     // Check to see if there is another instance of lifelog running
     if setup::is_already_running(&binary_name) {
@@ -33,60 +28,10 @@ async fn main() {
         return;
     }
 
-    setup::initialize_project(&config).expect("Failed to initialize project");
+    setup::initialize_project().expect("Failed to initialize project");
 
-    let mut tasks = Vec::new();
-
-    if config.screen.enabled {
-        let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            screen::start_logger(&config_clone.screen).await
-        }));
-    }
-    if config.camera.enabled {
-        let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            camera::start_logger(&config_clone.camera).await
-        }));
-    }
-
-    if config.hyprland.enabled {
-        let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            hyprland::start_logger(&config_clone.hyprland).await
-        }));
-    }
-
-    // Add to existing task spawning code
-    if config.processes.enabled {
-        let config_clone = Arc::clone(&config);
-        tasks.push(tokio::spawn(async move {
-            processes::start_logger(&config_clone.processes).await
-        }));
-    }
-
-    let user_is_running_wayland = env::var("WAYLAND_DISPLAY").is_ok();
-    if config.input_logger.enabled {
-        let config_clone = Arc::clone(&config);
-        if user_is_running_wayland {
-            tasks.push(tokio::spawn(async move {
-                evdev_input_logger::start_logger(&config.input_logger).await;
-            }));
-        } else {
-            tasks.push(tokio::spawn(async move {
-                input_logger::start_logger(&config.input_logger).await;
-            }));
-        }
-    }
-    //if config.microphone.enabled {
-    //    let config_clone = Arc::clone(&config);
-    //    tasks.push(tokio::spawn(async move {
-    //        microphone::start_logger(&config_clone.microphone).await;
-    //    }));
-    //}
-
-    // Wait for all tasks to complete
-    for task in tasks {
-        let _ = task.await;
-    }
+    // The modules being referenced don't exist in the library
+    // Instead we should be using the API client to communicate with the server
+    println!("All modules will be handled by the server process.");
+    println!("This binary is deprecated. Please use the lifelog-server-backend instead.");
 }

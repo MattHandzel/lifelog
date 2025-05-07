@@ -38,7 +38,7 @@ impl DataLogger for HyprlandLogger {
         self.running_flag.store(true, Ordering::SeqCst);
 
         while self.running_flag.load(Ordering::SeqCst) {
-            let timestamp = current_timestamp();
+            let _timestamp = current_timestamp();
             self.log_data().await?;
 
             sleep(Duration::from_secs_f64(self.config.interval)).await;
