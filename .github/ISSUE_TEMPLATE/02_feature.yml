@@ -17,8 +17,8 @@ body:
       placeholder: "If you have a preferred approach, outline it."
   - type: textarea
     id: alternatives
-    placeholder: "Consider alternative solutions..."
     attributes:
+      placeholder: "Consider alternative solutions..."
       label: Alternatives considered
   - type: textarea
     id: context
