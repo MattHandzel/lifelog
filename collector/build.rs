@@ -6,7 +6,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     tonic_build::configure()
         .file_descriptor_set_path(out_dir.join("lifelog_descriptor.bin"))
-        .compile_protos(
+        .compile(
             &["../proto/lifelog.proto", "../proto/lifelog_types.proto"],
             &["../proto"],
         )?;
