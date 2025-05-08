@@ -1,22 +1,11 @@
-// Export all modules needed by the main binary
-// pub mod config; - Using common config crate instead
 pub mod embed {
     // Empty placeholder module
 }
 
-// No longer needed with the new API-based architecture
-// pub mod modules {
-//     // Empty placeholder module
-// }
-
 pub mod prelude;
 pub mod setup;
 pub mod storage;
-// pub mod utils; - Using common utils crate instead
-
-// Re-export commonly used items
 pub use config::*;
-// pub use modules::*;  // No longer using direct module access
 pub use setup::*;
 pub use utils::*;
 
@@ -56,21 +45,107 @@ pub mod config_utils {
         let config = load_config();
         config.microphone.clone()
     }
+
+    // Add saving functions
+    pub fn save_screen_config(screen_config: &config::ScreenConfig) {
+        match dirs::home_dir() {
+            Some(home_dir) => {
+                let config_dir = home_dir.join(".lifelog");
+                std::fs::create_dir_all(&config_dir).unwrap_or_else(|_| {
+                    println!("Could not create config directory");
+                });
+                let config_file = config_dir.join("screen_config.json");
+                let config_json = serde_json::to_string_pretty(screen_config).unwrap_or_else(|_| {
+                    println!("Could not serialize screen config");
+                    "{}".to_string()
+                });
+                std::fs::write(config_file, config_json).unwrap_or_else(|_| {
+                    println!("Could not write screen config file");
+                });
+            }
+            None => {
+                println!("Could not get home directory");
+            }
+        }
+    }
+
+    pub fn save_microphone_config(microphone_config: &config::MicrophoneConfig) {
+        match dirs::home_dir() {
+            Some(home_dir) => {
+                let config_dir = home_dir.join(".lifelog");
+                std::fs::create_dir_all(&config_dir).unwrap_or_else(|_| {
+                    println!("Could not create config directory");
+                });
+                let config_file = config_dir.join("microphone_config.json");
+                let config_json = serde_json::to_string_pretty(microphone_config).unwrap_or_else(|_| {
+                    println!("Could not serialize microphone config");
+                    "{}".to_string()
+                });
+                std::fs::write(config_file, config_json).unwrap_or_else(|_| {
+                    println!("Could not write microphone config file");
+                });
+            }
+            None => {
+                println!("Could not get home directory");
+            }
+        }
+    }
+
+    pub fn save_text_upload_config(text_config: &config::TextUploadConfig) {
+        match dirs::home_dir() {
+            Some(home_dir) => {
+                let config_dir = home_dir.join(".lifelog");
+                std::fs::create_dir_all(&config_dir).unwrap_or_else(|_| {
+                    println!("Could not create config directory");
+                });
+                let config_file = config_dir.join("text_upload_config.json");
+                let config_json = serde_json::to_string_pretty(text_config).unwrap_or_else(|_| {
+                    println!("Could not serialize text upload config");
+                    "{}".to_string()
+                });
+                std::fs::write(config_file, config_json).unwrap_or_else(|_| {
+                    println!("Could not write text upload config file");
+                });
+            }
+            None => {
+                println!("Could not get home directory");
+            }
+        }
+    }
+
+    pub fn save_processes_config(processes_config: &config::ProcessesConfig) {
+        match dirs::home_dir() {
+            Some(home_dir) => {
+                let config_dir = home_dir.join(".lifelog");
+                std::fs::create_dir_all(&config_dir).unwrap_or_else(|_| {
+                    println!("Could not create config directory");
+                });
+                let config_file = config_dir.join("processes_config.json");
+                let config_json = serde_json::to_string_pretty(processes_config).unwrap_or_else(|_| {
+                    println!("Could not serialize processes config");
+                    "{}".to_string()
+                });
+                std::fs::write(config_file, config_json).unwrap_or_else(|_| {
+                    println!("Could not write processes config file");
+                });
+            }
+            None => {
+                println!("Could not get home directory");
+            }
+        }
+    }
 }
 
-// New API client module for communicating with the server
 pub mod api_client {
     use reqwest::Client;
     use serde::{Deserialize, Serialize};
     use std::env;
     use std::time::Duration;
 
-    // API base URL - defaults to localhost:8080 if not set
     pub fn get_api_base_url() -> String {
         env::var("VITE_API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string())
     }
 
-    // Create a new API client with reasonable defaults
     pub fn create_client() -> Client {
         Client::builder()
             .timeout(Duration::from_secs(30))
@@ -78,7 +153,6 @@ pub mod api_client {
             .expect("Failed to create HTTP client")
     }
 
-    // Generic API response structure
     #[derive(Debug, Serialize, Deserialize)]
     pub struct ApiResponse<T> {
         pub success: bool,

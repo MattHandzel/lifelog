@@ -1,23 +1,20 @@
 import { useState, useEffect, useRef } from 'react';
-import { invoke } from '@tauri-apps/api/core'; // Ensure invoke is imported
+import { invoke } from '@tauri-apps/api/core';
 import { Button } from './ui/button';
 import { Camera, X, Settings, Power, Clock, ArrowUpDown, RefreshCw } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
-import axios from 'axios'; // Keep axios for fetching image data, remove for config
+import axios from 'axios';
 
-// Server API endpoint for non-config data
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface Screenshot {
-  id: number; // Keep this if server provides it, otherwise use path or timestamp as key
+  id: number;
   timestamp: number;
   path: string;
   dataUrl?: string;
-  // Add other fields if available from server like width/height
 }
 
-// Mirror the ScreenConfig structure from lifelog_types.proto
 interface ScreenConfig {
 	enabled: boolean;
 	interval: number;
@@ -35,22 +32,19 @@ export default function ScreenDashboard() {
   const [selectedScreenshot, setSelectedScreenshot] = useState<Screenshot | null>(null);
   const [totalPages, setTotalPages] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
-  // Use the ScreenConfig interface for settings state
   const [settings, setSettings] = useState<ScreenConfig | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
-  // Use separate state for temporary edits in the settings panel
-  const [tempInterval, setTempInterval] = useState(60); // Default or load from settings
-  const [tempEnabled, setTempEnabled] = useState(true); // Default or load from settings
+  const [tempInterval, setTempInterval] = useState(60);
+  const [tempEnabled, setTempEnabled] = useState(true);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const refreshIntervalRef = useRef<number>();
   const pageSize = 9;
 
-  // Initial load effect
   useEffect(() => {
-    loadScreenshots(); // Keep loading screenshot list via axios/API
-    loadSettings(); // Load settings via Tauri invoke
+    loadScreenshots();
+    loadSettings();
 
     const savedAutoRefresh = localStorage.getItem('screenshots_auto_refresh');
     if (savedAutoRefresh !== null) {
@@ -58,10 +52,9 @@ export default function ScreenDashboard() {
     }
   }, []);
 
-  // Handle page changes for screenshots
   useEffect(() => {
     loadScreenshots();
-  }, [currentPage, sortOrder]); // Reload when sort order changes too
+  }, [currentPage, sortOrder]);
 
   // Handle auto-refresh setup/teardown based on settings interval
   useEffect(() => {
@@ -71,15 +64,14 @@ export default function ScreenDashboard() {
     }
 
     if (autoRefresh && settings && settings.enabled && settings.interval > 0) {
-       console.log(`Setting up auto-refresh interval: ${settings.interval} seconds`);
+       console.log(`[Screen] Setting up auto-refresh interval: ${settings.interval} seconds`);
        refreshIntervalRef.current = window.setInterval(() => {
-         console.log('Auto-refreshing screenshots...');
+         console.log('[Screen] Auto-refreshing...');
          // Refresh only if currently on the first page and sorting by newest
-         // to avoid unexpected page jumps
          if (currentPage === 1 && sortOrder === 'desc') {
            loadScreenshots();
          } else {
-           console.log("Auto-refresh skipped (not on page 1 or not sorting by newest)");
+           console.log("[Screen] Auto-refresh skipped (not page 1 or not newest sort)");
          }
        }, settings.interval * 1000);
     }
@@ -94,93 +86,79 @@ export default function ScreenDashboard() {
     };
   }, [autoRefresh, settings?.interval, settings?.enabled, currentPage, sortOrder]);
 
-  // Load screenshot list (remains using axios for now)
   async function loadScreenshots() {
     setIsLoading(true);
     try {
-      // Fetch screenshot list from API
        const response = await axios.get(`${API_BASE_URL}/api/logger/screen/data`, {
          params: {
            page: currentPage,
            page_size: pageSize,
            limit: pageSize,
-           // Apply sorting based on state
            ...(sortOrder === 'desc' ? { filter: "ORDER BY timestamp DESC" } : { filter: "ORDER BY timestamp ASC" })
          }
        });
 
-       console.log("Screen frames list loaded:", response.data);
+       console.log("[Screen] Frames list loaded:", response.data);
 
-       // Assuming response.data is an array of screenshot metadata objects
-       // Map to Screenshot interface, might need adjustments based on actual API response
        const mappedScreenshots = response.data.map((item: any) => ({
-          // Use a unique identifier if available, otherwise generate one or use path/timestamp
-          id: item.id ?? Math.random(), // Example: Use id if present, otherwise random (not ideal for keys)
+          id: item.id ?? Math.random(),
           timestamp: item.timestamp,
           path: item.path,
-          // dataUrl will be loaded on demand or preloaded below
         }));
 
-      // Preload image data (optional, can also load onClick)
       const screenshotsWithData = await Promise.all(
         mappedScreenshots.map(async (screenshot: Screenshot) => {
           try {
-            const imageResponse = await axios.get(`${API_BASE_URL}/api/files/screen/${screenshot.path}`, { // Assuming API structure
+            const imageResponse = await axios.get(`${API_BASE_URL}/api/files/screen/${screenshot.path}`, {
               responseType: 'blob'
             });
             const dataUrl = URL.createObjectURL(imageResponse.data);
             return { ...screenshot, dataUrl };
           } catch (error) {
-            console.error(`Failed to load data for screenshot ${screenshot.path}:`, error);
-            return screenshot; // Return original object if loading fails
+            console.error(`[Screen] Failed to load data for ${screenshot.path}:`, error);
+            return screenshot;
           }
         })
       );
 
       setScreenshots(screenshotsWithData);
 
-      // Calculate total pages (adjust based on how API provides total count)
       const totalCountHeader = response.headers['x-total-count'];
-      const totalCount = totalCountHeader ? parseInt(totalCountHeader) : screenshotsWithData.length + (currentPage * pageSize); // Estimate if header missing
+      const totalCount = totalCountHeader ? parseInt(totalCountHeader) : screenshotsWithData.length + (currentPage * pageSize);
       setTotalPages(Math.ceil(totalCount / pageSize));
 
     } catch (error) {
-      console.error('Failed to load screenshots:', error);
-      // Maybe show an error message to the user
+      console.error('[Screen] Failed to load screenshots:', error);
     } finally {
       setIsLoading(false);
     }
   }
 
-  // Load settings using Tauri invoke
   async function loadSettings() {
     setIsLoadingSettings(true);
     try {
-      console.log("Requesting screen config via Tauri...");
-      // Use invoke to call the generic backend function
+      console.log("[Screen] Requesting config via Tauri...");
       const result = await invoke("get_component_config", { componentName: "screen" });
-      console.log("Received screen config from Tauri:", result);
+      console.log("[Screen] Received config from Tauri:", result);
 
-      // Assuming result is the ScreenConfig object or null
       if (result && typeof result === 'object') {
-         // Explicitly cast to ScreenConfig - ensure properties match
          const loadedSettings = result as ScreenConfig;
 
-         // Validate required fields (optional but recommended)
          if (typeof loadedSettings.enabled !== 'boolean' || typeof loadedSettings.interval !== 'number') {
+            console.error("[Screen] Invalid settings format from backend.", loadedSettings);
             throw new Error("Received invalid settings format from backend.");
          }
 
+        console.log("[Screen] Parsed settings successfully:", loadedSettings);
         setSettings(loadedSettings);
         setTempInterval(loadedSettings.interval);
         setTempEnabled(loadedSettings.enabled);
       } else if (result === null) {
-          console.warn("Backend returned null for screen config. Using defaults.");
-          // Handle null case: use default settings or show an error
+          console.warn("[Screen] Backend returned null config. Using defaults.");
           const defaultSettings: ScreenConfig = {
               enabled: false,
               interval: 60,
-              output_dir: "", // Provide defaults if needed
+              output_dir: "",
               program: "",
               timestamp_format: ""
           };
@@ -188,25 +166,24 @@ export default function ScreenDashboard() {
           setTempInterval(defaultSettings.interval);
           setTempEnabled(defaultSettings.enabled);
       } else {
+          console.error("[Screen] Unexpected data format for settings:", result);
           throw new Error("Received unexpected data format for settings.");
       }
 
     } catch (error) {
-      console.error('Failed to load screen settings via Tauri:', error);
-      // Optionally set default settings or show an error message
+      console.error('[Screen] Failed to load settings via Tauri:', error);
        const defaultSettings: ScreenConfig = {
            enabled: false, interval: 60, output_dir: "", program: "", timestamp_format: ""
        };
-       setSettings(defaultSettings); // Fallback to default
+       setSettings(defaultSettings);
        setTempInterval(defaultSettings.interval);
        setTempEnabled(defaultSettings.enabled);
-       alert(`Failed to load settings: ${error}`); // Inform user
+       alert(`Failed to load settings: ${error}`);
     } finally {
       setIsLoadingSettings(false);
     }
   }
 
-  // Save settings using Tauri invoke
   async function saveSettings() {
     if (!settings) {
         alert("Cannot save settings: Current settings not loaded.");
@@ -224,46 +201,46 @@ export default function ScreenDashboard() {
 
     setIsSavingSettings(true);
     try {
-        // Construct the updated config object based on temp state
-        // Make sure to include all fields expected by the ScreenConfig struct
         const updatedConfig: ScreenConfig = {
-          ...settings, // Start with existing settings (includes output_dir etc.)
+          ...settings,
           enabled: tempEnabled,
           interval: tempInterval,
-          // Ensure other fields from 'settings' are included if they exist
           output_dir: settings.output_dir || "",
           program: settings.program || "",
           timestamp_format: settings.timestamp_format || ""
         };
 
-        console.log("Saving screen config via Tauri:", updatedConfig);
+        console.log("[Screen] Saving config via Tauri:", updatedConfig);
 
-        // Use invoke to call the generic backend function
         await invoke("set_component_config", {
             componentName: "screen",
-            config: updatedConfig // Pass the complete object
+            config: updatedConfig
         });
 
-        console.log("Screen settings saved successfully via Tauri.");
+        console.log("[Screen] Settings saved successfully via Tauri.");
 
         setSettings(updatedConfig);
         setShowSettings(false);
 
+        if (wasAutoRefreshEnabled) {
+          setTimeout(() => {
+            setAutoRefresh(true);
+          }, 1000); // Delay to ensure settings take effect
+        }
+
+        if (wasAutoRefreshEnabled && updatedConfig.enabled && updatedConfig.interval > 0) {
+          console.log(`[Screen] Updated auto-refresh interval: ${updatedConfig.interval} seconds`);
+        }
+
     } catch (error) {
-        console.error('Failed to save settings via Tauri:', error);
+      console.error('[Screen] Failed to save settings via Tauri:', error);
         alert(`Failed to save settings: ${error}`);
     } finally {
         setIsSavingSettings(false);
-        if (wasAutoRefreshEnabled) {
-           setTimeout(() => setAutoRefresh(true), 500);
-        }
     }
   }
 
-
-  // --- Helper functions (formatTimestamp, handlePreviousPage, etc.) remain largely the same ---
    function formatTimestamp(timestamp: number): string {
-    // Multiply by 1000 if timestamp is in seconds
     const date = new Date(timestamp * 1000);
     return date.toLocaleString(undefined, {
       year: 'numeric', month: 'short', day: 'numeric',
@@ -284,10 +261,9 @@ export default function ScreenDashboard() {
   }
 
   function handleScreenshotClick(screenshot: Screenshot) {
-    console.log("Opening screenshot:", screenshot);
-    // Use the dataUrl if available, otherwise construct API path
+    console.log("[Screen] Opening screenshot:", screenshot);
     const imageUrl = screenshot.dataUrl || `${API_BASE_URL}/api/files/screen/${screenshot.path}`;
-    setSelectedImage(imageUrl); // Store the URL to display
+    setSelectedImage(imageUrl);
     setSelectedScreenshot(screenshot);
   }
 
@@ -298,7 +274,6 @@ export default function ScreenDashboard() {
 
   function toggleSettings() {
     setShowSettings(!showSettings);
-    // Reset temp values from actual sttings when opening
     if (!showSettings && settings) {
       setTempInterval(settings.interval);
       setTempEnabled(settings.enabled);
@@ -321,11 +296,8 @@ export default function ScreenDashboard() {
 
   function toggleSortOrder() {
     setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
-    // Optionally reset to page 1 when changing sort order
-    // setCurrentPage(1);
   }
 
-  // Re-sort screenshots whenever screenshots or sortOrder changes
   const sortedScreenshots = [...screenshots].sort((a, b) => {
      return sortOrder === 'asc' ? a.timestamp - b.timestamp : b.timestamp - a.timestamp;
    });
@@ -344,7 +316,7 @@ export default function ScreenDashboard() {
                     onClick={toggleSettings}
                     variant="secondary"
                     className="flex items-center gap-2"
-                    disabled={isLoadingSettings} // Disable while loading initial settings
+                    disabled={isLoadingSettings}
                 >
                     {isLoadingSettings ? (
                          <RefreshCw className="w-4 h-4 animate-spin" />
@@ -399,12 +371,12 @@ export default function ScreenDashboard() {
                                  </div>
                                 <div className="px-4">
                                     <Slider
-                                        min={5} // Example: Minimum 5 seconds
-                                        max={600} // Example: Maximum 10 minutes
+                                        min={5} // Min 5 seconds
+                                        max={600} // Max 10 minutes
                                         step={5}
                                         value={[tempInterval]}
                                         onValueChange={(values) => setTempInterval(values[0])}
-                                        disabled={!tempEnabled} // Disable slider if capture is off
+                                        disabled={!tempEnabled}
                                         className="data-[disabled]:opacity-50"
                                     />
                                      <div className="flex justify-between text-xs text-[#9CA3AF] mt-2">
@@ -465,7 +437,7 @@ export default function ScreenDashboard() {
                           id="auto-refresh"
                           checked={autoRefresh}
                           onChange={(e) => setAutoRefresh(e.target.checked)}
-                          disabled={!settings || !settings.enabled} // Disable if logger off
+                          disabled={!settings || !settings.enabled}
                           className="h-4 w-4 text-[#4C8BF5] rounded focus:ring-2 focus:ring-[#4C8BF5]/20 bg-[#232B3D] border-[#2A3142] disabled:opacity-50"
                       />
                       <label htmlFor="auto-refresh" className={`text-sm font-medium ${!settings || !settings.enabled ? 'text-[#9CA3AF]' : 'text-[#F9FAFB]'}`}>
@@ -511,13 +483,9 @@ export default function ScreenDashboard() {
                 ) : (
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                          {sortedScreenshots.map((screenshot) => {
-                            // Calculation for display number can be complex with server-side pagination + client sort
-                            // Let's simplify or remove it for now unless total count is reliable
-                            // const displayNumber = ...
-
                              return (
                                 <div
-                                    key={screenshot.path} // Use path or timestamp if ID isn't stable/available
+                                    key={screenshot.path}
                                     className="card card-hover overflow-hidden cursor-pointer group"
                                     onClick={() => handleScreenshotClick(screenshot)}
                                 >
@@ -527,11 +495,10 @@ export default function ScreenDashboard() {
                                                 src={screenshot.dataUrl}
                                                 alt={`Screenshot from ${formatTimestamp(screenshot.timestamp)}`}
                                                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                                loading="lazy" // Lazy load images
+                                                loading="lazy"
                                             />
                                         ) : (
                                              <div className="w-full h-full flex items-center justify-center text-[#9CA3AF]">
-                                                 {/* Placeholder or spinner */}
                                                  <RefreshCw className="w-6 h-6 animate-spin" />
                                              </div>
                                          )}
@@ -544,7 +511,7 @@ export default function ScreenDashboard() {
                                              {formatTimestamp(screenshot.timestamp)}
                                          </div>
                                          <div className="text-xs text-gray-400 mt-1 truncate" title={screenshot.path}>
-                                            {screenshot.path.split('/').pop()} {/* Show only filename */}
+                                            {screenshot.path.split('/').pop()}
                                         </div>
                                      </div>
                                 </div>
@@ -568,9 +535,8 @@ export default function ScreenDashboard() {
                    className="relative max-w-7xl max-h-[90vh] bg-[#1C2233] rounded-lg shadow-2xl overflow-hidden"
                    onClick={(e) => e.stopPropagation()}
                >
-                    {/* Consider adding loading state for full image */}
                     <img
-                         src={selectedImage} // Use the stored URL (dataUrl or API path)
+                         src={selectedImage}
                          alt={`Full size screenshot from ${selectedScreenshot ? formatTimestamp(selectedScreenshot.timestamp) : ''}`}
                          className="block max-w-full max-h-[90vh] object-contain"
                      />
