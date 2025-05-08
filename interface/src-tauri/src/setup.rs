@@ -1,4 +1,4 @@
-use config::Config;
+use config::CollectorConfig;
 use rusqlite::Connection;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,23 +12,25 @@ pub fn ensure_directory(path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn initialize_project(config: &Config) -> std::io::Result<()> {
-    // TODO: Check to see if all of these things exist or not
-    // TODO: These should be moved inside their respective loggers
+/// Initializes the project structure, creating necessary directories and files.
+pub fn initialize_project() -> std::io::Result<()> {
+    // Example: Create a logs directory if it doesn't exist
+    // let log_dir = Path::new("./logs");
+    // if !log_dir.exists() {
+    //     fs::create_dir_all(log_dir)?;
+    // }
 
-    ensure_directory(Path::new(&config.screen.output_dir))?;
-    ensure_directory(Path::new(&config.system_performance.output_dir))?;
-    ensure_directory(Path::new(&config.ambient.output_dir))?;
-    ensure_directory(Path::new(&config.weather.output_dir))?;
-    ensure_directory(Path::new(&config.audio.output_dir))?;
-    ensure_directory(Path::new(&config.geolocation.output_dir))?;
-    ensure_directory(Path::new(&config.wifi.output_dir))?;
-    ensure_directory(Path::new(&config.camera.output_dir))?;
-    ensure_directory(Path::new(&config.microphone.output_dir))?;
-    ensure_directory(Path::new(&config.input_logger.output_dir))?;
+    // Placeholder for system inspection or other setup tasks
+    let mut sys = System::new_all();
+    sys.refresh_all();
 
-    //let keyboard_db = setup_keyboard_db(output_dir)?;
-    //let mouse_db = setup_mouse_db(output_dir)?;
+    println!("System initialized. Total processes: {}", sys.processes().len());
+
+    // // Example: Print process names (Corrected println! usage)
+    // for (pid, process) in sys.processes() {
+    //     println!("PID: {}, Name: {}", pid, process.name());
+    // }
+
     Ok(())
 }
 
@@ -36,7 +38,7 @@ pub fn is_already_running(process_name: &str) -> bool {
     let system = System::new_all();
     let mut process_count = 0;
     for process in system.processes_by_name(process_name) {
-        println!(process.name());
+        println!("{}", process.name());
         if process.name() == process_name {
             process_count += 1;
             if process_count > 1 {

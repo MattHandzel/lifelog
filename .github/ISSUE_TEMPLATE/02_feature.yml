@@ -1,0 +1,26 @@
+name: "✨ Feature request"
+description: "Suggest an idea or improvement."
+title: "[FEATURE]: "
+labels: ["feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: "What pain point are you trying to solve? (optional)"
+    validations:
+      required: false
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      placeholder: "If you have a preferred approach, outline it."
+  - type: textarea
+    id: alternatives
+    attributes:
+      placeholder: "Consider alternative solutions..."
+      label: Alternatives considered
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional content, inspiration, mockups, etc.

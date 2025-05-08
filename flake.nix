@@ -25,6 +25,7 @@
             openssl
             sqlite
             protobuf
+            rocksdb
           ]
           ++ pkgs.lib.optionals (pkgs.stdenv.isLinux) [
             alsa-lib
@@ -48,6 +49,7 @@
 
         nativeBuildInputs = with pkgs;
           [
+            llvmPackages.clang
             pkg-config
             cmake
           ]
@@ -69,6 +71,8 @@
           cargoLock.lockFile = ./Cargo.lock;
           cargoBuildFlags = ["-p" binName];
 
+          LIBCLANG_PATH = "${pkgs.llvmPackages.libclang}/lib";
+
           buildInputs = commonDeps.buildInputs;
           nativeBuildInputs = commonDeps.nativeBuildInputs;
 
@@ -77,6 +81,9 @@
             license = licenses.mit;
             maintainers = [maintainers.MattHandzel];
           };
+          preBuild = ''
+            cargo build
+          '';
         };
     in {
       lifelog-server = mkRustPackage {
@@ -131,9 +138,6 @@
           ];
       };
 
-      LIBCLANG_PATH = "${pkgs.llvmPackages.libclang.lib}/lib";
-      BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.llvmPackages.libclang.lib}/lib/clang/${pkgs.llvmPackages.clang.version}/include";
-      NIX_CFLAGS_COMPILE = "-I${pkgs.glibc.dev}/include";
       # Tesseract needs these at runtime
       TESSDATA_PREFIX = "${pkgs.tesseract}/share/tessdata";
     });

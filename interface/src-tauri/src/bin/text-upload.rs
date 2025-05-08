@@ -1,7 +1,6 @@
 use clap::{App, Arg, SubCommand};
-use lifelog_interface_lib::config::load_config;
-use lifelog_interface_lib::modules::text_upload;
-use std::path::Path;
+use config::load_config;
+use lifelog_interface_lib::api_client;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -32,48 +31,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .subcommand(SubCommand::with_name("list").about("List all uploaded text files"))
         .get_matches();
 
-    let config = load_config();
+    let _config = load_config();
+    let _client = api_client::create_client();
+    let _base_url = api_client::get_api_base_url();
 
     if let Some(matches) = matches.subcommand_matches("upload") {
         let file_path = matches.value_of("FILE").unwrap();
-        let result = text_upload::upload_file(&config.text_upload, Path::new(file_path)).await?;
-        println!("File uploaded successfully:");
-        println!("  Filename: {}", result.filename);
-        println!("  File type: {}", result.file_type);
-        println!("  File size: {} bytes", result.file_size);
-        println!("  Stored at: {}", result.stored_path);
-        println!("  Hash: {}", result.content_hash);
+        
+        println!("File upload functionality now requires the server to be running.");
+        println!("Please use the lifelog-server-backend service with the appropriate API endpoints.");
+        println!("Would have uploaded: {}", file_path);
+        
     } else if let Some(matches) = matches.subcommand_matches("search") {
         let pattern = matches.value_of("PATTERN").unwrap();
-        let results = text_upload::search_by_filename(&config.text_upload, pattern)?;
         
-        if results.is_empty() {
-            println!("No matching files found.");
-        } else {
-            println!("Found {} matching files:", results.len());
-            for (i, file) in results.iter().enumerate() {
-                println!("{}. {}", i + 1, file.filename);
-                println!("   Type: {}", file.file_type);
-                println!("   Size: {} bytes", file.file_size);
-                println!("   Path: {}", file.stored_path);
-                println!();
-            }
-        }
+        println!("Search functionality now requires the server to be running.");
+        println!("Please use the lifelog-server-backend service with the appropriate API endpoints.");
+        println!("Would have searched for: {}", pattern);
+        
     } else if let Some(_) = matches.subcommand_matches("list") {
-        let results = text_upload::get_all_files(&config.text_upload)?;
+        println!("List functionality now requires the server to be running.");
+        println!("Please use the lifelog-server-backend service with the appropriate API endpoints.");
         
-        if results.is_empty() {
-            println!("No files have been uploaded yet.");
-        } else {
-            println!("All uploaded files ({}):", results.len());
-            for (i, file) in results.iter().enumerate() {
-                println!("{}. {}", i + 1, file.filename);
-                println!("   Type: {}", file.file_type);
-                println!("   Size: {} bytes", file.file_size);
-                println!("   Path: {}", file.stored_path);
-                println!();
-            }
-        }
     } else {
         println!("Please provide a valid command. Use --help for more information.");
     }

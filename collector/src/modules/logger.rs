@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use thiserror::Error;
-use tokio::{task::JoinHandle};
+use tokio::task::JoinHandle;
 
 #[derive(Debug, Error)]
 pub enum LoggerError {

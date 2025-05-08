@@ -8,13 +8,21 @@ pub struct ServerConfig {
     pub host: String,
 
     #[serde(default = "default_server_port")]
-    pub port: u16,
+    pub port: u32, // TODO: REFACTOR TO u16, because it should be u16 but then I have some trouble
+    // for converting from u16 to u32 for the proto buf
 
-    #[serde(default = "default_database_path")]
-    pub database_path: String,
+    #[serde(default = "default_database_endpoint")]
+    pub database_endpoint: String,
 
     #[serde(default = "default_database_name")]
     pub database_name: String,
+
+    #[serde(default = "default_server_name")]
+    pub server_name: String,
+}
+
+pub fn default_database_endpoint() -> String {
+    "127.0.0.1:7183".to_string()
 }
 
 impl Default for ServerConfig {
@@ -22,10 +30,15 @@ impl Default for ServerConfig {
         Self {
             host: default_server_ip(),
             port: default_server_port(),
-            database_path: default_database_path(),
+            database_endpoint: default_database_endpoint(),
             database_name: default_database_name(),
+            server_name: default_server_name(),
         }
     }
+}
+
+pub fn default_server_name() -> String {
+    "LifelogServer".to_string()
 }
 
 pub fn default_database_path() -> String {
@@ -39,6 +52,6 @@ pub fn default_server_ip() -> String {
     "127.0.0.1".to_string()
 }
 
-pub fn default_server_port() -> u16 {
+pub fn default_server_port() -> u32{
     7182
 }

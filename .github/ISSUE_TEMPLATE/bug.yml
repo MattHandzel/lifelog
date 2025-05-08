@@ -1,7 +1,0 @@
-name: Bug Report
-description: Report a bug
-title: "[BUG] "
-labels: [bug]
-body:
-  - type: textarea
-    attributes: { label: "Description" }

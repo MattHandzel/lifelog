@@ -1,0 +1,12 @@
+[package]
+name="lifelog-proto"
+edition="2021"
+version="0.1.0"
+
+[dependencies]
+tonic = { version = "0.13.1" }
+prost = { version = "0.13.5"}
+prost-types = { version = "0.13.5"}
+
+[build-dependencies]
+tonic-build = { version = "0.13.1" }

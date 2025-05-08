@@ -7,7 +7,6 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
-use tokio::io::join;
 use utils::current_timestamp;
 
 use hyprland::data::{Clients, CursorPosition, Devices, Monitors, Workspace, Workspaces};
@@ -44,7 +43,7 @@ impl DataLogger for HyprlandLogger {
         self.running_flag.store(true, Ordering::SeqCst);
 
         while self.running_flag.load(Ordering::SeqCst) {
-            let timestamp = current_timestamp();
+            let _timestamp = current_timestamp();
             self.log_data().await?;
 
             sleep(Duration::from_secs_f64(self.config.interval)).await;

@@ -23,13 +23,18 @@ pub use utils::*;
 // Define utility functions for loading configs
 pub mod config_utils {
     pub use config::{
-        load_config, CameraConfig, Config, ConfigManager, ProcessesConfig, ScreenConfig,
+        load_config, CameraConfig, ConfigManager, ProcessesConfig, ScreenConfig,
         TextUploadConfig,
+        MicrophoneConfig
     };
 
     pub fn load_text_upload_config() -> TextUploadConfig {
-        let config = load_config();
-        config.text_upload.clone()
+        TextUploadConfig {
+            enabled: false,
+            output_dir: "".to_string().into(),
+            max_file_size_mb: 0,
+            supported_formats: vec![],
+        }
     }
 
     pub fn load_processes_config() -> ProcessesConfig {

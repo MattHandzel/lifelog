@@ -3,7 +3,7 @@ use chrono::Local;
 use config::InputLoggerConfig;
 #[cfg(target_os = "linux")]
 use evdev::*;
-use rusqlite::{params, Connection};
+use rusqlite::params;
 use std::fs;
 use std::time::SystemTime;
 use tokio::time::{sleep, Duration};

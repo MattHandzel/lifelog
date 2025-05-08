@@ -6,6 +6,7 @@ edition = "2021"
 
 [dependencies]
 lifelog-macros = { path = "../macros" }
+lifelog-types = {path = "../lifelog-types"}
 serde = { version = "1.0", features = ["derive"] }
 utils = { path = "../utils" }
 dirs-next = "2.0"
@@ -16,6 +17,9 @@ serde_json = "1.0"
 anyhow = "1.0"
 cpal = "0.15.3"
 derive_more = { version = "2.0.1", features = ["full"] }
+dashmap = { version = "6.1", features = ["serde"] }
+lifelog-proto = { path = "../lifelog-proto" }
+
 
 [features]
 dev = []

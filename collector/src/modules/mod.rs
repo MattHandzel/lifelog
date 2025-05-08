@@ -11,4 +11,3 @@ pub mod screen;
 pub mod text_upload;
 pub mod wayland_input_logger;
 pub mod weather;
-
