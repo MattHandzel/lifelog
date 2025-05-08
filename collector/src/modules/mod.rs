@@ -1,5 +1,5 @@
 // Export all modules
-pub mod camera;
+// pub mod camera;
 pub mod data_source;
 pub mod evdev_input_logger;
 pub mod hyprland;
