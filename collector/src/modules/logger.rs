@@ -2,10 +2,16 @@ use async_trait::async_trait;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
+use std::env;
+use tempfile::NamedTempFile;
+
 #[derive(Debug, Error)]
 pub enum LoggerError {
-    #[error("Database error: {0}")]
-    Database(#[from] rusqlite::Error),
+    #[error("Command execution failed: {0}")]
+    CommandFailed(String),
+
+    #[error("Failed to create temporary file: {0}")]
+    TempFileError(#[from] tempfile::PersistError),
 
     #[error("IO error: {0}")]
     Io(#[from] std::io::Error),
@@ -38,7 +44,7 @@ pub trait DataLogger: Sized + Send + Sync {
     fn stop(&self);
 
     // Given the data storing method, it will log the data
-    async fn log_data(&self) -> Result<(), LoggerError>;
+    async fn log_data(&self) -> Result<Vec<u8>, LoggerError>;
 
     fn new(config: Self::Config) -> Result<Self, LoggerError>
     where

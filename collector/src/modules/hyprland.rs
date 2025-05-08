@@ -24,8 +24,7 @@ impl DataLogger for HyprlandLogger {
     type Config = HyprlandConfig;
 
     fn setup(&self, config: HyprlandConfig) -> Result<LoggerHandle, LoggerError> {
-        setup::setup_hyprland_db(Path::new(&self.config.output_dir))
-            .map_err(|e| LoggerError::Database(e));
+        setup::setup_hyprland_db(Path::new(&self.config.output_dir));
             let logger = Self::new(config)?;
             let join = tokio::spawn(async move {
     

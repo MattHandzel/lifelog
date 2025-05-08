@@ -7,96 +7,124 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::time::{sleep, Duration};
+use tokio::io::join;
 
-use crate::setup::setup_screen_db;
-use crate::data_source::DataSource;
+use image::ImageReader;
+use image::GenericImageView;
+use std::io::Cursor;
+use lifelog_core::Utc;
+
+use std::env;
+use tempfile::NamedTempFile;
+use tokio::sync::Mutex;
+use std::sync::Arc;
+
+use crate::data_source::{DataSource, DataSourceError, DataSourceHandle};
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
-#[derive(Debug, thiserror::Error)]
-pub enum ScreenDataSourceError {
-    #[error("Screen Logger Error: {0}")]
-    LoggerError(#[from] LoggerError),
-
-    #[error("Logger task panicked or was cancelled: {0}")]
-    JoinError(#[from] tokio::task::JoinError),
-
-    #[error("Logger is already running.")]
-    AlreadyRunning,
-
-    #[error("Logger is not running.")]
-    NotRunning,
-
-    #[error("Failed to create logger instance during start.")]
-    InitializationError(LoggerError),
+#[derive(Debug, Clone)]
+pub struct CapturedImage {
+    pub timestamp: chrono::DateTime<Utc>,
+    pub image_data: Vec<u8>,
+    pub width: u32,
+    pub height: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ScreenDataSource {
     config: ScreenConfig,
-    handle: Option<LoggerHandle>,
+    logger: ScreenLogger,
+    pub buffer: Arc<Mutex<Vec<CapturedImage>>>,
 }
 
 impl ScreenDataSource {
-    pub fn new(config: ScreenConfig) -> Self {
-        ScreenDataSource {
+    pub fn new(config: ScreenConfig) -> Result<Self, DataSourceError> {
+        let logger = ScreenLogger::new(config.clone()); // handle error?
+        Ok(ScreenDataSource {
             config,
-            handle: None,
-        }
+            logger: logger?,
+            buffer: Arc::new(Mutex::new(Vec::new())),
+        })
     }
 }
 
 #[async_trait]
 impl DataSource for ScreenDataSource {
     type Config = ScreenConfig;
-    type Error = ScreenDataSourceError;
 
-    fn start(&mut self) -> Result<(), Self::Error> {
-        if self.handle.is_some() {
-            eprintln!("ScreenDataSource: Start called but logger is already running.");
-            return Err(ScreenDataSourceError::AlreadyRunning);
+    fn new(config: ScreenConfig) -> Result<Self, DataSourceError> {
+        ScreenDataSource::new(config)
+    }
+
+    fn start(&self) -> Result<DataSourceHandle, DataSourceError> {
+        if RUNNING.load(Ordering::SeqCst) {
+            eprintln!("ScreenDataSource: Start called but task is already running.");
+            return Err(DataSourceError::AlreadyRunning);
         }
 
-        println!("ScreenDataSource: Starting logger...");
-        let logger = ScreenLogger::new(self.config.clone())
-            .map_err(ScreenDataSourceError::InitializationError)?;
+        println!("ScreenDataSource: Starting data source task to store in memory...");
+        RUNNING.store(true, Ordering::SeqCst);
 
-        let handle = logger.setup()
-             .map_err(ScreenDataSourceError::LoggerError)?;
-        self.handle = Some(handle);
+        let source_clone = self.clone();
 
-        println!("ScreenDataSource: Logger started successfully.");
+        let join_handle = tokio::spawn(async move {
+            let task_result = source_clone.run().await;
+            println!("[Task] ScreenDataSource (in-memory) background task finished with result: {:?}", task_result);
+            task_result
+        });
+
+        println!("ScreenDataSource: Data source task (in-memory) started successfully.");
+        let new_join_handle = tokio::spawn(async { Ok(()) });
+        Ok(DataSourceHandle { join: new_join_handle })
+    }
+
+    async fn stop(&mut self) -> Result<(), DataSourceError> {
+        RUNNING.store(false, Ordering::SeqCst);
+        // FIXME, actually implmenet stop handles
         Ok(())
     }
 
-    async fn stop(&mut self) -> Result<(), Self::Error> {
-        if let Some(handle) = self.handle.take() {
-            println!("ScreenDataSource: Stopping logger...");
+    async fn run(&self) -> Result<(), DataSourceError> {
+        while RUNNING.load(Ordering::SeqCst) {
+            match self.logger.log_data().await {
+                Ok(image_data_bytes) => {
+                    let now = Local::now();
+                    let ts = Utc::now();
 
-            RUNNING.store(false, Ordering::SeqCst);
-            match handle.join.await {
-                Ok(Ok(())) => {
-                    println!("ScreenDataSource: Logger stopped successfully (task returned Ok).");
-                    Ok(())
-                }
-                Ok(Err(logger_err)) => {
-                    eprintln!("ScreenDataSource: Logger task finished with error: {}", logger_err);
-                    Err(ScreenDataSourceError::LoggerError(logger_err))
-                }
+                    let img = ImageReader::new(Cursor::new(&image_data_bytes))
+                        .with_guessed_format()
+                        .map_err(|e| LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+                        .decode()
+                        .map_err(|e| LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
 
-                Err(join_err) => {
-                    eprintln!("ScreenDataSource: Logger task failed to join (panic/cancel): {}", join_err);
-                    Err(ScreenDataSourceError::JoinError(join_err))
+                    let (width, height) = img.dimensions();
+
+                    let captured = CapturedImage {
+                        timestamp: ts,
+                        image_data: image_data_bytes,
+                        width: width,
+                        height: height,
+                    };
+
+                    let mut store_guard = self.buffer.lock().await;
+                    store_guard.push(captured);
+
+                    println!("ScreenDataSource: Stored screen capture in memory ({} images total)", store_guard.len());
+
+                }
+                Err(e) => {
+                    eprintln!("ScreenDataSource: Failed to capture screen data for in-memory store: {}", e);
                 }
             }
-        } else {
-            eprintln!("ScreenDataSource: Stop called but logger was not running.");
-            Err(ScreenDataSourceError::NotRunning)
+            sleep(Duration::from_secs_f64(self.config.interval)).await;
         }
+        println!("ScreenDataSource: In-memory run loop finished.");
+        Ok(())
     }
 
     fn is_running(&self) -> bool {
-        self.handle.is_some()
+        RUNNING.load(Ordering::SeqCst)
     }
 
     fn get_config(&self) -> Self::Config {
@@ -104,6 +132,7 @@ impl DataSource for ScreenDataSource {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct ScreenLogger {
     config: ScreenConfig,
 }
@@ -115,6 +144,45 @@ impl ScreenLogger {
 
     pub fn setup(&self) -> Result<LoggerHandle, LoggerError> {
         DataLogger::setup(self, self.config.clone())
+    }
+
+    async fn capture_screenshot_data(&self) -> Result<Vec<u8>, LoggerError> {
+        // let temp_file = NamedTempFile::new_in(env::temp_dir())?.into_temp_path();
+        // let temp_file_path_str = temp_file.to_str().ok_or_else(|| LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, "Invalid temp file path")))?;
+
+        let now = Local::now();
+        let ts = now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1e9;
+        let ts_fmt = now.format(&self.config.timestamp_format);
+        let out = format!("{}/{}.png", self.config.output_dir.display(), ts_fmt);
+
+        #[cfg(target_os = "macos")]
+        {
+            Command::new("screencapture")
+                .arg("-x")
+                .arg("-t")
+                .arg("png")
+                .arg(&out)
+                .status()
+                .map_err(LoggerError::Io)?;
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let cmd = if cfg!(target_os = "linux") {
+                "grim"
+            } else {
+                "screenshot.exe"
+            };
+            Command::new(cmd)
+                .arg("-t")
+                .arg("png")
+                .arg(&out)
+                .status()
+                .map_err(LoggerError::Io)?;
+        }
+
+        let image_data = tokio::fs::read(&out).await.map_err(LoggerError::Io)?;
+
+        Ok(image_data)
     }
 }
 
@@ -153,39 +221,7 @@ impl DataLogger for ScreenLogger {
         RUNNING.store(false, Ordering::SeqCst);
     }
 
-    async fn log_data(&self) -> Result<(), LoggerError> {
-        let conn = setup_screen_db(Path::new(&self.config.output_dir))?;
-        let now = Local::now();
-        let ts = now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1e9;
-        let ts_fmt = now.format(&self.config.timestamp_format);
-        let out = format!("{}/{}.png", self.config.output_dir.display(), ts_fmt);
-
-        #[cfg(target_os = "macos")]
-        {
-            Command::new("screencapture")
-                .arg("-x")
-                .arg("-t")
-                .arg("png")
-                .arg(&out)
-                .status()
-                .map_err(LoggerError::Io)?;
-        }
-        #[cfg(not(target_os = "macos"))]
-        {
-            let cmd = if cfg!(target_os = "linux") {
-                "grim"
-            } else {
-                "screenshot.exe"
-            };
-            Command::new(cmd)
-                .arg("-t")
-                .arg("png")
-                .arg(&out)
-                .status()
-                .map_err(LoggerError::Io)?;
-        }
-
-        conn.execute("INSERT INTO screen VALUES (?1)", params![ts])?;
-        Ok(())
+    async fn log_data(&self) -> Result<Vec<u8>, LoggerError> {
+        self.capture_screenshot_data().await
     }
 }
