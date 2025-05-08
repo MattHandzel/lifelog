@@ -23,6 +23,20 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::Mutex;
 use tauri::State;
+use serde_json::Value;
+use tonic::transport::Channel;
+
+// Include generated code for well-known google protobuf types
+pub mod google {
+    pub mod protobuf {
+        tonic::include_proto!("google.protobuf");
+    }
+}
+
+// This module contains the Protobuf generated code
+pub mod lifelog {
+    tonic::include_proto!("lifelog");
+}
 
 // Define application state
 struct AppState {
@@ -1104,6 +1118,118 @@ async fn update_microphone_settings(
     Ok(())
 }
 
+// Server address remains the same for now
+const GRPC_SERVER_ADDRESS: &str = "http://127.0.0.1:7182";
+
+#[tauri::command]
+async fn get_component_config(component_name: String) -> Result<Value, String> {
+    println!("Attempting to get config for component: {} via ServerService", component_name);
+    println!("gRPC: get_component_config - connecting to {}", GRPC_SERVER_ADDRESS);
+    let channel = Channel::from_static(GRPC_SERVER_ADDRESS)
+        .connect()
+        .await
+        .map_err(|e| format!("Failed to connect to gRPC server: {}", e))?;
+    println!("gRPC: get_component_config - connection established");
+    let mut client = lifelog::lifelog_server_service_client::LifelogServerServiceClient::new(channel);
+    let request = tonic::Request::new(lifelog::GetSystemConfigRequest {});
+    let response = client
+        .get_config(request)
+        .await
+        .map_err(|e| format!("ServerService GetConfig gRPC request failed: {}", e))?;
+    println!("gRPC: get_component_config - RPC get_config succeeded: {:?}", response);
+    let system_config = response.into_inner().config.ok_or_else(|| {
+        "Server response did not contain SystemConfig data".to_string()
+    })?;
+    // Parse collectors JSON string into CollectorConfig
+    let collectors_json = system_config.collectors;
+    println!("gRPC: get_component_config - received collectors JSON: {}", collectors_json);
+    let collector_config: lifelog::CollectorConfig = serde_json::from_str(&collectors_json)
+        .map_err(|e| format!("Failed to parse collector config JSON: {}", e))?;
+    println!("gRPC: get_component_config - parsed CollectorConfig: {:?}", collector_config);
+    let component_value = match component_name.to_lowercase().as_str() {
+        "screen" => serde_json::to_value(&collector_config.screen)
+            .map_err(|e| format!("Failed to serialize screen config: {}", e))?,
+        "camera" => serde_json::to_value(&collector_config.camera)
+            .map_err(|e| format!("Failed to serialize camera config: {}", e))?,
+        "microphone" => serde_json::to_value(&collector_config.microphone)
+            .map_err(|e| format!("Failed to serialize microphone config: {}", e))?,
+        "processes" => serde_json::to_value(&collector_config.processes)
+            .map_err(|e| format!("Failed to serialize processes config: {}", e))?,
+        "hyprland" => serde_json::to_value(&collector_config.hyprland)
+            .map_err(|e| format!("Failed to serialize hyprland config: {}", e))?,
+        _ => return Err(format!("Unknown component name: {}", component_name)),
+    };
+    println!("gRPC: get_component_config - returning component '{}' value: {:?}", component_name, component_value);
+    Ok(component_value)
+}
+
+#[tauri::command]
+async fn set_component_config(component_name: String, config_value: Value) -> Result<(), String> {
+    println!("gRPC: set_component_config - connecting to {}", GRPC_SERVER_ADDRESS);
+    println!("Attempting to set config for component: {} via ServerService with data: {:?}", component_name, config_value);
+    let channel = Channel::from_static(GRPC_SERVER_ADDRESS)
+        .connect()
+        .await
+        .map_err(|e| format!("Failed to connect to gRPC server: {}", e))?;
+    println!("gRPC: set_component_config - connection established");
+    let mut client = lifelog::lifelog_server_service_client::LifelogServerServiceClient::new(channel);
+    let get_request = tonic::Request::new(lifelog::GetSystemConfigRequest {});
+    let get_response = client
+        .get_config(get_request)
+        .await
+        .map_err(|e| format!("Failed to get current SystemConfig: {}", e))?;
+    println!("gRPC: set_component_config - RPC get_config succeeded: {:?}", get_response);
+    let system_config = get_response.into_inner().config.ok_or_else(|| {
+        "Server response did not contain SystemConfig data".to_string()
+    })?;
+    let collectors_json = system_config.collectors;
+    let mut collector_config: lifelog::CollectorConfig = serde_json::from_str(&collectors_json)
+        .map_err(|e| format!("Failed to parse collector config JSON: {}", e))?;
+    println!("gRPC: set_component_config - parsed CollectorConfig: {:?}", collector_config);
+    match component_name.to_lowercase().as_str() {
+        "screen" => {
+            let new_conf: lifelog::ScreenConfig = serde_json::from_value(config_value)
+                .map_err(|e| format!("Invalid screen config format: {}", e))?;
+            collector_config.screen = Some(new_conf);
+        }
+        "camera" => {
+            let new_conf: lifelog::CameraConfig = serde_json::from_value(config_value)
+                .map_err(|e| format!("Invalid camera config format: {}", e))?;
+            collector_config.camera = Some(new_conf);
+        }
+        "microphone" => {
+            let new_conf: lifelog::MicrophoneConfig = serde_json::from_value(config_value)
+                .map_err(|e| format!("Invalid microphone config format: {}", e))?;
+            collector_config.microphone = Some(new_conf);
+        }
+        "processes" => {
+            let new_conf: lifelog::ProcessesConfig = serde_json::from_value(config_value)
+                .map_err(|e| format!("Invalid processes config format: {}", e))?;
+            collector_config.processes = Some(new_conf);
+        }
+        "hyprland" => {
+            let new_conf: lifelog::HyprlandConfig = serde_json::from_value(config_value)
+                .map_err(|e| format!("Invalid hyprland config format: {}", e))?;
+            collector_config.hyprland = Some(new_conf);
+        }
+        _ => return Err(format!("Unknown component name for setting config: {}", component_name)),
+    }
+    println!("gRPC: set_component_config - sending updated CollectorConfig: {:?}", collector_config);
+    let set_request = tonic::Request::new(lifelog::SetSystemConfigRequest {
+        config: Some(collector_config.clone()),
+    });
+    let set_response = client
+        .set_config(set_request)
+        .await
+        .map_err(|e| format!("ServerService SetConfig gRPC request failed: {}", e))?;
+    println!("gRPC: set_component_config - RPC set_config succeeded: {:?}", set_response);
+    let success_flag = set_response.into_inner().success;
+    if !success_flag {
+        return Err("Server failed to apply the new configuration.".to_string());
+    }
+    Ok(())
+}
+
 fn main() {
     let config_manager = Mutex::new(config_utils::ConfigManager::new());
     
@@ -1155,6 +1281,8 @@ fn main() {
             // General
             get_all_processes,
             initialize_app,
+            get_component_config,
+            set_component_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

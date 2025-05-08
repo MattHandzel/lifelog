@@ -21,7 +21,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Starting server on {}", addr);
     let reflection_service = Builder::configure()
         .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
-        .build_v1alpha()?;
+        .build_v1alpha()?; // This should be build_v1alpha otherwise the reflection gRPC service
+                           // won't work with clients such as grpcui, it could be changed in the future
 
     let time: DateTime<Utc> = Utc::now();
     let uuid = Uuid::new_v4();

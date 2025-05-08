@@ -1,9 +1,7 @@
 // Add these imports at the top
-use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs;
 use std::path::PathBuf;
-use std::time::SystemTime;
 use hound;  // For WAV file processing
 use chrono::{DateTime, TimeZone, Utc, Local};
 
@@ -41,7 +39,7 @@ pub fn get_audio_files(output_dir: PathBuf, page: usize, page_size: usize) -> Re
     
     // Apply pagination
     let start = (page - 1) * page_size;
-    let end = start + page_size;
+    let _end = start + page_size;
     
     for path in entries.into_iter().skip(start).take(page_size) {
         let metadata = fs::metadata(&path)?;
@@ -89,7 +87,7 @@ pub fn get_audio_files(output_dir: PathBuf, page: usize, page_size: usize) -> Re
 // Simplified function to estimate audio duration from WAV file
 fn estimate_audio_duration(path: &PathBuf) -> Result<f64, Box<dyn Error>> {
     let file = fs::File::open(path)?;
-    let mut reader = hound::WavReader::new(file)?;
+    let reader = hound::WavReader::new(file)?;
     
     let spec = reader.spec();
     let duration = reader.duration() as f64 / spec.sample_rate as f64;

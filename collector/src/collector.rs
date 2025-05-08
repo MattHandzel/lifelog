@@ -333,7 +333,7 @@ impl Collector<LoggerHandle> {
             println!("Aborted internal Collector task.");
         }
 
-        for (name, handle) in self.handles.drain() {
+        for (name, _handle) in self.handles.drain() {
             println!("Stopping logger: {}", name);
             // handle.stop(); // Assuming LoggerHandle has a stop method
         }
