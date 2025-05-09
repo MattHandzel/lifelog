@@ -7,7 +7,7 @@ members = [
     "common/utils",
     "common/lifelog-core",
     "common/macros",
-    # "interface/src-tauri",
+    "interface/src-tauri",
     "common/lifelog-proto",
     # "common/transforms"
 ]
@@ -18,9 +18,10 @@ resolver = "2"
 edition = "2021"
 
 [workspace.dependencies]
-tonic = "0.13"
+tonic = "0.13.1"
 prost = "0.13.5"
 prost-types = "0.13.5"
+prost-build = "0.13.1"
 tokio = { version = "1", features = ["full"] }
 bytes = "1"
 tracing = "0.1"
@@ -34,7 +35,7 @@ anyhow = "1.0"
 log = "0.4"
 rusqlite = { version = "0.29", features = ["bundled"] }
 surrealdb = "2.3.1"
-tonic-build = "0.13"
+tonic-build = "0.13.1"
 dashmap = "6.1.0"
 tonic-reflection = { version = "0.13", features = ["server"] }
 toml = { version = "0.8.20"}
