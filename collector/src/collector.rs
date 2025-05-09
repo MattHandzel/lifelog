@@ -1,22 +1,20 @@
-use super::data_source::{DataSource, DataSourceHandle, DataSourceError};
-use std::fmt;
-use std::any::Any;
-use crate::modules::{
-    screen::{ScreenDataSource, CapturedImage},
-};
+use super::data_source::{DataSource, DataSourceError, DataSourceHandle};
+use crate::modules::screen::{CapturedImage, ScreenDataSource};
 use config;
 use data_modalities::screen::ScreenFrame;
+use std::any::Any;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::fmt;
 use std::fmt::Debug;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::task::AbortHandle;
 use tokio::time::Duration;
-use tokio::sync::Mutex;
 
-use futures_core::Stream;
-use lifelog_types::CollectorState;
-use lifelog_core::Uuid;
 use config::ScreenConfig;
+use futures_core::Stream;
+use lifelog_core::Uuid;
+use lifelog_types::CollectorState;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -143,16 +141,19 @@ impl CollectorHandle {
     pub async fn r#loop(&self) {
         let collector = self.collector.clone();
         loop {
-            let mut collector = collector.write().await;
-            if let Err(e) = collector.report_state().await {
-                eprintln!("Failed to report state: {}", e);
-                // Try and handshake again
-                if let Err(e) = collector.handshake().await {
-                    eprintln!("Failed to re-establish connection: {}", e);
-                } else {
-                    println!("Re-established connection.");
+            {
+                let mut collector = collector.write().await;
+                if let Err(e) = collector.report_state().await {
+                    eprintln!("Failed to report state: {}", e);
+                    // Try and handshake again
+                    if let Err(e) = collector.handshake().await {
+                        eprintln!("Failed to re-establish connection: {}", e);
+                    } else {
+                        println!("Re-established connection.");
+                    }
                 }
-            }
+            } // TODO: Need to drop the lock  here (maybe refactor it so that functions call for
+              // lock)
 
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
@@ -187,6 +188,8 @@ impl Collector {
         }
     }
 
+    /// This function connects the collector to the main lifelog server, it initializes the
+    /// grpc_client object and can be called at anytime to reconnect to the server.
     pub async fn handshake(&mut self) -> Result<(), CollectorError> {
         println!("Attempting gRPC connection to {}...", self.server_address);
 
@@ -222,8 +225,8 @@ impl Collector {
     pub fn listen(&mut self) {}
 
     pub async fn start(&mut self) -> Result<(), CollectorError> {
-        self.handshake().await?; // TODO: Refactor, this, we shouldn't require a handshake in order
-                                 // to start logging, also, should we move control to the loop function>
+        //self.handshake().await?; // TODO: Refactor, this, we shouldn't require a handshake in order
+        //                         // to start logging, also, should we move control to the loop function>
 
         let config = Arc::clone(&self.config);
 
@@ -234,22 +237,22 @@ impl Collector {
         if config.screen.enabled {
             let config_clone = Arc::clone(&self.config);
             match ScreenDataSource::new(config_clone.screen.clone()) {
-                Ok(screen_source) => {
-                    match screen_source.start() {
-                        Ok(ds_handle) => {
-                            let running_src = RunningSource {
-                                instance: Arc::new(Box::new(screen_source)),
-                                handle: ds_handle,
-                            };
-                            self.sources.insert("screen".to_string(), Box::new(running_src));
-                        }
-                        Err(e) => {
-                            let err = CollectorError::SourceSetupError("screen".to_string(), Box::new(e));
-                            eprintln!("{}", err);
-                            setup_errors.push(err);
-                        }
+                Ok(screen_source) => match screen_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource {
+                            instance: Arc::new(Box::new(screen_source)),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("screen".to_string(), Box::new(running_src));
                     }
-                }
+                    Err(e) => {
+                        let err =
+                            CollectorError::SourceSetupError("screen".to_string(), Box::new(e));
+                        eprintln!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
                 Err(e) => {
                     let err = CollectorError::SourceSetupError("screen".to_string(), Box::new(e));
                     eprintln!("{}", err);
@@ -258,7 +261,7 @@ impl Collector {
             }
         }
 
-        // For now I've removed the other sources. 
+        // For now I've removed the other sources.
         // But they should be added back here when they're reimplmemented!
 
         println!("Sources started. Active: {:?}", self.sources.keys());
@@ -281,11 +284,17 @@ impl Collector {
         let mut total = 0;
 
         if let Some(running_src_trait) = self.sources.get("screen") {
-            if let Some(running_screen_src) = (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>() {
-                let source_dyn_box_ref: &Arc<Box<dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static>> = &running_screen_src.instance;
+            if let Some(running_screen_src) =
+                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>()
+            {
+                let source_dyn_box_ref: &Arc<
+                    Box<dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static>,
+                > = &running_screen_src.instance;
                 let source_dyn_ref = &**source_dyn_box_ref;
 
-                if let Some(screen_ds) = (source_dyn_ref as &dyn Any).downcast_ref::<ScreenDataSource>() {
+                if let Some(screen_ds) =
+                    (source_dyn_ref as &dyn Any).downcast_ref::<ScreenDataSource>()
+                {
                     let buf_guard = screen_ds.buffer.lock().await;
                     let images = buf_guard.clone();
 
@@ -425,19 +434,15 @@ impl CollectorService for GRPCServerCollectorService {
         println!("[gRPC] Starting data send...");
         let (tx, rx) = tokio::sync::mpsc::channel(32);
         let collector_handle = self.collector.clone();
-    
+
         tokio::spawn(async move {
             let images: Vec<CapturedImage> = {
                 let read_guard = collector_handle.collector.read().await;
                 println!("[gRPC] DEBUG!!");
-                let running = read_guard
-                    .sources
-                    .get("screen")
-                    .and_then(|src| {
-                        (src as &dyn Any)
-                            .downcast_ref::<RunningSource<ScreenConfig>>()
-                    });
-    
+                let running = read_guard.sources.get("screen").and_then(|src| {
+                    (src as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>()
+                });
+
                 if let Some(running_screen_src) = running {
                     if let Some(screen_ds) = (running_screen_src.instance.as_ref() as &dyn Any)
                         .downcast_ref::<ScreenDataSource>()
@@ -453,11 +458,11 @@ impl CollectorService for GRPCServerCollectorService {
                     Vec::new()
                 }
             };
-    
+
             if images.is_empty() {
                 println!("[gRPC] No images to send.");
             }
-    
+
             for captured in images {
                 let screen_frame = data_modalities::screen::ScreenFrame {
                     uuid: Uuid::new_v4(),
@@ -467,11 +472,16 @@ impl CollectorService for GRPCServerCollectorService {
                     timestamp: captured.timestamp,
                     mime_type: "image/png".to_string(),
                 };
-    
-                match <data_modalities::screen::ScreenFrame as TryInto<lifelog_proto::ScreenFrame>>::try_into(screen_frame) {
+
+                match <data_modalities::screen::ScreenFrame as TryInto<
+                    lifelog_proto::ScreenFrame,
+                >>::try_into(screen_frame)
+                {
                     Ok(proto_frame) => {
                         let data_to_send = LifelogData {
-                            payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(proto_frame)),
+                            payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(
+                                proto_frame,
+                            )),
                         };
                         if tx.send(Ok(data_to_send)).await.is_err() {
                             eprintln!("[gRPC] receiver dropped, stopping send");
@@ -483,11 +493,10 @@ impl CollectorService for GRPCServerCollectorService {
                     }
                 }
             }
-    
+
             println!("[gRPC] Finished sending from ScreenDataSource.");
         });
-    
+
         Ok(tonic::Response::new(ReceiverStream::new(rx)))
     }
-    
 }
