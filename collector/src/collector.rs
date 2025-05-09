@@ -163,7 +163,7 @@ impl CollectorHandle {
     }
 
     pub async fn get_state(&self) -> CollectorState {
-        self.collector.read().await._get_state()
+        self.collector.read().await._get_state().await
     }
 }
 
@@ -275,16 +275,49 @@ impl Collector {
         Ok(())
     }
 
-    fn _get_state(&self) -> CollectorState {
+    async fn _get_state(&self) -> CollectorState {
+        let mut source_states = Vec::<String>::new();
+        let mut buffer_states = Vec::<String>::new();
+        let mut total = 0;
+
+        if let Some(running_src_trait) = self.sources.get("screen") {
+            if let Some(running_screen_src) = (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>() {
+                let source_dyn_box_ref: &Arc<Box<dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static>> = &running_screen_src.instance;
+                let source_dyn_ref = &**source_dyn_box_ref;
+
+                if let Some(screen_ds) = (source_dyn_ref as &dyn Any).downcast_ref::<ScreenDataSource>() {
+                    let buf_guard = screen_ds.buffer.lock().await;
+                    let images = buf_guard.clone();
+
+                    let screen_buf_size = images.capacity() * std::mem::size_of::<CapturedImage>();
+
+                    let fs = format!("Screen source buffer length: {}", screen_buf_size);
+                    buffer_states.push(fs.to_string());
+
+                    total += screen_buf_size; //TODO: get actual buffer size rather than just vec length
+
+                    if let is_running = screen_ds.is_running() {
+                        let fs = format!("Screen souce running state: {}", is_running);
+                        source_states.push(fs.to_string());
+                    } else {
+                        source_states.push("Could not get screen source state".to_string());
+                    }
+                }
+            }
+        }
+
         CollectorState {
             name: self.client_id.clone(),
             timestamp: chrono::Utc::now(),
+            source_states: source_states,
+            source_buffer_sizes: buffer_states,
+            total_buffer_size: total as u32,
         }
     }
 
     // Sends the current status to the gRPC server.
     pub async fn report_state(&mut self) -> Result<(), CollectorError> {
-        let current_state: lifelog_proto::CollectorState = self._get_state().into();
+        let current_state: lifelog_proto::CollectorState = self._get_state().await.into();
         if let Some(client) = self.grpc_client.as_mut() {
             let active_sources: Vec<String> = self.sources.keys().cloned().collect();
             println!("Reporting status: Active sources = {:?}", active_sources);
@@ -389,30 +422,26 @@ impl CollectorService for GRPCServerCollectorService {
         &self,
         _request: tonic::Request<GetDataRequest>,
     ) -> Result<tonic::Response<Self::GetDataStream>, tonic::Status> {
-        let (tx, rx) = tokio::sync::mpsc::channel(8);
+        println!("[gRPC] Starting data send...");
+        let (tx, rx) = tokio::sync::mpsc::channel(32);
         let collector_handle = self.collector.clone();
     
         tokio::spawn(async move {
-            // 1) Scope the read‐lock and buffer‐lock so they drop before any `.await`
             let images: Vec<CapturedImage> = {
-                // a) grab the collector read‐guard
                 let read_guard = collector_handle.collector.read().await;
-                // b) look up your RunningSource
+                println!("[gRPC] DEBUG!!");
                 let running = read_guard
                     .sources
                     .get("screen")
                     .and_then(|src| {
-                        // downcast RunningSource<ScreenConfig>
                         (src as &dyn Any)
                             .downcast_ref::<RunningSource<ScreenConfig>>()
                     });
     
                 if let Some(running_screen_src) = running {
-                    // c) downcast the inner DataSource to your concrete type
                     if let Some(screen_ds) = (running_screen_src.instance.as_ref() as &dyn Any)
                         .downcast_ref::<ScreenDataSource>()
                     {
-                        // d) lock its buffer and clone out the Vec
                         let buf_guard = screen_ds.buffer.lock().await;
                         buf_guard.clone()
                     } else {
@@ -423,14 +452,12 @@ impl CollectorService for GRPCServerCollectorService {
                     eprintln!("[gRPC] 'screen' source not found or wrong type");
                     Vec::new()
                 }
-                // read_guard and buf_guard both drop here
             };
     
             if images.is_empty() {
                 println!("[gRPC] No images to send.");
             }
     
-            // 2) Now we have an owned Vec<CapturedImage>, so .await in the loop is fine:
             for captured in images {
                 let screen_frame = data_modalities::screen::ScreenFrame {
                     uuid: Uuid::new_v4(),

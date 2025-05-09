@@ -1,1 +1,1 @@
-{"fields":[["name","String"],["timestamp","DateTime<Utc>"]],"ident":"CollectorState","metadata_type":"None","variants":[]}
+{"fields":[["name","String"],["timestamp","DateTime<Utc>"],["source_states","Vec<String>"],["source_buffer_sizes","Vec<String>"],["total_buffer_size","u32"]],"ident":"CollectorState","metadata_type":"None","variants":[]}

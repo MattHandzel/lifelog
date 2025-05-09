@@ -23,6 +23,10 @@ pub enum UsageType {
 pub struct CollectorState {
     pub name: String,
     pub timestamp: DateTime<Utc>,
+    pub source_states: Vec<String>,
+    pub source_buffer_sizes: Vec<String>,
+    pub total_buffer_size: u32
+    // Add to this!! all the information server needs from collector
 }
 
 #[lifelog_type(None)]
