@@ -1,3 +1,11 @@
 #V2
 info for db;
 SELECT * FROM FFFFFFFFFFFF___screen;
+select timestamp from FFFFFFFFFFFF___screen;
+select timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp;
+select image, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp LIMIT 1;
+select image_data, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp LIMIT 1;
+select image_bytes, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp LIMIT 1;
+select image_bytes, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp DESC LIMIT 1;
+SELECT image_bytes, timestamp FROM FFFFFFFFFFFF___screen order by timestamp desc limit 1;
+SELECT id, timestamp FROM FFFFFFFFFFFF___screen order by timestamp desc limit 1;

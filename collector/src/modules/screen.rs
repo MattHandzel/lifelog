@@ -6,23 +6,24 @@ use rusqlite::params;
 use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::time::{sleep, Duration};
 use tokio::io::join;
+use tokio::time::{sleep, Duration};
 
-use image::ImageReader;
 use image::GenericImageView;
-use std::io::Cursor;
+use image::ImageReader;
 use lifelog_core::Utc;
+use std::io::Cursor;
 
 use std::env;
+use std::sync::Arc;
 use tempfile::NamedTempFile;
 use tokio::sync::Mutex;
-use std::sync::Arc;
 
 use crate::data_source::{DataSource, DataSourceError, DataSourceHandle};
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
+// TODO: this should be the same as screenframe in common/data-modalities/screen/data.rs
 #[derive(Debug, Clone)]
 pub struct CapturedImage {
     pub timestamp: chrono::DateTime<Utc>,
@@ -70,13 +71,18 @@ impl DataSource for ScreenDataSource {
 
         let join_handle = tokio::spawn(async move {
             let task_result = source_clone.run().await;
-            println!("[Task] ScreenDataSource (in-memory) background task finished with result: {:?}", task_result);
+            println!(
+                "[Task] ScreenDataSource (in-memory) background task finished with result: {:?}",
+                task_result
+            );
             task_result
         });
 
         println!("ScreenDataSource: Data source task (in-memory) started successfully.");
         let new_join_handle = tokio::spawn(async { Ok(()) });
-        Ok(DataSourceHandle { join: new_join_handle })
+        Ok(DataSourceHandle {
+            join: new_join_handle,
+        })
     }
 
     async fn stop(&mut self) -> Result<(), DataSourceError> {
@@ -94,9 +100,13 @@ impl DataSource for ScreenDataSource {
 
                     let img = ImageReader::new(Cursor::new(&image_data_bytes))
                         .with_guessed_format()
-                        .map_err(|e| LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+                        .map_err(|e| {
+                            LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+                        })?
                         .decode()
-                        .map_err(|e| LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+                        .map_err(|e| {
+                            LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+                        })?;
 
                     let (width, height) = img.dimensions();
 
@@ -110,11 +120,16 @@ impl DataSource for ScreenDataSource {
                     let mut store_guard = self.buffer.lock().await;
                     store_guard.push(captured);
 
-                    println!("ScreenDataSource: Stored screen capture in memory ({} images total)", store_guard.len());
-
+                    println!(
+                        "ScreenDataSource: Stored screen capture in memory ({} images total)",
+                        store_guard.len()
+                    );
                 }
                 Err(e) => {
-                    eprintln!("ScreenDataSource: Failed to capture screen data for in-memory store: {}", e);
+                    eprintln!(
+                        "ScreenDataSource: Failed to capture screen data for in-memory store: {}",
+                        e
+                    );
                 }
             }
             sleep(Duration::from_secs_f64(self.config.interval)).await;
@@ -154,6 +169,7 @@ impl ScreenLogger {
         let ts = now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1e9;
         let ts_fmt = now.format(&self.config.timestamp_format);
         let out = format!("{}/{}.png", self.config.output_dir.display(), ts_fmt);
+        println!("[ScreenLogger] Capturing screenshot to: {}", out);
 
         #[cfg(target_os = "macos")]
         {
@@ -197,10 +213,12 @@ impl DataLogger for ScreenLogger {
     fn setup(&self, config: ScreenConfig) -> Result<LoggerHandle, LoggerError> {
         let logger = Self::new(config)?;
         let join = tokio::spawn(async move {
-
             let task_result = logger.run().await;
 
-            println!("[Task] Background task finished with result: {:?}", task_result);
+            println!(
+                "[Task] Background task finished with result: {:?}",
+                task_result
+            );
 
             task_result
         });

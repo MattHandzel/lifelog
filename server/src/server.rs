@@ -651,7 +651,7 @@ impl Server {
 // TODO: Complete this for every data type
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ScreenFrameSurreal {
-    pub uuid: String,
+    //pub uuid: String,
     pub timestamp: surrealdb::Datetime,
     pub width: i32,
     pub height: i32,
@@ -663,7 +663,7 @@ pub struct ScreenFrameSurreal {
 impl From<ScreenFrame> for ScreenFrameSurreal {
     fn from(frame: ScreenFrame) -> Self {
         Self {
-            uuid: frame.uuid.into(),
+            //uuid: frame.uuid.into(),
             timestamp: frame.timestamp.into(),
             width: frame.width as i32,
             height: frame.height as i32,

@@ -1,6 +1,6 @@
-use std::fmt::Debug;
-use std::any::Any;
 use async_trait::async_trait;
+use std::any::Any;
+use std::fmt::Debug;
 
 use crate::logger::LoggerError;
 use tokio::task::JoinHandle;
@@ -35,7 +35,10 @@ pub enum DataSourceError {
 pub trait DataSource: Any {
     type Config: Clone + Debug + Send + Sync + 'static;
 
-    fn as_any(&self) -> &(dyn Any + '_) where Self: Sized {
+    fn as_any(&self) -> &(dyn Any + '_)
+    where
+        Self: Sized,
+    {
         self
     }
 

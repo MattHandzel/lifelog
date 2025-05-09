@@ -239,7 +239,7 @@ impl Collector {
             match ScreenDataSource::new(config_clone.screen.clone()) {
                 Ok(screen_source) => match screen_source.start() {
                     Ok(ds_handle) => {
-                        let running_src = RunningSource {
+                        let running_src = RunningSource::<ScreenConfig> {
                             instance: Arc::new(Box::new(screen_source)),
                             handle: ds_handle,
                         };
@@ -432,21 +432,29 @@ impl CollectorService for GRPCServerCollectorService {
         _request: tonic::Request<GetDataRequest>,
     ) -> Result<tonic::Response<Self::GetDataStream>, tonic::Status> {
         println!("[gRPC] Starting data send...");
-        let (tx, rx) = tokio::sync::mpsc::channel(32);
+        const MAX_DATA_PER_CHANNEL: usize = 32;
+        let (tx, rx) = tokio::sync::mpsc::channel(MAX_DATA_PER_CHANNEL);
         let collector_handle = self.collector.clone();
 
         tokio::spawn(async move {
+            // TODO: Refactor this so that we never directly access the collector, the collector
+            // handle should be the interface to the collector, this should just be a function we
+            // call
             let images: Vec<CapturedImage> = {
                 let read_guard = collector_handle.collector.read().await;
                 println!("[gRPC] DEBUG!!");
-                let running = read_guard.sources.get("screen").and_then(|src| {
-                    (src as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>()
-                });
+                let running_source = (*read_guard.sources.get("screen").unwrap()).as_ref();
+                let running: Option<&RunningSource<ScreenConfig>> =
+                    (running_source as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>();
+
+                println!("{:?}", running);
 
                 if let Some(running_screen_src) = running {
-                    if let Some(screen_ds) = (running_screen_src.instance.as_ref() as &dyn Any)
-                        .downcast_ref::<ScreenDataSource>()
-                    {
+                    let clonned_instance = running_screen_src.instance.clone();
+
+                    let asdf = (*clonned_instance).as_ref();
+                    //println!("[gRPC] asdf: {:?}", asdf);
+                    if let Some(screen_ds) = (asdf as &dyn Any).downcast_ref::<ScreenDataSource>() {
                         let buf_guard = screen_ds.buffer.lock().await;
                         buf_guard.clone()
                     } else {
@@ -461,6 +469,8 @@ impl CollectorService for GRPCServerCollectorService {
 
             if images.is_empty() {
                 println!("[gRPC] No images to send.");
+            } else {
+                println!("[gRPC] Sending {} images.", images.len());
             }
 
             for captured in images {
