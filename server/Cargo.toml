@@ -39,3 +39,6 @@ tokio-stream = {workspace = true}
 
 [build-dependencies]
 tonic-build = {workspace = true}
+
+[features]
+dev = ["config/dev"] # Have config look for dev.toml

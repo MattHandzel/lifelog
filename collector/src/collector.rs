@@ -1,15 +1,19 @@
-use super::logger::{DataLogger, LoggerHandle};
-use crate::modules::{
-    hyprland::HyprlandLogger, microphone::MicrophoneLogger, screen::ScreenLogger,
-};
+use super::data_source::{DataSource, DataSourceError, DataSourceHandle};
+use crate::modules::screen::{CapturedImage, ScreenDataSource};
 use config;
 use data_modalities::screen::ScreenFrame;
+use std::any::Any;
 use std::collections::HashMap;
+use std::fmt;
+use std::fmt::Debug;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
+use config::ScreenConfig;
 use futures_core::Stream;
+use lifelog_core::Uuid;
 use lifelog_types::CollectorState;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
@@ -28,9 +32,24 @@ use lifelog_proto::{
 
 use rand::distr::Distribution; // import the distribution trait o.w. our sampling doesn't work
 
+struct RunningSource<C: Send + Sync + Debug + 'static> {
+    instance: Arc<Box<dyn DataSource<Config = C> + Send + Sync + 'static>>,
+    handle: DataSourceHandle,
+}
+
+impl<C: Send + Sync + Debug + 'static> fmt::Debug for RunningSource<C> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RunningSource")
+            .field("handle", &self.handle)
+            // We can't directly debug the trait object, so we'll indicate its type
+            .field("instance_type", &format!("{:?}", self.instance.type_id()))
+            .finish()
+    }
+}
+
 #[derive(Debug)]
 pub enum CollectorError {
-    LoggerSetupError(String, Box<dyn std::error::Error + Send + Sync>),
+    SourceSetupError(String, Box<dyn std::error::Error + Send + Sync>),
     GrpcConnectionError(tonic::transport::Error),
     GrpcRequestError(tonic::Status),
     NotConnected,
@@ -41,8 +60,8 @@ pub enum CollectorError {
 impl std::fmt::Display for CollectorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CollectorError::LoggerSetupError(name, e) => {
-                write!(f, "Logger '{}' setup failed: {}", name, e)
+            CollectorError::SourceSetupError(name, e) => {
+                write!(f, "Source '{}' setup failed: {}", name, e)
             }
             CollectorError::GrpcConnectionError(e) => write!(f, "gRPC connection failed: {}", e),
             CollectorError::GrpcRequestError(s) => write!(f, "gRPC request failed: {}", s),
@@ -58,7 +77,7 @@ impl std::fmt::Display for CollectorError {
 impl std::error::Error for CollectorError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
-            CollectorError::LoggerSetupError(_, e) => Some(e.as_ref()),
+            CollectorError::SourceSetupError(_, e) => Some(e.as_ref()),
             CollectorError::GrpcConnectionError(e) => Some(e),
             CollectorError::GrpcRequestError(s) => Some(s),
             _ => None,
@@ -82,26 +101,29 @@ pub struct GRPCServerCollectorService {
     pub collector: CollectorHandle,
 }
 
-pub struct Collector<T> {
+pub struct Collector {
     task: Option<AbortHandle>,
     config: Arc<config::CollectorConfig>,
-    handles: HashMap<String, T>,
+    sources: HashMap<String, Box<dyn RunningSourceTrait>>,
 
     grpc_client: Option<LifelogServerServiceClient<Channel>>,
     server_address: String,
     client_id: String,
 }
 
+trait RunningSourceTrait: Send + Sync + 'static + Debug + Any {}
+impl<C: Send + Sync + 'static + Debug + Any> RunningSourceTrait for RunningSource<C> {}
+
 /// The CollectorHandle is a struct that is used right now to abstract away how the collector
 /// works. Right now, it is using a read-write lock but in the future I might want to change this
 /// to the actor model.
 #[derive(Clone)]
 pub struct CollectorHandle {
-    pub collector: Arc<RwLock<Collector<LoggerHandle>>>,
+    pub collector: Arc<RwLock<Collector>>,
 }
 
 impl CollectorHandle {
-    pub fn new(collector: Collector<LoggerHandle>) -> Self {
+    pub fn new(collector: Collector) -> Self {
         Self {
             collector: Arc::new(RwLock::new(collector)),
         }
@@ -119,16 +141,19 @@ impl CollectorHandle {
     pub async fn r#loop(&self) {
         let collector = self.collector.clone();
         loop {
-            let mut collector = collector.write().await;
-            if let Err(e) = collector.report_state().await {
-                eprintln!("Failed to report state: {}", e);
-                // Try and handshake again
-                if let Err(e) = collector.handshake().await {
-                    eprintln!("Failed to re-establish connection: {}", e);
-                } else {
-                    println!("Re-established connection.");
+            {
+                let mut collector = collector.write().await;
+                if let Err(e) = collector.report_state().await {
+                    eprintln!("Failed to report state: {}", e);
+                    // Try and handshake again
+                    if let Err(e) = collector.handshake().await {
+                        eprintln!("Failed to re-establish connection: {}", e);
+                    } else {
+                        println!("Re-established connection.");
+                    }
                 }
-            }
+            } // TODO: Need to drop the lock  here (maybe refactor it so that functions call for
+              // lock)
 
             tokio::time::sleep(Duration::from_secs(5)).await;
         }
@@ -139,7 +164,7 @@ impl CollectorHandle {
     }
 
     pub async fn get_state(&self) -> CollectorState {
-        self.collector.read().await._get_state()
+        self.collector.read().await._get_state().await
     }
 }
 
@@ -147,7 +172,7 @@ impl CollectorHandle {
 // now I am just trying to gegt it to work but there the collector needs to be around a RWLock so
 // the server can do stuff like editing it's config so these methods need to be refactored
 // TODO: Implement pinging the server & re-trying upon disconnection
-impl Collector<LoggerHandle> {
+impl Collector {
     pub fn new(
         config: Arc<config::CollectorConfig>,
         server_address: String,
@@ -156,13 +181,15 @@ impl Collector<LoggerHandle> {
         Self {
             task: None,
             config,
-            handles: HashMap::new(),
+            sources: HashMap::new(),
             grpc_client: None,
             server_address,
             client_id,
         }
     }
 
+    /// This function connects the collector to the main lifelog server, it initializes the
+    /// grpc_client object and can be called at anytime to reconnect to the server.
     pub async fn handshake(&mut self) -> Result<(), CollectorError> {
         println!("Attempting gRPC connection to {}...", self.server_address);
 
@@ -198,83 +225,46 @@ impl Collector<LoggerHandle> {
     pub fn listen(&mut self) {}
 
     pub async fn start(&mut self) -> Result<(), CollectorError> {
-        self.handshake().await?; // TODO: Refactor, this, we shouldn't require a handshake in order
-                                 // to start logging, also, should we move control to the loop function>
+        //self.handshake().await?; // TODO: Refactor, this, we shouldn't require a handshake in order
+        //                         // to start logging, also, should we move control to the loop function>
 
         let config = Arc::clone(&self.config);
 
-        self.handles.clear();
+        self.sources.clear();
 
         let mut setup_errors: Vec<CollectorError> = Vec::new();
 
         if config.screen.enabled {
             let config_clone = Arc::clone(&self.config);
-            match ScreenLogger::new(config_clone.screen.clone()) {
-                Ok(logger) => match logger.setup() {
-                    Ok(handle) => {
-                        self.handles.insert("screen".to_string(), handle);
+            match ScreenDataSource::new(config_clone.screen.clone()) {
+                Ok(screen_source) => match screen_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<ScreenConfig> {
+                            instance: Arc::new(Box::new(screen_source)),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("screen".to_string(), Box::new(running_src));
                     }
                     Err(e) => {
                         let err =
-                            CollectorError::LoggerSetupError("screen".to_string(), Box::new(e));
+                            CollectorError::SourceSetupError("screen".to_string(), Box::new(e));
                         eprintln!("{}", err);
                         setup_errors.push(err);
                     }
                 },
                 Err(e) => {
-                    let err = CollectorError::LoggerSetupError("screen".to_string(), Box::new(e));
+                    let err = CollectorError::SourceSetupError("screen".to_string(), Box::new(e));
                     eprintln!("{}", err);
                     setup_errors.push(err);
                 }
             }
         }
 
-        if config.microphone.enabled {
-            let config_clone = Arc::clone(&self.config);
-            match MicrophoneLogger::new(config_clone.microphone.clone()) {
-                Ok(logger) => match logger.setup() {
-                    Ok(handle) => {
-                        self.handles.insert("microphone".to_string(), handle);
-                    }
-                    Err(e) => {
-                        let err =
-                            CollectorError::LoggerSetupError("microphone".to_string(), Box::new(e));
-                        eprintln!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err =
-                        CollectorError::LoggerSetupError("microphone".to_string(), Box::new(e));
-                    eprintln!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
+        // For now I've removed the other sources.
+        // But they should be added back here when they're reimplmemented!
 
-        if config.hyprland.enabled {
-            let config_clone = Arc::clone(&self.config);
-            match HyprlandLogger::new(config_clone.hyprland.clone()) {
-                Ok(logger) => match logger.setup() {
-                    Ok(handle) => {
-                        self.handles.insert("hyprland".to_string(), handle);
-                    }
-                    Err(e) => {
-                        let err =
-                            CollectorError::LoggerSetupError("hyprland".to_string(), Box::new(e));
-                        eprintln!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = CollectorError::LoggerSetupError("hyprland".to_string(), Box::new(e));
-                    eprintln!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        println!("Loggers started. Active: {:?}", self.handles.keys());
+        println!("Sources started. Active: {:?}", self.sources.keys());
 
         if let Err(e) = self.report_state().await {
             eprintln!("Failed to report initial status: {}", e);
@@ -282,25 +272,64 @@ impl Collector<LoggerHandle> {
         }
 
         if !setup_errors.is_empty() {
-            eprintln!("Warning: Some loggers failed to start.");
+            eprintln!("Warning: Some sources failed to start.");
         }
 
         Ok(())
     }
 
-    fn _get_state(&self) -> CollectorState {
+    async fn _get_state(&self) -> CollectorState {
+        let mut source_states = Vec::<String>::new();
+        let mut buffer_states = Vec::<String>::new();
+        let mut total = 0;
+
+        if let Some(running_src_trait) = self.sources.get("screen") {
+            if let Some(running_screen_src) =
+                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>()
+            {
+                let source_dyn_box_ref: &Arc<
+                    Box<dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static>,
+                > = &running_screen_src.instance;
+                let source_dyn_ref = &**source_dyn_box_ref;
+
+                if let Some(screen_ds) =
+                    (source_dyn_ref as &dyn Any).downcast_ref::<ScreenDataSource>()
+                {
+                    let buf_guard = screen_ds.buffer.lock().await;
+                    let images = buf_guard.clone();
+
+                    let screen_buf_size = images.capacity() * std::mem::size_of::<CapturedImage>();
+
+                    let fs = format!("Screen source buffer length: {}", screen_buf_size);
+                    buffer_states.push(fs.to_string());
+
+                    total += screen_buf_size; //TODO: get actual buffer size rather than just vec length
+
+                    if let is_running = screen_ds.is_running() {
+                        let fs = format!("Screen souce running state: {}", is_running);
+                        source_states.push(fs.to_string());
+                    } else {
+                        source_states.push("Could not get screen source state".to_string());
+                    }
+                }
+            }
+        }
+
         CollectorState {
             name: self.client_id.clone(),
             timestamp: chrono::Utc::now(),
+            source_states: source_states,
+            source_buffer_sizes: buffer_states,
+            total_buffer_size: total as u32,
         }
     }
 
     // Sends the current status to the gRPC server.
     pub async fn report_state(&mut self) -> Result<(), CollectorError> {
-        let current_state: lifelog_proto::CollectorState = self._get_state().into();
+        let current_state: lifelog_proto::CollectorState = self._get_state().await.into();
         if let Some(client) = self.grpc_client.as_mut() {
-            let active_loggers: Vec<String> = self.handles.keys().cloned().collect();
-            println!("Reporting status: Active loggers = {:?}", active_loggers);
+            let active_sources: Vec<String> = self.sources.keys().cloned().collect();
+            println!("Reporting status: Active sources = {:?}", active_sources);
 
             let request = Request::new(ReportStateRequest {
                 state: Some(current_state),
@@ -326,18 +355,18 @@ impl Collector<LoggerHandle> {
     pub fn send_data(&mut self) {}
 
     pub fn stop(&mut self) {
-        println!("Stopping Collector and loggers...");
+        println!("Stopping Collector and sources...");
 
         if let Some(handle) = self.task.take() {
             handle.abort();
             println!("Aborted internal Collector task.");
         }
 
-        for (name, _handle) in self.handles.drain() {
-            println!("Stopping logger: {}", name);
-            // handle.stop(); // Assuming LoggerHandle has a stop method
+        for (name, _handle) in self.sources.drain() {
+            println!("Stopping sources: {}", name);
+            // handle.stop(); // Assuming SourceHandle has a stop method
         }
-        self.handles.clear();
+        self.sources.clear();
 
         self.grpc_client = None;
         println!("Collector stopped.");
@@ -402,27 +431,80 @@ impl CollectorService for GRPCServerCollectorService {
         &self,
         _request: tonic::Request<GetDataRequest>,
     ) -> Result<tonic::Response<Self::GetDataStream>, tonic::Status> {
-        let (tx, rx) = tokio::sync::mpsc::channel(8);
+        println!("[gRPC] Starting data send...");
+        const MAX_DATA_PER_CHANNEL: usize = 32;
+        let (tx, rx) = tokio::sync::mpsc::channel(MAX_DATA_PER_CHANNEL);
+        let collector_handle = self.collector.clone();
 
-        let mut rng = rand::rng();
-        // TODO: Replace this fake data with the real data buffer.
-        let fake_data: Vec<ScreenFrame> = rand::distr::StandardUniform
-            .sample_iter(&mut rng)
-            .take(16)
-            .collect(); // 16
-                        // fake images
         tokio::spawn(async move {
-            // TODO: For all messages we want to send, raise an error if the message is larger than
-            // 4 MB. (TCP limit). We want to raise error here (how to fix that)
-            for f in fake_data {
-                let _ = tx
-                    .send(Ok(lifelog_proto::LifelogData {
-                        payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(f.into())), // TODO:
-                                                                                                    // change name of screenframe so it matches the type
-                    }))
-                    .await
-                    .unwrap();
+            // TODO: Refactor this so that we never directly access the collector, the collector
+            // handle should be the interface to the collector, this should just be a function we
+            // call
+            let images: Vec<CapturedImage> = {
+                let read_guard = collector_handle.collector.read().await;
+                println!("[gRPC] DEBUG!!");
+                let running_source = (*read_guard.sources.get("screen").unwrap()).as_ref();
+                let running: Option<&RunningSource<ScreenConfig>> =
+                    (running_source as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>();
+
+                println!("{:?}", running);
+
+                if let Some(running_screen_src) = running {
+                    let clonned_instance = running_screen_src.instance.clone();
+
+                    let asdf = (*clonned_instance).as_ref();
+                    //println!("[gRPC] asdf: {:?}", asdf);
+                    if let Some(screen_ds) = (asdf as &dyn Any).downcast_ref::<ScreenDataSource>() {
+                        let buf_guard = screen_ds.buffer.lock().await;
+                        buf_guard.clone()
+                    } else {
+                        eprintln!("[gRPC] could not downcast to ScreenDataSource");
+                        Vec::new()
+                    }
+                } else {
+                    eprintln!("[gRPC] 'screen' source not found or wrong type");
+                    Vec::new()
+                }
+            };
+
+            if images.is_empty() {
+                println!("[gRPC] No images to send.");
+            } else {
+                println!("[gRPC] Sending {} images.", images.len());
             }
+
+            for captured in images {
+                let screen_frame = data_modalities::screen::ScreenFrame {
+                    uuid: Uuid::new_v4(),
+                    width: captured.width,
+                    height: captured.height,
+                    image_bytes: captured.image_data,
+                    timestamp: captured.timestamp,
+                    mime_type: "image/png".to_string(),
+                };
+
+                match <data_modalities::screen::ScreenFrame as TryInto<
+                    lifelog_proto::ScreenFrame,
+                >>::try_into(screen_frame)
+                {
+                    Ok(proto_frame) => {
+                        let data_to_send = LifelogData {
+                            payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(
+                                proto_frame,
+                            )),
+                        };
+                        if tx.send(Ok(data_to_send)).await.is_err() {
+                            eprintln!("[gRPC] receiver dropped, stopping send");
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[gRPC] conversion error: {:?}", e);
+                    }
+                }
+            }
+
+            println!("[gRPC] Finished sending from ScreenDataSource.");
         });
 
         Ok(tonic::Response::new(ReceiverStream::new(rx)))
