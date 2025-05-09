@@ -25,8 +25,7 @@ pub struct CollectorState {
     pub timestamp: DateTime<Utc>,
     pub source_states: Vec<String>,
     pub source_buffer_sizes: Vec<String>,
-    pub total_buffer_size: u32
-    // Add to this!! all the information server needs from collector
+    pub total_buffer_size: u32, // Add to this!! all the information server needs from collector
 }
 
 #[lifelog_type(None)]
@@ -41,6 +40,7 @@ pub struct ServerState {
     pub cpu_usage: f32,    // TODO: REFACTOR TO USE USAGE TYPE
     pub memory_usage: f32, // TODO: REFACTOR TO USE USAGE TYPE
     pub threads: f32,      // TODO: REFACTOR TO USE USAGE TYPE
+    pub timestamp_of_last_sync: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>, // TDOO: REFACTOR TO OPTION and type of f64
 
     pub pending_commands: Vec<ServerCommand>,
 }
@@ -93,6 +93,8 @@ impl Default for ServerState {
             memory_usage: 0., // TODO: REFACTOR TO USE USAGE TYPE
             threads: 0.,      // TODO: REFACTOR TO USE USAGE TYPE
             pending_commands: vec![],
+            timestamp_of_last_sync: chrono::DateTime::from_timestamp(0, 0)
+                .expect("This will never fail"), // TODO: REFACTOR
         }
     }
 }

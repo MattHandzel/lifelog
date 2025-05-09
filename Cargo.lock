@@ -1041,6 +1041,7 @@ dependencies = [
  "dashmap 6.1.0",
  "derive_more 2.0.1",
  "dirs-next",
+ "lifelog-core",
  "lifelog-macros",
  "lifelog-proto",
  "lifelog-types",

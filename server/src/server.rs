@@ -41,6 +41,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use surrealdb::sql::{Thing, Value};
 
 static CREATED_TABLES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
+const SYNC_INTERVAL: i64 = 5; // TODO: Refactor this into policy
 
 // TODO: Refactor into am acro to automatically generate this
 const SCREENFRAME_SCHEMA: &str = r#"
@@ -67,11 +68,17 @@ async fn ensure_table(
         return Ok(());
     }
     let ddl = schema_tpl.replace("{table}", table);
+    //db.query(format!(
+    //    r#"
+    //    DEFINE TABLE {table} SCHEMAFULL;
+    //    {ddl}
+    //    DEFINE INDEX {table}_ts_idx ON {table} FIELDS timestamp;
+    //"#
+    //))
+    // TODO: we want to be able to define the index as well
     db.query(format!(
         r#"
         DEFINE TABLE {table} SCHEMAFULL;
-        {ddl}
-        DEFINE INDEX {table}_ts_idx ON {table} FIELDS timestamp;
     "#
     ))
     .await?;
@@ -405,14 +412,16 @@ impl Policy for ServerPolicy {
 
         // See what the current client requests are
 
-        // TODO: Look at the collector states and when a collector is more than 60 seconds out of
+        // TODO: Look at the collector states and when a collector is more than x seconds out of
         // sync ask it for more data
-        let SYNC_INTERVAL = 5; // TODO: Refactor this into policy
-        let action = if true
-        /*state.server_state.timestamp.timestamp() % SYNC_INTERVAL == 0*/
+        let action = if (state.server_state.timestamp - state.server_state.timestamp_of_last_sync)
+            .num_seconds() as f64
+            >= (self.config.collector_sync_interval as f64)
+        // TODO: Refactor so this happens once
         {
             // TODO: Add the specific data modality here
-            ServerAction::SyncData("SELECT * FROM screen".to_string())
+            ServerAction::SyncData("SELECT * FROM screen".to_string()) // TODO: Refactor so that we
+                                                                       // can sync from all collectors
         } else {
             ServerAction::Sleep(tokio::time::Duration::from_millis(100))
         };
@@ -516,6 +525,7 @@ impl Server {
                 tokio::time::sleep(duration).await;
             }
             ServerAction::SyncData(query) => {
+                // TODO: Refactor so we actually use the query
                 // Get the target data modalities(s) from the query
                 let mut collectors = self.register_collectors.write().await;
                 for collector in collectors.iter_mut() {
@@ -541,7 +551,7 @@ impl Server {
                     // TODO: REFACTOR THIS FUNCTION
 
                     let data_modality_str = "screen";
-                    let table = format!("{}___{}", mac, data_modality_str);
+                    let table = format!("`{}:{}`", mac, data_modality_str);
 
                     ensure_table(&self.db, &table, SCREENFRAME_SCHEMA)
                         .await
@@ -583,6 +593,10 @@ impl Server {
                         //  }))
                         //  .await?;
                     }
+
+                    // TODO: refactor, i dont think we should write lock the state here, diff
+                    // function for estimating the state?
+                    self.state.write().await.server_state.timestamp_of_last_sync = Utc::now();
                 }
 
                 // For now, assume we want to sync all data modalities
