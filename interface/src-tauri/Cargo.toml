@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "UI Interface for Lifelog"
 authors = ["you"]
 edition = "2021"
+default-run = "lifelog-server-frontend"
 
 [[bin]]
 name = "lifelog-server-frontend"
@@ -21,8 +22,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 # Define build dependencies directly, don't inherit from workspace dependencies
-tonic-build = "0.9" # Specify version directly
-prost-build = "0.11" # Specify version directly
+tonic-build = { workspace = true }
+prost-build = { workspace = true }
 
 [dependencies]
 utils = {path = "../../common/utils"}
@@ -75,4 +76,4 @@ tempfile = "3.8.1"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
-dev = []
+dev = ["config/dev"]

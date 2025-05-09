@@ -68,3 +68,5 @@ config.toml
 other-projects.md
 lifelogging.md
 node_modules/
+lifelog_data/
+/lifelog_data/
