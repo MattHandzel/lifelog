@@ -671,11 +671,12 @@ async fn get_camera_settings(
 
     Ok(serde_json::json!({
         "enabled": camera_config.enabled,
-        "device": camera_config.device,
-        "fps": camera_config.fps,
         "interval": camera_config.interval,
-        "output_dir": camera_config.output_dir,
-        "resolution": camera_config.resolution,
+        "output_dir": camera_config.output_dir.to_str().unwrap_or_default(),
+        "device": camera_config.device,
+        "resolution_x": camera_config.resolution_x,
+        "resolution_y": camera_config.resolution_y,
+        "fps": camera_config.fps,
         "timestamp_format": camera_config.timestamp_format,
     }))
 }
@@ -1140,12 +1141,15 @@ async fn get_component_config(component_name: String) -> Result<Value, String> {
     let system_config = response.into_inner().config.ok_or_else(|| {
         "Server response did not contain SystemConfig data".to_string()
     })?;
-    // Parse collectors JSON string into CollectorConfig
-    let collectors_json = system_config.collectors;
-    println!("gRPC: get_component_config - received collectors JSON: {}", collectors_json);
-    let collector_config: lifelog::CollectorConfig = serde_json::from_str(&collectors_json)
-        .map_err(|e| format!("Failed to parse collector config JSON: {}", e))?;
-    println!("gRPC: get_component_config - parsed CollectorConfig: {:?}", collector_config);
+
+    let collectors_json_opt = system_config.collector; // This is Option<lifelog::CollectorConfig>
+    println!("gRPC: get_component_config - received collector config option from SystemConfig: {:?}", collectors_json_opt);
+
+    let collector_config: lifelog::CollectorConfig = collectors_json_opt.ok_or_else(|| {
+        format!("Collector configuration is missing in SystemConfig, cannot get component '{}'", component_name)
+    })?;
+    println!("gRPC: get_component_config - unwrapped CollectorConfig: {:?}", collector_config);
+
     let component_value = match component_name.to_lowercase().as_str() {
         "screen" => serde_json::to_value(&collector_config.screen)
             .map_err(|e| format!("Failed to serialize screen config: {}", e))?,
@@ -1182,10 +1186,13 @@ async fn set_component_config(component_name: String, config_value: Value) -> Re
     let system_config = get_response.into_inner().config.ok_or_else(|| {
         "Server response did not contain SystemConfig data".to_string()
     })?;
-    let collectors_json = system_config.collectors;
-    let mut collector_config: lifelog::CollectorConfig = serde_json::from_str(&collectors_json)
-        .map_err(|e| format!("Failed to parse collector config JSON: {}", e))?;
-    println!("gRPC: set_component_config - parsed CollectorConfig: {:?}", collector_config);
+
+    let collectors_json_opt = system_config.collector; // This is Option<lifelog::CollectorConfig>
+    println!("gRPC: set_component_config - received collector config option from SystemConfig: {:?}", collectors_json_opt);
+
+    let mut collector_config: lifelog::CollectorConfig = collectors_json_opt.unwrap_or_default();
+    println!("gRPC: set_component_config - starting with CollectorConfig (possibly default): {:?}", collector_config);
+
     match component_name.to_lowercase().as_str() {
         "screen" => {
             let new_conf: lifelog::ScreenConfig = serde_json::from_value(config_value)
