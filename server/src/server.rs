@@ -38,7 +38,7 @@ use tokio_stream::StreamExt;
 use dashmap::DashSet;
 use once_cell::sync::Lazy;
 use serde::{de::DeserializeOwned, Serialize};
-use surrealdb::sql::Thing;
+use surrealdb::sql::{Thing, Value};
 
 static CREATED_TABLES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
 
@@ -353,16 +353,28 @@ impl LifelogServerService for GRPCServerLifelogServerService {
     async fn query(
         &self,
         request: tonic::Request<QueryRequest>,
-    ) -> Result<TonicResponse<QueryResponse>, TonicStatus> {
-        let inner = request.into_inner();
-        println!("Received a query request! {:?}", inner.query);
-        Ok(TonicResponse::new(QueryResponse {
-            uuids: vec![lifelog_proto::Uuid {
-                uuid: "2b6e8293-1300-4318-9196-f8fed905b499".to_string(),
-            }],
-        }))
-    }
+    ) -> Result<tonic::Response<QueryResponse>, tonic::Status> {
+        let QueryRequest { query } = request.into_inner();
+        if query.trim().is_empty() {
+            return Err(tonic::Status::invalid_argument("query string is empty"));
+        }
 
+        let db = self.server.get_db().await;
+        println!("Query: {}", query);
+        let mut rows: Vec<ScreenFrameSurreal> = db
+            .select(query)
+            .await
+            .map_err(|e| tonic::Status::internal(format!("database error: {e}")))?;
+        //println!("Response: {:?}", resp);
+
+        let mut response = QueryResponse { uuids: vec![] };
+
+        for v in rows {
+            response.uuids.push(v.timestamp.to_string());
+        }
+
+        Ok(tonic::Response::new(response))
+    }
     async fn get_state(
         &self,
         _request: tonic::Request<GetStateRequest>,
@@ -639,7 +651,7 @@ impl Server {
 // TODO: Complete this for every data type
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ScreenFrameSurreal {
-    //pub uuid: surrealdb::Uuid,
+    pub uuid: String,
     pub timestamp: surrealdb::Datetime,
     pub width: i32,
     pub height: i32,
@@ -651,7 +663,7 @@ pub struct ScreenFrameSurreal {
 impl From<ScreenFrame> for ScreenFrameSurreal {
     fn from(frame: ScreenFrame) -> Self {
         Self {
-            //uuid: surrealdb::Uuid::from_u128_le(frame.uuid.to_u128_le()),
+            uuid: frame.uuid.into(),
             timestamp: frame.timestamp.into(),
             width: frame.width as i32,
             height: frame.height as i32,
