@@ -8,35 +8,27 @@ use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::io::join;
 use tokio::time::{sleep, Duration};
+use data_modalities::screen::ScreenFrame;
 
 use image::GenericImageView;
 use image::ImageReader;
 use lifelog_core::Utc;
 use std::io::Cursor;
+use lifelog_core::Uuid;
 
 use std::env;
 use std::sync::Arc;
-use tempfile::NamedTempFile;
 use tokio::sync::Mutex;
 
 use crate::data_source::{DataSource, DataSourceError, DataSourceHandle};
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
-// TODO: this should be the same as screenframe in common/data-modalities/screen/data.rs
-#[derive(Debug, Clone)]
-pub struct CapturedImage {
-    pub timestamp: chrono::DateTime<Utc>,
-    pub image_data: Vec<u8>,
-    pub width: u32,
-    pub height: u32,
-}
-
 #[derive(Debug, Clone)]
 pub struct ScreenDataSource {
     config: ScreenConfig,
     logger: ScreenLogger,
-    pub buffer: Arc<Mutex<Vec<CapturedImage>>>,
+    pub buffer: Arc<Mutex<Vec<ScreenFrame>>>,
 }
 
 impl ScreenDataSource {
@@ -110,11 +102,15 @@ impl DataSource for ScreenDataSource {
 
                     let (width, height) = img.dimensions();
 
-                    let captured = CapturedImage {
-                        timestamp: ts,
-                        image_data: image_data_bytes,
+                    
+
+                    let captured = ScreenFrame {
+                        uuid: Uuid::new_v4(),
                         width: width,
                         height: height,
+                        image_bytes: image_data_bytes,
+                        timestamp: ts,
+                        mime_type: "image/png".to_string(),
                     };
 
                     let mut store_guard = self.buffer.lock().await;

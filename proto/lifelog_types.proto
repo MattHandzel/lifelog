@@ -207,5 +207,6 @@ message InterfaceState {
 message LifelogData {
   oneof payload {
     ScreenFrame screenframe = 1;
+    SnapshotFrame snapshotframe = 2;
   }
 }
