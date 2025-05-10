@@ -155,7 +155,7 @@ export interface ScreenFrame {
   mime_type: string;
 }
 
-export type ServerCommand = "RegisterCollector" | "GetConfig" | "SetConfig" | "GetData" | "Query" | "ReportState" | "GetState";
+export type ServerCommand = "RegisterCollector" | "GetConfig" | "SetConfig" | "GetData" | "ReportState" | "GetState";
 
 export interface ServerConfig {
   host: string;

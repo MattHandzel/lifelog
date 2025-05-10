@@ -20,15 +20,17 @@ use config::CollectorConfig;
 use lifelog_proto::lifelog_server_service_server::LifelogServerService;
 use lifelog_proto::{
     GetDataRequest, GetDataResponse, GetStateRequest, GetSystemConfigRequest,
-    GetSystemConfigResponse, GetSystemStateResponse, QueryRequest, QueryResponse,
+    GetSystemConfigResponse, GetSystemStateResponse, Query, QueryRequest, QueryResponse,
     RegisterCollectorRequest, RegisterCollectorResponse, ReportStateRequest, ReportStateResponse,
-    SetSystemConfigRequest, SetSystemConfigResponse,
+    SetSystemConfigRequest, SetSystemConfigResponse, Timerange,
 };
 use lifelog_types::DataModality;
 
 use lifelog_proto::collector_service_client::CollectorServiceClient;
 
 use data_modalities::*;
+use prost_types::Timestamp;
+use std::collections::HashSet;
 use sysinfo::System;
 
 use futures_core::Stream;
@@ -39,6 +41,7 @@ use dashmap::DashSet;
 use once_cell::sync::Lazy;
 use serde::{de::DeserializeOwned, Serialize};
 use surrealdb::sql::{Thing, Value};
+use surrealdb::Error;
 
 static CREATED_TABLES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
 const SYNC_INTERVAL: i64 = 5; // TODO: Refactor this into policy
@@ -318,14 +321,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
     ) -> Result<TonicResponse<GetDataResponse>, TonicStatus> {
         let req = request.into_inner();
         let chunks: Vec<lifelog_proto::lifelog_data::Payload> = Vec::new();
-        for modality in DataModality::iter() {
-            // Find the uuids in the data base
-        }
-        // 4) turn it into a gRPC response
-        //match result {
-        //Ok(resp) => Ok(TonicResponse::new(resp)),
-        //    Err(stat) => Err(TonicStatus::internal(stat.to_string())),
-        //}
+        for modality in DataModality::iter() {}
         Ok(TonicResponse::new(GetDataResponse { data: vec![] }))
     }
 
@@ -358,26 +354,22 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         request: tonic::Request<QueryRequest>,
     ) -> Result<tonic::Response<QueryResponse>, tonic::Status> {
         let QueryRequest { query } = request.into_inner();
-        if query.trim().is_empty() {
-            return Err(tonic::Status::invalid_argument("query string is empty"));
-        }
-
-        let db = self.server.get_db().await;
-        println!("Query: {}", query);
-        let mut rows: Vec<ScreenFrameSurreal> = db
-            .select(query)
-            .await
-            .map_err(|e| tonic::Status::internal(format!("database error: {e}")))?;
-        //println!("Response: {:?}", resp);
-
-        let mut response = QueryResponse { uuids: vec![] };
-
-        for v in rows {
-            response.uuids.push(v.timestamp.to_string());
-        }
-
-        Ok(tonic::Response::new(response))
+        //if let None = query {
+        //    return Err(tonic::Status::invalid_argument(
+        //        "You sent `None` as a Query, that is illegal!",
+        //    ));
+        //}
+        //let query = query.unwrap();
+        //
+        //let db = self.server.get_db().await;
+        //
+        //let ids = query_uuids(&db, query)
+        //    .await
+        //    .map_err(|e| tonic::Status::internal(e.to_string()))?;
+        let ids = vec![]; // TODO: Implement this
+        Ok(tonic::Response::new(QueryResponse { uuids: ids }))
     }
+
     async fn get_state(
         &self,
         _request: tonic::Request<GetStateRequest>,
@@ -727,3 +719,108 @@ impl From<BrowserFrame> for BrowserFrameSurreal {
         }
     }
 }
+
+///// Convert `prost_types::Timestamp` → RFC-3339 string recognised by SurrealDB.
+//fn ts_to_rfc3339(ts: &prost_types::Timestamp) -> String {
+//    // Safety: prost Timestamp always contains valid seconds/nanos
+//    let dt: DateTime<Utc> = chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32).unwrap();
+//    dt.to_rfc3339()
+//}
+//
+//fn build_time_filter(ranges: &[Timerange]) -> (String, Vec<(&'static str, Value)>) {
+//    if ranges.is_empty() {
+//        return ("true".into(), Vec::new());
+//    }
+//
+//    let mut clauses = Vec::with_capacity(ranges.len());
+//    let mut binds = Vec::with_capacity(ranges.len() * 2);
+//
+//    for (i, tr) in ranges.iter().enumerate() {
+//        let start = ts_to_rfc3339(tr.start.as_ref().expect("missing start"));
+//        let end = ts_to_rfc3339(tr.end.as_ref().expect("missing end"));
+//
+//        // (timestamp >= $s0 AND timestamp <= $e0)
+//        clauses.push(format!("(timestamp >= $s{i} AND timestamp <= $e{i})"));
+//
+//        binds.push((Box::leak(format!("s{i}").into_boxed_str()), start.into()));
+//        binds.push((Box::leak(format!("e{i}").into_boxed_str()), end.into()));
+//    }
+//
+//    (clauses.join(" OR "), binds)
+//}
+//
+///// Main helper – run the query and get the matching UUIDs.
+/////
+///// * `db`           – an *already authorised* Surreal handle
+///// * `query`        – the incoming gRPC `Query`
+/////
+///// Returns a deduplicated vector of UUID strings.
+//pub async fn query_uuids(
+//    db: &Surreal<Client>,
+//    query: Query,
+//) -> Result<Vec<String>, surrealdb::Error> {
+//    // Decide which tables we need to hit:
+//    //   * search_sources drive the filtering
+//    //   * if return_sources is empty, fall back to search_sources
+//    let search_sources = if query.search_sources.is_empty() {
+//        &query.return_sources
+//    } else {
+//        &query.search_sources
+//    };
+//
+//    let return_sources = if query.return_sources.is_empty() {
+//        search_sources
+//    } else {
+//        &query.return_sources
+//    };
+//
+//    // Time filter ------------------------------------------------------------
+//    let (time_filter, mut bindings) = build_time_filter(&query.time_ranges);
+//
+//    let browser_filter = true;
+//    let browser_bind = None;
+//
+//    //// Optional browser-text filter ------------------------------------------
+//    //let (browser_filter, browser_bind) = if query.browser_text.is_empty() {
+//    //    ("true".into(), None)
+//    //} else {
+//    //    (
+//    //        "(title CONTAINS $btxt OR url CONTAINS $btxt)".into(),
+//    //        Some(("btxt", query.browser_text.clone().into())),
+//    //    )
+//    //};
+//
+//    if let Some(b) = browser_bind {
+//        bindings.push(b);
+//    }
+//
+//    // Collect UUIDs from all tables -----------------------------------------
+//    let mut uuids = HashSet::<String>::new();
+//
+//    for table_str in return_sources {
+//        // Our helper that parses "device:modality" → actual table name
+//        let table = DataOrigin::from_string(table_str.clone()).get_table_name();
+//
+//        let sql = format!(
+//            r#"
+//            SELECT VALUE record::id(id)
+//            FROM type::table($tbl)
+//            WHERE ({time_filter}) AND ({browser_filter});
+//            "#
+//        );
+//        println!("SQL: {}", sql);
+//        panic!("SQL: {}", sql);
+//
+//        //// Run the query in one round-trip
+//        //let mut resp = db
+//        //    .query(sql)
+//        //    .bind(("tbl", &table))
+//        //    //.bind_many(bindings.clone())
+//        //    .await?;
+//
+//        //let ids: Vec<String> = resp.take(0)?; // flat array because SELECT VALUE
+//        //uuids.extend(ids);
+//    }
+//
+//    Ok(uuids.into_iter().collect())
+//}

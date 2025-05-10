@@ -39,8 +39,32 @@ fn main() {
 pub enum DataModality {{
     {}
 }}
+
+impl DataModality {{
+    pub fn from_str(name: &str) -> Self {{
+        match name {{
+            {}
+            _ => panic!("Invalid data modality: {{}}", name),
+        }}
+    }}
+    pub fn to_string(&self) -> String {{
+        match self {{
+            {}
+        }}
+    }}
+}}
 "#,
-        variants.join(",\n    ")
+        variants.join(",\n    "),
+        variants
+            .iter()
+            .map(|name| format!("\"{}\" => Self::{},", name, name))
+            .collect::<Vec<_>>()
+            .join("\n            "),
+        variants
+            .iter()
+            .map(|name| format!("Self::{} => \"{}\".to_string(),", name, name))
+            .collect::<Vec<_>>()
+            .join("\n            "),
     );
 
     fs::write(dest_path, code).unwrap();

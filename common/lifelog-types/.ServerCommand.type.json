@@ -1,1 +1,1 @@
-{"fields":[],"ident":"ServerCommand","metadata_type":"None","variants":["RegisterCollector","GetConfig","SetConfig","GetData","Query","ReportState","GetState"]}
+{"fields":[],"ident":"ServerCommand","metadata_type":"None","variants":["RegisterCollector","GetConfig","SetConfig","GetData","ReportState","GetState"]}

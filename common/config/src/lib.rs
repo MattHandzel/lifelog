@@ -541,7 +541,7 @@ fn create_default_config() -> CollectorConfig {
     CollectorConfig {
         id: "implement_this".to_string(),
         host: "127.0.0.1".to_string(),
-        port: 7190,
+        port: 7182,
         timestamp_format: default_timestamp_format(),
         screen: ScreenConfig {
             enabled: true,
@@ -740,4 +740,3 @@ pub struct BrowserHistoryConfig {
 
     pub browser_type: String,
 }
-

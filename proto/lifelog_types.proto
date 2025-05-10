@@ -172,9 +172,8 @@ enum ServerCommand {
   GetConfig = 1;
   SetConfig = 2;
   GetData = 3;
-  Query = 4;
-  ReportState = 5;
-  GetState = 6;
+  ReportState = 4;
+  GetState = 5;
 }
 
 message ServerConfig {

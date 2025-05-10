@@ -63,7 +63,7 @@ pub enum ServerCommand {
     GetConfig,
     SetConfig,
     GetData,
-    Query,
+    //Query, //TODO: Bring this back
     ReportState,
     GetState,
 }
@@ -226,6 +226,25 @@ impl DataOrigin {
     pub fn new(source: DataOriginType, modality: DataModality) -> Self {
         DataOrigin { source, modality }
     }
+    pub fn from_string(source: String) -> Self {
+        let parts = source.split(':').collect::<Vec<_>>();
+        if parts.len() < 2 {
+            panic!("{}", format!("Invalid data origin string: {source}"));
+        }
+        if parts.len() == 2 {
+            return DataOrigin {
+                source: DataOriginType::DeviceId(parts[0].to_string()),
+                modality: DataModality::from_str(parts[1]),
+            };
+        }
+        DataOrigin {
+            source: DataOriginType::DataOrigin(Box::new(DataOrigin::from_string(
+                parts[0..parts.len() - 1].join(":"),
+            ))),
+            modality: DataModality::from_str(parts[parts.len() - 1]),
+        }
+    }
+
     pub fn get_table_name(&self) -> String {
         match &self.source {
             DataOriginType::DeviceId(device_id) => {

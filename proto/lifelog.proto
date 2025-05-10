@@ -58,8 +58,33 @@ message UUID {
   string uuid = 1;
 }
 
+
+// This is a message that the interface will send to the server to get the data it wants
+message Query {
+  // Example Query: "find my browser usage between [2025-01-01, 202-02-01] where my screen looked similar to this {image}, and the browser title had the word 'lifelog' in it"
+  // From this query the system will extract timestamps of when this query is satisfied and then return the relevant data from the data source specified
+
+  // These are the sources the query will search through. It will search through the OR of the sources. It will return the OR of the source. For example, if the user has two laptop's then they can specify what laptop they want to search through. This is useful for when the user has multiple devices and wants to search through a specific one.
+  repeated string search_sources = 1;
+
+  // These are the sources the query will return data from. It will return the OR of the sources. In the example it is browser usage, but we can also select the laptop screen and it would return both sources for the user. 
+  repeated string return_sources = 2;
+
+  // This is an image embedding the user wants to search through
+  Embedding image_embedding = 3;
+
+
+  // This is the time ranges, specified, it will search through the OR of the time ranges.
+  repeated Timerange time_ranges = 4; 
+  
+
+  // This is the browser text
+  string browser_text = 5; 
+  }
+
+
 message QueryRequest {
-  string query = 1; // TODO: Change this to be the query data type we define
+  Query query = 1; // TODO: Change this to be the query data type we define
   }
 message QueryResponse {
   repeated string uuids = 1; // TODO: Change this to be the query data type we define
@@ -85,7 +110,14 @@ message ReportStateResponse {
   bool acknowledged = 1;
 }
 
+message Embedding {
+  repeated float embedding = 1;
+}
 
+message Timerange {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+}
 
 // -----------------------------------------------------------------------------
 // Services

@@ -21,7 +21,7 @@ impl Modality for BrowserFrame {
         lifelog_proto::lifelog_data::Payload::Browserframe(self.into()) // TODO: refactor code so this is
     }
     fn get_table_name() -> &'static str {
-        "screen" // TODO: automatically generate this based on folder name
+        "browser" // TODO: automatically generate this based on folder name
     }
     fn get_surrealdb_schema() -> &'static str {
         r#"
