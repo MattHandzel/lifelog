@@ -61,7 +61,7 @@ impl BrowserHistorySource {
             }
         };
 
-        let history_path = &self.config.input_dir; 
+        let history_path = &self.config.input_file; 
         let ts = Utc::now();
 
         let last_query_chrome_micros = (last_query.timestamp() * 1_000_000) + last_query.timestamp_subsec_micros() as i64 + WINDOWS_EPOCH_MICROS;

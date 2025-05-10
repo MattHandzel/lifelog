@@ -25,7 +25,7 @@ export interface BrowserFrame {
 
 export interface BrowserHistoryConfig {
   enabled: boolean;
-  input_dir: string;
+  input_file: string;
   output_file: string;
   browser_type: string;
 }

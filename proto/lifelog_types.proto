@@ -30,7 +30,7 @@ message BrowserFrame {
 
 message BrowserHistoryConfig {
   bool enabled = 1;
-  string input_dir = 2;
+  string input_file = 2;
   string output_file = 3;
   string browser_type = 4;
 }
