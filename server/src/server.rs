@@ -518,114 +518,11 @@ impl Server {
                 // TODO: Refactor so we actually use the query
                 // Get the target data modalities(s) from the query
                 let mut collectors = self.register_collectors.write().await;
-                for collector in collectors.iter_mut() {
-                    println!("Syncing data with collector: {:?}", collector);
-                    // TODO: This code can fail here (notice the unwraps, I should handle it.
-                    let mut stream = collector
-                        .grpc_client
-                        .get_data(GetDataRequest {
-                            uuids: vec![query.clone().into()],
-                        })
-                        .await
-                        .unwrap()
-                        .into_inner();
-                    println!("Defined the stream here...");
-                    let mut data = vec![];
+                sync_data_with_collectors(state.clone(), &self.db, query, &mut collectors).await;
 
-                    while let Some(chunk) = stream.next().await {
-                        data.push(chunk.unwrap().payload);
-                    }
-                    println!("Done receiving data");
-                    let mac = collector.mac.clone();
-
-                    // TODO: REFACTOR THIS FUNCTION
-                    for chunk in data {
-                        // record id = random UUID
-                        let chunk = chunk.unwrap();
-
-                        // TODO: this can be automated
-                        // TODO: Repeat for every data type, just do the old c.into()
-                        // TODO: this can be automated, PLEASE GET RID OF THIS MATCH STATEMENT AND
-                        // CODE, MAKE IT BETTER
-                        // PLEASE FORGIVE ME FOR THIS CODE 😭
-                        match chunk {
-                            lifelog_proto::lifelog_data::Payload::Screenframe(c) => {
-                                let data_origin = DataOrigin::new(
-                                    DataOriginType::DeviceId(mac.clone()),
-                                    DataModality::Screen,
-                                );
-                                ensure_table(&self.db, &data_origin).await.unwrap();
-                                let chunk: ScreenFrame = c.into();
-                                let table = format!("{}", data_origin.get_table_name());
-                                //println!("{:?}", chunk);
-
-                                println!("{:?}", chunk.timestamp);
-                                println!("Adding {:?} to table {}", chunk.uuid.to_string(), table,);
-
-                                let uuid = chunk.uuid;
-                                let chunk: ScreenFrameSurreal = chunk.into();
-                                //println!("Chunk: {:?}", chunk);
-                                let record: Result<Option<ScreenFrameSurreal>, Error> = self
-                                    .db
-                                    .create((table.clone(), uuid.to_string()))
-                                    .content(chunk)
-                                    .await;
-                                match record {
-                                    Err(e) => {
-                                        eprintln!("Error: {:?}", e);
-                                    }
-                                    Ok(record) => {
-                                        let _ = record.expect(
-                                            format!("Unable to create row in table {}", table)
-                                                .as_str(),
-                                        );
-                                    }
-                                }
-                            }
-                            lifelog_proto::lifelog_data::Payload::Browserframe(c) => {
-                                let data_origin = DataOrigin::new(
-                                    DataOriginType::DeviceId(mac.clone()),
-                                    DataModality::Browser,
-                                );
-                                ensure_table(&self.db, &data_origin).await.unwrap();
-                                let chunk: BrowserFrame = c.into();
-                                let table = format!("{}", data_origin.get_table_name());
-
-                                println!(
-                                    "Adding {:?} to table {}",
-                                    chunk.uuid,
-                                    data_origin.get_table_name()
-                                );
-
-                                let uuid = chunk.uuid;
-                                let chunk: BrowserFrameSurreal = chunk.into();
-                                let _: BrowserFrameSurreal = self
-                                    .db
-                                    .create((table.clone(), uuid.to_string()))
-                                    .content(chunk)
-                                    .await
-                                    .unwrap()
-                                    .expect(
-                                        format!("Unable to create row in table {}", table).as_str(),
-                                    );
-                            }
-                            _ => unimplemented!(),
-                        };
-
-                        //db.create("audit_log")
-                        //  .content(json!({
-                        //      "ts": chrono::Utc::now(),
-                        //      "actor": msg.source_mac,
-                        //      "action": "ingest",
-                        //      "detail": { "table": table }
-                        //  }))
-                        //  .await?;
-                    }
-
-                    // TODO: refactor, i dont think we should write lock the state here, diff
-                    // function for estimating the state?
-                    self.state.write().await.server_state.timestamp_of_last_sync = Utc::now();
-                }
+                // TODO: refactor, i dont think we should write lock the state here, diff
+                // function for estimating the state?
+                self.state.write().await.server_state.timestamp_of_last_sync = Utc::now();
 
                 // For now, assume we want to sync all data modalities
 
@@ -838,3 +735,108 @@ impl From<BrowserFrame> for BrowserFrameSurreal {
 //
 //    Ok(uuids.into_iter().collect())
 //}
+//
+
+async fn sync_data_with_collectors(
+    state: SystemState,
+    db: &Surreal<Client>,
+    query: String,
+    collectors: &mut Vec<RegisteredCollector>,
+) {
+    for collector in collectors.iter_mut() {
+        // TODO: Parallelize this
+        println!("Syncing data with collector: {:?}", collector);
+        // TODO: This code can fail here (notice the unwraps, I should handle it.
+        let mut stream = collector
+            .grpc_client
+            .get_data(GetDataRequest {
+                uuids: vec![query.clone().into()],
+            })
+            .await
+            .unwrap()
+            .into_inner();
+        println!("Defined the stream here...");
+        let mut data = vec![];
+
+        while let Some(chunk) = stream.next().await {
+            data.push(chunk.unwrap().payload);
+        }
+        println!("Done receiving data");
+        let mac = collector.mac.clone();
+
+        // TODO: REFACTOR THIS FUNCTION
+        for chunk in data {
+            // record id = random UUID
+            let chunk = chunk.unwrap();
+
+            // TODO: this can be automated with a macro
+            match chunk {
+                lifelog_proto::lifelog_data::Payload::Screenframe(c) => {
+                    let data_origin = DataOrigin::new(
+                        DataOriginType::DeviceId(mac.clone()),
+                        DataModality::Screen,
+                    );
+                    let record = add_data_to_db::<ScreenFrame, ScreenFrameSurreal>(
+                        &db,
+                        c.into(),
+                        &data_origin,
+                    )
+                    .await;
+                }
+                lifelog_proto::lifelog_data::Payload::Browserframe(c) => {
+                    let data_origin = DataOrigin::new(
+                        DataOriginType::DeviceId(mac.clone()),
+                        DataModality::Browser,
+                    );
+
+                    let record = add_data_to_db::<BrowserFrame, BrowserFrameSurreal>(
+                        &db,
+                        c.into(),
+                        &data_origin,
+                    )
+                    .await;
+                }
+                _ => unimplemented!(),
+            };
+
+            //db.create("audit_log")
+            //  .content(json!({
+            //      "ts": chrono::Utc::now(),
+            //      "actor": msg.source_mac,
+            //      "action": "ingest",
+            //      "detail": { "table": table }
+            //  }))
+            //  .await?;
+        }
+    }
+}
+
+async fn add_data_to_db<LifelogType, SurrealType>(
+    db: &Surreal<Client>,
+    data: LifelogType,
+    data_origin: &DataOrigin,
+) -> surrealdb::Result<SurrealType>
+where
+    LifelogType: Into<SurrealType> + DataType,
+    SurrealType: Serialize + DeserializeOwned + 'static,
+{
+    let uuid = data.uuid();
+    let table = format!("{}", data_origin.get_table_name());
+    ensure_table(&db, &data_origin).await.unwrap();
+    let data: SurrealType = data.into();
+    let record: Result<Option<SurrealType>, Error> = db
+        .create((table.clone(), uuid.to_string()))
+        .content(data)
+        .await;
+    //println!("[SURREAL]: Created <{}:{}>", table, uuid);
+    match record {
+        Err(e) => {
+            eprintln!("{}", e);
+            Err(e)
+        }
+        Ok(record) => {
+            let record = record.expect(format!("Unable to create row in table {}", table).as_str());
+            Ok(record)
+        }
+    }
+}
