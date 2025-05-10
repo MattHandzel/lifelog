@@ -1,12 +1,12 @@
+use crate::data_source::*;
 use crate::logger::*;
 use async_trait::async_trait;
 use config::BrowserHistoryConfig;
-use tokio::sync::Mutex;
-use std::sync::Arc;
-use crate::data_source::*;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
-use data_modalities::snapshot::SnapshotFrame;
+use data_modalities::browser::BrowserFrame;
 use rusqlite::{Connection, Result};
 use tokio::time::{sleep, Duration};
 
@@ -15,7 +15,7 @@ static RUNNING: AtomicBool = AtomicBool::new(false);
 #[derive(Debug, Clone)]
 pub struct BrowserHistorySource {
     config: BrowserHistoryConfig,
-    pub buffer: Arc<Mutex<Vec<SnapshotFrame>>>,
+    pub buffer: Arc<Mutex<Vec<BrowserFrame>>>,
 }
 
 impl BrowserHistorySource {
@@ -70,7 +70,6 @@ impl DataSource for BrowserHistorySource {
 
     async fn run(&self) -> Result<(), DataSourceError> {
         while RUNNING.load(Ordering::SeqCst) {
-            
             sleep(Duration::from_secs_f64(5.0)).await; //fixme
         }
         println!("BrowserHistorySource: In-memory run loop finished.");
@@ -85,3 +84,4 @@ impl DataSource for BrowserHistorySource {
         self.config.clone()
     }
 }
+

@@ -99,6 +99,8 @@ A transform is an abstract term. It is any general function. It can be an ML mod
 
 If there is an update to the transform (using a different model) then store the original? or use the original?
 
+A transform has an input modality class and an output modality. For OCr the input modality class is Images and the output modality is OCRFrame. Each transform on ANYTHING has it's own modality.
+
 Functions:
 
 ```rs

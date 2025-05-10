@@ -1661,16 +1661,21 @@ name = "data-modalities"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "image 0.25.6",
  "lifelog-core",
  "lifelog-macros",
  "lifelog-proto",
+ "lifelog-types",
  "maplit",
  "prost-types",
  "rand 0.9.1",
+ "rusty-tesseract",
  "serde",
  "serde_json",
+ "thiserror 2.0.12",
  "tonic",
  "tonic-build",
+ "utils",
  "walkdir",
 ]
 
@@ -4021,6 +4026,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "dashmap 6.1.0",
+ "image 0.25.6",
  "lifelog-core",
  "lifelog-macros",
  "lifelog-proto",
@@ -4028,6 +4034,7 @@ dependencies = [
  "serde",
  "strum 0.27.1",
  "strum_macros 0.27.1",
+ "thiserror 2.0.12",
  "tokio",
  "tonic-build",
  "uuid",
@@ -8482,17 +8489,6 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
-]
-
-[[package]]
-name = "transforms"
-version = "0.1.0"
-dependencies = [
- "lifelog-core",
- "lifelog-types",
- "rusty-tesseract",
- "thiserror 2.0.12",
- "utils",
 ]
 
 [[package]]
