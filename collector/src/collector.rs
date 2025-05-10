@@ -1,5 +1,5 @@
 use super::data_source::{DataSource, DataSourceError, DataSourceHandle};
-use crate::modules::screen::{CapturedImage, ScreenDataSource};
+use crate::modules::screen::{ScreenDataSource};
 use config;
 use data_modalities::screen::ScreenFrame;
 use std::any::Any;
@@ -13,7 +13,6 @@ use tokio::time::Duration;
 
 use config::ScreenConfig;
 use futures_core::Stream;
-use lifelog_core::Uuid;
 use lifelog_types::CollectorState;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
@@ -298,7 +297,7 @@ impl Collector {
                     let buf_guard = screen_ds.buffer.lock().await;
                     let images = buf_guard.clone();
 
-                    let screen_buf_size = images.capacity() * std::mem::size_of::<CapturedImage>();
+                    let screen_buf_size = images.capacity() * std::mem::size_of::<ScreenFrame>();
 
                     let fs = format!("Screen source buffer length: {}", screen_buf_size);
                     buffer_states.push(fs.to_string());
@@ -440,7 +439,7 @@ impl CollectorService for GRPCServerCollectorService {
             // TODO: Refactor this so that we never directly access the collector, the collector
             // handle should be the interface to the collector, this should just be a function we
             // call
-            let images: Vec<CapturedImage> = {
+            let images: Vec<ScreenFrame> = {
                 let read_guard = collector_handle.collector.read().await;
                 println!("[gRPC] DEBUG!!");
                 let running_source = (*read_guard.sources.get("screen").unwrap()).as_ref();
@@ -473,16 +472,7 @@ impl CollectorService for GRPCServerCollectorService {
                 println!("[gRPC] Sending {} images.", images.len());
             }
 
-            for captured in images {
-                let screen_frame = data_modalities::screen::ScreenFrame {
-                    uuid: Uuid::new_v4(),
-                    width: captured.width,
-                    height: captured.height,
-                    image_bytes: captured.image_data,
-                    timestamp: captured.timestamp,
-                    mime_type: "image/png".to_string(),
-                };
-
+            for screen_frame in images {
                 match <data_modalities::screen::ScreenFrame as TryInto<
                     lifelog_proto::ScreenFrame,
                 >>::try_into(screen_frame)

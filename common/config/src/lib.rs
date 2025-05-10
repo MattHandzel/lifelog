@@ -24,6 +24,7 @@ pub struct CollectorConfig {
     pub port: u32, //TODO: Refactor code base so this can be u16 instead of u32, this will be the
     //port gRPC server will run on
     pub timestamp_format: String,
+    pub browser: BrowserHistoryConfig,
     pub screen: ScreenConfig,
     pub camera: CameraConfig,
     pub microphone: MicrophoneConfig,
@@ -549,6 +550,11 @@ fn create_default_config() -> CollectorConfig {
             program: default_screen_program(),
             timestamp_format: default_timestamp_format(),
         },
+        browser: BrowserHistoryConfig {
+            enabled: true,
+            browser_type: "chrome".to_string(),
+            input_dir: "".to_string().into(), // fixme?
+        },
         camera: CameraConfig {
             enabled: default_false(),
             interval: default_camera_interval(),
@@ -716,5 +722,22 @@ pub struct SystemConfig {
     pub server: ServerConfig,
     pub collector: CollectorConfig,
     //pub collectors: BTreeMap<String, CollectorConfig>,
+}
+
+// #[lifelog_type(None)]
+// #[derive(Debug, Clone, Serialize, Deserialize, From)]
+// enum BrowserHistoryType {
+//     Chrome,
+// Firefox}
+
+#[lifelog_type(Config)]
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
+pub struct BrowserHistoryConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    pub input_dir: PathBuf,
+
+    pub browser_type: String,
 }
 
