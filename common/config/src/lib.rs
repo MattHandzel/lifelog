@@ -553,7 +553,8 @@ fn create_default_config() -> CollectorConfig {
         browser: BrowserHistoryConfig {
             enabled: true,
             browser_type: "chrome".to_string(),
-            input_dir: "".to_string().into(), // fixme?
+            input_file: "".to_string().into(), // fixme?
+            output_file: lifelog_dir.join("browser"),
         },
         camera: CameraConfig {
             enabled: default_false(),
@@ -736,7 +737,9 @@ pub struct BrowserHistoryConfig {
     #[serde(default = "default_true")]
     pub enabled: bool,
 
-    pub input_dir: PathBuf,
+    pub input_file: PathBuf,
+
+    pub output_file: PathBuf,
 
     pub browser_type: String,
 }

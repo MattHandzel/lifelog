@@ -1,1 +1,1 @@
-{"fields":[["enabled","bool"],["input_dir","PathBuf"],["browser_type","String"]],"ident":"BrowserHistoryConfig","metadata_type":"Config","variants":[]}
+{"fields":[["enabled","bool"],["input_file","PathBuf"],["output_file","PathBuf"],["browser_type","String"]],"ident":"BrowserHistoryConfig","metadata_type":"Config","variants":[]}

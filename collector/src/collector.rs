@@ -1,7 +1,8 @@
 use super::data_source::{DataSource, DataSourceError, DataSourceHandle};
 use crate::modules::screen::{ScreenDataSource};
+use crate::modules::browser_history::{BrowserHistorySource};
 use config;
-use data_modalities::screen::ScreenFrame;
+use data_modalities::{screen::ScreenFrame, browser::BrowserFrame};
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt;
@@ -11,7 +12,7 @@ use tokio::sync::Mutex;
 use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
-use config::ScreenConfig;
+use config::{ScreenConfig, BrowserHistoryConfig};
 use futures_core::Stream;
 use lifelog_types::CollectorState;
 use tokio::sync::RwLock;
@@ -260,6 +261,33 @@ impl Collector {
             }
         }
 
+        if config.browser.enabled {
+            let config_clone = Arc::clone(&self.config);
+            match BrowserHistorySource::new(config_clone.browser.clone()) {
+                Ok(browser_source) => match browser_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<BrowserHistoryConfig> {
+                            instance: Arc::new(Box::new(browser_source)),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("browser".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err =
+                            CollectorError::SourceSetupError("browser".to_string(), Box::new(e));
+                        eprintln!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = CollectorError::SourceSetupError("browser".to_string(), Box::new(e));
+                    eprintln!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
         // For now I've removed the other sources.
         // But they should be added back here when they're reimplmemented!
 
@@ -441,7 +469,6 @@ impl CollectorService for GRPCServerCollectorService {
             // call
             let images: Vec<ScreenFrame> = {
                 let read_guard = collector_handle.collector.read().await;
-                println!("[gRPC] DEBUG!!");
                 let running_source = (*read_guard.sources.get("screen").unwrap()).as_ref();
                 let running: Option<&RunningSource<ScreenConfig>> =
                     (running_source as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>();
@@ -454,8 +481,16 @@ impl CollectorService for GRPCServerCollectorService {
                     let asdf = (*clonned_instance).as_ref();
                     //println!("[gRPC] asdf: {:?}", asdf);
                     if let Some(screen_ds) = (asdf as &dyn Any).downcast_ref::<ScreenDataSource>() {
-                        let buf_guard = screen_ds.buffer.lock().await;
-                        buf_guard.clone()
+                        match screen_ds.get_data().await  {
+                            Ok(images) => {
+                                screen_ds.clear_buffer();
+                                images
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to get buffer from ScreenDataSource! {:}", e);
+                                Vec::new()
+                            }
+                        }
                     } else {
                         eprintln!("[gRPC] could not downcast to ScreenDataSource");
                         Vec::new()
@@ -495,6 +530,69 @@ impl CollectorService for GRPCServerCollectorService {
             }
 
             println!("[gRPC] Finished sending from ScreenDataSource.");
+
+            let browser_entries: Vec<BrowserFrame> = {
+                let read_guard = collector_handle.collector.read().await;
+                let running_source = (*read_guard.sources.get("browser").unwrap()).as_ref();
+                let running: Option<&RunningSource<BrowserHistoryConfig>> =
+                    (running_source as &dyn Any).downcast_ref::<RunningSource<BrowserHistoryConfig>>();
+
+                println!("{:?}", running);
+
+                if let Some(running_browser_src) = running {
+                    let clonned_instance = running_browser_src.instance.clone();
+
+                    let asdf = (*clonned_instance).as_ref();
+                    //println!("[gRPC] asdf: {:?}", asdf);
+                    if let Some(browser_ds) = (asdf as &dyn Any).downcast_ref::<BrowserHistorySource>() {
+                        match browser_ds.get_data()  {
+                            Ok(history) => {
+                                history
+                            }
+                            Err(e) => {
+                                eprintln!("Failed to get buffer from BrowserHistorySource! {:}", e);
+                                Vec::new()
+                            }
+                        }
+                    } else {
+                        eprintln!("[gRPC] could not downcast to BrowserHistorySource");
+                        Vec::new()
+                    }
+                } else {
+                    eprintln!("[gRPC] 'browser' source not found or wrong type");
+                    Vec::new()
+                }
+            };
+
+            if browser_entries.is_empty() {
+                println!("[gRPC] No browser history to send.");
+            } else {
+                println!("[gRPC] Sending {} browser history entries.", browser_entries.len());
+            }
+
+            for browser_frame in browser_entries {
+                match <data_modalities::browser::BrowserFrame as TryInto<
+                    lifelog_proto::BrowserFrame,
+                >>::try_into(browser_frame)
+                {
+                    Ok(proto_frame) => {
+                        let data_to_send = LifelogData {
+                            payload: Some(lifelog_proto::lifelog_data::Payload::Browserframe(
+                                proto_frame,
+                            )),
+                        };
+                        if tx.send(Ok(data_to_send)).await.is_err() {
+                            eprintln!("[gRPC] receiver dropped, stopping send");
+                            break;
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[gRPC] conversion error: {:?}", e);
+                    }
+                }
+            }
+
+            println!("[gRPC] Finished sending from BrowserHistorySource.");
         });
 
         Ok(tonic::Response::new(ReceiverStream::new(rx)))

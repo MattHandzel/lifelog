@@ -30,8 +30,9 @@ message BrowserFrame {
 
 message BrowserHistoryConfig {
   bool enabled = 1;
-  string input_dir = 2;
-  string browser_type = 3;
+  string input_file = 2;
+  string output_file = 3;
+  string browser_type = 4;
 }
 
 enum BrowserHistoryType {
@@ -72,9 +73,10 @@ message CollectorState {
 }
 
 enum DataModality {
-  Screen = 0;
-  Ocr = 1;
-  Browser = 2;
+  Ocr = 0;
+  Browser = 1;
+  Screen = 2;
+  Browser_history = 3;
 }
 
 message GeoConfig {

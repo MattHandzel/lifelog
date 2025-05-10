@@ -40,6 +40,19 @@ impl ScreenDataSource {
             buffer: Arc::new(Mutex::new(Vec::new())),
         })
     }
+
+    pub async fn get_data(&self) -> Result<Vec<ScreenFrame>, DataSourceError> {
+        let buffer_guard = self.buffer.lock().await;
+
+        Ok(buffer_guard.clone())
+    }
+
+    pub async fn clear_buffer(&self) -> Result<(), DataSourceError> {
+        let mut buffer_guard = self.buffer.lock().await;
+
+        buffer_guard.clear();
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -87,7 +100,6 @@ impl DataSource for ScreenDataSource {
         while RUNNING.load(Ordering::SeqCst) {
             match self.logger.log_data().await {
                 Ok(image_data_bytes) => {
-                    let now = Local::now();
                     let ts = Utc::now();
 
                     let img = ImageReader::new(Cursor::new(&image_data_bytes))
@@ -193,6 +205,10 @@ impl ScreenLogger {
         }
 
         let image_data = tokio::fs::read(&out).await.map_err(LoggerError::Io)?;
+
+        if let Err(e) = tokio::fs::remove_file(&out).await {
+            eprintln!("[ScreenLogger] Failed to delete temporary screenshot: {}", e);
+        }
 
         Ok(image_data)
     }

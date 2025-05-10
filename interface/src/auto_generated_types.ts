@@ -25,7 +25,8 @@ export interface BrowserFrame {
 
 export interface BrowserHistoryConfig {
   enabled: boolean;
-  input_dir: string;
+  input_file: string;
+  output_file: string;
   browser_type: string;
 }
 
@@ -63,7 +64,7 @@ export interface CollectorState {
   total_buffer_size: number;
 }
 
-export type DataModality = "Screen" | "Ocr" | "Browser";
+export type DataModality = "Ocr" | "Browser" | "Screen" | "Browser_history";
 
 export interface GeoConfig {
   enabled: boolean;
