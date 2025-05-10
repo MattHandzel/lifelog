@@ -10,11 +10,6 @@ pub use tracing;
 pub use uuid;
 pub use uuid::Uuid;
 
-pub mod data_sources;
-pub mod database_state;
-pub mod system_state;
-//pub mod system_state;
-
 pub use serde;
 pub use serde::Deserialize;
 pub use serde::Serialize;
@@ -65,11 +60,32 @@ pub enum LifelogMacroMetaDataType {
     None,
 }
 
-use ::serde::de::DeserializeOwned;
-pub trait Modality: Sized + Send + Sync + 'static + DeserializeOwned {
-    const TABLE: &'static str;
-    fn into_payload(self) -> lifelog_proto::lifelog_data::Payload;
-    fn id(&self) -> String;
+use core::{slice, str};
+const fn folder_name(path: &str) -> &str {
+    let bytes = path.as_bytes();
+    let mut last_slash = 0;
+    let mut second_last_slash = 0;
+
+    // Same loop logic to find slashes as before
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'/' || bytes[i] == b'\\' {
+            second_last_slash = last_slash;
+            last_slash = i;
+        }
+        i += 1;
+    }
+
+    // Calculate slice bounds using pointer arithmetic
+    let start = second_last_slash + 1;
+    let len = last_slash - start;
+
+    // SAFETY: Original path is valid UTF-8, and we're slicing between valid slash positions
+    unsafe {
+        let ptr = bytes.as_ptr().add(start);
+        let byte_slice = slice::from_raw_parts(ptr, len);
+        str::from_utf8_unchecked(byte_slice)
+    }
 }
 
 //use system_state::*;

@@ -18,10 +18,7 @@ export interface AudioConfig {
   chunk_duration_secs: number;
 }
 
-export interface SystemConfig {
-  server: ServerConfig;
-  collector: CollectorConfig;
-}
+export type BrowserHistoryType = "Chrome" | "Firefox";
 
 export interface KeyboardConfig {
   enabled: boolean;
@@ -142,7 +139,6 @@ export interface ServerState {
 
 export interface NetworkConfig {
   enabled: boolean;
-  interval: number;
   output_dir: string;
 }
 
@@ -157,15 +153,16 @@ export interface MicrophoneConfig {
   capture_interval_secs: number;
 }
 
-export interface CameraConfig {
+export interface OcrFrame {
+  uuid: string;
+  timestamp: Date;
+  text: string;
+}
+
+export interface ProcessesConfig {
   enabled: boolean;
   interval: number;
   output_dir: string;
-  device: string;
-  resolution_x: number;
-  resolution_y: number;
-  fps: number;
-  timestamp_format: string;
 }
 
 export interface ScreenConfig {
@@ -176,18 +173,7 @@ export interface ScreenConfig {
   timestamp_format: string;
 }
 
-export interface CollectorConfig {
-  id: string;
-  host: string;
-  port: number;
-  timestamp_format: string;
-  browser: BrowserHistoryConfig;
-  screen: ScreenConfig;
-  camera: CameraConfig;
-  microphone: MicrophoneConfig;
-  processes: ProcessesConfig;
-  hyprland: HyprlandConfig;
-}
+export type ServerCommand = "RegisterCollector" | "GetConfig" | "SetConfig" | "GetData" | "Query" | "ReportState" | "GetState";
 
 export interface InputLoggerConfig {
   output_dir: string;

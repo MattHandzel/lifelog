@@ -28,7 +28,7 @@ use lifelog_types::DataModality;
 
 use lifelog_proto::collector_service_client::CollectorServiceClient;
 
-use data_modalities::screen::*;
+use data_modalities::*;
 use sysinfo::System;
 
 use futures_core::Stream;
@@ -43,15 +43,6 @@ use surrealdb::sql::{Thing, Value};
 static CREATED_TABLES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
 const SYNC_INTERVAL: i64 = 5; // TODO: Refactor this into policy
 
-// TODO: Refactor into am acro to automatically generate this
-const SCREENFRAME_SCHEMA: &str = r#"
-    DEFINE FIELD timestamp  ON {table} TYPE datetime;
-    DEFINE FIELD width      ON {table} TYPE int;
-    DEFINE FIELD height     ON {table} TYPE int;
-    DEFINE FIELD image_bytes ON {table} TYPE bytes;
-    DEFINE FIELD mime_type  ON {table} TYPE string;
-"#;
-
 // TODO: Refactor the timestamp so it uses datetime instead of string, same with uuid, refactor it
 // so it doesn't use image_bytes but instead uses a file path to the image
 // Maybe have a custom struct for data retrievals and parse it to the actual representation?
@@ -59,15 +50,19 @@ const SCREENFRAME_SCHEMA: &str = r#"
 // database, get that file path, create a new struct ScreenFrameSurreal that has the surrealdb
 // types?
 
-async fn ensure_table(
-    db: &Surreal<Client>,
-    table: &str,
-    schema_tpl: &str,
-) -> surrealdb::Result<()> {
-    if CREATED_TABLES.contains(table) {
+async fn ensure_table(db: &Surreal<Client>, data_origin: DataOrigin) -> surrealdb::Result<()> {
+    let table = data_origin.get_table_name();
+    if CREATED_TABLES.contains(&table) {
         return Ok(());
     }
-    let ddl = schema_tpl.replace("{table}", table);
+    // TODO: Auto generate this or find a better way of representing
+    let schema_tpl = match data_origin.modality {
+        DataModality::Screen => ScreenFrame::get_surrealdb_schema(),
+        DataModality::Browser => BrowserFrame::get_surrealdb_schema(),
+        DataModality::Ocr => OcrFrame::get_surrealdb_schema(),
+        _ => unimplemented!(),
+    };
+    let ddl = schema_tpl.replace("{table}", &table);
     //db.query(format!(
     //    r#"
     //    DEFINE TABLE {table} SCHEMAFULL;
@@ -78,7 +73,8 @@ async fn ensure_table(
     // TODO: we want to be able to define the index as well
     db.query(format!(
         r#"
-        DEFINE TABLE {table} SCHEMAFULL;
+        DEFINE TABLE `{table}` SCHEMAFULL;
+        {ddl}
     "#
     ))
     .await?;
@@ -506,8 +502,8 @@ impl Server {
             state.server_state.cpu_usage = cpu_usage; // TODO: Get the real CPU usage
             state.server_state.timestamp = Utc::now();
             state.server_state.memory_usage = memory_usage; // TODO: Get the real memory usage
-                                                            //state.server_state.threads = 0.0; // TODO: Get the real number of threads
-                                                            //                                  // TODO: There is a race condition here, someone can grab the lock before we can grab it
+                                                            // TODO: Get the real number of threads
+                                                            // TODO: There is a race condition here, someone can grab the lock before we can grab it
             state.clone()
         }
     }
@@ -549,40 +545,66 @@ impl Server {
                     let mac = collector.mac.clone();
 
                     // TODO: REFACTOR THIS FUNCTION
-
                     let data_modality_str = "screen";
                     let table = format!("`{}:{}`", mac, data_modality_str);
-
-                    ensure_table(&self.db, &table, SCREENFRAME_SCHEMA)
-                        .await
-                        .unwrap();
                     for chunk in data {
                         // record id = random UUID
                         let chunk = chunk.unwrap();
 
+                        // TODO: this can be automated
                         // TODO: Repeat for every data type, just do the old c.into()
-                        let mut chunk: ScreenFrame = match chunk {
-                            lifelog_proto::lifelog_data::Payload::Screenframe(c) => c.into(),
+                        // TODO: this can be automated, PLEASE GET RID OF THIS MATCH STATEMENT AND
+                        // CODE, MAKE IT BETTER
+                        // PLEASE FORGIVE ME FOR THIS CODE 😭
+                        match chunk {
+                            lifelog_proto::lifelog_data::Payload::Screenframe(c) => {
+                                let data_origin = DataOrigin::new(
+                                    DataOriginType::DeviceId(mac.clone()),
+                                    DataModality::Screen,
+                                );
+                                ensure_table(&self.db, data_origin).await.unwrap();
+                                let chunk: ScreenFrame = c.into();
+
+                                println!("Adding {:?} to table {}", chunk.uuid, table);
+
+                                let uuid = chunk.uuid;
+                                let chunk: ScreenFrameSurreal = chunk.into();
+                                let _: ScreenFrameSurreal = self
+                                    .db
+                                    .create((table.as_str(), uuid.to_string()))
+                                    .content(chunk)
+                                    .await
+                                    .unwrap()
+                                    .expect(
+                                        format!("Unable to create row in table {}", table.as_str())
+                                            .as_str(),
+                                    );
+                            }
+                            lifelog_proto::lifelog_data::Payload::Browserframe(c) => {
+                                let data_origin = DataOrigin::new(
+                                    DataOriginType::DeviceId(mac.clone()),
+                                    DataModality::Browser,
+                                );
+                                ensure_table(&self.db, data_origin).await.unwrap();
+                                let chunk: BrowserFrame = c.into();
+
+                                println!("Adding {:?} to table {}", chunk.uuid, table);
+
+                                let uuid = chunk.uuid;
+                                let chunk: BrowserFrameSurreal = chunk.into();
+                                let _: BrowserFrameSurreal = self
+                                    .db
+                                    .create((table.as_str(), uuid.to_string()))
+                                    .content(chunk)
+                                    .await
+                                    .unwrap()
+                                    .expect(
+                                        format!("Unable to create row in table {}", table.as_str())
+                                            .as_str(),
+                                    );
+                            }
                             _ => unimplemented!(),
                         };
-                        chunk.timestamp = chunk
-                            .timestamp
-                            .with_nanosecond(chunk.timestamp.timestamp_subsec_micros() * 1000)
-                            .unwrap();
-                        println!("Adding {:?} to table {}", chunk.uuid, table);
-
-                        let uuid = chunk.uuid;
-                        let chunk: ScreenFrameSurreal = chunk.into();
-                        let _: ScreenFrameSurreal = self
-                            .db
-                            .create((table.as_str(), uuid.to_string()))
-                            .content(chunk)
-                            .await
-                            .unwrap()
-                            .expect(
-                                format!("Unable to create row in table {}", table.as_str())
-                                    .as_str(),
-                            );
 
                         //db.create("audit_log")
                         //  .content(json!({
@@ -662,7 +684,7 @@ impl Server {
     //}
 }
 
-// TODO: Complete this for every data type
+// TODO: Complete this for every data type, make this into a MACRO
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ScreenFrameSurreal {
     //pub uuid: String,
@@ -683,6 +705,25 @@ impl From<ScreenFrame> for ScreenFrameSurreal {
             height: frame.height as i32,
             image_bytes: frame.image_bytes.into(),
             mime_type: frame.mime_type,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BrowserFrameSurreal {
+    pub timestamp: surrealdb::Datetime,
+    pub url: String,
+    pub title: String,
+    pub visit_count: i32,
+}
+
+impl From<BrowserFrame> for BrowserFrameSurreal {
+    fn from(frame: BrowserFrame) -> Self {
+        Self {
+            timestamp: frame.timestamp.into(),
+            url: frame.url,
+            title: frame.title,
+            visit_count: frame.visit_count as i32,
         }
     }
 }

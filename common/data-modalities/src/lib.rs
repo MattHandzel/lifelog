@@ -1,2 +1,7 @@
+pub mod browser;
+pub mod ocr;
 pub mod screen;
-pub mod browser_history;
+
+pub use browser::*;
+pub use ocr::*;
+pub use screen::*;

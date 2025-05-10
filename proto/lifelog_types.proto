@@ -102,15 +102,10 @@ message SystemPerformanceConfig {
   bool log_disk = 6;
 }
 
-message HyprlandConfig {
+message NetworkConfig {
   bool enabled = 1;
   double interval = 2;
   string output_dir = 3;
-  bool log_clients = 4;
-  bool log_activewindow = 5;
-  bool log_workspace = 6;
-  bool log_active_monitor = 7;
-  bool log_devices = 8;
 }
 
 message ProcessesConfig {
@@ -176,7 +171,7 @@ message MicrophoneConfig {
   uint64 capture_interval_secs = 8;
 }
 
-message CameraConfig {
+message ScreenConfig {
   bool enabled = 1;
   double interval = 2;
   string output_dir = 3;
@@ -195,17 +190,14 @@ message ScreenConfig {
   string timestamp_format = 5;
 }
 
-message CollectorConfig {
-  string id = 1;
-  string host = 2;
-  uint32 port = 3;
-  string timestamp_format = 4;
-  BrowserHistoryConfig browser = 5;
-  ScreenConfig screen = 6;
-  CameraConfig camera = 7;
-  MicrophoneConfig microphone = 8;
-  ProcessesConfig processes = 9;
-  HyprlandConfig hyprland = 10;
+enum ServerCommand {
+  RegisterCollector = 0;
+  GetConfig = 1;
+  SetConfig = 2;
+  GetData = 3;
+  Query = 4;
+  ReportState = 5;
+  GetState = 6;
 }
 
 message InputLoggerConfig {

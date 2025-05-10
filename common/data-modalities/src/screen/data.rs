@@ -2,10 +2,14 @@ use lifelog_core::*;
 
 use lifelog_macros::lifelog_type;
 use lifelog_proto;
+use lifelog_types::Modality;
 use rand::distr::{Alphanumeric, Distribution, StandardUniform};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
 
+use image;
+use image::io::Reader as ImageReader;
+use std::io::Cursor;
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenFrame {
@@ -16,17 +20,34 @@ pub struct ScreenFrame {
                            // macro is a pain
 }
 
+impl From<ScreenFrame> for image::DynamicImage {
+    fn from(frame: ScreenFrame) -> Self {
+        ImageReader::new(Cursor::new(frame.image_bytes))
+            .with_guessed_format()
+            .expect("Unable to guess image format")
+            .decode()
+            .expect("Unable to decode image")
+    }
+}
+
 impl Modality for ScreenFrame {
-    const TABLE: &'static str = "screen";
     fn into_payload(self) -> lifelog_proto::lifelog_data::Payload {
         lifelog_proto::lifelog_data::Payload::Screenframe(self.into()) // TODO: refactor code so this is
                                                                        // the same as screenframe
     }
-    fn id(&self) -> String {
-        self.uuid.to_string()
+    fn get_table_name() -> &'static str {
+        "screen" // TODO: automatically generate this based on folder name
+    }
+    fn get_surrealdb_schema() -> &'static str {
+        r#"
+    DEFINE FIELD timestamp  ON screen TYPE datetime;
+    DEFINE FIELD width      ON screen TYPE int;
+    DEFINE FIELD height     ON screen TYPE int;
+    DEFINE FIELD image_bytes ON screen TYPE bytes;
+    DEFINE FIELD mime_type  ON screen TYPE string;
+"#
     }
 }
-
 impl Distribution<ScreenFrame> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ScreenFrame {
         let image_path: String = rng

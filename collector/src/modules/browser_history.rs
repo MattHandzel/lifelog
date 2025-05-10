@@ -1,8 +1,7 @@
+use crate::data_source::*;
+use crate::logger::*;
 use async_trait::async_trait;
 use config::BrowserHistoryConfig;
-use tokio::sync::Mutex;
-use std::sync::Arc;
-use crate::data_source::*;
 use std::sync::atomic::{AtomicBool, Ordering};
 use serde::{Deserialize, Serialize};
 use chrono::{DateTime, NaiveDateTime, TimeZone};
@@ -148,7 +147,6 @@ impl DataSource for BrowserHistorySource {
 
     async fn run(&self) -> Result<(), DataSourceError> {
         while RUNNING.load(Ordering::SeqCst) {
-            
             sleep(Duration::from_secs_f64(5.0)).await; //fixme
         }
         println!("BrowserHistorySource: In-memory run loop finished.");
@@ -163,3 +161,4 @@ impl DataSource for BrowserHistorySource {
         self.config.clone()
     }
 }
+

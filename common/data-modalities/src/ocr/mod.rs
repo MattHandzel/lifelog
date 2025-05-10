@@ -1,7 +1,42 @@
-use lifelog-core;:*;
-use tesseract_rs::{LeptonicaPix, Tesseract};
+use lifelog_core::*;
+
+use image::DynamicImage;
+use lifelog_macros::lifelog_type;
+use lifelog_proto;
+use lifelog_types::Modality;
+use lifelog_types::Transform;
+use lifelog_types::{LifelogImage, TransformError};
+use rand::distr::{Alphanumeric, Distribution, StandardUniform};
+use rand::{thread_rng, Rng};
+use rusty_tesseract::{Args, Image};
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use utils::load_image;
+
+#[lifelog_type(Data)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OcrFrame {
+    text: String,
+}
+
+// TODO: Make this be automatically created
+impl Modality for OcrFrame {
+    fn into_payload(self) -> lifelog_proto::lifelog_data::Payload {
+        lifelog_proto::lifelog_data::Payload::Ocrframe(self.into())
+    }
+
+    fn get_table_name() -> &'static str {
+        "ocr" // TODO: automatically generate this based on folder name
+    }
+    /// This returns the surrealdb schema with the table's needed to be filled out.
+    /// NOTE: `{table}` is a placeholder for the table name. The ` are required because the table will
+    /// contain special characters like ":"
+    fn get_surrealdb_schema() -> &'static str {
+        r#"
+        DEFINE FIELD timestamp ON `{table}` TYPE datetime;
+        DEFINE FIELD text ON `{table}` TYPE string;"#
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum OCRTransformError {
@@ -24,25 +59,46 @@ pub struct OcrConfig {
 }
 
 impl Transform for OcrTransform {
-    type Input = Image::DynamicImage;
-    type Output = String;
+    type Input = LifelogImage;
+    type Output = OcrFrame;
     type Config = OcrConfig;
 
-    fn apply(&self, input: Input) -> Result<Output, TransformError> {
-        let text = perform_ocr(input, &self.config).map_err(|e| TransformError::General {
-            transform: TransformType::OCR,
-            message: format!("OCR failed: {}", e),
-        })?;
-
-        Ok(Data::Text(text))
+    fn new(config: Self::Config) -> Self {
+        OcrTransform { config }
     }
 
-    fn transform_type(&self) -> TransformType {
-        TransformType::OCR
+    fn apply(&self, input: Self::Input) -> Result<Self::Output, TransformError> {
+        let img = Image::from_dynamic_image(&input.image).unwrap();
+        let args = Args {
+            lang: self.config.language.clone(), // TODO: Make it so users can type language (like en, eng,
+            // English, etc)
+            ..Default::default()
+        };
+
+        // TODO: Refactor OCR frame to use the boxes so we can better show data to the user.
+
+        let data_output = rusty_tesseract::image_to_string(&img, &args).unwrap();
+        //let data_output = rusty_tesseract::image_to_data(&img, &args).unwrap();
+        //for line in data_output.data {
+        //    println!(
+        //        "[OCR TRANSFORM] Text: '{}', Confidence: {}, Bounding Box: {:?}",
+        //        line.text, line.conf, line.bbox
+        //    );
+        //}
+
+        Ok(OcrFrame {
+            text: data_output,
+            uuid: input.uuid,
+            timestamp: input.timestamp,
+        })
     }
 
     fn priority(&self) -> u8 {
         2
+    }
+
+    fn modality(&self) -> String {
+        "ocr".to_string()
     }
 }
 
@@ -50,20 +106,6 @@ impl OcrTransform {
     pub fn new(config: OcrConfig) -> Self {
         OcrTransform { config }
     }
-}
-
-// Helper function for OCR processing
-fn perform_ocr(image: image::DynamicImage, config: &OcrConfig) -> Result<String, String> {
-    let mut engine = tesseract::Tesseract::new(config.engine_path.as_deref(), &config.language)
-        .map_err(|e| format!("Engine initialization failed: {}", e))?;
-
-    engine
-        .set_image_from_mem(&image.to_rgb8())
-        .map_err(|e| format!("Image processing failed: {}", e))?;
-
-    engine
-        .get_text()
-        .map_err(|e| format!("Text extraction failed: {}", e))
 }
 
 #[cfg(test)]

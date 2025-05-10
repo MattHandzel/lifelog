@@ -1,9 +1,12 @@
 use lifelog_core::*;
 use lifelog_macros::lifelog_type;
 use lifelog_proto::collector_service_client::CollectorServiceClient;
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::fmt;
 use strum_macros::EnumIter;
+use thiserror::Error;
 use tokio;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -76,11 +79,11 @@ pub enum ServerAction {
     Query(lifelog_proto::QueryRequest),
     GetData(lifelog_proto::GetDataRequest), // TODO: Wouldn't it be cool if the system could specify exactly what data
     // it wanted from the collector so when it has a query it doesn't need to process everything?
+    TransformData(Vec<lifelog_proto::Uuid>),
     SyncData(Query),
     HealthCheck,
     ReceiveData(Vec<lifelog_proto::Uuid>),
     CompressData(Vec<lifelog_proto::Uuid>),
-    TransformData(Vec<lifelog_proto::Uuid>),
     RegisterActor(ActorConfig),
 }
 
@@ -145,5 +148,106 @@ pub struct DataSource {
     modality: DataModality, // the type of data modality
 }
 
-// TODO: autogenerate this
-//
+#[derive(Debug, Error)]
+pub enum TransformError {
+    #[error("Unknown error occurred")]
+    Unknown,
+}
+
+enum TextTransformationTypes {
+    TextEmbedding,
+    EntityExtraction,
+    KeywordExtraction,
+}
+
+enum ImageTransformationTypes {
+    OCR,
+    ImageEmbedding,
+    SensitiveContentDetection,
+}
+
+enum TransformType {
+    TextEmbedding,
+    EntityExtraction,
+    OCR,
+    ImageEmbedding,
+    SensitiveContentDetection,
+}
+
+struct TransformConfig {}
+
+struct TransformExampleStruct {
+    input: DataSource,
+    output: DataSource,
+    config: TransformConfig,
+}
+
+pub trait Transform {
+    type Input;
+    type Output;
+    type Config;
+
+    fn apply(&self, input: Self::Input) -> Result<Self::Output, TransformError>;
+    fn modality(&self) -> String;
+    fn new(config: Self::Config) -> Self;
+
+    fn priority(&self) -> u8;
+}
+
+// TODO: Make this a macro, make folder name automatically be part of struct. Make it so that
+// EVERYTHING here is automatically generated (schema as well)
+pub trait Modality: Sized + Send + Sync + 'static + DeserializeOwned + DataType {
+    fn into_payload(self) -> lifelog_proto::lifelog_data::Payload;
+    fn get_table_name() -> &'static str;
+    fn get_surrealdb_schema() -> &'static str;
+    fn get_timestamp(&self) -> DateTime<Utc> {
+        self.timestamp()
+    }
+    fn get_uuid(&self) -> Uuid {
+        self.uuid()
+    }
+}
+
+pub type DeviceId = String;
+
+#[derive(Debug, Clone, Hash, Deserialize, Serialize)]
+pub enum DataOriginType {
+    DeviceId(DeviceId), // MAC of device
+    DataOrigin(Box<DataOrigin>),
+}
+
+#[derive(Debug, Clone, Hash, Deserialize, Serialize)]
+pub struct DataOrigin {
+    pub source: DataOriginType,
+    pub modality: DataModality,
+}
+
+impl DataOrigin {
+    pub fn new(source: DataOriginType, modality: DataModality) -> Self {
+        DataOrigin { source, modality }
+    }
+    pub fn get_table_name(&self) -> String {
+        match &self.source {
+            DataOriginType::DeviceId(device_id) => {
+                format!("{}:{}", device_id, self.modality.to_string())
+            }
+            DataOriginType::DataOrigin(data_origin) => format!(
+                "{}:{}",
+                data_origin.get_table_name(),
+                self.modality.to_string()
+            ),
+        }
+    }
+}
+
+pub struct LifelogImage {
+    pub uuid: ::lifelog_core::uuid::Uuid,
+    pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>,
+    pub image: image::DynamicImage,
+}
+
+pub struct LifelogText {
+    pub text: String,
+    pub uuid: ::lifelog_core::uuid::Uuid,
+    pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>,
+}
