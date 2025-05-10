@@ -1,8 +1,8 @@
 use super::data_source::{DataSource, DataSourceError, DataSourceHandle};
-use crate::modules::screen::{ScreenDataSource};
-use crate::modules::browser_history::{BrowserHistorySource};
+use crate::modules::browser_history::BrowserHistorySource;
+use crate::modules::screen::ScreenDataSource;
 use config;
-use data_modalities::{screen::ScreenFrame, browser::BrowserFrame};
+use data_modalities::{browser::BrowserFrame, screen::ScreenFrame};
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt;
@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
-use config::{ScreenConfig, BrowserHistoryConfig};
+use config::{BrowserHistoryConfig, ScreenConfig};
 use futures_core::Stream;
 use lifelog_types::CollectorState;
 use tokio::sync::RwLock;
@@ -481,8 +481,9 @@ impl CollectorService for GRPCServerCollectorService {
                     let asdf = (*clonned_instance).as_ref();
                     //println!("[gRPC] asdf: {:?}", asdf);
                     if let Some(screen_ds) = (asdf as &dyn Any).downcast_ref::<ScreenDataSource>() {
-                        match screen_ds.get_data().await  {
+                        match screen_ds.get_data().await {
                             Ok(images) => {
+                                println!("[gRPC] clearing image buffer!");
                                 screen_ds.clear_buffer();
                                 images
                             }
@@ -534,8 +535,9 @@ impl CollectorService for GRPCServerCollectorService {
             let browser_entries: Vec<BrowserFrame> = {
                 let read_guard = collector_handle.collector.read().await;
                 let running_source = (*read_guard.sources.get("browser").unwrap()).as_ref();
-                let running: Option<&RunningSource<BrowserHistoryConfig>> =
-                    (running_source as &dyn Any).downcast_ref::<RunningSource<BrowserHistoryConfig>>();
+                let running: Option<&RunningSource<BrowserHistoryConfig>> = (running_source
+                    as &dyn Any)
+                    .downcast_ref::<RunningSource<BrowserHistoryConfig>>();
 
                 println!("{:?}", running);
 
@@ -544,11 +546,11 @@ impl CollectorService for GRPCServerCollectorService {
 
                     let asdf = (*clonned_instance).as_ref();
                     //println!("[gRPC] asdf: {:?}", asdf);
-                    if let Some(browser_ds) = (asdf as &dyn Any).downcast_ref::<BrowserHistorySource>() {
-                        match browser_ds.get_data()  {
-                            Ok(history) => {
-                                history
-                            }
+                    if let Some(browser_ds) =
+                        (asdf as &dyn Any).downcast_ref::<BrowserHistorySource>()
+                    {
+                        match browser_ds.get_data() {
+                            Ok(history) => history,
                             Err(e) => {
                                 eprintln!("Failed to get buffer from BrowserHistorySource! {:}", e);
                                 Vec::new()
@@ -567,7 +569,10 @@ impl CollectorService for GRPCServerCollectorService {
             if browser_entries.is_empty() {
                 println!("[gRPC] No browser history to send.");
             } else {
-                println!("[gRPC] Sending {} browser history entries.", browser_entries.len());
+                println!(
+                    "[gRPC] Sending {} browser history entries.",
+                    browser_entries.len()
+                );
             }
 
             for browser_frame in browser_entries {

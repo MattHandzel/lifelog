@@ -80,9 +80,9 @@ async fn ensure_table(db: &Surreal<Client>, data_origin: &DataOrigin) -> surreal
         {ddl}
     "#
     );
-    db.query(db_query).await?;
+    db.query(db_query.clone()).await?;
     CREATED_TABLES.insert(table.to_owned());
-    println!("Ensuring table schema: {}", ddl);
+    println!("Ensuring table schema: {}", db_query);
     println!("Ensuring table: {}", table);
     Ok(())
 }
@@ -556,7 +556,7 @@ impl Server {
                                 );
                                 ensure_table(&self.db, &data_origin).await.unwrap();
                                 let chunk: ScreenFrame = c.into();
-                                let table = format!("`{}`", data_origin.get_table_name());
+                                let table = format!("{}", data_origin.get_table_name());
                                 //println!("{:?}", chunk);
 
                                 println!("{:?}", chunk.timestamp);
@@ -565,15 +565,22 @@ impl Server {
                                 let uuid = chunk.uuid;
                                 let chunk: ScreenFrameSurreal = chunk.into();
                                 //println!("Chunk: {:?}", chunk);
-                                let _: ScreenFrameSurreal = self
+                                let record: Result<Option<ScreenFrameSurreal>, Error> = self
                                     .db
                                     .create((table.clone(), uuid.to_string()))
                                     .content(chunk)
-                                    .await
-                                    .unwrap()
-                                    .expect(
-                                        format!("Unable to create row in table {}", table).as_str(),
-                                    );
+                                    .await;
+                                match record {
+                                    Err(e) => {
+                                        eprintln!("Error: {:?}", e);
+                                    }
+                                    Ok(record) => {
+                                        let _ = record.expect(
+                                            format!("Unable to create row in table {}", table)
+                                                .as_str(),
+                                        );
+                                    }
+                                }
                             }
                             lifelog_proto::lifelog_data::Payload::Browserframe(c) => {
                                 let data_origin = DataOrigin::new(
@@ -582,7 +589,7 @@ impl Server {
                                 );
                                 ensure_table(&self.db, &data_origin).await.unwrap();
                                 let chunk: BrowserFrame = c.into();
-                                let table = format!("`{}`", data_origin.get_table_name());
+                                let table = format!("{}", data_origin.get_table_name());
 
                                 println!(
                                     "Adding {:?} to table {}",

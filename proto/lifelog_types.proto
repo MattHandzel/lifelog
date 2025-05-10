@@ -76,7 +76,6 @@ enum DataModality {
   Screen = 0;
   Ocr = 1;
   Browser = 2;
-  Browser_history = 3;
 }
 
 message GeoConfig {

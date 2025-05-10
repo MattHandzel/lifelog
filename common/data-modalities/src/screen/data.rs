@@ -40,11 +40,11 @@ impl Modality for ScreenFrame {
     }
     fn get_surrealdb_schema() -> &'static str {
         r#"
-    DEFINE FIELD timestamp  ON `{table}` TYPE datetime;
-    DEFINE FIELD width      ON `{table}` TYPE int;
-    DEFINE FIELD height     ON `{table}` TYPE int;
-    DEFINE FIELD image_bytes ON `{table}` TYPE bytes;
-    DEFINE FIELD mime_type  ON `{table}` TYPE string;
+    DEFINE FIELD timestamp  ON TABLE `{table}` TYPE datetime;
+    DEFINE FIELD width      ON TABLE `{table}` TYPE int;
+    DEFINE FIELD height     ON TABLE `{table}` TYPE int;
+    DEFINE FIELD image_bytes ON TABLE `{table}` TYPE bytes;
+    DEFINE FIELD mime_type  ON TABLE `{table}` TYPE string;
 "#
     }
 }

@@ -19,3 +19,14 @@ select * from FFFFFFFFFFFF:Screen;
 select * from `FFFFFFFFFFFF:Screen`;
 info for db;
 select * from FFFFFFFFFFFF:Screen
+info for db
+select * from FFFFFFFFFFFF:Screen;
+select * from `FFFFFFFFFFFF:Screen`
+DEFINE TABLE `FFFFFFFFFFFF:Screen` SCHEMAFULL;
+define table `asdf:asdf`;
+create `asdf:asdf`:person 
+info for db
+select * from FFFFFFFFFFFF:Screen;
+select * from `FFFFFFFFFFFF:Screen`;
+select * from `\\`FFFFFFFFFFFF:Screen\\``;
+select * from `FFFFFFFFFFFF:Screen`;
