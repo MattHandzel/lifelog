@@ -1,2 +1,2 @@
 pub mod screen;
-pub mod snapshot;
+pub mod browser_history;
