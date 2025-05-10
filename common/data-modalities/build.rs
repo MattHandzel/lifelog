@@ -9,7 +9,7 @@ use std::{
 };
 use walkdir::WalkDir;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 struct DataTypeDefinition {
     ident: String,
     fields: Vec<(String, String)>,
@@ -33,6 +33,8 @@ struct ProtobufGenerator;
 impl CodeGenerator for TypeScriptGenerator {
     fn generate(&self, types: &[DataTypeDefinition]) -> Result<String> {
         let mut output = String::from("// Auto‐generated types\n\n");
+
+        // Ensure types is sorted
 
         for dtype in types {
             // enum as TS string‐union
@@ -327,7 +329,12 @@ fn main() -> Result<()> {
 
     let mut files = find_metadata_files(Path::new(".."))?;
     files.sort();
-    let types = parse_metadata_files(&files)?;
+    let mut types = parse_metadata_files(&files)?;
+
+    let mut types = types.to_vec();
+    types.sort_by(|a, b| a.ident.cmp(&b.ident));
+    println!("TYPES: {:?}", types);
+
     generate_and_write(&types, &gens, &config.output_paths)?;
     Ok(())
 }
