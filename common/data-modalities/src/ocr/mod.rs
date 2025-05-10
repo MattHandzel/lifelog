@@ -3,8 +3,7 @@ use lifelog_core::*;
 use image::DynamicImage;
 use lifelog_macros::lifelog_type;
 use lifelog_proto;
-use lifelog_types::Modality;
-use lifelog_types::Transform;
+use lifelog_types::{DataModality, DataOrigin, DataOriginType, Modality, Transform};
 use lifelog_types::{LifelogImage, TransformError};
 use rand::distr::{Alphanumeric, Distribution, StandardUniform};
 use rand::{thread_rng, Rng};
@@ -16,7 +15,7 @@ use utils::load_image;
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrFrame {
-    text: String,
+    pub text: String,
 }
 
 // TODO: Make this be automatically created
@@ -48,11 +47,14 @@ pub enum OCRTransformError {
     ProcessingError(String),
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrTransform {
+    source: DataOrigin,
+    destination: DataOrigin,
     config: OcrConfig,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrConfig {
     pub language: String,
     pub engine_path: Option<String>,
@@ -63,8 +65,15 @@ impl Transform for OcrTransform {
     type Output = OcrFrame;
     type Config = OcrConfig;
 
-    fn new(config: Self::Config) -> Self {
-        OcrTransform { config }
+    fn new(source: DataOrigin, config: Self::Config) -> Self {
+        Self {
+            source: source.clone(),
+            destination: DataOrigin::new(
+                (DataOriginType::DataOrigin(Box::new(source))),
+                DataModality::Ocr,
+            ),
+            config,
+        }
     }
 
     fn apply(&self, input: Self::Input) -> Result<Self::Output, TransformError> {
@@ -97,14 +106,15 @@ impl Transform for OcrTransform {
         2
     }
 
-    fn modality(&self) -> String {
-        "ocr".to_string()
+    fn config(&self) -> Self::Config {
+        self.config.clone()
     }
-}
 
-impl OcrTransform {
-    pub fn new(config: OcrConfig) -> Self {
-        OcrTransform { config }
+    fn source(&self) -> DataOrigin {
+        self.source.clone()
+    }
+    fn destination(&self) -> DataOrigin {
+        self.destination.clone()
     }
 }
 

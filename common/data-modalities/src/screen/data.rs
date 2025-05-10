@@ -2,7 +2,7 @@ use lifelog_core::*;
 
 use lifelog_macros::lifelog_type;
 use lifelog_proto;
-use lifelog_types::Modality;
+use lifelog_types::{LifelogImage, Modality};
 use rand::distr::{Alphanumeric, Distribution, StandardUniform};
 use rand::{thread_rng, Rng};
 use serde::{Deserialize, Serialize};
@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use image;
 use image::io::Reader as ImageReader;
 use std::io::Cursor;
+
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenFrame {
@@ -18,6 +19,16 @@ pub struct ScreenFrame {
     pub image_bytes: Vec<u8>,
     pub mime_type: String, // TODO: Refactor this to use mime type object, not doing it rn because
                            // macro is a pain
+}
+
+impl From<ScreenFrame> for LifelogImage {
+    fn from(frame: ScreenFrame) -> Self {
+        LifelogImage {
+            uuid: frame.uuid,
+            timestamp: frame.timestamp,
+            image: image::DynamicImage::from(frame),
+        }
+    }
 }
 
 impl From<ScreenFrame> for image::DynamicImage {

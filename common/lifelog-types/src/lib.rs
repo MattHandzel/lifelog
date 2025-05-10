@@ -79,7 +79,7 @@ pub enum ServerAction {
     Query(lifelog_proto::QueryRequest),
     GetData(lifelog_proto::GetDataRequest), // TODO: Wouldn't it be cool if the system could specify exactly what data
     // it wanted from the collector so when it has a query it doesn't need to process everything?
-    TransformData(Vec<lifelog_proto::Uuid>),
+    TransformData(Vec<LifelogFrameKey>),
     SyncData(Query),
     HealthCheck,
     ReceiveData(Vec<lifelog_proto::Uuid>),
@@ -182,14 +182,17 @@ struct TransformExampleStruct {
     config: TransformConfig,
 }
 
+// TODO: Should this transform's input types and output types by LifelogData types?
 pub trait Transform {
     type Input;
     type Output;
     type Config;
 
     fn apply(&self, input: Self::Input) -> Result<Self::Output, TransformError>;
-    fn modality(&self) -> String;
-    fn new(config: Self::Config) -> Self;
+    fn source(&self) -> DataOrigin;
+    fn destination(&self) -> DataOrigin;
+    fn config(&self) -> Self::Config;
+    fn new(source: DataOrigin, config: Self::Config) -> Self;
 
     fn priority(&self) -> u8;
 }
@@ -210,21 +213,24 @@ pub trait Modality: Sized + Send + Sync + 'static + DeserializeOwned + DataType 
 
 pub type DeviceId = String;
 
-#[derive(Debug, Clone, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Hash, Deserialize, Serialize, PartialEq)]
 pub enum DataOriginType {
     DeviceId(DeviceId), // MAC of device
     DataOrigin(Box<DataOrigin>),
 }
 
-#[derive(Debug, Clone, Hash, Deserialize, Serialize)]
+#[derive(Debug, Clone, Hash, Deserialize, Serialize, PartialEq)]
 pub struct DataOrigin {
-    pub source: DataOriginType,
+    pub origin: DataOriginType,
     pub modality: DataModality,
 }
 
 impl DataOrigin {
     pub fn new(source: DataOriginType, modality: DataModality) -> Self {
-        DataOrigin { source, modality }
+        DataOrigin {
+            origin: source,
+            modality,
+        }
     }
     pub fn from_string(source: String) -> Self {
         let parts = source.split(':').collect::<Vec<_>>();
@@ -233,12 +239,12 @@ impl DataOrigin {
         }
         if parts.len() == 2 {
             return DataOrigin {
-                source: DataOriginType::DeviceId(parts[0].to_string()),
+                origin: DataOriginType::DeviceId(parts[0].to_string()),
                 modality: DataModality::from_str(parts[1]),
             };
         }
         DataOrigin {
-            source: DataOriginType::DataOrigin(Box::new(DataOrigin::from_string(
+            origin: DataOriginType::DataOrigin(Box::new(DataOrigin::from_string(
                 parts[0..parts.len() - 1].join(":"),
             ))),
             modality: DataModality::from_str(parts[parts.len() - 1]),
@@ -246,11 +252,31 @@ impl DataOrigin {
     }
 
     pub fn get_table_name(&self) -> String {
-        match &self.source {
+        match &self.origin {
             DataOriginType::DeviceId(device_id) => {
-                format!("{}:{}", device_id, self.modality.to_string())
+                format!(
+                    "{}:{}",
+                    device_id.replace(":", ""), // Remove ':''s
+                    self.modality.to_string()
+                )
             }
             DataOriginType::DataOrigin(data_origin) => format!(
+                "{}:{}",
+                data_origin.get_table_name(),
+                self.modality.to_string()
+            ),
+        }
+    }
+}
+
+impl fmt::Display for DataOrigin {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.origin {
+            DataOriginType::DeviceId(device_id) => {
+                write!(f, "{}:{}", device_id.replace(":", ""), self.modality)
+            }
+            DataOriginType::DataOrigin(data_origin) => write!(
+                f,
                 "{}:{}",
                 data_origin.get_table_name(),
                 self.modality.to_string()
@@ -269,4 +295,21 @@ pub struct LifelogText {
     pub text: String,
     pub uuid: ::lifelog_core::uuid::Uuid,
     pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>,
+}
+
+#[derive(Debug, Clone, Hash, Deserialize, Serialize)]
+pub struct LifelogFrameKey {
+    pub uuid: ::lifelog_core::uuid::Uuid,
+    pub origin: DataOrigin,
+}
+
+impl LifelogFrameKey {
+    pub fn new(uuid: ::lifelog_core::uuid::Uuid, origin: DataOrigin) -> Self {
+        LifelogFrameKey { uuid, origin }
+    }
+}
+impl fmt::Display for LifelogFrameKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "<{}>:<{}>", self.origin.get_table_name(), self.uuid)
+    }
 }

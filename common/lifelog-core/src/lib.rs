@@ -45,6 +45,8 @@ pub use tonic;
 //    })
 //}
 
+// TODO: Refactor this trait so it no longer has the `uuid` field. The uuid is the key so it should
+// not be stored with the data. This requies a refactor of much more of this project.
 pub trait DataType {
     fn uuid(&self) -> Uuid;
     fn timestamp(&self) -> DateTime<Utc>;

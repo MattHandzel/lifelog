@@ -232,10 +232,17 @@ message WifiConfig {
   string scan_command = 4;
 }
 
+message crFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string text = 3;
+}
+
 message LifelogData {
   oneof payload {
     BrowserFrame browserframe = 1;
     OcrFrame ocrframe = 2;
     ScreenFrame screenframe = 3;
+    crFrame crframe = 4;
   }
 }

@@ -194,6 +194,7 @@ pub struct Server {
     register_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
     register_interfaces: Arc<RwLock<Vec<RegisteredInterface>>>,
     policy: Arc<RwLock<ServerPolicy>>,
+    transforms: Arc<RwLock<Vec<LifelogTransform>>>, // TODO: These should be registered transforms
 }
 
 static mut SYS: Option<sysinfo::System> = None;
@@ -229,6 +230,17 @@ impl Server {
             SYS = Some(System::new_all());
         }
 
+        let ocr_transform = OcrTransform::new(
+            DataOrigin::new(
+                DataOriginType::DeviceId("FF:FF:FF:FF:FF:FF".to_string()),
+                DataModality::Screen,
+            ),
+            OcrConfig {
+                language: "eng".to_string(),
+                engine_path: None,
+            },
+        );
+
         let s = Self {
             db,
             host: config.host.clone(),
@@ -237,6 +249,7 @@ impl Server {
             register_collectors: Arc::new(RwLock::new(vec![])),
             register_interfaces: Arc::new(RwLock::new(vec![])),
             policy,
+            transforms: Arc::new(RwLock::new(vec![ocr_transform.into()])),
         };
 
         Ok(s)
@@ -413,7 +426,10 @@ impl Policy for ServerPolicy {
             ServerAction::SyncData("SELECT * FROM screen".to_string()) // TODO: Refactor so that we
                                                                        // can sync from all collectors
         } else {
-            ServerAction::Sleep(tokio::time::Duration::from_millis(100))
+            println!("TransformingData");
+            ServerAction::TransformData(vec![])
+
+            //ServerAction::Sleep(tokio::time::Duration::from_millis(100))
         };
 
         action
@@ -528,6 +544,26 @@ impl Server {
 
                 // Ask the collectors to send data
             }
+            ServerAction::TransformData(untransformed_data_keys) => {
+                // TODO: Move this to policy
+                let db_connection = self.db.clone();
+                let transforms = self.transforms.clone().read().await.to_vec();
+                let mut untransformed_data_keys: Vec<LifelogFrameKey> = vec![];
+                for transform in &transforms {
+                    untransformed_data_keys.extend(
+                        get_keys_in_source_not_in_destination(
+                            &self.db,
+                            transform.source().clone(),
+                            transform.destination().clone(),
+                        )
+                        .await,
+                    );
+                }
+
+                //tokio::task::spawn_blocking(async move || {
+                transform_data(&db_connection, untransformed_data_keys, transforms).await;
+                //});
+            }
             _ => todo!(),
         }
     }
@@ -591,7 +627,7 @@ impl Server {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ScreenFrameSurreal {
     //pub uuid: String,
-    pub timestamp: surrealdb::Datetime,
+    pub timestamp: surrealdb::sql::Datetime,
     pub width: i32,
     pub height: i32,
     pub image_bytes: surrealdb::sql::Bytes,
@@ -612,9 +648,22 @@ impl From<ScreenFrame> for ScreenFrameSurreal {
     }
 }
 
+impl From<ScreenFrameSurreal> for ScreenFrame {
+    fn from(frame: ScreenFrameSurreal) -> Self {
+        Self {
+            uuid: uuid::Uuid::from_u128(0),
+            timestamp: frame.timestamp.into(),
+            width: frame.width as u32,
+            height: frame.height as u32,
+            image_bytes: frame.image_bytes.into(),
+            mime_type: frame.mime_type,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct BrowserFrameSurreal {
-    pub timestamp: surrealdb::Datetime,
+    pub timestamp: surrealdb::sql::Datetime,
     pub url: String,
     pub title: String,
     pub visit_count: i32,
@@ -627,6 +676,21 @@ impl From<BrowserFrame> for BrowserFrameSurreal {
             url: frame.url,
             title: frame.title,
             visit_count: frame.visit_count as i32,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct OcrFrameSurreal {
+    pub timestamp: surrealdb::sql::Datetime,
+    pub text: String,
+}
+
+impl From<OcrFrame> for OcrFrameSurreal {
+    fn from(frame: OcrFrame) -> Self {
+        Self {
+            timestamp: frame.timestamp.into(),
+            text: frame.text,
         }
     }
 }
@@ -811,6 +875,162 @@ async fn sync_data_with_collectors(
     }
 }
 
+async fn get_all_uuids_from_origin(
+    db: &Surreal<Client>,
+    data_origin: &DataOrigin,
+) -> Result<Vec<Uuid>, surrealdb::Error> {
+    let table = data_origin.get_table_name();
+    let sql = format!("SELECT VALUE record::id(id) as uuid FROM `{table}`"); //FIX: Sql injection 🤡
+    let uuids: Vec<String> = db
+        .query(sql)
+        .await
+        .expect("Couldn't do the query")
+        .take(0)
+        .expect("We should only ever have one query");
+    let uuids = uuids
+        .into_iter()
+        .map(|s| {
+            let uuid = s.parse::<Uuid>().expect("Unable to go from string to uuid");
+            uuid
+        })
+        .collect::<Vec<Uuid>>();
+    Ok(uuids)
+}
+
+async fn get_keys_in_source_not_in_destination(
+    db: &Surreal<Client>,
+    source: DataOrigin,
+    destination: DataOrigin,
+) -> Vec<LifelogFrameKey> {
+    // Get the record uuids from source
+    let uuids_from_source = get_all_uuids_from_origin(&db, &source)
+        .await
+        .expect(format!("Unable to get uuids from source: {}", source).as_str());
+
+    // Get the record uuids from destination
+    let uuids_from_destination = get_all_uuids_from_origin(&db, &destination)
+        .await
+        .expect(format!("Unable to get uuids from destination: {}", destination).as_str());
+
+    // Get the record uuids from source that are not in destination
+    let uuids_in_source_not_in_destination: Vec<LifelogFrameKey> = uuids_from_source
+        .iter()
+        .filter(|uuid| !uuids_from_destination.contains(uuid))
+        .cloned()
+        .map(|uuid| {
+            let key = LifelogFrameKey::new(uuid, source.clone());
+            key
+        })
+        .collect();
+
+    return uuids_in_source_not_in_destination;
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+enum LifelogTransform {
+    OcrTransform(OcrTransform),
+}
+
+impl LifelogTransform {
+    fn source(&self) -> DataOrigin {
+        match self {
+            LifelogTransform::OcrTransform(transform) => transform.source(),
+            _ => unimplemented!(),
+        }
+    }
+    fn destination(&self) -> DataOrigin {
+        match self {
+            LifelogTransform::OcrTransform(transform) => transform.destination(),
+            _ => unimplemented!(),
+        }
+    }
+}
+
+impl From<OcrTransform> for LifelogTransform {
+    fn from(transform: OcrTransform) -> Self {
+        Self::OcrTransform(transform)
+    }
+}
+
+async fn transform_data(
+    db: &Surreal<Client>,
+    untransformed_data_keys: Vec<LifelogFrameKey>,
+    transforms: Vec<LifelogTransform>,
+) {
+    for key in untransformed_data_keys.iter() {
+        let data_to_transform: LifelogData = get_data_by_key(db, key)
+            .await
+            .expect(format!("Unable to get data by key: {}", key).as_str());
+        for transform in transforms.iter() {
+            // Check what transforms apply to these keys
+            let transformed_data: Option<LifelogData> = match transform {
+                LifelogTransform::OcrTransform(transform) => {
+                    if key.origin == transform.source() {
+                        let mut result = transform
+                                .apply(data_to_transform.clone().try_into().expect("Data source is not a lifelog image!"))
+                                .expect(format!("This should never error because the origins {} {} are the same", key.origin, transform.source()).as_str());
+
+                        result.uuid = key.uuid; // NOTE: THIS IS IMPORTANT. THIS NEEDS TO BE FIXED
+                                                // WITH A CODE REFACTOR
+                        Some(result.into())
+                    } else {
+                        None
+                    }
+                }
+                _ => unimplemented!(),
+            };
+            let transformed_data = match transformed_data {
+                Some(data) => data,
+                None => continue,
+            };
+            match transformed_data {
+                LifelogData::OcrFrame(ocr_frame) => {
+                    add_data_to_db::<OcrFrame, OcrFrameSurreal>(
+                        &db,
+                        ocr_frame,
+                        &transform.destination(),
+                    )
+                    .await
+                    .unwrap();
+                }
+                _ => unimplemented!(),
+            }
+        }
+    }
+}
+
+async fn get_data_by_key(
+    db: &Surreal<Client>,
+    key: &LifelogFrameKey,
+) -> Result<LifelogData, anyhow::Error> {
+    match key.origin.modality {
+        DataModality::Screen => {
+            let row: Option<ScreenFrameSurreal> = db
+                .select((key.origin.get_table_name(), key.uuid.to_string()))
+                .await?;
+            let screen_frame: ScreenFrame = row
+                .expect(
+                    format!(
+                        "Unabled to find record <{}>:<{}>",
+                        key.origin.get_table_name(),
+                        key.uuid
+                    )
+                    .as_str(),
+                )
+                .into();
+            //println!("Got screen frame: {:?}", screen_frame);
+            Ok(screen_frame.into())
+        }
+        // TODO: Implmeent browser
+        //DataModality::Browser => {
+        //    let browser_frame: BrowserFrame = row.unwrap().into();
+        //    println!("Got browser frame: {:?}", browser_frame);
+        //    Ok(browser_frame.into())
+        //}
+        _ => unimplemented!(),
+    }
+}
+
 async fn add_data_to_db<LifelogType, SurrealType>(
     db: &Surreal<Client>,
     data: LifelogType,
@@ -828,7 +1048,7 @@ where
         .create((table.clone(), uuid.to_string()))
         .content(data)
         .await;
-    //println!("[SURREAL]: Created <{}:{}>", table, uuid);
+    println!("[SURREAL]: Created <{}:{}>", table, uuid);
     match record {
         Err(e) => {
             eprintln!("{}", e);
@@ -838,5 +1058,40 @@ where
             let record = record.expect(format!("Unable to create row in table {}", table).as_str());
             Ok(record)
         }
+    }
+}
+
+// TODO: This should be automated
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub enum LifelogData {
+    ScreenFrame(ScreenFrame),
+    BrowserFrame(BrowserFrame),
+    OcrFrame(OcrFrame),
+}
+
+impl TryFrom<LifelogData> for LifelogImage {
+    type Error = anyhow::Error;
+    fn try_from(v: LifelogData) -> Result<Self, Self::Error> {
+        match v {
+            LifelogData::ScreenFrame(frame) => Ok(frame.into()),
+            _ => Err(anyhow::anyhow!("Cannot convert to LifelogImage")),
+        }
+    }
+}
+
+impl From<ScreenFrame> for LifelogData {
+    fn from(v: ScreenFrame) -> Self {
+        Self::ScreenFrame(v)
+    }
+}
+impl From<BrowserFrame> for LifelogData {
+    fn from(v: BrowserFrame) -> Self {
+        Self::BrowserFrame(v)
+    }
+}
+
+impl From<OcrFrame> for LifelogData {
+    fn from(v: OcrFrame) -> Self {
+        Self::OcrFrame(v)
     }
 }

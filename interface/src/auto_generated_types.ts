@@ -213,3 +213,9 @@ export interface WifiConfig {
   scan_command: string;
 }
 
+export interface crFrame {
+  uuid: string;
+  timestamp: Date;
+  text: string;
+}
+
