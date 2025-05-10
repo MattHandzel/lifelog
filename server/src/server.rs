@@ -79,6 +79,7 @@ async fn ensure_table(
     db.query(format!(
         r#"
         DEFINE TABLE {table} SCHEMAFULL;
+        {ddl}
     "#
     ))
     .await?;
@@ -506,8 +507,8 @@ impl Server {
             state.server_state.cpu_usage = cpu_usage; // TODO: Get the real CPU usage
             state.server_state.timestamp = Utc::now();
             state.server_state.memory_usage = memory_usage; // TODO: Get the real memory usage
-                                                            //state.server_state.threads = 0.0; // TODO: Get the real number of threads
-                                                            //                                  // TODO: There is a race condition here, someone can grab the lock before we can grab it
+                                                            // TODO: Get the real number of threads
+                                                            // TODO: There is a race condition here, someone can grab the lock before we can grab it
             state.clone()
         }
     }

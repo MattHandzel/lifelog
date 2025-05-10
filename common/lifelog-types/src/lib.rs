@@ -76,11 +76,11 @@ pub enum ServerAction {
     Query(lifelog_proto::QueryRequest),
     GetData(lifelog_proto::GetDataRequest), // TODO: Wouldn't it be cool if the system could specify exactly what data
     // it wanted from the collector so when it has a query it doesn't need to process everything?
+    TransformData(Vec<lifelog_proto::Uuid>),
     SyncData(Query),
     HealthCheck,
     ReceiveData(Vec<lifelog_proto::Uuid>),
     CompressData(Vec<lifelog_proto::Uuid>),
-    TransformData(Vec<lifelog_proto::Uuid>),
     RegisterActor(ActorConfig),
 }
 
