@@ -12,7 +12,7 @@ use std::{
 };
 
 
-use data_modalities::browser_history::BrowserFrame;
+use data_modalities::browser::BrowserFrame;
 use rusqlite::{Connection, Result, Row};
 use tokio::time::{sleep, Duration};
 use lifelog_core::Utc;

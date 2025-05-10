@@ -2,7 +2,7 @@ use super::data_source::{DataSource, DataSourceError, DataSourceHandle};
 use crate::modules::screen::{ScreenDataSource};
 use crate::modules::browser_history::{BrowserHistorySource};
 use config;
-use data_modalities::{screen::ScreenFrame, browser_history::BrowserFrame};
+use data_modalities::{screen::ScreenFrame, browser::BrowserFrame};
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt;
@@ -571,7 +571,7 @@ impl CollectorService for GRPCServerCollectorService {
             }
 
             for browser_frame in browser_entries {
-                match <data_modalities::browser_history::BrowserFrame as TryInto<
+                match <data_modalities::browser::BrowserFrame as TryInto<
                     lifelog_proto::BrowserFrame,
                 >>::try_into(browser_frame)
                 {
