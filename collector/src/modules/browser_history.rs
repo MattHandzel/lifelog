@@ -70,7 +70,7 @@ impl BrowserHistorySource {
         let conn = Connection::open(history_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT url, title, visit_time, visit_count FROM urls INNER JOIN visits ON urls.id = visits.url WHERE visit_time > ? AND visit_time <= ?"
+            "SELECT urls.url, title, visit_time, visit_count FROM urls INNER JOIN visits ON urls.id = visits.url WHERE visit_time > ? AND visit_time <= ?"
         )?;
 
         let history_iter = stmt.query_map([last_query_chrome_micros, now_chrome_micros], |row| {
