@@ -64,7 +64,7 @@ export interface CollectorState {
   total_buffer_size: number;
 }
 
-export type DataModality = "Ocr" | "Browser" | "Screen" | "Browser_history";
+export type DataModality = "Screen" | "Ocr" | "Browser" | "Browser_history";
 
 export interface GeoConfig {
   enabled: boolean;

@@ -541,7 +541,7 @@ fn create_default_config() -> CollectorConfig {
     CollectorConfig {
         id: "implement_this".to_string(),
         host: "127.0.0.1".to_string(),
-        port: 7182,
+        port: 7190,
         timestamp_format: default_timestamp_format(),
         screen: ScreenConfig {
             enabled: true,

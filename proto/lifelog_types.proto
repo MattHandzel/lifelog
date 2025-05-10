@@ -73,9 +73,9 @@ message CollectorState {
 }
 
 enum DataModality {
-  Ocr = 0;
-  Browser = 1;
-  Screen = 2;
+  Screen = 0;
+  Ocr = 1;
+  Browser = 2;
   Browser_history = 3;
 }
 

@@ -25,11 +25,10 @@ impl Modality for BrowserFrame {
     }
     fn get_surrealdb_schema() -> &'static str {
         r#"
-    DEFINE FIELD timestamp  ON browser TYPE datetime;
-    DEFINE FIELD url      ON browser TYPE string;
-    DEFINE FIELD title  ON browser TYPE string;
-    DEFINE FIELD visit_count ON browser TYPE int;
+    DEFINE FIELD timestamp  ON `{table}` TYPE datetime;
+    DEFINE FIELD url      ON `{table}` TYPE string;
+    DEFINE FIELD title  ON `{table}` TYPE string;
+    DEFINE FIELD visit_count ON `{table}` TYPE int;
 "#
     }
 }
-

@@ -9,3 +9,13 @@ select image_bytes, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp LIMI
 select image_bytes, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp DESC LIMIT 1;
 SELECT image_bytes, timestamp FROM FFFFFFFFFFFF___screen order by timestamp desc limit 1;
 SELECT id, timestamp FROM FFFFFFFFFFFF___screen order by timestamp desc limit 1;
+select * from `FFFFFFFFFF:Screen`;
+select * from `FFFFFFFFFFFF:Screen`;
+select * from `FFFFFFFFFFFF:Browser`;
+select * from `FFFFFFFFFFFF:Screen`;
+info for db
+select * from `FFFFFFFFFFFF:Screen`;
+select * from FFFFFFFFFFFF:Screen;
+select * from `FFFFFFFFFFFF:Screen`;
+info for db;
+select * from FFFFFFFFFFFF:Screen

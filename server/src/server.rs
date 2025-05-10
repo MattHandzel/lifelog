@@ -53,7 +53,7 @@ const SYNC_INTERVAL: i64 = 5; // TODO: Refactor this into policy
 // database, get that file path, create a new struct ScreenFrameSurreal that has the surrealdb
 // types?
 
-async fn ensure_table(db: &Surreal<Client>, data_origin: DataOrigin) -> surrealdb::Result<()> {
+async fn ensure_table(db: &Surreal<Client>, data_origin: &DataOrigin) -> surrealdb::Result<()> {
     let table = data_origin.get_table_name();
     if CREATED_TABLES.contains(&table) {
         return Ok(());
@@ -74,14 +74,16 @@ async fn ensure_table(db: &Surreal<Client>, data_origin: DataOrigin) -> surreald
     //"#
     //))
     // TODO: we want to be able to define the index as well
-    db.query(format!(
+    let db_query = format!(
         r#"
         DEFINE TABLE `{table}` SCHEMAFULL;
         {ddl}
     "#
-    ))
-    .await?;
+    );
+    db.query(db_query).await?;
     CREATED_TABLES.insert(table.to_owned());
+    println!("Ensuring table schema: {}", ddl);
+    println!("Ensuring table: {}", table);
     Ok(())
 }
 
@@ -537,8 +539,6 @@ impl Server {
                     let mac = collector.mac.clone();
 
                     // TODO: REFACTOR THIS FUNCTION
-                    let data_modality_str = "screen";
-                    let table = format!("`{}:{}`", mac, data_modality_str);
                     for chunk in data {
                         // record id = random UUID
                         let chunk = chunk.unwrap();
@@ -554,22 +554,25 @@ impl Server {
                                     DataOriginType::DeviceId(mac.clone()),
                                     DataModality::Screen,
                                 );
-                                ensure_table(&self.db, data_origin).await.unwrap();
+                                ensure_table(&self.db, &data_origin).await.unwrap();
                                 let chunk: ScreenFrame = c.into();
+                                let table = format!("`{}`", data_origin.get_table_name());
+                                //println!("{:?}", chunk);
 
-                                println!("Adding {:?} to table {}", chunk.uuid, table);
+                                println!("{:?}", chunk.timestamp);
+                                println!("Adding {:?} to table {}", chunk.uuid.to_string(), table,);
 
                                 let uuid = chunk.uuid;
                                 let chunk: ScreenFrameSurreal = chunk.into();
+                                //println!("Chunk: {:?}", chunk);
                                 let _: ScreenFrameSurreal = self
                                     .db
-                                    .create((table.as_str(), uuid.to_string()))
+                                    .create((table.clone(), uuid.to_string()))
                                     .content(chunk)
                                     .await
                                     .unwrap()
                                     .expect(
-                                        format!("Unable to create row in table {}", table.as_str())
-                                            .as_str(),
+                                        format!("Unable to create row in table {}", table).as_str(),
                                     );
                             }
                             lifelog_proto::lifelog_data::Payload::Browserframe(c) => {
@@ -577,22 +580,26 @@ impl Server {
                                     DataOriginType::DeviceId(mac.clone()),
                                     DataModality::Browser,
                                 );
-                                ensure_table(&self.db, data_origin).await.unwrap();
+                                ensure_table(&self.db, &data_origin).await.unwrap();
                                 let chunk: BrowserFrame = c.into();
+                                let table = format!("`{}`", data_origin.get_table_name());
 
-                                println!("Adding {:?} to table {}", chunk.uuid, table);
+                                println!(
+                                    "Adding {:?} to table {}",
+                                    chunk.uuid,
+                                    data_origin.get_table_name()
+                                );
 
                                 let uuid = chunk.uuid;
                                 let chunk: BrowserFrameSurreal = chunk.into();
                                 let _: BrowserFrameSurreal = self
                                     .db
-                                    .create((table.as_str(), uuid.to_string()))
+                                    .create((table.clone(), uuid.to_string()))
                                     .content(chunk)
                                     .await
                                     .unwrap()
                                     .expect(
-                                        format!("Unable to create row in table {}", table.as_str())
-                                            .as_str(),
+                                        format!("Unable to create row in table {}", table).as_str(),
                                     );
                             }
                             _ => unimplemented!(),
