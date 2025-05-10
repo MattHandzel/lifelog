@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SnapshotFrame {
+pub struct BrowserFrame {
     pub url: String,
     pub title: String,
     pub visit_count: u32,

@@ -554,6 +554,7 @@ fn create_default_config() -> CollectorConfig {
             enabled: true,
             browser_type: "chrome".to_string(),
             input_dir: "".to_string().into(), // fixme?
+            output_file: lifelog_dir.join("browser"),
         },
         camera: CameraConfig {
             enabled: default_false(),
@@ -737,6 +738,8 @@ pub struct BrowserHistoryConfig {
     pub enabled: bool,
 
     pub input_dir: PathBuf,
+
+    pub output_file: PathBuf,
 
     pub browser_type: String,
 }
