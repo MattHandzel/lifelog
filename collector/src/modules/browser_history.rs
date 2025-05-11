@@ -35,7 +35,7 @@ impl BrowserHistorySource {
         })
     }
 
-    pub fn get_data(&self) -> Result<Vec<BrowserFrame>, DataSourceError> {
+    pub fn get_data(&mut self) -> Result<Vec<BrowserFrame>, DataSourceError> {
         let last_query = match fs::File::open(&self.config.output_file) {
             Ok(mut file) => {
                 let mut contents = String::new();
@@ -70,7 +70,7 @@ impl BrowserHistorySource {
         let conn = Connection::open(history_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT urls.url, title, visit_time, visit_count FROM urls INNER JOIN visits ON urls.id = visits.url WHERE visit_time > ? AND visit_time <= ? LIMIT 10"
+            "SELECT urls.url, title, visit_time, visit_count FROM urls INNER JOIN visits ON urls.id = visits.url WHERE visit_time > ? AND visit_time <= ?"
         )?;
 
         let history_iter = stmt.query_map([last_query_chrome_micros, now_chrome_micros], |row| {

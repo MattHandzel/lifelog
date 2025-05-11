@@ -41,7 +41,7 @@ impl ScreenDataSource {
         })
     }
 
-    pub async fn get_data(&self) -> Result<Vec<ScreenFrame>, DataSourceError> {
+    pub async fn get_data(&mut self) -> Result<Vec<ScreenFrame>, DataSourceError> {
         let buffer_guard = self.buffer.lock().await;
 
         Ok(buffer_guard.clone())
@@ -117,7 +117,7 @@ impl DataSource for ScreenDataSource {
                     
 
                     let captured = ScreenFrame {
-                        uuid: Uuid::new_v4(),
+                        uuid: Uuid::new_v4(), //use v6
                         width: width,
                         height: height,
                         image_bytes: image_data_bytes,
