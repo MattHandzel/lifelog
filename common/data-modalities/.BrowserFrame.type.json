@@ -1,0 +1,1 @@
+{"fields":[["uuid","::lifelog_core::uuid::Uuid"],["timestamp","::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>"],["url","String"],["title","String"],["visit_count","u32"]],"ident":"BrowserFrame","metadata_type":"Data","variants":[]}

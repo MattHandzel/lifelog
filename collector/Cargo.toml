@@ -55,6 +55,7 @@ futures-core = "0.3.31"
 dashmap = {workspace = true}
 
 prost-types = { workspace = true }
+tempfile = "3.8.1"
 
 [build-dependencies]
 tonic-build = {workspace = true}

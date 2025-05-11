@@ -9,6 +9,11 @@ lifelog-macros = { path = "../macros" }
 lifelog-proto = { path = "../lifelog-proto" }
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.9.1"
+rusty-tesseract = {workspace = true}
+lifelog-types = { path = "../lifelog-types" }
+utils = { path = "../utils" }
+image = {workspace = true}
+thiserror = {workspace=true}
 
 prost-types = { version = "0.13.5"}
 tonic = { version = "0.13.1"}

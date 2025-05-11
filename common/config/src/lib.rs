@@ -5,15 +5,24 @@ use std::fs;
 use std::path::PathBuf;
 use utils::replace_home_dir_in_path;
 
+use lifelog_core;
 mod policy_config;
 mod server_config;
 use derive_more::From;
 pub use policy_config::*;
 pub use server_config::*;
 
+use std::collections::HashMap;
+
 // TODO: Implement default for all configs
 // TODO: Make it so that there is a default directory
 // TODO: How do other projects do configs
+
+#[lifelog_type(Confg)]
+pub struct SystemConfig {
+    pub server: ServerConfig,
+    pub collectors: HashMap<String, CollectorConfig>,
+}
 
 #[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
@@ -23,6 +32,7 @@ pub struct CollectorConfig {
     pub port: u32, //TODO: Refactor code base so this can be u16 instead of u32, this will be the
     //port gRPC server will run on
     pub timestamp_format: String,
+    pub browser: BrowserHistoryConfig,
     pub screen: ScreenConfig,
     pub camera: CameraConfig,
     pub microphone: MicrophoneConfig,
@@ -278,7 +288,7 @@ pub struct ScreenConfig {
 }
 
 fn default_screen_interval() -> f64 {
-    60.0
+    20.0
 }
 
 // TODO: Make this a function that returns the default screen program based on the OS
@@ -548,6 +558,12 @@ fn create_default_config() -> CollectorConfig {
             program: default_screen_program(),
             timestamp_format: default_timestamp_format(),
         },
+        browser: BrowserHistoryConfig {
+            enabled: true,
+            browser_type: "chrome".to_string(),
+            input_file: "".to_string().into(), // fixme?
+            output_file: lifelog_dir.join("browser"),
+        },
         camera: CameraConfig {
             enabled: default_false(),
             interval: default_camera_interval(),
@@ -709,10 +725,21 @@ pub fn default_microphone_capture_interval_secs() -> u64 {
     300 // Default to capturing every 5 minutes (300 seconds)
 }
 
+// #[lifelog_type(None)]
+// #[derive(Debug, Clone, Serialize, Deserialize, From)]
+// enum BrowserHistoryType {
+//     Chrome,
+// Firefox}
+
 #[lifelog_type(Config)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SystemConfig {
-    pub server: ServerConfig,
-    pub collector: CollectorConfig,
-    //pub collectors: BTreeMap<String, CollectorConfig>,
+#[derive(Debug, Clone, Serialize, Deserialize, From)]
+pub struct BrowserHistoryConfig {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+
+    pub input_file: PathBuf,
+
+    pub output_file: PathBuf,
+
+    pub browser_type: String,
 }

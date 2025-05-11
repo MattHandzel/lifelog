@@ -171,6 +171,26 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 // Vec<Enum> or Vec<String>
                 if let Type::Path(typepath) = &f.ty {
+                    let seg = typepath.path.segments.last().unwrap();
+                    // TODO: REfactor, this code is so bad
+if seg.ident == "DateTime" {
+                if let PathArguments::AngleBracketed(args) = &seg.arguments {
+                    if let Some(GenericArgument::Type(Type::Path(inner))) = args.args.first() {
+                        // inner is a path; check its last segment == "Utc"
+                        if inner.path.segments.last().unwrap().ident == "Utc" {
+                            return quote! {
+                                #name: {
+                                    let ts = p.#name.unwrap_or_default();
+                                    ::lifelog_core::chrono::DateTime::<::lifelog_core::chrono::Utc>::from_utc(
+                                        ::lifelog_core::chrono::NaiveDateTime::from_timestamp(ts.seconds, ts.nanos as u32),
+                                        ::lifelog_core::chrono::Utc,
+                                    )
+                                }
+                            };
+                        }
+                    }
+                }
+            }
                     let seg = typepath.path.segments.last().unwrap().ident.to_string();
                     // Check to see if it a Vec<u8> (aka bytes) vector
                     if seg == "Vec" {
@@ -209,23 +229,28 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                         return quote! {
                             #name: p.#name.into_iter()
                                 .map(|(k,v)| (k, v.into()))
-                                .collect::<std::collections::BTreeMap<_,_>>()
+                                .collect::<std::collections::HashMap<_,_>>()
                         }
                 }
-
-                    // Option<Enum>
-                    if typepath.path.segments.len() == 1 && typepath.path.segments[0].ident == "Option" {
-                        if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
-                            &typepath.path.segments[0].arguments
-                        {
-                            if let Some(GenericArgument::Type(Type::Path(inner))) = args.first() {
-                                let _inner_ident = &inner.path.segments.last().unwrap().ident;
-                                return quote! {
-                                    #name: p.#name.map(|s| s.parse().unwrap())
-                                };
-                            }
+                    else if seg == "ServerState" {
+                        return quote!{
+                            #name : p.#name.unwrap().into()
                         }
                     }
+
+                    //// Option<Enum>
+                    //if typepath.path.segments.len() == 1 && typepath.path.segments[0].ident == "Option" {
+                    //    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
+                    //        &typepath.path.segments[0].arguments
+                    //    {
+                    //        if let Some(GenericArgument::Type(Type::Path(inner))) = args.first() {
+                    //            let _inner_ident = &inner.path.segments.last().unwrap().ident;
+                    //            return quote! {
+                    //                #name: p.#name.map(|s| s.parse().unwrap())
+                    //            };
+                    //        }
+                    //    }
+                    //}
                 }
                 // fallback
                 quote! { #name: p.#name.into() }
@@ -241,6 +266,25 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
             // Self -> proto
             let into_fields = named.named.iter().map(|f| {
                 let name = f.ident.as_ref().unwrap();
+
+    if let Type::Path(type_path) = &f.ty {
+        if let Some(seg) = type_path.path.segments.last() {
+            if seg.ident == "DateTime" {
+                if let PathArguments::AngleBracketed(args) = &seg.arguments {
+                    if let Some(GenericArgument::Type(Type::Path(inner))) = args.args.first() {
+                        if inner.path.segments.last().unwrap().ident == "Utc" {
+                            return quote! {
+                                #name: Some(::prost_types::Timestamp {
+                                    seconds: s.#name.timestamp(),
+                                    nanos: 1000 * (s.#name.timestamp_subsec_nanos() / 1000) as i32,
+                                })
+                            };
+                        }
+                    }
+                }
+            }
+        }
+    }
                 // uuid
                 if name == "uuid" {
                     return quote! { uuid: s.uuid.to_string() };
@@ -286,29 +330,57 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                         };
                     }
 
+                    //if typepath.path.segments.len() == 1
+                    //    && typepath.path.segments[0].ident == "Option"
+                    //{
+                    //    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                    //        args,
+                    //        ..
+                    //    }) = &typepath.path.segments[0].arguments
+                    //    {
+                    //        if let Some(GenericArgument::Type(Type::Path(_inner))) = args.first() {
+                    //            return quote! {
+                    //                #name: s.#name.unwrap().into()
+                    //            };
+                    //        }
+                    //    }
+                    //}
+                    //
                     // Option<Enum> -> Option<String>
-                    if typepath.path.segments.len() == 1
-                        && typepath.path.segments[0].ident == "Option"
-                    {
-                        if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                            args,
-                            ..
-                        }) = &typepath.path.segments[0].arguments
-                        {
-                            if let Some(GenericArgument::Type(Type::Path(_inner))) = args.first() {
-                                return quote! {
-                                    #name: s.#name.as_ref().map(|e| e.to_string())
-                                };
-                            }
-                        }
-                    }
+                    //if typepath.path.segments.len() == 1
+                    //    && typepath.path.segments[0].ident == "Option"
+                    //{
+                    //    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                    //        args,
+                    //        ..
+                    //    }) = &typepath.path.segments[0].arguments
+                    //    {
+                    //        if let Some(GenericArgument::Type(Type::Path(_inner))) = args.first() {
+                    //            return quote! {
+                    //                #name: s.#name.as_ref().map(|e| e.to_string())
+                    //            };
+                    //        }
+                    //    }
+                    //}
                     let seg = typepath.path.segments.last().unwrap().ident.to_string();
 
                     if seg == "PathBuf" {
                         return quote! { #name: s.#name.display().to_string() };
                     } else if seg.ends_with("Config") {
                         return quote! { #name: Some(s.#name.into()) };
-                    } else {
+                    }  else if seg == "HashMap" {
+                        return quote! {
+                            #name: s.#name.into_iter()
+                                .map(|(k,v)| (k, v.into()))
+                                .collect::<std::collections::HashMap<_,_>>()
+                        }
+                    } else if seg == "ServerState" {
+                        return quote! {
+                            #name : Some(s.#name.into())
+                        }
+                    }
+
+                    else {
                         return quote! { #name: s.#name.into() };
                     }
                 }

@@ -1,1 +1,1 @@
-{"fields":[["server","ServerConfig"],["collector","CollectorConfig"]],"ident":"SystemConfig","metadata_type":"Config","variants":[]}
+{"fields":[["server","ServerConfig"],["collectors","HashMap<String,CollectorConfig>"]],"ident":"SystemConfig","metadata_type":"None","variants":[]}
