@@ -5,6 +5,9 @@ import "google/protobuf/timestamp.proto";
 import "google/protobuf/any.proto";
 import "google/protobuf/wrappers.proto";
 
+message ActorConfig {
+}
+
 message AmbientConfig {
   bool enabled = 1;
   double interval = 2;
@@ -73,9 +76,9 @@ message CollectorState {
 }
 
 enum DataModality {
-  Screen = 0;
+  Browser = 0;
   Ocr = 1;
-  Browser = 2;
+  Screen = 2;
 }
 
 message GeoConfig {
@@ -168,13 +171,13 @@ message ScreenFrame {
   string mime_type = 6;
 }
 
-enum ServerCommand {
-  RegisterCollector = 0;
-  GetConfig = 1;
-  SetConfig = 2;
-  GetData = 3;
-  ReportState = 4;
-  GetState = 5;
+enum ServerActionType {
+  Querying = 0;
+  GetData = 1;
+  SyncData = 2;
+  TransformData = 3;
+  CompressData = 4;
+  RegisterActor = 5;
 }
 
 message ServerConfig {
@@ -192,7 +195,7 @@ message ServerState {
   float memory_usage = 4;
   float threads = 5;
   google.protobuf.Timestamp timestamp_of_last_sync = 6;
-  repeated string pending_commands = 7;
+  repeated string pending_actions = 7;
 }
 
 message SystemConfig {
@@ -207,6 +210,12 @@ message SystemPerformanceConfig {
   bool log_cpu = 4;
   bool log_memory = 5;
   bool log_disk = 6;
+}
+
+message SystemState {
+  map<string,CollectorState> collector_states = 1;
+  map<string,InterfaceState> interface_states = 2;
+  ServerState server_state = 3;
 }
 
 message TextUploadConfig {
@@ -232,17 +241,10 @@ message WifiConfig {
   string scan_command = 4;
 }
 
-message crFrame {
-  string uuid = 1;
-  google.protobuf.Timestamp timestamp = 2;
-  string text = 3;
-}
-
 message LifelogData {
   oneof payload {
     BrowserFrame browserframe = 1;
     OcrFrame ocrframe = 2;
     ScreenFrame screenframe = 3;
-    crFrame crframe = 4;
   }
 }

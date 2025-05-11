@@ -161,8 +161,11 @@ impl ServerHandle {
 
     pub async fn r#loop(&self) {
         loop {
-            let server = self.server.write().await;
-            server.step().await;
+            {
+                println!("[LOOP]: Requesting server lock");
+                let server = self.server.write().await;
+                server.step().await;
+            }
             tokio::time::sleep(time::Duration::from_millis(100)).await;
         }
     }
@@ -175,12 +178,20 @@ impl ServerHandle {
     // TODO: Refactor having to define all of these functions... I am not a fan of them...
     pub async fn register_collector(&self, collector: RegisteredCollector) {
         let mut server = self.server.write().await;
-        server.register_collectors.write().await.push(collector);
+        server.registered_collectors.write().await.push(collector);
     }
 
     pub async fn contains_collector(&self, collector_name: String) -> bool {
         let server = self.server.read().await;
         server.contains_collector(collector_name).await
+    }
+
+    pub async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+        println!(
+            "[PROCESS_QUERY]: Requesting server lock for query {}",
+            query
+        );
+        self.server.read().await.process_query(query).await
     }
 }
 
@@ -191,9 +202,10 @@ pub struct Server {
     host: String,
     port: u16,
     state: Arc<RwLock<SystemState>>,
-    register_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
+    registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
     register_interfaces: Arc<RwLock<Vec<RegisteredInterface>>>,
     policy: Arc<RwLock<ServerPolicy>>,
+    origins: Arc<RwLock<Vec<DataOrigin>>>,
     transforms: Arc<RwLock<Vec<LifelogTransform>>>, // TODO: These should be registered transforms
 }
 
@@ -241,15 +253,21 @@ impl Server {
             },
         );
 
+        let origins_vec = get_origins_from_db(&db)
+            .await
+            .expect("Failed to get origins from db");
+        println!("[INSTANTIATION]: Origins: {:?}", origins_vec);
+
         let s = Self {
             db,
             host: config.host.clone(),
             port: config.port as u16,
             state,
-            register_collectors: Arc::new(RwLock::new(vec![])),
+            registered_collectors: Arc::new(RwLock::new(vec![])),
             register_interfaces: Arc::new(RwLock::new(vec![])),
             policy,
             transforms: Arc::new(RwLock::new(vec![ocr_transform.into()])),
+            origins: Arc::new(RwLock::new(origins_vec)),
         };
 
         Ok(s)
@@ -302,6 +320,8 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                     address: collector_ip.to_string(),
                     grpc_client: client.clone(),
                 };
+                // Add origins to our origins
+
                 self.server.register_collector(collector.clone()).await;
                 println!("Registering collector: {:?}", collector);
 
@@ -369,20 +389,31 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         request: tonic::Request<QueryRequest>,
     ) -> Result<tonic::Response<QueryResponse>, tonic::Status> {
         let QueryRequest { query } = request.into_inner();
-        //if let None = query {
-        //    return Err(tonic::Status::invalid_argument(
-        //        "You sent `None` as a Query, that is illegal!",
-        //    ));
-        //}
-        //let query = query.unwrap();
-        //
-        //let db = self.server.get_db().await;
-        //
-        //let ids = query_uuids(&db, query)
-        //    .await
-        //    .map_err(|e| tonic::Status::internal(e.to_string()))?;
-        let ids = vec![]; // TODO: Implement this
-        Ok(tonic::Response::new(QueryResponse { uuids: ids }))
+
+        if let None = query {
+            return Ok(tonic::Response::new(QueryResponse { keys: vec![] }));
+        }
+        println!("[QUERY] Received a query request: {:?}", query);
+        let query = query.unwrap();
+        let mut uuids: Vec<LifelogFrameKey> = vec![];
+        // NOTE: Right now we just return all uuids for a query, in the future actually parse the
+        // query message and return the uuids that match
+        let query = String::from("");
+        let keys = self
+            .server
+            .process_query(query.clone())
+            .await
+            .map_err(|e| {
+                tonic::Status::internal(format!("Failed to process query: {}", e.to_string()))
+            })?;
+        let proto_keys: Vec<lifelog_proto::LifelogDataKey> = keys
+            .iter()
+            .map(|key| lifelog_proto::LifelogDataKey {
+                uuid: key.uuid.to_string(),
+                origin: key.origin.get_table_name(),
+            })
+            .collect();
+        Ok(tonic::Response::new(QueryResponse { keys: proto_keys }))
     }
 
     async fn get_state(
@@ -391,9 +422,10 @@ impl LifelogServerService for GRPCServerLifelogServerService {
     ) -> Result<TonicResponse<GetSystemStateResponse>, TonicStatus> {
         println!("Received a get state request!");
         let state = self.server.get_state().await;
+        //let proto_state = s
         Ok(TonicResponse::new(GetSystemStateResponse {
-            state: Some(state.server_state.into()), // TODO: Replace this with the system state
-                                                    // instead of the server state (i need some work with the proto files)
+            state: Some(state.into()), // TODO: Replace this with the system state
+                                       // instead of the server state (i need some work with the proto files)
         }))
     }
 }
@@ -420,16 +452,25 @@ impl Policy for ServerPolicy {
         let action = if (state.server_state.timestamp - state.server_state.timestamp_of_last_sync)
             .num_seconds() as f64
             >= (self.config.collector_sync_interval as f64)
+            && !state
+                .server_state
+                .pending_actions
+                .iter()
+                .any(|a| matches!(a, &ServerActionType::SyncData))
         // TODO: Refactor so this happens once
         {
             // TODO: Add the specific data modality here
             ServerAction::SyncData("SELECT * FROM screen".to_string()) // TODO: Refactor so that we
                                                                        // can sync from all collectors
-        } else {
-            println!("TransformingData");
+        } else if !state
+            .server_state
+            .pending_actions
+            .iter()
+            .any(|a| matches!(a, ServerActionType::TransformData))
+        {
             ServerAction::TransformData(vec![])
-
-            //ServerAction::Sleep(tokio::time::Duration::from_millis(100))
+        } else {
+            ServerAction::Sleep(tokio::time::Duration::from_millis(100))
         };
 
         action
@@ -468,7 +509,7 @@ impl Server {
     // collector has a different name then they are different collectors, same name means same
     // collector. Are there any problems with this?
     async fn contains_collector(&self, collector_name: String) -> bool {
-        let collectors = self.register_collectors.read().await;
+        let collectors = self.registered_collectors.read().await;
         println!(
             "Checking if collector {} is registered: {:?}",
             collector_name, collectors
@@ -518,6 +559,37 @@ impl Server {
         }
     }
 
+    async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+        let mut keys: Vec<LifelogFrameKey> = vec![];
+        println!("asdfadsfasdf");
+        // TODO: Refactor this so we add origins in a more intelligent way instead of checking them
+        // every time
+        let mut origins = self.origins.write().await;
+        *origins = get_origins_from_db(&self.db)
+            .await
+            .expect("Failed to get origins from db");
+
+        for origin in origins.iter() {
+            println!("[PROCESS_QUERY]: Looking at origin {}", origin);
+            let result = get_all_uuids_from_origin(&self.db, &origin).await;
+            match result {
+                Ok(uuids_from_origin) => {
+                    keys.extend(uuids_from_origin.iter().map(|uuid| LifelogFrameKey {
+                        uuid: *uuid,
+                        origin: origin.clone(),
+                    }));
+                }
+                Err(e) => {
+                    return Err(LifelogError::Database(format!(
+                        "Failed to get uuids from origin: {}",
+                        e
+                    )));
+                }
+            }
+        }
+        Ok(keys)
+    }
+
     async fn add_audit_log(&self, action: &ServerAction) {
         //println!("Adding audit log for action: {:?}", action);
     }
@@ -531,14 +603,29 @@ impl Server {
                 tokio::time::sleep(duration).await;
             }
             ServerAction::SyncData(query) => {
+                {
+                    self.state
+                        .write()
+                        .await
+                        .server_state
+                        .pending_actions
+                        .push(ServerActionType::SyncData);
+                }
                 // TODO: Refactor so we actually use the query
                 // Get the target data modalities(s) from the query
-                let mut collectors = self.register_collectors.write().await;
+                let mut collectors = self.registered_collectors.write().await;
                 sync_data_with_collectors(state.clone(), &self.db, query, &mut collectors).await;
 
                 // TODO: refactor, i dont think we should write lock the state here, diff
                 // function for estimating the state?
-                self.state.write().await.server_state.timestamp_of_last_sync = Utc::now();
+                let mut state = self.state.write().await;
+                state.server_state.timestamp_of_last_sync = Utc::now();
+                state.server_state.pending_actions.retain(|a| {
+                    if let ServerActionType::SyncData = a {
+                        return false;
+                    }
+                    true
+                });
 
                 // For now, assume we want to sync all data modalities
 
@@ -546,23 +633,44 @@ impl Server {
             }
             ServerAction::TransformData(untransformed_data_keys) => {
                 // TODO: Move this to policy
+                {
+                    self.state
+                        .write()
+                        .await
+                        .server_state
+                        .pending_actions
+                        .push(ServerActionType::TransformData); // TODO: Refactor this function s ow e don't hold the state write block
+                }
+                let state_clone = self.state.clone();
                 let db_connection = self.db.clone();
                 let transforms = self.transforms.clone().read().await.to_vec();
                 let mut untransformed_data_keys: Vec<LifelogFrameKey> = vec![];
-                for transform in &transforms {
-                    untransformed_data_keys.extend(
-                        get_keys_in_source_not_in_destination(
-                            &self.db,
-                            transform.source().clone(),
-                            transform.destination().clone(),
-                        )
-                        .await,
-                    );
-                }
+                tokio::task::spawn_blocking(async move || {
+                    for transform in &transforms {
+                        untransformed_data_keys.extend(
+                            get_keys_in_source_not_in_destination(
+                                &db_connection,
+                                transform.source().clone(),
+                                transform.destination().clone(),
+                            )
+                            .await,
+                        );
+                    }
 
-                //tokio::task::spawn_blocking(async move || {
-                transform_data(&db_connection, untransformed_data_keys, transforms).await;
-                //});
+                    transform_data(&db_connection, untransformed_data_keys, transforms).await;
+                    // TODO: Refactor so not directly calling the .write on state
+                    state_clone
+                        .write()
+                        .await
+                        .server_state
+                        .pending_actions
+                        .retain(|a| {
+                            if let ServerActionType::TransformData = a {
+                                return false;
+                            }
+                            true
+                        });
+                });
             }
             _ => todo!(),
         }
@@ -806,7 +914,7 @@ async fn sync_data_with_collectors(
     db: &Surreal<Client>,
     query: String,
     collectors: &mut Vec<RegisteredCollector>,
-) {
+) -> Result<(), LifelogError> {
     for collector in collectors.iter_mut() {
         // TODO: Parallelize this
         println!("Syncing data with collector: {:?}", collector);
@@ -873,6 +981,7 @@ async fn sync_data_with_collectors(
             //  .await?;
         }
     }
+    Ok(())
 }
 
 async fn get_all_uuids_from_origin(
@@ -1094,4 +1203,37 @@ impl From<OcrFrame> for LifelogData {
     fn from(v: OcrFrame) -> Self {
         Self::OcrFrame(v)
     }
+}
+
+pub async fn get_tables(db: &Surreal<Client>) -> Result<Vec<String>, LifelogError> {
+    #[derive(serde::Deserialize)]
+    struct Info {
+        tables: std::collections::HashMap<String, serde_json::Value>,
+    }
+
+    let mut resp = db
+        .query("INFO FOR DB")
+        .await
+        .map_err(|e| LifelogError::Database(format!("{}", e)))?;
+
+    let info: Option<Info> = resp
+        .take(0)
+        .map_err(|e| LifelogError::Database(format!("{}", e)))?;
+    let info = info.ok_or_else(|| LifelogError::Database("INFO FOR DB failed!!!".to_string()))?;
+    Ok(info.tables.keys().cloned().collect())
+}
+
+async fn get_origins_from_db(db: &Surreal<Client>) -> Result<Vec<DataOrigin>, LifelogError> {
+    let tables = get_tables(&db).await?;
+    let origins = tables
+        .iter()
+        .map(|table| {
+            let origin = DataOrigin::tryfrom_string(table.clone());
+            origin
+        })
+        .filter(Result::is_ok)
+        .map(|origin| origin.expect("this should never happen"))
+        .collect::<Vec<DataOrigin>>();
+
+    Ok(origins)
 }

@@ -229,23 +229,28 @@ if seg.ident == "DateTime" {
                         return quote! {
                             #name: p.#name.into_iter()
                                 .map(|(k,v)| (k, v.into()))
-                                .collect::<std::collections::BTreeMap<_,_>>()
+                                .collect::<std::collections::HashMap<_,_>>()
                         }
                 }
-
-                    // Option<Enum>
-                    if typepath.path.segments.len() == 1 && typepath.path.segments[0].ident == "Option" {
-                        if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
-                            &typepath.path.segments[0].arguments
-                        {
-                            if let Some(GenericArgument::Type(Type::Path(inner))) = args.first() {
-                                let _inner_ident = &inner.path.segments.last().unwrap().ident;
-                                return quote! {
-                                    #name: p.#name.map(|s| s.parse().unwrap())
-                                };
-                            }
+                    else if seg == "ServerState" {
+                        return quote!{
+                            #name : p.#name.unwrap().into()
                         }
                     }
+
+                    //// Option<Enum>
+                    //if typepath.path.segments.len() == 1 && typepath.path.segments[0].ident == "Option" {
+                    //    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) =
+                    //        &typepath.path.segments[0].arguments
+                    //    {
+                    //        if let Some(GenericArgument::Type(Type::Path(inner))) = args.first() {
+                    //            let _inner_ident = &inner.path.segments.last().unwrap().ident;
+                    //            return quote! {
+                    //                #name: p.#name.map(|s| s.parse().unwrap())
+                    //            };
+                    //        }
+                    //    }
+                    //}
                 }
                 // fallback
                 quote! { #name: p.#name.into() }
@@ -280,7 +285,6 @@ if seg.ident == "DateTime" {
             }
         }
     }
-            
                 // uuid
                 if name == "uuid" {
                     return quote! { uuid: s.uuid.to_string() };
@@ -326,29 +330,57 @@ if seg.ident == "DateTime" {
                         };
                     }
 
+                    //if typepath.path.segments.len() == 1
+                    //    && typepath.path.segments[0].ident == "Option"
+                    //{
+                    //    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                    //        args,
+                    //        ..
+                    //    }) = &typepath.path.segments[0].arguments
+                    //    {
+                    //        if let Some(GenericArgument::Type(Type::Path(_inner))) = args.first() {
+                    //            return quote! {
+                    //                #name: s.#name.unwrap().into()
+                    //            };
+                    //        }
+                    //    }
+                    //}
+                    //
                     // Option<Enum> -> Option<String>
-                    if typepath.path.segments.len() == 1
-                        && typepath.path.segments[0].ident == "Option"
-                    {
-                        if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
-                            args,
-                            ..
-                        }) = &typepath.path.segments[0].arguments
-                        {
-                            if let Some(GenericArgument::Type(Type::Path(_inner))) = args.first() {
-                                return quote! {
-                                    #name: s.#name.as_ref().map(|e| e.to_string())
-                                };
-                            }
-                        }
-                    }
+                    //if typepath.path.segments.len() == 1
+                    //    && typepath.path.segments[0].ident == "Option"
+                    //{
+                    //    if let PathArguments::AngleBracketed(AngleBracketedGenericArguments {
+                    //        args,
+                    //        ..
+                    //    }) = &typepath.path.segments[0].arguments
+                    //    {
+                    //        if let Some(GenericArgument::Type(Type::Path(_inner))) = args.first() {
+                    //            return quote! {
+                    //                #name: s.#name.as_ref().map(|e| e.to_string())
+                    //            };
+                    //        }
+                    //    }
+                    //}
                     let seg = typepath.path.segments.last().unwrap().ident.to_string();
 
                     if seg == "PathBuf" {
                         return quote! { #name: s.#name.display().to_string() };
                     } else if seg.ends_with("Config") {
                         return quote! { #name: Some(s.#name.into()) };
-                    } else {
+                    }  else if seg == "HashMap" {
+                        return quote! {
+                            #name: s.#name.into_iter()
+                                .map(|(k,v)| (k, v.into()))
+                                .collect::<std::collections::HashMap<_,_>>()
+                        }
+                    } else if seg == "ServerState" {
+                        return quote! {
+                            #name : Some(s.#name.into())
+                        }
+                    }
+
+                    else {
                         return quote! { #name: s.#name.into() };
                     }
                 }

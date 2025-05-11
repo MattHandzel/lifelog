@@ -280,7 +280,7 @@ pub struct ScreenConfig {
 }
 
 fn default_screen_interval() -> f64 {
-    60.0
+    20.0
 }
 
 // TODO: Make this a function that returns the default screen program based on the OS

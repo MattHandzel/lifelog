@@ -82,12 +82,18 @@ message Query {
   string browser_text = 5; 
   }
 
+message LifelogDataKey {
+  string uuid = 1;
+  string origin = 2;
+  }
 
 message QueryRequest {
   Query query = 1; // TODO: Change this to be the query data type we define
   }
+
+
 message QueryResponse {
-  repeated string uuids = 1; // TODO: Change this to be the query data type we define
+  repeated LifelogDataKey keys = 1; // TODO: Change this to be the query data type we define
 }
 
 message GetStateRequest {}
@@ -96,7 +102,7 @@ message GetCollectorStateResponse {
 }
 
 message GetSystemStateResponse {
-  ServerState state = 1;
+  SystemState state = 1;
 }
 
 // -----------------------------------------------------------------------------

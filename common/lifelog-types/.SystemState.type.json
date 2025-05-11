@@ -1,0 +1,1 @@
+{"fields":[["collector_states","HashMap<String,CollectorState>"],["interface_states","HashMap<String,InterfaceState>"],["server_state","ServerState"]],"ident":"SystemState","metadata_type":"None","variants":[]}

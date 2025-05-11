@@ -55,3 +55,22 @@ select record::id(id) as uuid from `FFFFFFFFFFFF:Screen` where record::id(id) = 
 select timestamp from `FFFFFFFFFFFF:Screen` where record::id(id) = '211f0090-89a1-4a01-890f-4ced13873a1c';
 info for db;
 select * from `FFFFFFFFFFFF:Screen:Ocr`
+info for db;
+delete `asdf:asdf`;
+info for db;
+delete  `asdf:asdf`;
+select count(timestamp) from `FFFFFFFFFFFF:Screen:Ocr`;
+select count() from `FFFFFFFFFFFF:Screen:Ocr`;
+select count() from `FFFFFFFFFFFF:Screen`;
+select count() from `FFFFFFFFFFFF:Screen:OCR`;
+select count() from `FFFFFFFFFFFF:Screen:OCR` group all;
+select count() from `FFFFFFFFFFFF:Screen:Ocr` group all;
+select count() from `FFFFFFFFFFFF:Screen` group all;
+select count() from `FFFFFFFFFFFF:Screen:Ocr` group all;
+select count() from `FFFFFFFFFFFF:Screen` group all;
+select count() from `FFFFFFFFFFFF:Screen:Ocr` group all;
+select timestamp from `FFFFFFFFFFFF:Screen`
+select text from `FFFFFFFFFFFF:Screen:Ocr` limit 3
+select text from `FFFFFFFFFFFF:Screen:Ocr` limit 1
+clear
+select * from `FFFFFFFFFFFF:Screen:Ocr` limit 1

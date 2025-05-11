@@ -1,5 +1,8 @@
 // Auto‐generated types
 
+export interface ActorConfig {
+}
+
 export interface AmbientConfig {
   enabled: boolean;
   interval: number;
@@ -64,7 +67,7 @@ export interface CollectorState {
   total_buffer_size: number;
 }
 
-export type DataModality = "Screen" | "Ocr" | "Browser";
+export type DataModality = "Browser" | "Ocr" | "Screen";
 
 export interface GeoConfig {
   enabled: boolean;
@@ -156,7 +159,7 @@ export interface ScreenFrame {
   mime_type: string;
 }
 
-export type ServerCommand = "RegisterCollector" | "GetConfig" | "SetConfig" | "GetData" | "ReportState" | "GetState";
+export type ServerActionType = "Querying" | "GetData" | "SyncData" | "TransformData" | "CompressData" | "RegisterActor";
 
 export interface ServerConfig {
   host: string;
@@ -173,7 +176,7 @@ export interface ServerState {
   memory_usage: number;
   threads: number;
   timestamp_of_last_sync: Date;
-  pending_commands: any[];
+  pending_actions: any[];
 }
 
 export interface SystemConfig {
@@ -188,6 +191,12 @@ export interface SystemPerformanceConfig {
   log_cpu: boolean;
   log_memory: boolean;
   log_disk: boolean;
+}
+
+export interface SystemState {
+  collector_states: Record<string, any>;
+  interface_states: Record<string, any>;
+  server_state: ServerState;
 }
 
 export interface TextUploadConfig {
@@ -211,11 +220,5 @@ export interface WifiConfig {
   interval: number;
   output_dir: string;
   scan_command: string;
-}
-
-export interface crFrame {
-  uuid: string;
-  timestamp: Date;
-  text: string;
 }
 
