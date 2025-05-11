@@ -28,6 +28,7 @@ tracing-subscriber = { workspace = true }
 rusqlite = { workspace = true, features = ["bundled"] } 
 
 sha2 = "0.10"
+mac_address = "1.0"
 toml = "0.5"
 evdev = "0.13"         
 dirs = "4.0"
