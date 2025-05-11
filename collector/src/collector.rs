@@ -11,6 +11,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::AbortHandle;
 use tokio::time::Duration;
+use mac_address::get_mac_address;
 
 use config::{BrowserHistoryConfig, ScreenConfig};
 use futures_core::Stream;
@@ -310,6 +311,15 @@ impl Collector {
         let mut buffer_states = Vec::<String>::new();
         let mut total = 0;
 
+        let mac_address_variable: Option<String> = match get_mac_address() {
+            Ok(Some(mac_addr)) => {
+                println!("MAC addr = {}", mac_addr);
+                Some(mac_addr.to_string())
+            }
+            Ok(None) => None,
+            Err(e) => None,
+        };
+
         if let Some(running_src_trait) = self.sources.get("screen") {
             if let Some(running_screen_src) =
                 (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>()
@@ -342,8 +352,17 @@ impl Collector {
             }
         }
 
+        let dev_name = match mac_address_variable {
+            Some(s) => {
+                s
+            }
+            None => {
+                self.client_id.clone()
+            }
+        };
+
         CollectorState {
-            name: self.client_id.clone(),
+            name: dev_name,
             timestamp: chrono::Utc::now(),
             source_states: source_states,
             source_buffer_sizes: buffer_states,

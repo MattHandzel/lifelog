@@ -204,6 +204,14 @@ impl ServerHandle {
         let server = self.server.read().await;
         server.get_system_config().await
     }
+
+    pub async fn get_data(
+        &self,
+        keys: Vec<LifelogFrameKey>,
+    ) -> Result<Vec<LifelogData>, LifelogError> {
+        let server = self.server.read().await;
+        server.get_data(keys).await
+    }
 }
 
 // TDOO: ADD A CHANNEL FOR COMMS
@@ -314,6 +322,19 @@ impl Server {
             .insert(state.name.clone(), state);
         Ok(())
     }
+
+    async fn get_data(&self, req: Vec<LifelogFrameKey>) -> Result<Vec<LifelogData>, LifelogError> {
+        let mut datas: Vec<LifelogData> = vec![];
+        for key in req.iter() {
+            let data: LifelogData = get_data_by_key(&self.db, key) // TODO: Refactor this so it's faster,
+                // less db queries
+                .await
+                .expect(format!("Unable to get data by key: {}", key).as_str());
+
+            datas.push(data);
+        }
+        Ok(datas)
+    }
 }
 
 pub struct GRPCServerLifelogServerService {
@@ -403,9 +424,21 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         request: TonicRequest<GetDataRequest>,
     ) -> Result<TonicResponse<GetDataResponse>, TonicStatus> {
         let req = request.into_inner();
-        let chunks: Vec<lifelog_proto::lifelog_data::Payload> = Vec::new();
-        for modality in DataModality::iter() {}
-        Ok(TonicResponse::new(GetDataResponse { data: vec![] }))
+        let GetDataRequest { keys } = req;
+        let data: Vec<lifelog_proto::LifelogData> = self
+            .server
+            .get_data(
+                keys.iter()
+                    .map(|k| LifelogFrameKey::from(k.clone()))
+                    .collect(),
+            )
+            .await
+            .map_err(|e| TonicStatus::internal(format!("Failed to get data: {}", e)))?
+            .iter()
+            .map(|v| lifelog_proto::LifelogData::from(v.clone()))
+            .collect();
+
+        Ok(TonicResponse::new(GetDataResponse { data: data }))
     }
 
     // TODO: Refactor ALL functions to include this check to see if the thing doing the requesting
@@ -855,6 +888,18 @@ impl From<BrowserFrame> for BrowserFrameSurreal {
     }
 }
 
+impl From<BrowserFrameSurreal> for BrowserFrame {
+    fn from(frame: BrowserFrameSurreal) -> Self {
+        Self {
+            uuid: uuid::Uuid::from_u128(0),
+            timestamp: frame.timestamp.into(),
+            url: frame.url,
+            title: frame.title,
+            visit_count: frame.visit_count as u32,
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct OcrFrameSurreal {
     pub timestamp: surrealdb::sql::Datetime,
@@ -864,6 +909,16 @@ struct OcrFrameSurreal {
 impl From<OcrFrame> for OcrFrameSurreal {
     fn from(frame: OcrFrame) -> Self {
         Self {
+            timestamp: frame.timestamp.into(),
+            text: frame.text,
+        }
+    }
+}
+
+impl From<OcrFrameSurreal> for OcrFrame {
+    fn from(frame: OcrFrameSurreal) -> Self {
+        Self {
+            uuid: uuid::Uuid::from_u128(0),
             timestamp: frame.timestamp.into(),
             text: frame.text,
         }
@@ -988,9 +1043,7 @@ async fn sync_data_with_collectors(
         // TODO: This code can fail here (notice the unwraps, I should handle it.
         let mut stream = collector
             .grpc_client
-            .get_data(GetDataRequest {
-                uuids: vec![query.clone().into()],
-            })
+            .get_data(GetDataRequest { keys: vec![] })
             .await
             .unwrap()
             .into_inner();
@@ -1189,7 +1242,7 @@ async fn get_data_by_key(
             let row: Option<ScreenFrameSurreal> = db
                 .select((key.origin.get_table_name(), key.uuid.to_string()))
                 .await?;
-            let screen_frame: ScreenFrame = row
+            let mut screen_frame: ScreenFrame = row
                 .expect(
                     format!(
                         "Unabled to find record <{}>:<{}>",
@@ -1199,15 +1252,43 @@ async fn get_data_by_key(
                     .as_str(),
                 )
                 .into();
-            //println!("Got screen frame: {:?}", screen_frame);
+            screen_frame.uuid = key.uuid; //NOTE: This is important. This needs to be fixed with a code refactor
             Ok(screen_frame.into())
         }
-        // TODO: Implmeent browser
-        //DataModality::Browser => {
-        //    let browser_frame: BrowserFrame = row.unwrap().into();
-        //    println!("Got browser frame: {:?}", browser_frame);
-        //    Ok(browser_frame.into())
-        //}
+        DataModality::Ocr => {
+            let row: Option<OcrFrameSurreal> = db
+                .select((key.origin.get_table_name(), key.uuid.to_string()))
+                .await?;
+            let mut ocr_frame: OcrFrame = row
+                .expect(
+                    format!(
+                        "Unabled to find record <{}>:<{}>",
+                        key.origin.get_table_name(),
+                        key.uuid
+                    )
+                    .as_str(),
+                )
+                .into();
+            ocr_frame.uuid = key.uuid; //NOTE: This is important. This needs to be fixed with a code refactor
+            Ok(ocr_frame.into())
+        }
+        DataModality::Browser => {
+            let row: Option<BrowserFrameSurreal> = db
+                .select((key.origin.get_table_name(), key.uuid.to_string()))
+                .await?;
+            let mut browser_frame: BrowserFrame = row
+                .expect(
+                    format!(
+                        "Unabled to find record <{}>:<{}>",
+                        key.origin.get_table_name(),
+                        key.uuid
+                    )
+                    .as_str(),
+                )
+                .into();
+            browser_frame.uuid = key.uuid; //NOTE: This is important. This needs to be fixed with a code refactor
+            Ok(browser_frame.into())
+        }
         _ => unimplemented!(),
     }
 }
@@ -1248,6 +1329,43 @@ pub enum LifelogData {
     ScreenFrame(ScreenFrame),
     BrowserFrame(BrowserFrame),
     OcrFrame(OcrFrame),
+}
+
+impl From<LifelogData> for lifelog_proto::LifelogData {
+    fn from(data: LifelogData) -> Self {
+        match data {
+            LifelogData::ScreenFrame(frame) => lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(
+                    frame.into(),
+                )),
+            },
+            LifelogData::BrowserFrame(frame) => lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Browserframe(
+                    frame.into(),
+                )),
+            },
+            LifelogData::OcrFrame(frame) => lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Ocrframe(frame.into())),
+            },
+        }
+    }
+}
+
+impl From<lifelog_proto::LifelogData> for LifelogData {
+    fn from(data: lifelog_proto::LifelogData) -> Self {
+        match data.payload {
+            Some(lifelog_proto::lifelog_data::Payload::Screenframe(frame)) => {
+                LifelogData::ScreenFrame(frame.into())
+            }
+            Some(lifelog_proto::lifelog_data::Payload::Browserframe(frame)) => {
+                LifelogData::BrowserFrame(frame.into())
+            }
+            Some(lifelog_proto::lifelog_data::Payload::Ocrframe(frame)) => {
+                LifelogData::OcrFrame(frame.into())
+            }
+            _ => unimplemented!(),
+        }
+    }
 }
 
 impl TryFrom<LifelogData> for LifelogImage {

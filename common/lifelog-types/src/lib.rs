@@ -337,6 +337,24 @@ pub struct LifelogFrameKey {
     pub origin: DataOrigin,
 }
 
+impl From<lifelog_proto::LifelogDataKey> for LifelogFrameKey {
+    fn from(key: lifelog_proto::LifelogDataKey) -> Self {
+        LifelogFrameKey {
+            uuid: key.uuid.parse().expect("unable to parse uuid!"),
+            origin: DataOrigin::tryfrom_string(key.origin).unwrap(),
+        }
+    }
+}
+
+impl From<LifelogFrameKey> for lifelog_proto::LifelogDataKey {
+    fn from(key: LifelogFrameKey) -> Self {
+        lifelog_proto::LifelogDataKey {
+            uuid: key.uuid.to_string(),
+            origin: key.origin.get_table_name(),
+        }
+    }
+}
+
 impl LifelogFrameKey {
     pub fn new(uuid: ::lifelog_core::uuid::Uuid, origin: DataOrigin) -> Self {
         LifelogFrameKey { uuid, origin }
