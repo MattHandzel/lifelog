@@ -1,8 +1,8 @@
 use crate::policy::*;
 use chrono::Timelike;
 use chrono::Utc;
-use config::ServerConfig;
 use config::ServerPolicyConfig;
+use config::{ServerConfig, SystemConfig};
 use lifelog_core::*;
 use lifelog_types::*;
 use std::sync::Arc;
@@ -13,6 +13,7 @@ use thiserror::Error;
 use tokio::sync::RwLock;
 use tonic::{Request as TonicRequest, Response as TonicResponse, Status as TonicStatus};
 
+use std::collections::HashMap;
 use std::time;
 use strum::IntoEnumIterator;
 
@@ -162,7 +163,7 @@ impl ServerHandle {
     pub async fn r#loop(&self) {
         loop {
             {
-                println!("[LOOP]: Requesting server lock");
+                //println!("[LOOP]: Requesting server lock");
                 let server = self.server.write().await;
                 server.step().await;
             }
@@ -186,12 +187,22 @@ impl ServerHandle {
         server.contains_collector(collector_name).await
     }
 
+    pub async fn report_collector_state(&self, state: CollectorState) -> Result<(), LifelogError> {
+        let mut server = self.server.write().await;
+        server.report_collector_state(state).await
+    }
+
     pub async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
         println!(
             "[PROCESS_QUERY]: Requesting server lock for query {}",
             query
         );
         self.server.read().await.process_query(query).await
+    }
+
+    pub async fn get_system_config(&self) -> Result<SystemConfig, LifelogError> {
+        let server = self.server.read().await;
+        server.get_system_config().await
     }
 }
 
@@ -207,6 +218,7 @@ pub struct Server {
     policy: Arc<RwLock<ServerPolicy>>,
     origins: Arc<RwLock<Vec<DataOrigin>>>,
     transforms: Arc<RwLock<Vec<LifelogTransform>>>, // TODO: These should be registered transforms
+    config: ServerConfig,
 }
 
 static mut SYS: Option<sysinfo::System> = None;
@@ -268,9 +280,39 @@ impl Server {
             policy,
             transforms: Arc::new(RwLock::new(vec![ocr_transform.into()])),
             origins: Arc::new(RwLock::new(origins_vec)),
+            config: config.clone(),
         };
 
         Ok(s)
+    }
+    async fn get_system_config(&self) -> Result<SystemConfig, LifelogError> {
+        // Get the config of all the collectors
+        let mut collectors = self.registered_collectors.write().await;
+        let mut collector_configs: HashMap<String, CollectorConfig> = HashMap::new();
+        for collector in collectors.iter_mut() {
+            let config: CollectorConfig = collector
+                .grpc_client
+                .get_config(lifelog_proto::GetCollectorConfigRequest {})
+                .await?
+                .into_inner()
+                .config
+                .unwrap() // TODO: Instead of panicing we should get reutrn null
+                .into();
+            collector_configs.insert(collector.id.clone(), config);
+        }
+        let config = SystemConfig {
+            server: self.config.clone(),
+            collectors: collector_configs,
+        };
+
+        Ok(config)
+    }
+    async fn report_collector_state(&self, state: CollectorState) -> Result<(), LifelogError> {
+        let mut system_state = self.state.write().await;
+        system_state
+            .collector_states
+            .insert(state.name.clone(), state);
+        Ok(())
     }
 }
 
@@ -323,6 +365,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 // Add origins to our origins
 
                 self.server.register_collector(collector.clone()).await;
+
                 println!("Registering collector: {:?}", collector);
 
                 Ok(TonicResponse::new(RegisterCollectorResponse {
@@ -338,8 +381,13 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         _request: tonic::Request<GetSystemConfigRequest>,
     ) -> Result<TonicResponse<GetSystemConfigResponse>, TonicStatus> {
-        println!("Received a get config request!");
-        Ok(TonicResponse::new(GetSystemConfigResponse::default()))
+        let system_config =
+            self.server.get_system_config().await.map_err(|e| {
+                TonicStatus::internal(format!("Failed to get system config: {}", e))
+            })?;
+        Ok(TonicResponse::new(GetSystemConfigResponse {
+            config: Some(system_config.into()),
+        }))
     }
 
     async fn set_config(
@@ -368,15 +416,20 @@ impl LifelogServerService for GRPCServerLifelogServerService {
     ) -> Result<TonicResponse<ReportStateResponse>, TonicStatus> {
         let state = _request.into_inner().state.unwrap();
         println!(
-            "Received a get state request! {} {:?}",
+            "Received a report state request! {} {:?}",
             state.name,
             state.timestamp.unwrap()
         );
         // Ensure we got a state reported by a registered collector, if not then we ignore it
         match self.server.contains_collector(state.name.clone()).await {
-            true => Ok(TonicResponse::new(ReportStateResponse {
-                acknowledged: true,
-            })),
+            true => {
+                self.server
+                    .report_collector_state(state.clone().into())
+                    .await;
+                Ok(TonicResponse::new(ReportStateResponse {
+                    acknowledged: true,
+                }))
+            }
             false => Err(TonicStatus::internal(format!(
                 "Collector {} is not registered",
                 state.name
@@ -613,18 +666,29 @@ impl Server {
                 }
                 // TODO: Refactor so we actually use the query
                 // Get the target data modalities(s) from the query
-                let mut collectors = self.registered_collectors.write().await;
-                sync_data_with_collectors(state.clone(), &self.db, query, &mut collectors).await;
+                let registered_collectors_clone = self.registered_collectors.clone();
+                let db_connection = self.db.clone();
+                let state_clone = self.state.clone();
+                tokio::spawn(async move {
+                    let mut collectors = registered_collectors_clone.write().await;
+                    sync_data_with_collectors(
+                        state.clone(),
+                        &db_connection,
+                        query,
+                        &mut collectors,
+                    )
+                    .await;
 
-                // TODO: refactor, i dont think we should write lock the state here, diff
-                // function for estimating the state?
-                let mut state = self.state.write().await;
-                state.server_state.timestamp_of_last_sync = Utc::now();
-                state.server_state.pending_actions.retain(|a| {
-                    if let ServerActionType::SyncData = a {
-                        return false;
-                    }
-                    true
+                    // TODO: refactor, i dont think we should write lock the state here, diff
+                    // function for estimating the state?
+                    let mut state = state_clone.write().await;
+                    state.server_state.timestamp_of_last_sync = Utc::now();
+                    state.server_state.pending_actions.retain(|a| {
+                        if let ServerActionType::SyncData = a {
+                            return false;
+                        }
+                        true
+                    });
                 });
 
                 // For now, assume we want to sync all data modalities
@@ -633,6 +697,7 @@ impl Server {
             }
             ServerAction::TransformData(untransformed_data_keys) => {
                 // TODO: Move this to policy
+                println!("[TRANSFORM_DATA] Waiting for state write lock to be released");
                 {
                     self.state
                         .write()
@@ -644,8 +709,10 @@ impl Server {
                 let state_clone = self.state.clone();
                 let db_connection = self.db.clone();
                 let transforms = self.transforms.clone().read().await.to_vec();
-                let mut untransformed_data_keys: Vec<LifelogFrameKey> = vec![];
-                tokio::task::spawn_blocking(async move || {
+                println!("[TRANSFORM_DATA] starting thread");
+                let res = tokio::spawn(async move {
+                    let mut untransformed_data_keys: Vec<LifelogFrameKey> = vec![];
+                    println!("[TRANSFORM_DATA]: Transforming data");
                     for transform in &transforms {
                         untransformed_data_keys.extend(
                             get_keys_in_source_not_in_destination(
@@ -1070,6 +1137,11 @@ async fn transform_data(
         let data_to_transform: LifelogData = get_data_by_key(db, key)
             .await
             .expect(format!("Unable to get data by key: {}", key).as_str());
+        println!(
+            "[TRANSFORM_DATA]: Transforming data: <{}>:<{}>",
+            key.origin.get_table_name(),
+            key.uuid
+        );
         for transform in transforms.iter() {
             // Check what transforms apply to these keys
             let transformed_data: Option<LifelogData> = match transform {

@@ -181,7 +181,7 @@ export interface ServerState {
 
 export interface SystemConfig {
   server: ServerConfig;
-  collector: CollectorConfig;
+  collectors: Record<string, any>;
 }
 
 export interface SystemPerformanceConfig {

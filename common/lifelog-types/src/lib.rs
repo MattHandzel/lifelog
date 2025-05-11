@@ -57,8 +57,7 @@ type Query = String;
 
 //#[lifelog_type(None)]
 //#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ServerCommand {
-}
+pub enum ServerCommand {}
 //    // These are commands to the servers, each of them can result in [0-n] actions. If it is
 //    // something that can be immediately resolved (such as registering a collector) then it will
 //    // result in no actions done,
@@ -79,11 +78,11 @@ pub enum ServerCommand {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerActionType {
     Querying,
-    GetData, 
+    GetData,
     SyncData,
     TransformData,
     CompressData,
-    RegisterActor
+    RegisterActor,
 }
 
 #[derive(Debug, Clone)]

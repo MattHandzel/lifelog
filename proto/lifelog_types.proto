@@ -200,7 +200,7 @@ message ServerState {
 
 message SystemConfig {
   ServerConfig server = 1;
-  CollectorConfig collector = 2;
+  map<string,CollectorConfig> collectors = 2;
 }
 
 message SystemPerformanceConfig {
