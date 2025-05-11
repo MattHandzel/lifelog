@@ -35,7 +35,7 @@ impl BrowserHistorySource {
         })
     }
 
-    pub fn get_data(&self) -> Result<Vec<BrowserFrame>, DataSourceError> {
+    pub fn get_data(&mut self) -> Result<Vec<BrowserFrame>, DataSourceError> {
         let last_query = match fs::File::open(&self.config.output_file) {
             Ok(mut file) => {
                 let mut contents = String::new();
@@ -75,7 +75,7 @@ impl BrowserHistorySource {
 
         let history_iter = stmt.query_map([last_query_chrome_micros, now_chrome_micros], |row| {
             Ok(BrowserFrame {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::new_v4(), //use v6
                 url: row.get::<_, String>(0)?,
                 title: row.get::<_, String>(1)?,
                 timestamp: {
@@ -94,9 +94,7 @@ impl BrowserHistorySource {
             history_entries.push(entry?);
         }
 
-        let unix_micros = last_query.timestamp() * 1_000_000 + last_query.timestamp_subsec_micros() as i64;
-        let chrome_timestamp_micros = unix_micros + WINDOWS_EPOCH_MICROS;
-        if let Err(e) = fs::write(&self.config.output_file, chrome_timestamp_micros.to_string()) {
+        if let Err(e) = fs::write(&self.config.output_file, now_chrome_micros.to_string()) {
             eprintln!("Error saving last query time (Chrome format): {}", e);
         }
 

@@ -33,7 +33,7 @@ use lifelog_proto::{
 use rand::distr::Distribution; // import the distribution trait o.w. our sampling doesn't work
 
 struct RunningSource<C: Send + Sync + Debug + 'static> {
-    instance: Arc<Box<dyn DataSource<Config = C> + Send + Sync + 'static>>,
+    instance: Arc<Mutex<Box<dyn DataSource<Config = C> + Send + Sync + 'static>>>,
     handle: DataSourceHandle,
 }
 
@@ -240,7 +240,7 @@ impl Collector {
                 Ok(screen_source) => match screen_source.start() {
                     Ok(ds_handle) => {
                         let running_src = RunningSource::<ScreenConfig> {
-                            instance: Arc::new(Box::new(screen_source)),
+                            instance: Arc::new(Mutex::new(Box::new(screen_source))),
                             handle: ds_handle,
                         };
                         self.sources
@@ -267,7 +267,7 @@ impl Collector {
                 Ok(browser_source) => match browser_source.start() {
                     Ok(ds_handle) => {
                         let running_src = RunningSource::<BrowserHistoryConfig> {
-                            instance: Arc::new(Box::new(browser_source)),
+                            instance: Arc::new(Mutex::new(Box::new(browser_source))),
                             handle: ds_handle,
                         };
                         self.sources
@@ -314,9 +314,9 @@ impl Collector {
             if let Some(running_screen_src) =
                 (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>()
             {
-                let source_dyn_box_ref: &Arc<
+                let source_dyn_box_ref: &Arc<Mutex<
                     Box<dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static>,
-                > = &running_screen_src.instance;
+                >> = &running_screen_src.instance;
                 let source_dyn_ref = &**source_dyn_box_ref;
 
                 if let Some(screen_ds) =
@@ -476,15 +476,16 @@ impl CollectorService for GRPCServerCollectorService {
                 println!("{:?}", running);
 
                 if let Some(running_screen_src) = running {
-                    let clonned_instance = running_screen_src.instance.clone();
+                    let instance_arc = &running_screen_src.instance;
+                    let mut guard = instance_arc.lock().await;
+                    let boxed_dyn_data_source: &mut Box<dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static> = &mut *guard;
+                    let inner_dyn_data_source_ref: &mut (dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static) = &mut **boxed_dyn_data_source;
 
-                    let asdf = (*clonned_instance).as_ref();
-                    //println!("[gRPC] asdf: {:?}", asdf);
-                    if let Some(screen_ds) = (asdf as &dyn Any).downcast_ref::<ScreenDataSource>() {
-                        match screen_ds.get_data().await {
+                    if let Some(screen_ds_mut) = (inner_dyn_data_source_ref as &mut dyn Any).downcast_mut::<ScreenDataSource>() {
+                        match screen_ds_mut.get_data().await {
                             Ok(images) => {
                                 println!("[gRPC] clearing image buffer!");
-                                screen_ds.clear_buffer();
+                                screen_ds_mut.clear_buffer().await.unwrap_or_else(|e| eprintln!("Error clearing buffer: {}", e));
                                 images
                             }
                             Err(e) => {
@@ -492,10 +493,12 @@ impl CollectorService for GRPCServerCollectorService {
                                 Vec::new()
                             }
                         }
-                    } else {
+                    }
+                    else {
                         eprintln!("[gRPC] could not downcast to ScreenDataSource");
                         Vec::new()
                     }
+
                 } else {
                     eprintln!("[gRPC] 'screen' source not found or wrong type");
                     Vec::new()
@@ -542,13 +545,12 @@ impl CollectorService for GRPCServerCollectorService {
                 println!("{:?}", running);
 
                 if let Some(running_browser_src) = running {
-                    let clonned_instance = running_browser_src.instance.clone();
+                    let instance_arc = &running_browser_src.instance;
+                    let mut guard = instance_arc.lock().await;
+                    let boxed_dyn_data_source: &mut Box<dyn DataSource<Config = BrowserHistoryConfig> + Send + Sync + 'static> = &mut *guard;
+                    let inner_dyn_data_source_ref: &mut (dyn DataSource<Config = BrowserHistoryConfig> + Send + Sync + 'static) = &mut **boxed_dyn_data_source;
 
-                    let asdf = (*clonned_instance).as_ref();
-                    //println!("[gRPC] asdf: {:?}", asdf);
-                    if let Some(browser_ds) =
-                        (asdf as &dyn Any).downcast_ref::<BrowserHistorySource>()
-                    {
+                    if let Some(browser_ds) = (inner_dyn_data_source_ref as &mut dyn Any).downcast_mut::<BrowserHistorySource>() {
                         match browser_ds.get_data() {
                             Ok(history) => history,
                             Err(e) => {
