@@ -70,12 +70,12 @@ impl BrowserHistorySource {
         let conn = Connection::open(history_path)?;
 
         let mut stmt = conn.prepare(
-            "SELECT urls.url, title, visit_time, visit_count FROM urls INNER JOIN visits ON urls.id = visits.url WHERE visit_time > ? AND visit_time <= ?"
+            "SELECT urls.url, title, visit_time, visit_count FROM urls INNER JOIN visits ON urls.id = visits.url WHERE visit_time > ? AND visit_time <= ? LIMIT 10"
         )?;
 
         let history_iter = stmt.query_map([last_query_chrome_micros, now_chrome_micros], |row| {
             Ok(BrowserFrame {
-                uuid: Uuid::new_v4(),
+                uuid: Uuid::new_v4(), //use v6
                 url: row.get::<_, String>(0)?,
                 title: row.get::<_, String>(1)?,
                 timestamp: {
@@ -94,9 +94,7 @@ impl BrowserHistorySource {
             history_entries.push(entry?);
         }
 
-        let unix_micros = last_query.timestamp() * 1_000_000 + last_query.timestamp_subsec_micros() as i64;
-        let chrome_timestamp_micros = unix_micros + WINDOWS_EPOCH_MICROS;
-        if let Err(e) = fs::write(&self.config.output_file, chrome_timestamp_micros.to_string()) {
+        if let Err(e) = fs::write(&self.config.output_file, now_chrome_micros.to_string()) {
             eprintln!("Error saving last query time (Chrome format): {}", e);
         }
 
