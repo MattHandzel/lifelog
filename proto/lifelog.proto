@@ -46,7 +46,7 @@ message SetCollectorConfigResponse {
 
 
 message GetDataRequest {
-  repeated string uuids = 1;
+  repeated LifelogDataKey keys = 1;
 }
 
   
@@ -65,21 +65,22 @@ message Query {
   // From this query the system will extract timestamps of when this query is satisfied and then return the relevant data from the data source specified
 
   // These are the sources the query will search through. It will search through the OR of the sources. It will return the OR of the source. For example, if the user has two laptop's then they can specify what laptop they want to search through. This is useful for when the user has multiple devices and wants to search through a specific one.
-  repeated string search_sources = 1;
+  repeated string search_origins = 1;
 
   // These are the sources the query will return data from. It will return the OR of the sources. In the example it is browser usage, but we can also select the laptop screen and it would return both sources for the user. 
-  repeated string return_sources = 2;
-
-  // This is an image embedding the user wants to search through
-  Embedding image_embedding = 3;
-
+  repeated string return_origins = 2;
 
   // This is the time ranges, specified, it will search through the OR of the time ranges.
-  repeated Timerange time_ranges = 4; 
-  
+  repeated Timerange time_ranges = 3; 
 
-  // This is the browser text
-  string browser_text = 5; 
+  // This is an image embedding the user wants to search through
+  Embedding image_embedding = 4;
+
+  // This is the text embedding the user wants to search through
+  Embedding text_embedding = 5;
+
+  // Text to search through this database
+  repeated string text = 6; 
   }
 
 message LifelogDataKey {
