@@ -254,32 +254,23 @@ impl DataOrigin {
     }
     pub fn tryfrom_string(source: String) -> Result<Self, LifelogError> {
         let parts = source.split(':').collect::<Vec<_>>();
-        if parts.len() < 2 {
-            panic!("{}", format!("Invalid data origin string: {source}"));
-        }
-        let modality = DataModality::tryfrom_str(parts[parts.len() - 1]);
-        let modality = match modality {
-            Ok(modality) => modality,
-            Err(e) => {
-                return Err(e);
-            }
-        };
-        if parts.len() == 2 {
-            return Ok(DataOrigin {
-                origin: DataOriginType::DeviceId(parts[0].to_string()),
-                modality: modality,
-            });
-        }
-        let potential_origin = DataOrigin::tryfrom_string(parts[0..parts.len() - 1].join(":"));
-        match potential_origin {
-            Err(e) => {
-                return Err(e);
-            }
-            Ok(origin) => {
-                return Ok(DataOrigin {
-                    origin: DataOriginType::DataOrigin(Box::new(origin)),
-                    modality: modality,
-                });
+        match parts[..] {
+            [] => Err(LifelogError::InvalidDataModality(source)),
+            [x] => Err(LifelogError::InvalidDataModality(source)),
+            [device_id, modality] => Ok(DataOrigin {
+                origin: DataOriginType::DeviceId(device_id.to_string()),
+                modality: DataModality::tryfrom_str(modality)?,
+            }),
+            [.., modality] => {
+                let potential_origin =
+                    DataOrigin::tryfrom_string(parts[0..parts.len() - 1].join(":"));
+                match potential_origin {
+                    Err(e) => Err(e),
+                    Ok(origin) => Ok(DataOrigin {
+                        origin: DataOriginType::DataOrigin(Box::new(origin)),
+                        modality: DataModality::tryfrom_str(modality)?,
+                    }),
+                }
             }
         }
     }

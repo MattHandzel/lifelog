@@ -31,7 +31,7 @@ fn main() {
                 .collect()
         })
         .collect();
-    variants.sort_by(|a, b| a.cmp(&b));
+    variants.sort();
 
     // Generate Rust code
     let code = format!(

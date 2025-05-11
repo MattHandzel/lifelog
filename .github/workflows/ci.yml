@@ -43,9 +43,13 @@ jobs:
       - name: Cache Cargo Dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Ensure Lifelog Project Compiles
+      - name: Ensure Lifelog Project Is Correct
         if: runner.os != 'Linux'
         run: cargo check
+
+      - name: Ensure Lifelog Project Compiles
+        if: runner.os != 'Linux'
+        run: cargo build --release
 
       # - name: Run Rust application
       #   run: |
