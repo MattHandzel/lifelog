@@ -4,7 +4,7 @@ use lifelog_macros::lifelog_type;
 use lifelog_proto;
 use lifelog_types::{LifelogImage, Modality};
 use rand::distr::{Alphanumeric, Distribution, StandardUniform};
-use rand::{thread_rng, Rng};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use image;

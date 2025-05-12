@@ -5,7 +5,6 @@ use std::fs;
 use std::path::PathBuf;
 use utils::replace_home_dir_in_path;
 
-use lifelog_core;
 mod policy_config;
 mod server_config;
 use derive_more::From;

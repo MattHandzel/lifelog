@@ -1,14 +1,4 @@
 #V2
-info for db;
-SELECT * FROM FFFFFFFFFFFF___screen;
-select timestamp from FFFFFFFFFFFF___screen;
-select timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp;
-select image, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp LIMIT 1;
-select image_data, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp LIMIT 1;
-select image_bytes, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp LIMIT 1;
-select image_bytes, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp DESC LIMIT 1;
-SELECT image_bytes, timestamp FROM FFFFFFFFFFFF___screen order by timestamp desc limit 1;
-SELECT id, timestamp FROM FFFFFFFFFFFF___screen order by timestamp desc limit 1;
 select * from `FFFFFFFFFF:Screen`;
 select * from `FFFFFFFFFFFF:Screen`;
 select * from `FFFFFFFFFFFF:Browser`;
@@ -74,3 +64,38 @@ select text from `FFFFFFFFFFFF:Screen:Ocr` limit 3
 select text from `FFFFFFFFFFFF:Screen:Ocr` limit 1
 clear
 select * from `FFFFFFFFFFFF:Screen:Ocr` limit 1
+select count() from `FFFFFFFFFFFF:Screen`;
+select count() from `FFFFFFFFFFFF:Screen` group all;
+select count() from `FFFFFFFFFFFF:Screen:ocr` group all;
+select count() from `FFFFFFFFFFFF:Screen:Ocr` group all;
+select count() from `FFFFFFFFFFFF:Screen` group all;
+info for db;
+select uuid from `FFFFFFFFFFFF:Screen`
+select record::id(id) from `FFFFFFFFFFFF:Screen`
+select count() from `FFFFFFFFFFFF:Screen` group all;
+select count() from `FFFFFFFFFFFF:Screen:Ocr` group all;
+select text from `FFFFFFFFFF:Screen:Ocr`;
+info for db
+select text from `FFFFFFFFFFFF:Screen:Ocr`;
+info for db;
+SELECT id, text\nFROM `FFFFFFFFFFFF:Screen:Ocr`\nWHERE string::contains(text, "Jacen Wong") 
+SELECT id\nFROM `FFFFFFFFFFFF:Screen:Ocr`\nWHERE string::contains(text, "Jacen Wong") 
+DEFINE ANALYZER ocr_ascii_lower\n  TOKENIZERS class\n  FILTERS ascii, lowercase;\n
+info for db;
+insert into ocr_copy (select * from `FFFFFFFFFFFF:Screen:Ocr`);
+info for db
+DEFINE INDEX ocr_text_ft\n  ON TABLE ocr_copy\n  FIELDS text\n  SEARCH ANALYZER ocr_ascii_lower  BM25; 
+REBUILD INDEX ocr_text_ft ON ocr_copy;
+SELECT id, search::score()\nFROM ocr_copy\nWHERE text @@ "Jacen Wong";
+INFO FOR TABLE ocr_copy;\n
+SELECT\n  id,\n  search::score() AS score,                      -- BM25 relevance\n  search::highlight(text, '→', '←') AS snippet   -- optional\nFROM ocr_copy\nWHERE text @@ "invoice number 1234"\nORDER BY score DESC\nLIMIT 20;\n
+SELECT\n  id,\n  search::score() AS score,                      -- BM25 relevance\n  search::highlight(text, '→', '←') AS snippet   -- optional\nFROM ocr_copy\nWHERE text @@ "Jacen Wong"\nORDER BY score DESC\nLIMIT 20;\n
+SELECT\n  id,\n  search::score() AS score,                      -- BM25 relevance\n  search::highlight(text, '→', '←') AS snippet   -- optional\nFROM ocr_copy\nWHERE text @@ "Jacen"\nORDER BY score DESC\nLIMIT 20;\n
+SELECT\n  id,\n  search::score() AS score,                      -- BM25 relevance\n  search::highlight(text, '→', '←') AS snippet   -- optional\nFROM ocr_copy\nWHERE text @@ "lifelog"\nORDER BY score DESC\nLIMIT 20;\n
+SELECT\n  id,\n  search::score(0)                    AS score,      -- BM25 relevance\n  search::highlight('→','←',0)        AS snippet     -- wrap hits\nFROM ocr_copy\nWHERE text @0@ "lifelog"                              -- ← give the clause its 0-label\nORDER BY score DESC\nLIMIT 20;\n
+SELECT\n  id,\n  search::score(0)                    AS score,      -- BM25 relevance\n  search::highlight('→','←',0)        AS snippet     -- wrap hits\nFROM ocr_copy\nWHERE text @0@ "Jacen Wong"                              -- ← give the clause its 0-label\nORDER BY score DESC\nLIMIT 20;\n
+SELECT\n  id,\n  search::score(0)                    AS score\nFROM ocr_copy\nWHERE text @0@ "Jacen Wong"                              -- ← give the clause its 0-label\nORDER BY score DESC\nLIMIT 20;\n
+select count() from ocr_copy
+select count() from ocr_copy group all
+SELECT\n  id,\n  search::score(0)                    AS score\nFROM ocr_copy\nWHERE text @0@ "Jacen Wong"                              -- ← give the clause its 0-label\nORDER BY score DESC\nLIMIT 20;\n
+SELECT\n  id,\n  search::score(0)                    AS score\nFROM ocr_copy\nWHERE text @0@ "Islam"                              -- ← give the clause its 0-label\nORDER BY score DESC\nLIMIT 20;\n

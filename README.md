@@ -4,21 +4,39 @@ The vision for the project is a software system that allows users to store infor
 
 ## Installation
 
-### Dependencies
+#### Build Dependencies
 
-[Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html)
+- Rustc (1.86)
+- Cargo 1.82.0
+- [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) for OCR
 
-#### Linux
+Run `cargo build --release` to build the project. This will create binaries in `target/release/` folder. It will create three binaries, one for the server, one for the collector and one for the interface. The server binary is `lifelog-server`, the client binary is `lifelog-collector` and the interface binary is `lifelog-interface`.
+
+Optionally, if you would like to only build a specific binary, you can run `cargo build --release -p <binary_name>` where `<binary_name>` is one of the three binaries mentioned above.
 
 ##### NixOS
 
-Use the `flake.nix` 😀
-
-#### MacOS
+If you are on NixOS I have graciously provided the `flake.nix` to include in your configuration. 😀
 
 ## System Diagram
 
 ![System Diagram](./docs/Lifelog.drawio.svg)
+
+Currently our system is composed of three main components:
+
+#### Server [./docs/server.md]
+
+A Server is a component that is a local (but can be remote) server that receives data from the collectors and allowing the user to manage the collectors from one centralized way.
+
+The server also is able to do transformations on data (such as OCR) which allows better retrieval of data. It also has a web interface to allow the user to manage the collectors, view the data, and query their data.
+
+#### Collectors [./docs/collectors.md]
+
+A collector is a component that runs on the device and collects data from various data sources. It is responsible for defining the data sources available on the device, logging data from those sources, and responding to requests from the server.
+
+#### Interface [./docs/interface.md]
+
+The interface is how the users can interact with the system. It is a desktop application that is able to connect to the server and run queries on the server to retrieve their lifelog.
 
 ### References
 

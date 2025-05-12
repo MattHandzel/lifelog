@@ -4,7 +4,6 @@ use lifelog_proto::collector_service_client::CollectorServiceClient;
 use prost;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::fmt;
 use strum_macros::EnumIter;
 use thiserror::Error;

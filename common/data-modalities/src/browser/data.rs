@@ -5,8 +5,6 @@ use lifelog_proto;
 use serde::{Deserialize, Serialize};
 
 use lifelog_types::Modality;
-use rand::distr::{Alphanumeric, Distribution, StandardUniform};
-use rand::{thread_rng, Rng};
 
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]

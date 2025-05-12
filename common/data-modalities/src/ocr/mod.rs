@@ -1,16 +1,12 @@
 use lifelog_core::*;
 
-use image::DynamicImage;
 use lifelog_macros::lifelog_type;
 use lifelog_proto;
 use lifelog_types::{DataModality, DataOrigin, DataOriginType, Modality, Transform};
 use lifelog_types::{LifelogImage, TransformError};
-use rand::distr::{Alphanumeric, Distribution, StandardUniform};
-use rand::{thread_rng, Rng};
 use rusty_tesseract::{Args, Image};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use utils::load_image;
 
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +26,7 @@ impl Modality for OcrFrame {
     /// This returns the surrealdb schema with the table's needed to be filled out.
     /// NOTE: `{table}` is a placeholder for the table name. The ` are required because the table will
     /// contain special characters like ":"
+    // TODO: Add searching?
     fn get_surrealdb_schema() -> &'static str {
         r#"
         DEFINE FIELD timestamp ON `{table}` TYPE datetime;
@@ -69,7 +66,7 @@ impl Transform for OcrTransform {
         Self {
             source: source.clone(),
             destination: DataOrigin::new(
-                (DataOriginType::DataOrigin(Box::new(source))),
+                DataOriginType::DataOrigin(Box::new(source)),
                 DataModality::Ocr,
             ),
             config,

@@ -329,7 +329,7 @@ fn main() -> Result<()> {
 
     let mut files = find_metadata_files(Path::new(".."))?;
     files.sort();
-    let mut types = parse_metadata_files(&files)?;
+    let types = parse_metadata_files(&files)?;
 
     let mut types = types.to_vec();
     types.sort_by(|a, b| a.ident.cmp(&b.ident));

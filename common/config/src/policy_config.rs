@@ -1,5 +1,4 @@
 use lifelog_types::{Unit, UsageType};
-use lifelog_core;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

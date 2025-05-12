@@ -7,7 +7,7 @@ members = [
     "common/utils",
     "common/lifelog-core",
     "common/macros",
-    # "interface/src-tauri",
+    "interface/src-tauri",
     "common/lifelog-proto",
     "common/lifelog-types",
 ]
@@ -47,3 +47,4 @@ image = { version = "0.25.6" , features = ["jpeg", "png","webp"]}
 once_cell = "1.21.3"
 futures-core = "0.3.31"
 tokio-stream = { version = "0.1.17", features = ["full"] }
+
