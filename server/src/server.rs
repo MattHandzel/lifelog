@@ -1,4 +1,5 @@
 use crate::policy::*;
+use anyhow;
 use chrono::Timelike;
 use chrono::Utc;
 use config::ServerPolicyConfig;
@@ -11,6 +12,7 @@ use surrealdb::opt::auth::Root;
 use surrealdb::Surreal;
 use thiserror::Error;
 use tokio::sync::RwLock;
+use tonic::{Request, Response, Status};
 use tonic::{Request as TonicRequest, Response as TonicResponse, Status as TonicStatus};
 
 use std::collections::HashMap;
@@ -178,8 +180,18 @@ impl ServerHandle {
 
     // TODO: Refactor having to define all of these functions... I am not a fan of them...
     pub async fn register_collector(&self, collector: RegisteredCollector) {
-        let mut server = self.server.write().await;
-        server.registered_collectors.write().await.push(collector);
+        let server_lock = self.server.read().await; // Acquire read lock on Server to access registered_collectors
+        let mut collectors_vec = server_lock.registered_collectors.write().await; // Acquire write lock on the Vec
+
+        if let Some(existing_collector) = collectors_vec.iter_mut().find(|c| c.id == collector.id) {
+            // Collector already exists, update it
+            println!("Updating existing collector: {:?}", collector.id);
+            *existing_collector = collector;
+        } else {
+            // Collector does not exist, add it
+            println!("Adding new collector: {:?}", collector.id);
+            collectors_vec.push(collector);
+        }
     }
 
     pub async fn contains_collector(&self, collector_name: String) -> bool {
@@ -350,14 +362,14 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         let inner = request.into_inner();
         let collector_config: CollectorConfig = inner.config.unwrap().into();
         let collector_ip = format!(
-            "http://{}:{}", // TODO: I shouldn't explicitly write http here, it should either be
-            // defined in the config or the protocol should be
+            "http://{}:{}",
             collector_config.host.clone(),
             collector_config.port.clone()
         );
         println!(
-            "Received a register collector request from: {:?}",
-            collector_ip
+            "Received a register collector request from: {:?} for collector ID: {}",
+            collector_ip,
+            collector_config.id
         );
 
         let endpoint = tonic::transport::Endpoint::from_shared(collector_ip.clone());
@@ -377,13 +389,14 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 })?;
                 let client = CollectorServiceClient::new(channel);
 
+                let actual_mac_id = collector_config.id.clone();
+
                 let collector = RegisteredCollector {
-                    id: collector_config.id.clone(),
-                    mac: "FF:FF:FF:FF:FF:FF".to_string().replace(":", ""), // TODO: Implement this on the collector
+                    id: actual_mac_id.clone(),
+                    mac: actual_mac_id.clone(),
                     address: collector_ip.to_string(),
                     grpc_client: client.clone(),
                 };
-                // Add origins to our origins
 
                 self.server.register_collector(collector.clone()).await;
 
@@ -419,12 +432,41 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         Ok(TonicResponse::new(SetSystemConfigResponse::default()))
     }
 
-    async fn get_data(
-        &self,
-        request: TonicRequest<GetDataRequest>,
-    ) -> Result<TonicResponse<GetDataResponse>, TonicStatus> {
-        let req = request.into_inner();
-        let GetDataRequest { keys } = req;
+    async fn query(&self, request: Request<QueryRequest>) -> Result<Response<QueryResponse>, Status> {
+        let query_message = request.into_inner().query;
+        println!("[QUERY] Received a query request: {:?}", query_message);
+        let server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
+
+        let mut uuids: Vec<LifelogFrameKey> = vec![];
+        // NOTE: Right now we just return all uuids for a query, in the future actually parse the
+        // query message and return the uuids that match
+        let query = String::from("");
+        let keys = self
+            .server
+            .process_query(query.clone())
+            .await
+            .map_err(|e| {
+                tonic::Status::internal(format!("Failed to process query: {}", e.to_string()))
+            })?;
+        let proto_keys: Vec<lifelog_proto::LifelogDataKey> = keys
+            .iter()
+            .map(|key| lifelog_proto::LifelogDataKey {
+                uuid: key.uuid.to_string(),
+                origin: key.origin.get_table_name(),
+            })
+            .collect();
+        let response = QueryResponse { keys: proto_keys };
+        println!("[SERVER QUERY] Responding to QueryRequest with {} keys", response.keys.len());
+        Ok(Response::new(response))
+    }
+
+    async fn get_data(&self, request: Request<GetDataRequest>) -> Result<Response<GetDataResponse>, Status> {
+        let inner_request = request.into_inner();
+        println!("[SERVER GET_DATA] Received GetDataRequest with {} keys", inner_request.keys.len());
+        
+        let server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
+        let keys = inner_request.keys;
+
         let data: Vec<lifelog_proto::LifelogData> = self
             .server
             .get_data(
@@ -433,12 +475,14 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                     .collect(),
             )
             .await
-            .map_err(|e| TonicStatus::internal(format!("Failed to get data: {}", e)))?
+            .map_err(|e| Status::internal(format!("Failed to get data: {}", e)))?
             .iter()
             .map(|v| lifelog_proto::LifelogData::from(v.clone()))
             .collect();
 
-        Ok(TonicResponse::new(GetDataResponse { data: data }))
+        let response = GetDataResponse { data: data };
+        println!("[SERVER GET_DATA] Responding to GetDataRequest with {} data items", response.data.len());
+        Ok(Response::new(response))
     }
 
     // TODO: Refactor ALL functions to include this check to see if the thing doing the requesting
@@ -468,38 +512,6 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 state.name
             ))),
         }
-    }
-
-    async fn query(
-        &self,
-        request: tonic::Request<QueryRequest>,
-    ) -> Result<tonic::Response<QueryResponse>, tonic::Status> {
-        let QueryRequest { query } = request.into_inner();
-
-        if let None = query {
-            return Ok(tonic::Response::new(QueryResponse { keys: vec![] }));
-        }
-        println!("[QUERY] Received a query request: {:?}", query);
-        let query = query.unwrap();
-        let mut uuids: Vec<LifelogFrameKey> = vec![];
-        // NOTE: Right now we just return all uuids for a query, in the future actually parse the
-        // query message and return the uuids that match
-        let query = String::from("");
-        let keys = self
-            .server
-            .process_query(query.clone())
-            .await
-            .map_err(|e| {
-                tonic::Status::internal(format!("Failed to process query: {}", e.to_string()))
-            })?;
-        let proto_keys: Vec<lifelog_proto::LifelogDataKey> = keys
-            .iter()
-            .map(|key| lifelog_proto::LifelogDataKey {
-                uuid: key.uuid.to_string(),
-                origin: key.origin.get_table_name(),
-            })
-            .collect();
-        Ok(tonic::Response::new(QueryResponse { keys: proto_keys }))
     }
 
     async fn get_state(
@@ -646,19 +658,30 @@ impl Server {
     }
 
     async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+        println!("[SERVER PROCESS_QUERY] Entered process_query for query: {}", query);
         let mut keys: Vec<LifelogFrameKey> = vec![];
-        println!("asdfadsfasdf");
-        // TODO: Refactor this so we add origins in a more intelligent way instead of checking them
-        // every time
+        // println!("asdfadsfasdf"); // Original debug print, can be removed or kept
+        
+        println!("[SERVER PROCESS_QUERY] Attempting to get write lock on self.origins...");
         let mut origins = self.origins.write().await;
-        *origins = get_origins_from_db(&self.db)
-            .await
-            .expect("Failed to get origins from db");
+        println!("[SERVER PROCESS_QUERY] Acquired write lock on self.origins.");
+        
+        println!("[SERVER PROCESS_QUERY] Calling get_origins_from_db...");
+        match get_origins_from_db(&self.db).await {
+            Ok(db_origins) => {
+                println!("[SERVER PROCESS_QUERY] Successfully got origins from DB: {:?}", db_origins.len());
+                *origins = db_origins;
+            }
+            Err(e) => {
+                eprintln!("[SERVER PROCESS_QUERY] Failed to get origins from DB: {}", e);
+                return Err(LifelogError::Other(anyhow::anyhow!("Failed to refresh origins from DB: {}", e)));
+            }
+        }
 
+        println!("[SERVER PROCESS_QUERY] Iterating over {} origins.", origins.len());
         for origin in origins.iter() {
-            println!("[PROCESS_QUERY]: Looking at origin {}", origin);
-            let result = get_all_uuids_from_origin(&self.db, &origin).await;
-            match result {
+            println!("[SERVER PROCESS_QUERY]: Looking at origin {}", origin);
+            match get_all_uuids_from_origin(&self.db, &origin).await {
                 Ok(uuids_from_origin) => {
                     keys.extend(uuids_from_origin.iter().map(|uuid| LifelogFrameKey {
                         uuid: *uuid,
@@ -666,13 +689,17 @@ impl Server {
                     }));
                 }
                 Err(e) => {
-                    return Err(LifelogError::Database(format!(
-                        "Failed to get uuids from origin: {}",
-                        e
-                    )));
+                    eprintln!("[SERVER PROCESS_QUERY] Failed to get uuids from origin {}: {}", origin, e);
+                    // Decide if we should continue or return an error for the whole query
+                    // For now, let's log and continue, accumulating partial results
+                    // return Err(LifelogError::Database(format!(
+                    //     "Failed to get uuids from origin: {}",
+                    //     e
+                    // )));
                 }
             }
         }
+        println!("[SERVER PROCESS_QUERY] Finished processing. Returning {} keys.", keys.len());
         Ok(keys)
     }
 

@@ -19,7 +19,7 @@ struct Cli {
         short = 's',
         long = "server-address",
         value_name = "URL",
-        default_value = "http://localhost:50051"
+        default_value = "http://127.0.0.1:50051"
     )]
     server_address: String,
 }

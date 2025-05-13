@@ -7,7 +7,7 @@ members = [
     "common/utils",
     "common/lifelog-core",
     "common/macros",
-    # "interface/src-tauri",
+    "interface/src-tauri",
     "common/lifelog-proto",
     "common/lifelog-types",
 ]

@@ -16,7 +16,14 @@ import {
   KeyboardIcon as InputIcon,
   PanelTopIcon,
   MonitorIcon as DesktopIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  User as UserIcon,
+  Cpu as CpuIcon,
+  MemoryStick as MemoryStickIcon,
+  Network as NetworkIcon,
+  Disc3 as DiskIcon,
+  Power as PowerIcon,
+  ScreenShare
 } from "lucide-react";
 import TextUploadDashboard from "./TextUploadDashboard";
 import ProcessesDashboard from "./ProcessesDashboard";
@@ -105,7 +112,7 @@ export default function FeatureTabs() {
       id: "screen",
       label: "Screenshots",
       icon: CameraIcon,
-      component: <ScreenDashboard />,
+      component: <ScreenDashboard collectorId={null} />,
       implemented: true,
       description: "Browse captured screenshots",
       category: "data"

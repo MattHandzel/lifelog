@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from './ui/button';
 import { Settings, Power, Clock, X, RefreshCcw, Camera } from 'lucide-react';
@@ -8,6 +8,8 @@ import axios from 'axios';
 import { Card, CardContent } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Trash, ArrowUpDown } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
+import { Input } from './ui/input';
 
 // Server API endpoint from environment variable
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
@@ -39,13 +41,16 @@ export default function CameraDashboard() {
   const [totalPages, setTotalPages] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<CameraSettings | null>(null);
-  const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [tempInterval, setTempInterval] = useState(60);
   const [tempEnabled, setTempEnabled] = useState(true);
   const [tempFps, setTempFps] = useState(30);
   const [isSupported, setIsSupported] = useState<boolean | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [config, setConfig] = useState<CameraConfig | null>(null);
+  const [status, setStatus] = useState<string>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [availableCameras, setAvailableCameras] = useState<string[]>([]);
   
   const pageSize = 9;
 

@@ -202,8 +202,28 @@ impl Collector {
         let mut client = LifelogServerServiceClient::new(channel);
 
         println!("Connected. Performing handshake...");
+
+        // Get the actual MAC address
+        let mac_addr_string = match get_mac_address() {
+            Ok(Some(mac)) => mac.to_string().replace(":", ""), // Normalize to remove colons, like server expects
+            Ok(None) => {
+                let err_msg = "MAC address not found".to_string();
+                eprintln!("{}", err_msg);
+                return Err(CollectorError::RegistrationFailed(err_msg));
+            }
+            Err(e) => {
+                let err_msg = format!("Error getting MAC address: {}", e);
+                eprintln!("{}", err_msg);
+                return Err(CollectorError::RegistrationFailed(err_msg));
+            }
+        };
+
+        // Clone the existing config and update its ID to the MAC address
+        let mut config_for_registration = (*self.config).clone();
+        config_for_registration.id = mac_addr_string.clone(); // Use the MAC address as the ID
+
         let request = Request::new(RegisterCollectorRequest {
-            config: Some((*self.config).clone().into()),
+            config: Some(config_for_registration.into()), // Send the modified config
         });
 
         let response = client.register_collector(request).await?;
