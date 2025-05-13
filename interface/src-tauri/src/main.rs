@@ -9,8 +9,6 @@ mod storage;
 use crate::storage::AudioFile;
 use base64;
 use base64::{engine::general_purpose, Engine as _};
-use chrono::Local;
-use dirs;
 
 use config::{MicrophoneConfig, ProcessesConfig, ScreenConfig, TextUploadConfig};
 use lifelog_interface_lib::{
@@ -18,8 +16,7 @@ use lifelog_interface_lib::{
     config_utils,
 };
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Mutex;
 use tauri::State;
@@ -460,7 +457,7 @@ async fn update_screenshot_settings(
     }
 
     // Update local config
-    let mut config = state.screen_config.lock().unwrap();
+    let mut config = state.screen_config.lock().expect("Failed to lock screen_config for update");
     config.enabled = enabled;
     config.interval = interval;
 
@@ -636,7 +633,7 @@ async fn get_camera_settings(
     config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
 ) -> Result<serde_json::Value, String> {
     let camera_config = {
-        let config_manager = config_manager.lock().map_err(|e| e.to_string())?;
+        let config_manager = config_manager.lock().expect("Failed to lock config_manager for camera status poll");
         config_manager.get_camera_config()
     };
 
@@ -684,7 +681,7 @@ async fn update_camera_settings(
     }
 
     {
-        let mut config_manager = config_manager.lock().map_err(|e| e.to_string())?;
+        let mut config_manager = config_manager.lock().expect("Failed to lock config_manager for camera status poll");
         let mut camera_config = config_manager.get_camera_config();
 
         camera_config.enabled = enabled;
@@ -702,7 +699,7 @@ async fn update_camera_settings(
 async fn get_camera_frames(
     page: usize,
     page_size: usize,
-    config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
+    _config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
     state: State<'_, AppState>,
 ) -> Result<Vec<serde_json::Value>, String> {
     let url = format!(
@@ -774,7 +771,7 @@ async fn get_camera_frame_data(filename: String, state: State<'_, AppState>) -> 
 
 #[tauri::command]
 async fn trigger_camera_capture(
-    config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
+    _config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let url = format!("{}/api/loggers/camera/capture", api_client::get_api_base_url());
@@ -798,7 +795,7 @@ async fn trigger_camera_capture(
 
 #[tauri::command]
 async fn restart_camera_logger(
-    config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
+    _config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let url = format!("{}/api/loggers/camera/restart", api_client::get_api_base_url());
@@ -818,7 +815,7 @@ async fn restart_camera_logger(
     }
 
     println!("Capturing initial test frame");
-    let test_result = trigger_camera_capture(config_manager.clone(), state.clone()).await;
+    let test_result = trigger_camera_capture(_config_manager.clone(), state.clone()).await;
     if let Err(e) = &test_result {
         println!("Warning: Initial test capture failed: {}", e);
     } else {
@@ -1148,7 +1145,7 @@ async fn set_component_config(collector_id: String, component_type: String, conf
         .await
         .map_err(|e| format!("Failed to get current SystemConfig: {}", e))?;
     println!("gRPC: set_component_config - RPC get_config succeeded: {:?}", get_response);
-    let mut system_config = get_response.into_inner().config.ok_or_else(|| {
+    let system_config = get_response.into_inner().config.ok_or_else(|| {
         "Server response did not contain SystemConfig data".to_string()
     })?;
 
@@ -1349,7 +1346,7 @@ async fn query_screenshot_keys_async(
 
 #[tauri::command]
 async fn query_screenshot_keys(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     state: tauri::State<'_, GrpcClientState>,
     collector_id: Option<String>,
 ) -> Result<Vec<LifelogDataKeyWrapper>, String> {
@@ -1481,7 +1478,7 @@ async fn get_screenshots_data_async(
 
 #[tauri::command]
 async fn get_screenshots_data(
-    app_handle: tauri::AppHandle,
+    _app_handle: tauri::AppHandle,
     state: tauri::State<'_, GrpcClientState>,
     keys: Vec<LifelogDataKeyWrapper>,
 ) -> Result<Vec<ScreenFrameWrapper>, String> {
@@ -1541,6 +1538,38 @@ async fn get_collector_ids(state: tauri::State<'_, GrpcClientState>) -> Result<V
     } else {
         println!("[TAURI] get_collector_ids: gRPC client was None after lock.");
         Err("gRPC client not initialized after lock".to_string())
+    }
+}
+
+#[tauri::command]
+async fn select_file_dialog(
+    _app_handle: tauri::AppHandle,
+    _window: tauri::Window,
+) -> Result<Option<String>, String> {
+    Ok(Some("simulated/path/to/file.txt".to_string()))
+}
+
+async fn setup_camera_status_poller(
+    app_handle: tauri::AppHandle,
+    config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
+    state: State<'_, AppState>,
+) {
+    println!("Setting up camera status poller");
+
+    // Initial check and potential trigger
+    let initial_config = { // Scope to release lock quickly
+        let config_guard = config_manager.lock().expect("Failed to lock config_manager for camera status poll");
+        config_guard.get_camera_config().clone()
+    };
+    if initial_config.enabled {
+        println!("Capturing initial test frame");
+        // Pass config_manager as the first argument, it will be ignored by _config_manager
+        let test_result = trigger_camera_capture(config_manager.clone(), state.clone()).await;
+        if let Err(e) = &test_result {
+            println!("Warning: Initial test capture failed: {}", e);
+        } else {
+            println!("Initial test capture successful");
+        }
     }
 }
 

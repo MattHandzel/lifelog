@@ -160,7 +160,6 @@ export default function SettingsDashboard() {
               )}
             </div>
 
-            {/* Render ScreenDashboard if a collector is selected */}
             {selectedCollectorId ? (
               <>
                 {(() => { console.log('[SettingsDashboard] Rendering ScreenDashboard for collector:', selectedCollectorId); return null; })()}

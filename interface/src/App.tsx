@@ -45,7 +45,6 @@ function AppLayout() {
           L
         </h1>
 
-        {/* Navigation */}
         <nav className="flex-1 flex flex-col">
           <div className="flex flex-col gap-2 mt-4">
             <NavLink view="dashboard" label="Dashboard" icon={LayoutDashboard} />
