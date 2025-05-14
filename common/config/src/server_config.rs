@@ -53,5 +53,5 @@ pub fn default_server_ip() -> String {
 }
 
 pub fn default_server_port() -> u32{
-    7182
+    50051
 }

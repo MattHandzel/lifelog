@@ -1,21 +1,11 @@
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { auth } from './lib/api';
+import { BrowserRouter } from 'react-router-dom';
 import { Login } from './components/Login';
-import { Sidebar } from './components/Sidebar';
-import ModulesPanel from './components/ModulesPanel';
-import CameraDashboard from './components/CameraDashboard';
-import MicrophoneDashboard from './components/MicrophoneDashboard';
-import ScreenDashboard from './components/ScreenDashboard';
-import ProcessesDashboard from './components/ProcessesDashboard';
-import SettingsDashboard from './components/SettingsDashboard';
-import TextUploadDashboard from './components/TextUploadDashboard';
 import SearchDashboard from './components/SearchDashboard';
 import AccountDashboard from './components/AccountDashboard';
-import { LayoutDashboard, Activity, Camera, Settings, Search, User } from "lucide-react";
+import { LayoutDashboard, Settings, Search, User } from "lucide-react";
 import FeatureTabs from "./components/FeatureTabs.tsx";
 import { cn } from "./lib/utils";
-
 
 import './App.css';
 
@@ -55,7 +45,6 @@ function AppLayout() {
           L
         </h1>
 
-        {/* Navigation */}
         <nav className="flex-1 flex flex-col">
           <div className="flex flex-col gap-2 mt-4">
             <NavLink view="dashboard" label="Dashboard" icon={LayoutDashboard} />
@@ -112,10 +101,6 @@ function App() {
         const authenticated = true;
         setIsAuthenticated(authenticated);
         setLoading(false);
-        
-        const apiUrl = typeof import.meta.env !== 'undefined' 
-          ? import.meta.env.VITE_API_BASE_URL 
-          : 'http://localhost:8080';
       } catch (err) {
         console.error('[APP] Auth check error:', err);
         setError('Authentication check failed');

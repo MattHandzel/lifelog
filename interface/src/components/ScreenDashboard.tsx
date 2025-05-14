@@ -4,20 +4,19 @@ import { Button } from './ui/button';
 import { Camera, X, Settings, Power, Clock, ArrowUpDown, RefreshCw } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
-import axios from 'axios'; // Keep axios for fetching image data, remove for config
 
-// Server API endpoint for non-config data
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface Screenshot {
-  id: number; // Keep this if server provides it, otherwise use path or timestamp as key
-  timestamp: number;
-  path: string;
-  dataUrl?: string;
-  // Add other fields if available from server like width/height
+  uuid: string;
+  timestamp: number | null;
+  dataUrl: string;    
+  width: number;
+  height: number;
+  mime_type: string;
+  origin_table: string; 
 }
 
-// Mirror the ScreenConfig structure from lifelog_types.proto
 interface ScreenConfig {
 	enabled: boolean;
 	interval: number;
@@ -26,8 +25,16 @@ interface ScreenConfig {
 	timestamp_format: string;
 }
 
+interface ScreenDashboardProps {
+  collectorId: string | null;
+}
 
-export default function ScreenDashboard() {
+interface LifelogDataKeyWrapper {
+  uuid: string;
+  origin: string;
+}
+
+export default function ScreenDashboard({ collectorId: propCollectorId }: ScreenDashboardProps) {
   const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -35,223 +42,245 @@ export default function ScreenDashboard() {
   const [selectedScreenshot, setSelectedScreenshot] = useState<Screenshot | null>(null);
   const [totalPages, setTotalPages] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
-  // Use the ScreenConfig interface for settings state
   const [settings, setSettings] = useState<ScreenConfig | null>(null);
   const [isLoadingSettings, setIsLoadingSettings] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
-  // Use separate state for temporary edits in the settings panel
-  const [tempInterval, setTempInterval] = useState(60); // Default or load from settings
-  const [tempEnabled, setTempEnabled] = useState(true); // Default or load from settings
+  const [tempInterval, setTempInterval] = useState(60);
+  const [tempEnabled, setTempEnabled] = useState(true);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const refreshIntervalRef = useRef<number>();
   const pageSize = 9;
+  const isLoadingRef = useRef(false); 
+  const [fetchError, setFetchError] = useState<string | null>(null); // For displaying fetch errors
 
-  // Initial load effect
+  const internalCollectorId = 'FE:40:13:F2:E9:71'; // Hardcoded Collector ID
+
   useEffect(() => {
-    loadScreenshots(); // Keep loading screenshot list via axios/API
-    loadSettings(); // Load settings via Tauri invoke
+    console.log(`[ScreenDashboard] Initializing with hardcoded collectorId: ${internalCollectorId}`);
+    setIsLoading(true); // Indicate loading early
+    setIsLoadingSettings(true);
+    loadSettings(internalCollectorId);
+    loadScreenshots(internalCollectorId);
 
     const savedAutoRefresh = localStorage.getItem('screenshots_auto_refresh');
     if (savedAutoRefresh !== null) {
       setAutoRefresh(savedAutoRefresh === 'true');
     }
+
   }, []);
 
-  // Handle page changes for screenshots
   useEffect(() => {
-    loadScreenshots();
-  }, [currentPage, sortOrder]); // Reload when sort order changes too
+    loadScreenshots(internalCollectorId);
+  }, [currentPage, sortOrder]);
 
-  // Handle auto-refresh setup/teardown based on settings interval
   useEffect(() => {
     if (refreshIntervalRef.current) {
       clearInterval(refreshIntervalRef.current);
       refreshIntervalRef.current = undefined;
     }
-
     if (autoRefresh && settings && settings.enabled && settings.interval > 0) {
-       console.log(`Setting up auto-refresh interval: ${settings.interval} seconds`);
        refreshIntervalRef.current = window.setInterval(() => {
-         console.log('Auto-refreshing screenshots...');
-         // Refresh only if currently on the first page and sorting by newest
-         // to avoid unexpected page jumps
          if (currentPage === 1 && sortOrder === 'desc') {
-           loadScreenshots();
-         } else {
-           console.log("Auto-refresh skipped (not on page 1 or not sorting by newest)");
+           console.log('[ScreenDashboard] Auto-refresh triggered...');
+           loadScreenshots(internalCollectorId);
          }
        }, settings.interval * 1000);
     }
-
     localStorage.setItem('screenshots_auto_refresh', autoRefresh.toString());
+    return () => { if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current); };
+  }, [autoRefresh, settings, currentPage, sortOrder]);
 
-    return () => {
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-        refreshIntervalRef.current = undefined;
-      }
-    };
-  }, [autoRefresh, settings?.interval, settings?.enabled, currentPage, sortOrder]);
+  async function loadScreenshots(collectorIdToLoad: string | null) {
+    if (isLoadingRef.current) {
+      console.log("[ScreenDashboard] loadScreenshots: Load already in progress, skipping.");
+      return;
+    }
+    if (!collectorIdToLoad) {
+      console.log("[ScreenDashboard] loadScreenshots: No collectorId provided, cannot load.");
+      setScreenshots([]);
+      setIsLoading(false);
+      setTotalPages(1);
+      setCurrentPage(1);
+      setFetchError(null)
+      return;
+    }
 
-  // Load screenshot list (remains using axios for now)
-  async function loadScreenshots() {
+    isLoadingRef.current = true;
+    console.log(`[ScreenDashboard] loadScreenshots: STARTING load for collector ${collectorIdToLoad}`);
     setIsLoading(true);
+    setFetchError(null);
+    const startTime = performance.now();
     try {
-      // Fetch screenshot list from API
-       const response = await axios.get(`${API_BASE_URL}/api/logger/screen/data`, {
-         params: {
-           page: currentPage,
-           page_size: pageSize,
-           limit: pageSize,
-           // Apply sorting based on state
-           ...(sortOrder === 'desc' ? { filter: "ORDER BY timestamp DESC" } : { filter: "ORDER BY timestamp ASC" })
-         }
-       });
+      console.log(`[ScreenDashboard] loadScreenshots: Step 1 - Invoking query_screenshot_keys for ${collectorIdToLoad}`);
+      const keys = await invoke<LifelogDataKeyWrapper[]>("query_screenshot_keys", { collectorId: collectorIdToLoad });
+      const postQueryKeysTime = performance.now();
+      console.log(`[ScreenDashboard] loadScreenshots: Step 1 - Received ${keys.length} raw keys for ${collectorIdToLoad}. Time: ${(postQueryKeysTime - startTime).toFixed(2)}ms`, keys.slice(0, 5)); // Log first 5 keys
 
-       console.log("Screen frames list loaded:", response.data);
+      if (keys.length === 0) {
+        setScreenshots([]);
+        setTotalPages(1);
+        setCurrentPage(1);
+        setIsLoading(false);
+        console.log(`[ScreenDashboard] loadScreenshots: No raw keys found. Total time: ${(performance.now() - startTime).toFixed(2)}ms`);
+        return;
+      }
 
-       // Assuming response.data is an array of screenshot metadata objects
-       // Map to Screenshot interface, might need adjustments based on actual API response
-       const mappedScreenshots = response.data.map((item: any) => ({
-          // Use a unique identifier if available, otherwise generate one or use path/timestamp
-          id: item.id ?? Math.random(), // Example: Use id if present, otherwise random (not ideal for keys)
-          timestamp: item.timestamp,
-          path: item.path,
-          // dataUrl will be loaded on demand or preloaded below
-        }));
+      const screenKeys = keys.filter(key => {
+        const parts = key.origin.split(':');
+        return parts.length > 0 && parts[parts.length - 1].toLowerCase() === 'screen';
+      });
+      const postFilterTime = performance.now();
+      console.log(`[ScreenDashboard] loadScreenshots: Step 2 - Filtered down to ${screenKeys.length} screen-specific keys. Time since start: ${(postFilterTime - startTime).toFixed(2)}ms. First 5 screen keys:`, screenKeys.slice(0,5));
 
-      // Preload image data (optional, can also load onClick)
-      const screenshotsWithData = await Promise.all(
-        mappedScreenshots.map(async (screenshot: Screenshot) => {
-          try {
-            const imageResponse = await axios.get(`${API_BASE_URL}/api/files/screen/${screenshot.path}`, { // Assuming API structure
-              responseType: 'blob'
-            });
-            const dataUrl = URL.createObjectURL(imageResponse.data);
-            return { ...screenshot, dataUrl };
-          } catch (error) {
-            console.error(`Failed to load data for screenshot ${screenshot.path}:`, error);
-            return screenshot; // Return original object if loading fails
-          }
-        })
-      );
+      if (screenKeys.length === 0) {
+        setScreenshots([]);
+        setTotalPages(1);
+        setCurrentPage(1);
+        setIsLoading(false);
+        console.log(`[ScreenDashboard] loadScreenshots: No screen-specific keys after filtering. Total time: ${(performance.now() - startTime).toFixed(2)}ms`);
+        return;
+      }
 
-      setScreenshots(screenshotsWithData);
+      const LATEST_LIMIT = 10;
+      let keysToFetch = screenKeys;
+      if (screenKeys.length > LATEST_LIMIT) {
+        keysToFetch = screenKeys.slice(0, LATEST_LIMIT); 
+        console.log(`[ScreenDashboard] loadScreenshots: Sliced to ${keysToFetch.length} keys due to LATEST_LIMIT of ${LATEST_LIMIT}.`);
+      }
 
-      // Calculate total pages (adjust based on how API provides total count)
-      const totalCountHeader = response.headers['x-total-count'];
-      const totalCount = totalCountHeader ? parseInt(totalCountHeader) : screenshotsWithData.length + (currentPage * pageSize); // Estimate if header missing
-      setTotalPages(Math.ceil(totalCount / pageSize));
+      console.log(`[ScreenDashboard] loadScreenshots: PRE-STEP 3 - keysToFetch has ${keysToFetch.length} items. Content (first 5):`, JSON.stringify(keysToFetch.slice(0,5)));
 
-    } catch (error) {
-      console.error('Failed to load screenshots:', error);
-      // Maybe show an error message to the user
+      if (keysToFetch.length === 0) {
+        console.log("[ScreenDashboard] loadScreenshots: keysToFetch is empty right before invoking get_screenshots_data. Returning.");
+        setScreenshots([]);
+        setTotalPages(1);
+        setCurrentPage(1);
+        setIsLoading(false);
+        return;
+      }
+
+      console.log(`[ScreenDashboard] loadScreenshots: Step 3 - Invoking get_screenshots_data for ${keysToFetch.length} screen keys.`);
+      const startTimeStep3 = performance.now();
+      try {
+        const fetchedScreenshots = await invoke<Screenshot[]>("get_screenshots_data", { keys: keysToFetch });
+        const endTimeStep3 = performance.now();
+        console.log(`[ScreenDashboard] loadScreenshots: Step 3 - SUCCESS - Received ${fetchedScreenshots.length} screenshot data items. Time since start: ${(endTimeStep3 - startTimeStep3).toFixed(2)}ms. First item:`, fetchedScreenshots.length > 0 ? fetchedScreenshots[0] : 'No data');
+        setScreenshots(fetchedScreenshots);
+
+        setTotalPages(Math.ceil(fetchedScreenshots.length / pageSize)); 
+        if (currentPage > Math.ceil(fetchedScreenshots.length / pageSize) && fetchedScreenshots.length > 0) {
+            setCurrentPage(1);
+        } else if (fetchedScreenshots.length === 0) {
+            setCurrentPage(1);
+        }
+      } catch (error) {
+        const endTimeStep3Error = performance.now();
+        console.error(`[ScreenDashboard] loadScreenshots: Step 3 - FAILED - Error invoking get_screenshots_data:`, error);
+        console.error(`[ScreenDashboard] loadScreenshots: Step 3 - Time for invoke attempt: ${(endTimeStep3Error - startTimeStep3).toFixed(2)}ms. Time since start: ${(endTimeStep3Error - startTime).toFixed(2)}ms.`);
+        setScreenshots([]);
+        setTotalPages(1);
+        setCurrentPage(1);
+        const errorMessage = error instanceof Error ? error.message :
+                             typeof error === 'string' ? error :
+                             typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string' ? error.message :
+                             "Failed to load screenshots.";
+        setFetchError(errorMessage);
+      }
+
+    } catch (error: any) {
+      console.error('[ScreenDashboard] Failed to load screenshots via Tauri (outer catch):', error);
+      setScreenshots([]);
+      setTotalPages(1);
+      setCurrentPage(1);
+      const errorMessage = error instanceof Error ? error.message :
+                           typeof error === 'string' ? error :
+                           typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string' ? error.message :
+                           "Failed to load screenshots.";
+      setFetchError(errorMessage);
     } finally {
       setIsLoading(false);
+      isLoadingRef.current = false; // Clear loading flag
+      console.log(`[ScreenDashboard] loadScreenshots: FINISHED for collector ${collectorIdToLoad}. Total time: ${(performance.now() - startTime).toFixed(2)}ms`);
     }
   }
 
-  // Load settings using Tauri invoke
-  async function loadSettings() {
+  async function loadSettings(currentCollectorIdToLoad: string, retries = 3, delay = 1000) {
     setIsLoadingSettings(true);
     try {
-      console.log("Requesting screen config via Tauri...");
-      // Use invoke to call the generic backend function
-      const result = await invoke("get_component_config", { componentName: "screen" });
-      console.log("Received screen config from Tauri:", result);
-
-      // Assuming result is the ScreenConfig object or null
+      console.log(`[ScreenDashboard] Requesting screen config for collector ${currentCollectorIdToLoad} via Tauri... (Attempt: ${4 - retries})`);
+      const result = await invoke("get_component_config", {
+        collectorId: currentCollectorIdToLoad,
+        componentType: "screen"
+      });
+      console.log(`[ScreenDashboard] Received screen config for collector ${currentCollectorIdToLoad} from Tauri:`, result);
       if (result && typeof result === 'object') {
-         // Explicitly cast to ScreenConfig - ensure properties match
          const loadedSettings = result as ScreenConfig;
-
-         // Validate required fields (optional but recommended)
          if (typeof loadedSettings.enabled !== 'boolean' || typeof loadedSettings.interval !== 'number') {
+            console.error("[ScreenDashboard] Received invalid settings format from backend.");
             throw new Error("Received invalid settings format from backend.");
          }
-
         setSettings(loadedSettings);
         setTempInterval(loadedSettings.interval);
         setTempEnabled(loadedSettings.enabled);
-      } else if (result === null) {
-          console.warn("Backend returned null for screen config. Using defaults.");
-          // Handle null case: use default settings or show an error
-          const defaultSettings: ScreenConfig = {
-              enabled: false,
-              interval: 60,
-              output_dir: "", // Provide defaults if needed
-              program: "",
-              timestamp_format: ""
-          };
-          setSettings(defaultSettings);
-          setTempInterval(defaultSettings.interval);
-          setTempEnabled(defaultSettings.enabled);
+        setIsLoadingSettings(false); // Success
+        return;
       } else {
-          throw new Error("Received unexpected data format for settings.");
+          console.warn("[ScreenDashboard] Backend returned null or unexpected for screen config. Using defaults for now. This might indicate component not fully configured on server.");
       }
-
-    } catch (error) {
-      console.error('Failed to load screen settings via Tauri:', error);
-      // Optionally set default settings or show an error message
-       const defaultSettings: ScreenConfig = {
-           enabled: false, interval: 60, output_dir: "", program: "", timestamp_format: ""
-       };
-       setSettings(defaultSettings); // Fallback to default
-       setTempInterval(defaultSettings.interval);
-       setTempEnabled(defaultSettings.enabled);
-       alert(`Failed to load settings: ${error}`); // Inform user
-    } finally {
-      setIsLoadingSettings(false);
+    } catch (error: any) {
+      console.error(`[ScreenDashboard] Failed to load screen settings for collector ${currentCollectorIdToLoad} via Tauri (Attempt: ${4 - retries}):`, error);
+      if (retries > 0 && error.message && error.message.includes("No collector found")) {
+        console.log(`[ScreenDashboard] Collector not found, retrying loadSettings in ${delay / 1000}s... (${retries} retries left)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        await loadSettings(internalCollectorId, retries - 1, delay * 2);
+        return;
+      }
+       alert(`Failed to load settings for ${currentCollectorIdToLoad} after multiple attempts: ${error.message || error}`);
     }
+
+    console.warn(`[ScreenDashboard] Falling back to default settings for collector ${currentCollectorIdToLoad} after attempts or non-retryable error.`);
+    const defaultSettingsData: ScreenConfig = {
+        enabled: false, interval: 60, output_dir: "", program: "", timestamp_format: ""
+    };
+    setSettings(defaultSettingsData);
+    setTempInterval(defaultSettingsData.interval);
+    setTempEnabled(defaultSettingsData.enabled);
+    setIsLoadingSettings(false);
   }
 
-  // Save settings using Tauri invoke
   async function saveSettings() {
     if (!settings) {
         alert("Cannot save settings: Current settings not loaded.");
         return;
     };
-
     const wasAutoRefreshEnabled = autoRefresh;
     if (wasAutoRefreshEnabled) {
       setAutoRefresh(false);
-      if (refreshIntervalRef.current) {
-        clearInterval(refreshIntervalRef.current);
-        refreshIntervalRef.current = undefined;
-      }
+      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
     }
-
     setIsSavingSettings(true);
     try {
-        // Construct the updated config object based on temp state
-        // Make sure to include all fields expected by the ScreenConfig struct
         const updatedConfig: ScreenConfig = {
-          ...settings, // Start with existing settings (includes output_dir etc.)
+          ...settings,
           enabled: tempEnabled,
           interval: tempInterval,
-          // Ensure other fields from 'settings' are included if they exist
           output_dir: settings.output_dir || "",
           program: settings.program || "",
           timestamp_format: settings.timestamp_format || ""
         };
-
-        console.log("Saving screen config via Tauri:", updatedConfig);
-
-        // Use invoke to call the generic backend function
+        console.log(`[ScreenDashboard] Saving screen config for collector ${internalCollectorId} via Tauri:`, updatedConfig);
         await invoke("set_component_config", {
-            componentName: "screen",
-            config: updatedConfig // Pass the complete object
+            collectorId: internalCollectorId, 
+            componentType: "screen",
+            configValue: updatedConfig 
         });
-
-        console.log("Screen settings saved successfully via Tauri.");
-
+        console.log(`[ScreenDashboard] Screen settings for collector ${internalCollectorId} saved successfully.`);
         setSettings(updatedConfig);
         setShowSettings(false);
-
     } catch (error) {
-        console.error('Failed to save settings via Tauri:', error);
-        alert(`Failed to save settings: ${error}`);
+        console.error(`[ScreenDashboard] Failed to save settings for collector ${internalCollectorId} via Tauri:`, error);
+        alert(`Failed to save settings for ${internalCollectorId}: ${error}`);
     } finally {
         setIsSavingSettings(false);
         if (wasAutoRefreshEnabled) {
@@ -260,10 +289,8 @@ export default function ScreenDashboard() {
     }
   }
 
-
-  // --- Helper functions (formatTimestamp, handlePreviousPage, etc.) remain largely the same ---
-   function formatTimestamp(timestamp: number): string {
-    // Multiply by 1000 if timestamp is in seconds
+   function formatTimestamp(timestamp: number | null): string {
+    if (timestamp === null) return "N/A";
     const date = new Date(timestamp * 1000);
     return date.toLocaleString(undefined, {
       year: 'numeric', month: 'short', day: 'numeric',
@@ -285,9 +312,7 @@ export default function ScreenDashboard() {
 
   function handleScreenshotClick(screenshot: Screenshot) {
     console.log("Opening screenshot:", screenshot);
-    // Use the dataUrl if available, otherwise construct API path
-    const imageUrl = screenshot.dataUrl || `${API_BASE_URL}/api/files/screen/${screenshot.path}`;
-    setSelectedImage(imageUrl); // Store the URL to display
+    setSelectedImage(screenshot.dataUrl); 
     setSelectedScreenshot(screenshot);
   }
 
@@ -297,8 +322,8 @@ export default function ScreenDashboard() {
   }
 
   function toggleSettings() {
+    console.log('[ScreenDashboard] Toggling settings panel. Current internalCollectorId:', internalCollectorId);
     setShowSettings(!showSettings);
-    // Reset temp values from actual sttings when opening
     if (!showSettings && settings) {
       setTempInterval(settings.interval);
       setTempEnabled(settings.enabled);
@@ -321,19 +346,16 @@ export default function ScreenDashboard() {
 
   function toggleSortOrder() {
     setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
-    // Optionally reset to page 1 when changing sort order
-    // setCurrentPage(1);
   }
 
-  // Re-sort screenshots whenever screenshots or sortOrder changes
   const sortedScreenshots = [...screenshots].sort((a, b) => {
-     return sortOrder === 'asc' ? a.timestamp - b.timestamp : b.timestamp - a.timestamp;
+    const tsA = a.timestamp === null ? (sortOrder === 'asc' ? Infinity : -Infinity) : a.timestamp;
+    const tsB = b.timestamp === null ? (sortOrder === 'asc' ? Infinity : -Infinity) : b.timestamp;
+    return sortOrder === 'asc' ? tsA - tsB : tsB - tsA;
    });
-
 
   return (
     <div className="p-6 md:p-8 space-y-6">
-        {/* Header */}
         <div className="mb-8">
             <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-3">
@@ -444,14 +466,15 @@ export default function ScreenDashboard() {
             </div>
         )}
 
-      {/* Screenshot Display Area */}
       <div className="card">
         <div className="p-6">
-          {/* Controls: Refresh, Sort, Auto-refresh, Pagination */}
           <div className="flex flex-col sm:flex-row justify-between gap-4 mb-8">
-             {/* Left Controls */}
              <div className="flex items-center gap-2 flex-wrap">
-                 <Button onClick={loadScreenshots} disabled={isLoading}>
+                 <Button onClick={() => {
+                     loadScreenshots(internalCollectorId);
+                 }} 
+                     disabled={isLoading}
+                 >
                      <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                      Refresh
                  </Button>
@@ -490,14 +513,19 @@ export default function ScreenDashboard() {
              </div>
           </div>
 
-          {/* Screenshot Grid or Loading/Empty State */}
-          {isLoading && !isLoadingSettings ? ( // Show loading only if not also loading settings initially
+          {isLoading && !isLoadingSettings ? (
              <div className="text-center py-12 text-[#9CA3AF]">
                  <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-3 text-[#4C8BF5]" />
                  Loading screenshots...
              </div>
           ) : (
              <>
+               {fetchError && (
+                <div className="mb-4 p-4 text-center text-red-400 bg-red-900/30 border border-red-600/50 rounded-md">
+                  <p>Error loading screenshots: {fetchError}</p>
+                  <p className="text-sm text-red-400/80">The server might be busy or unresponsive. Some images may be missing.</p>
+                </div>
+              )}
                {sortedScreenshots.length === 0 && !isLoading ? (
                    <div className="flex flex-col items-center justify-center py-12 text-[#9CA3AF]">
                         <Camera className="w-12 h-12 mb-4" />
@@ -511,13 +539,9 @@ export default function ScreenDashboard() {
                 ) : (
                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                          {sortedScreenshots.map((screenshot) => {
-                            // Calculation for display number can be complex with server-side pagination + client sort
-                            // Let's simplify or remove it for now unless total count is reliable
-                            // const displayNumber = ...
-
                              return (
                                 <div
-                                    key={screenshot.path} // Use path or timestamp if ID isn't stable/available
+                                    key={screenshot.uuid} // Use uuid as key
                                     className="card card-hover overflow-hidden cursor-pointer group"
                                     onClick={() => handleScreenshotClick(screenshot)}
                                 >
@@ -531,7 +555,6 @@ export default function ScreenDashboard() {
                                             />
                                         ) : (
                                              <div className="w-full h-full flex items-center justify-center text-[#9CA3AF]">
-                                                 {/* Placeholder or spinner */}
                                                  <RefreshCw className="w-6 h-6 animate-spin" />
                                              </div>
                                          )}
@@ -543,8 +566,8 @@ export default function ScreenDashboard() {
                                          <div className="text-sm font-medium text-[#F9FAFB]">
                                              {formatTimestamp(screenshot.timestamp)}
                                          </div>
-                                         <div className="text-xs text-gray-400 mt-1 truncate" title={screenshot.path}>
-                                            {screenshot.path.split('/').pop()} {/* Show only filename */}
+                                         <div className="text-xs text-gray-400 mt-1 truncate" title={screenshot.origin_table + '/' + screenshot.uuid}>
+                                            {screenshot.uuid} {/* Show UUID or a derived name */}
                                         </div>
                                      </div>
                                 </div>
@@ -568,10 +591,9 @@ export default function ScreenDashboard() {
                    className="relative max-w-7xl max-h-[90vh] bg-[#1C2233] rounded-lg shadow-2xl overflow-hidden"
                    onClick={(e) => e.stopPropagation()}
                >
-                    {/* Consider adding loading state for full image */}
                     <img
-                         src={selectedImage} // Use the stored URL (dataUrl or API path)
-                         alt={`Full size screenshot from ${selectedScreenshot ? formatTimestamp(selectedScreenshot.timestamp) : ''}`}
+                         src={selectedImage} // Use the stored URL (dataUrl)
+                         alt={`Full size screenshot from ${selectedScreenshot && selectedScreenshot.timestamp ? formatTimestamp(selectedScreenshot.timestamp) : selectedScreenshot?.uuid || ''}`}
                          className="block max-w-full max-h-[90vh] object-contain"
                      />
                    <Button
@@ -583,7 +605,7 @@ export default function ScreenDashboard() {
                    </Button>
                    {selectedScreenshot && (
                       <div className="absolute bottom-0 left-0 w-full p-2 bg-gradient-to-t from-black/80 to-transparent text-white text-xs">
-                          {formatTimestamp(selectedScreenshot.timestamp)} - {selectedScreenshot.path}
+                          {(selectedScreenshot.timestamp ? formatTimestamp(selectedScreenshot.timestamp) : 'No Timestamp')} - ID: {selectedScreenshot.uuid}
                       </div>
                    )}
                </div>

@@ -74,7 +74,22 @@ impl Transform for OcrTransform {
     }
 
     fn apply(&self, input: Self::Input) -> Result<Self::Output, TransformError> {
-        let img = Image::from_dynamic_image(&input.image).unwrap();
+        let img = match Image::from_dynamic_image(&input.image) {
+            Ok(image) => image,
+            Err(_e) => {
+                // If image conversion itself fails, we might want a specific error.
+                // For now, this will likely lead to Tesseract error or empty output.
+                // This path should ideally not be hit if LifelogImage is valid.
+                // Consider returning TransformError::ImageConversionFailed or similar.
+                eprintln!("[OCR TRANSFORM] Failed to create rusty_tesseract::Image from dynamic_image");
+                // Let's return an empty OcrFrame to avoid panicking here
+                return Ok(OcrFrame {
+                    text: String::new(),
+                    uuid: input.uuid,
+                    timestamp: input.timestamp,
+                });
+            }
+        };
         let args = Args {
             lang: self.config.language.clone(), // TODO: Make it so users can type language (like en, eng,
             // English, etc)
@@ -83,7 +98,15 @@ impl Transform for OcrTransform {
 
         // TODO: Refactor OCR frame to use the boxes so we can better show data to the user.
 
-        let data_output = rusty_tesseract::image_to_string(&img, &args).unwrap();
+        let data_output = match rusty_tesseract::image_to_string(&img, &args) {
+            Ok(text) => text,
+            Err(e) => {
+                eprintln!("[OCR TRANSFORM] Tesseract processing error: {:?}", e);
+                // Return empty string, allowing the transform to "succeed" with no text.
+                // Depending on requirements, one might want to propagate this as an error.
+                String::new()
+            }
+        };
         //let data_output = rusty_tesseract::image_to_data(&img, &args).unwrap();
         //for line in data_output.data {
         //    println!(

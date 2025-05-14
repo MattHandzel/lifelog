@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { User, Mail, Key, Save, Shield, Bell, Clock } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Mail, Key, Save, Shield, Clock } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';

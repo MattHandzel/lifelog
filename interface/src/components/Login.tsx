@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth } from '../lib/api';
+import { invoke } from '@tauri-apps/api/core';
 
 export function Login() {
   const [credentials, setCredentials] = useState({
@@ -10,7 +11,7 @@ export function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [apiUrl, setApiUrl] = useState('');
-  const [debugInfo, setDebugInfo] = useState<any>({});
+  const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -21,11 +22,10 @@ export function Login() {
     // Try to ping the server
     const pingServer = async () => {
       try {
-        const response = await fetch(`${url}/api/health`);
-        const data = await response.json();
-        setDebugInfo(prev => ({ ...prev, serverPing: 'Success', serverResponse: data }));
+        const data = await invoke('ping_server', { payload: 'frontend' });
+        setDebugInfo((prev: Record<string, any>) => ({ ...prev, serverPing: 'Success', serverResponse: data }));
       } catch (err) {
-        setDebugInfo(prev => ({ ...prev, serverPing: 'Failed', error: String(err) }));
+        setDebugInfo((prev: Record<string, any>) => ({ ...prev, serverPing: 'Failed', error: String(err) }));
       }
     };
     
@@ -44,19 +44,17 @@ export function Login() {
     e.preventDefault();
     setError('');
     setLoading(true);
-    console.log('[DEBUG] Login attempt with:', credentials);
-    setDebugInfo(prev => ({ ...prev, loginAttempt: credentials }));
-
+    setDebugInfo((prev: Record<string, any>) => ({ ...prev, loginAttempt: { username: credentials.username, password: credentials.password } }));
     try {
-      // Use the real authentication API
-      const result = await auth.login(credentials);
-      console.log('[DEBUG] Login successful:', result);
-      setDebugInfo(prev => ({ ...prev, loginResult: result }));
+      const result = await invoke('login', { username: credentials.username, password: credentials.password });
+      console.log('[LOGIN] Login successful:', result);
+      setDebugInfo((prev: Record<string, any>) => ({ ...prev, loginResult: result }));
       navigate('/camera');
     } catch (err) {
-      console.error('[DEBUG] Login failed:', err);
+      console.error('[LOGIN] Login error:', err);
       setError('Invalid username or password');
-      setDebugInfo(prev => ({ ...prev, loginError: String(err) }));
+      setDebugInfo((prev: Record<string, any>) => ({ ...prev, loginError: String(err) }));
+      alert(`Login failed: ${err}`);
     } finally {
       setLoading(false);
     }
