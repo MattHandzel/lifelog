@@ -10,3 +10,5 @@ Database schema:
 
 - [ ] For a transform
   - [ ] When a new transform is registered, it will take in a data modality and then do a transform on that data modality. This looks like the server choosing to run that transform, if there is a table with the name (SOURCE*MAC:<data-modality>*<transform-name). The transform queries the source with its query and finds all data with a uuid that is not currently in its table. With that data, it runs its transform and adds it to it's table.
+
+What if I have an object store database for the "BLOB" like data (images, audio). Maybe the database should only have "high entropy" content. With this way of thinking, lifelog might be able to easily add extend other forms of merdia (such as uploading a file/book/video). TODO: Think about this more.

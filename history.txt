@@ -1,9 +1,4 @@
 #V2
-select * from `FFFFFFFFFF:Screen`;
-select * from `FFFFFFFFFFFF:Screen`;
-select * from `FFFFFFFFFFFF:Browser`;
-select * from `FFFFFFFFFFFF:Screen`;
-info for db
 select * from `FFFFFFFFFFFF:Screen`;
 select * from FFFFFFFFFFFF:Screen;
 select * from `FFFFFFFFFFFF:Screen`;
@@ -99,3 +94,8 @@ select count() from ocr_copy
 select count() from ocr_copy group all
 SELECT\n  id,\n  search::score(0)                    AS score\nFROM ocr_copy\nWHERE text @0@ "Jacen Wong"                              -- ← give the clause its 0-label\nORDER BY score DESC\nLIMIT 20;\n
 SELECT\n  id,\n  search::score(0)                    AS score\nFROM ocr_copy\nWHERE text @0@ "Islam"                              -- ← give the clause its 0-label\nORDER BY score DESC\nLIMIT 20;\n
+select * from ocr_text limit 1;
+select * from ocr_text_copy limit 1;
+select * from ocr_copy limit 1;
+select uuid from ocr_copy limit 1;
+select record::id(id) from ocr_copy limit 1;
