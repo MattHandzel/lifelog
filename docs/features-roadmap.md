@@ -132,3 +132,7 @@ This is the lifelog interface, it will be an interface for the user to be able t
 - [ ] Be able to 'take a snapshot' with all loggers
 - [ ] Manually activate individual loggers
 - [ ] Manually activate jobs (for processing data)
+
+### Docs
+
+have a features like this: https://surrealdb.com/features

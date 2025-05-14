@@ -192,11 +192,11 @@ impl ServerHandle {
         server.report_collector_state(state).await
     }
 
-    pub async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
-        println!(
-            "[PROCESS_QUERY]: Requesting server lock for query {}",
-            query
-        );
+    pub async fn process_query(
+        &self,
+        query: lifelog_proto::Query,
+    ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+        println!("[PROCESS_QUERY]: Requesting server lock for ");
         self.server.read().await.process_query(query).await
     }
 
@@ -484,7 +484,6 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         let mut uuids: Vec<LifelogFrameKey> = vec![];
         // NOTE: Right now we just return all uuids for a query, in the future actually parse the
         // query message and return the uuids that match
-        let query = String::from("");
         let keys = self
             .server
             .process_query(query.clone())
@@ -645,7 +644,10 @@ impl Server {
         }
     }
 
-    async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+    async fn process_query(
+        &self,
+        query: lifelog_proto::Query,
+    ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
         let mut keys: Vec<LifelogFrameKey> = vec![];
         println!("asdfadsfasdf");
         // TODO: Refactor this so we add origins in a more intelligent way instead of checking them
@@ -656,8 +658,56 @@ impl Server {
             .expect("Failed to get origins from db");
 
         for origin in origins.iter() {
+            // here is where I should take the query and just return the uuid's that match the
+            // query
+
+            // TODO: REMOVE THIS
+            println!("The query has return origins {:?}", query.return_origins);
+            println!("The origin is {:?}", origin);
+            if !query.return_origins.contains(&origin.get_table_name()) {
+                println!("[PROCESS_QUERY]: Skipping origin {}", origin);
+                continue;
+            };
+
             println!("[PROCESS_QUERY]: Looking at origin {}", origin);
-            let result = get_all_uuids_from_origin(&self.db, &origin).await;
+
+            // FIX: Forive me, this should be done better
+
+            let mut where_statement = match origin.modality {
+                DataModality::Screen => {
+                    "TRUE".to_string() // Don't do any searching on screen explicilty
+                }
+                DataModality::Ocr => query
+                    .text
+                    .iter()
+                    .map(|query_text| format!("text CONTAINS \"{}\"", query_text))
+                    .collect::<Vec<_>>()
+                    .join(" OR  "),
+                DataModality::Browser => query
+                    .text
+                    .iter()
+                    .map(|query_text| {
+                        format!(
+                            "url CONTAINS \"{}\" OR title CONTAINS \"{}\"",
+                            query_text, query_text
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" OR "),
+            };
+
+            if where_statement.is_empty() {
+                where_statement = "TRUE".to_string();
+            } // TODO: Refactor this so it is implicit in the previous match statement
+
+            // Add time ranges to the where statements
+            println!(
+                "{}",
+                format!("Constructing where statement {where_statement}")
+            );
+
+            let result =
+                get_all_keys_matching_where_statement(&self.db, &origin, where_statement).await;
             match result {
                 Ok(uuids_from_origin) => {
                     keys.extend(uuids_from_origin.iter().map(|uuid| LifelogFrameKey {
@@ -1104,12 +1154,15 @@ async fn sync_data_with_collectors(
     Ok(())
 }
 
-async fn get_all_uuids_from_origin(
+async fn get_all_keys_matching_where_statement(
     db: &Surreal<Client>,
     data_origin: &DataOrigin,
+    where_statement: String,
 ) -> Result<Vec<Uuid>, surrealdb::Error> {
     let table = data_origin.get_table_name();
-    let sql = format!("SELECT VALUE record::id(id) as uuid FROM `{table}`"); //FIX: Sql injection 🤡
+    // FIX: verify that the where statement is valid (i.e. column names are correct, what's a
+    // better way to do this?
+    let sql = format!("SELECT VALUE record::id(id) as uuid FROM `{table}` WHERE {where_statement}"); //FIX: Sql injection 🤡
     let uuids: Vec<String> = db
         .query(sql)
         .await
@@ -1124,6 +1177,13 @@ async fn get_all_uuids_from_origin(
         })
         .collect::<Vec<Uuid>>();
     Ok(uuids)
+}
+
+async fn get_all_uuids_from_origin(
+    db: &Surreal<Client>,
+    data_origin: &DataOrigin,
+) -> Result<Vec<Uuid>, surrealdb::Error> {
+    get_all_keys_matching_where_statement(db, data_origin, "TRUE".to_string()).await
 }
 
 async fn get_keys_in_source_not_in_destination(

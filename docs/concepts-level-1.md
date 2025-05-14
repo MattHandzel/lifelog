@@ -137,6 +137,10 @@ A transform should also define some query parameters with it, so it only transfo
 
 When interfacing with the transformed data, one can interface with it using
 
+Transforms are not just map functions, they should also be able to do filtering. How to do filtering? Make it a column in the original database (not a fan). The filter can have a (table, uuid) if it passes or doesn't pass the filter (need both because what if filter has yet to be run.
+
+Suppose we want to run a transform "what book was I reading". We wouldn't want to have to run this transform on all screen data because it is a waste. Therefore, we might want to have a transform "is reading book" that returns a boolean. Then the transform "what book was I reading" can run on the data that is marked as "is reading book". How can we formulate this in code? Should we allow a Transform to have source filters? Wait aren't filters just a subset of queries? Should transforms be able to use queries to filter the data??? Hmmm, this would give it more freedom, I don't know if I want the user to have such fine-grained control over when to run transforms, if this was the case then the user could specify the transform to run on specific days for example which might be very cool. It would also add dependencies for the transforms to use the filters, what if they don't exist? This shouldn't be in the transform apply function, but it should be used when deciding what data to transform or what data to not transform. Should the logic on what is untransformed be moved into the transform? I think so. pass in db connection and have the transform query untransformed data. Maybe we could also implement resource sharing between transforms so they are used equal based on their priority!!! Very smart idea.
+
 ##### Cool Transforms
 
 Agent that takes notes - Define a trasnform that is an agent that maybe can extract key words
