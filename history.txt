@@ -1,0 +1,76 @@
+#V2
+info for db;
+SELECT * FROM FFFFFFFFFFFF___screen;
+select timestamp from FFFFFFFFFFFF___screen;
+select timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp;
+select image, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp LIMIT 1;
+select image_data, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp LIMIT 1;
+select image_bytes, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp LIMIT 1;
+select image_bytes, timestamp from FFFFFFFFFFFF___screen ORDER BY timestamp DESC LIMIT 1;
+SELECT image_bytes, timestamp FROM FFFFFFFFFFFF___screen order by timestamp desc limit 1;
+SELECT id, timestamp FROM FFFFFFFFFFFF___screen order by timestamp desc limit 1;
+select * from `FFFFFFFFFF:Screen`;
+select * from `FFFFFFFFFFFF:Screen`;
+select * from `FFFFFFFFFFFF:Browser`;
+select * from `FFFFFFFFFFFF:Screen`;
+info for db
+select * from `FFFFFFFFFFFF:Screen`;
+select * from FFFFFFFFFFFF:Screen;
+select * from `FFFFFFFFFFFF:Screen`;
+info for db;
+select * from FFFFFFFFFFFF:Screen
+info for db;
+info for db
+select * from `FFFFFFFFFFFF:Screen`;
+select * from `FFFFFFFFFFFF:Screen` order by timestamp;
+select * from `FFFFFFFFFFFF:Screen` order by timestamp desc;
+select * from `FFFFFFFFFFFF:Screen` order by timestamp ascending;
+select * from `FFFFFFFFFFFF:Screen` order by timestamp desc;
+select * from `FFFFFFFFFFFF:Screen` order by timestamp ascending;
+select value record::id(id) from type::table(`FFFFFFFFFFF:Screen`);
+select value record::id(id) from type::table(FFFFFFFFFFF:Screen);
+select * from `FFFFFFFFFFFF:Screen` order by timestamp ascending;
+select record::id(id), timestamp from `FFFFFFFFFFFF:Screen` order by timestamp ascending;
+select record::id(id) from `FFFFFFFFFFFF:Screen`;
+info for db;
+SELECT <uuid> record::id(id) as uuid FROM `FFFFFFFFFFFF:Screen`;
+SELECT record::id(id) as uuid FROM `FFFFFFFFFFFF:Screen`;
+SELECT <string> record::id(id) as uuid FROM `FFFFFFFFFFFF:Screen`;
+SELECT VALUE record::id(id) as uuid FROM `FFFFFFFFFFFF:Screen`;
+info for db;
+select * from `FFFFFFFFFFFF:Screen` where id = "211f0090-89a1-4a01-890f-4ced13873a1c";
+select * from `FFFFFFFFFFFF:Screen` where id = u'211f0090-89a1-4a01-890f-4ced13873a1c';
+select * from `FFFFFFFFFFFF:Screen` where id == u'211f0090-89a1-4a01-890f-4ced13873a1c';
+select * from `FFFFFFFFFFFF:Screen`; // where id == u'211f0090-89a1-4a01-890f-4ced13873a1c';
+select id from `FFFFFFFFFFFF:Screen`; // where id == u'211f0090-89a1-4a01-890f-4ced13873a1c';
+select record::id(id) from `FFFFFFFFFFFF:Screen`; // where id == u'211f0090-89a1-4a01-890f-4ced13873a1c';
+select record::id(id) as uuid from `FFFFFFFFFFFF:Screen`; // where id == u'211f0090-89a1-4a01-890f-4ced13873a1c';
+select record::id(id) as uuid from `FFFFFFFFFFFF:Screen` where uuid == u'211f0090-89a1-4a01-890f-4ced13873a1c';
+select record::id(id) as uuid from `FFFFFFFFFFFF:Screen` where uuid == '211f0090-89a1-4a01-890f-4ced13873a1c';
+select record::id(id) as uuid from `FFFFFFFFFFFF:Screen` // where uuid == '211f0090-89a1-4a01-890f-4ced13873a1c';
+select record::id(id) as uuid from `FFFFFFFFFFFF:Screen` where uuid == '211f0090-89a1-4a01-890f-4ced13873a1c';
+select value record::id(id) as uuid from `FFFFFFFFFFFF:Screen` where uuid == '211f0090-89a1-4a01-890f-4ced13873a1c';
+select record::id(id) as uuid from `FFFFFFFFFFFF:Screen` where uuid = '211f0090-89a1-4a01-890f-4ced13873a1c';
+select record::id(id) as uuid from `FFFFFFFFFFFF:Screen` where record::id(id) = '211f0090-89a1-4a01-890f-4ced13873a1c';
+select timestamp from `FFFFFFFFFFFF:Screen` where record::id(id) = '211f0090-89a1-4a01-890f-4ced13873a1c';
+info for db;
+select * from `FFFFFFFFFFFF:Screen:Ocr`
+info for db;
+delete `asdf:asdf`;
+info for db;
+delete  `asdf:asdf`;
+select count(timestamp) from `FFFFFFFFFFFF:Screen:Ocr`;
+select count() from `FFFFFFFFFFFF:Screen:Ocr`;
+select count() from `FFFFFFFFFFFF:Screen`;
+select count() from `FFFFFFFFFFFF:Screen:OCR`;
+select count() from `FFFFFFFFFFFF:Screen:OCR` group all;
+select count() from `FFFFFFFFFFFF:Screen:Ocr` group all;
+select count() from `FFFFFFFFFFFF:Screen` group all;
+select count() from `FFFFFFFFFFFF:Screen:Ocr` group all;
+select count() from `FFFFFFFFFFFF:Screen` group all;
+select count() from `FFFFFFFFFFFF:Screen:Ocr` group all;
+select timestamp from `FFFFFFFFFFFF:Screen`
+select text from `FFFFFFFFFFFF:Screen:Ocr` limit 3
+select text from `FFFFFFFFFFFF:Screen:Ocr` limit 1
+clear
+select * from `FFFFFFFFFFFF:Screen:Ocr` limit 1

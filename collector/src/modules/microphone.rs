@@ -47,8 +47,14 @@ impl DataLogger for MicrophoneLogger {
     fn setup(&self, config: MicrophoneConfig) -> Result<LoggerHandle, LoggerError> {
         let logger = Self::new(config)?;
         let join = tokio::spawn(async move {
-            let _ = logger.run().await;
+
+            let task_result = logger.run().await;
+
+            println!("[Task] Background task finished with result: {:?}", task_result);
+
+            task_result
         });
+
         Ok(LoggerHandle { join })
     }
 

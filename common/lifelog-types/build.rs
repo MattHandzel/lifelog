@@ -16,7 +16,8 @@ fn main() {
         .map(|e| e.file_name().into_string().unwrap());
 
     // Generate enum variants
-    let variants: Vec<String> = modalities
+    let mut variants: Vec<String> = modalities
+        .into_iter()
         .map(|name| {
             // Convert kebab-case to PascalCase
             name.split('-')
@@ -30,6 +31,7 @@ fn main() {
                 .collect()
         })
         .collect();
+    variants.sort_by(|a, b| a.cmp(&b));
 
     // Generate Rust code
     let code = format!(
@@ -39,8 +41,32 @@ fn main() {
 pub enum DataModality {{
     {}
 }}
+
+impl DataModality {{
+    pub fn tryfrom_str(name: &str) -> Result<Self, LifelogError> {{
+        match name {{
+            {}
+            _ => Err(LifelogError::InvalidDataModality(name.to_string())),
+        }}
+    }}
+    pub fn to_string(&self) -> String {{
+        match self {{
+            {}
+        }}
+    }}
+}}
 "#,
-        variants.join(",\n    ")
+        variants.join(",\n    "),
+        variants
+            .iter()
+            .map(|name| format!("\"{}\" => Ok(Self::{}),", name, name))
+            .collect::<Vec<_>>()
+            .join("\n            "),
+        variants
+            .iter()
+            .map(|name| format!("Self::{} => \"{}\".to_string(),", name, name))
+            .collect::<Vec<_>>()
+            .join("\n            "),
     );
 
     fs::write(dest_path, code).unwrap();

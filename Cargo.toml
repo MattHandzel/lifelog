@@ -9,7 +9,7 @@ members = [
     "common/macros",
     "interface/src-tauri",
     "common/lifelog-proto",
-    # "common/transforms"
+    "common/lifelog-types",
 ]
 
 resolver = "2"
@@ -39,6 +39,8 @@ tonic-build = "0.13.1"
 dashmap = "6.1.0"
 tonic-reflection = { version = "0.13", features = ["server"] }
 toml = { version = "0.8.20"}
+rusty-tesseract = { version = "1.1.0"}
+image = { version = "0.25.6" , features = ["jpeg", "png","webp"]} 
 
 
 # Dependencies for streaming 

@@ -24,14 +24,19 @@ impl DataLogger for HyprlandLogger {
     type Config = HyprlandConfig;
 
     fn setup(&self, config: HyprlandConfig) -> Result<LoggerHandle, LoggerError> {
-        setup::setup_hyprland_db(Path::new(&self.config.output_dir))
-            .map_err(|e| LoggerError::Database(e));
-        let logger = Self::new(config)?;
-        let join = tokio::spawn(async move {
-            let _ = logger.run().await;
-        });
-        Ok(LoggerHandle { join })
-    }
+        setup::setup_hyprland_db(Path::new(&self.config.output_dir));
+            let logger = Self::new(config)?;
+            let join = tokio::spawn(async move {
+    
+                let task_result = logger.run().await;
+    
+                println!("[Task] Background task finished with result: {:?}", task_result);
+    
+                task_result
+            });
+    
+            Ok(LoggerHandle { join })
+        }
 
     async fn run(&self) -> Result<(), LoggerError> {
         self.running_flag.store(true, Ordering::SeqCst);

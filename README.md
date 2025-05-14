@@ -4,6 +4,10 @@ The vision for the project is a software system that allows users to store infor
 
 ## Installation
 
+### Dependencies
+
+[Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html)
+
 #### Linux
 
 ##### NixOS

@@ -76,4 +76,4 @@ tempfile = "3.8.1"
 
 [features]
 custom-protocol = ["tauri/custom-protocol"]
-dev = []
+dev = ["config/dev"]
