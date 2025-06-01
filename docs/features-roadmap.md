@@ -33,6 +33,8 @@
   - [ ] Fish
 - [ ] Home assistant devices
 - [ ] Devices networked (using wireshark)
+- [ ] File upload (videos, text, pdfs)
+- [ ] Adding filters (i.e. with quick capture I am adding a filter that this information is important).
 
 ### Inferences
 

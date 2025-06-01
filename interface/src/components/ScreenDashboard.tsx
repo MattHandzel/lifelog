@@ -54,7 +54,7 @@ export default function ScreenDashboard({ collectorId: propCollectorId }: Screen
   const isLoadingRef = useRef(false); 
   const [fetchError, setFetchError] = useState<string | null>(null); // For displaying fetch errors
 
-  const internalCollectorId = 'FE:40:13:F2:E9:71'; // Hardcoded Collector ID
+  const internalCollectorId = '02:42:CE:25:6A:36'; // Hardcoded Collector ID
 
   useEffect(() => {
     console.log(`[ScreenDashboard] Initializing with hardcoded collectorId: ${internalCollectorId}`);

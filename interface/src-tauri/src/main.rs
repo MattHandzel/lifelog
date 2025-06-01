@@ -1076,7 +1076,7 @@ async fn update_microphone_settings(
     Ok(())
 }
 
-const GRPC_SERVER_ADDRESS: &str = "http://localhost:50051";
+const GRPC_SERVER_ADDRESS: &str = "http://localhost:7182";
 
 #[tauri::command]
 async fn get_component_config(collector_id: String, component_type: String) -> Result<Value, String> {

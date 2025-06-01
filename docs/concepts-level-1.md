@@ -22,8 +22,6 @@ A data source is one source of data. It is something that is very specific and i
 
 ```rs
 struct DataSource {
-    name: String, // human-definable name
-    location: String,
     device: Device, // the device it is on
     modality: DataModality, // the type of data modality
 }
@@ -94,12 +92,13 @@ The server has the same thing on it's end, where it can listen on all of these m
 #### Transforms
 
 A transform is something that takes data of one data type A and applies some transformation of it to create something of another data type B, where A could equal B.
+IDEA: Technically, should transforms be done on data that is being synced so we don't need to read it from the database? It would be more efficient
 
 A transform is an abstract term. It is any general function. It can be an ML model applied to the data, some filtering/signal processing, it can be an API call to another server to do something with the data. Only thing is that it acts on existing data.
 
-If there is an update to the transform (using a different model) then store the original? or use the original?
-
 A transform has an input modality class and an output modality. For OCr the input modality class is Images and the output modality is OCRFrame. Each transform on ANYTHING has it's own modality.
+
+If there is an update to the transform (using a different model) then store the original? or use the original?
 
 Functions:
 

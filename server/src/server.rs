@@ -368,8 +368,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         );
         println!(
             "Received a register collector request from: {:?} for collector ID: {}",
-            collector_ip,
-            collector_config.id
+            collector_ip, collector_config.id
         );
 
         let endpoint = tonic::transport::Endpoint::from_shared(collector_ip.clone());
@@ -432,7 +431,10 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         Ok(TonicResponse::new(SetSystemConfigResponse::default()))
     }
 
-    async fn query(&self, request: Request<QueryRequest>) -> Result<Response<QueryResponse>, Status> {
+    async fn query(
+        &self,
+        request: Request<QueryRequest>,
+    ) -> Result<Response<QueryResponse>, Status> {
         let query_message = request.into_inner().query;
         println!("[QUERY] Received a query request: {:?}", query_message);
         let server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
@@ -456,14 +458,23 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             })
             .collect();
         let response = QueryResponse { keys: proto_keys };
-        println!("[SERVER QUERY] Responding to QueryRequest with {} keys", response.keys.len());
+        println!(
+            "[SERVER QUERY] Responding to QueryRequest with {} keys",
+            response.keys.len()
+        );
         Ok(Response::new(response))
     }
 
-    async fn get_data(&self, request: Request<GetDataRequest>) -> Result<Response<GetDataResponse>, Status> {
+    async fn get_data(
+        &self,
+        request: Request<GetDataRequest>,
+    ) -> Result<Response<GetDataResponse>, Status> {
         let inner_request = request.into_inner();
-        println!("[SERVER GET_DATA] Received GetDataRequest with {} keys", inner_request.keys.len());
-        
+        println!(
+            "[SERVER GET_DATA] Received GetDataRequest with {} keys",
+            inner_request.keys.len()
+        );
+
         let server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
         let keys = inner_request.keys;
 
@@ -481,7 +492,10 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             .collect();
 
         let response = GetDataResponse { data: data };
-        println!("[SERVER GET_DATA] Responding to GetDataRequest with {} data items", response.data.len());
+        println!(
+            "[SERVER GET_DATA] Responding to GetDataRequest with {} data items",
+            response.data.len()
+        );
         Ok(Response::new(response))
     }
 
@@ -658,27 +672,42 @@ impl Server {
     }
 
     async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
-        println!("[SERVER PROCESS_QUERY] Entered process_query for query: {}", query);
+        println!(
+            "[SERVER PROCESS_QUERY] Entered process_query for query: {}",
+            query
+        );
         let mut keys: Vec<LifelogFrameKey> = vec![];
         // println!("asdfadsfasdf"); // Original debug print, can be removed or kept
-        
+
         println!("[SERVER PROCESS_QUERY] Attempting to get write lock on self.origins...");
         let mut origins = self.origins.write().await;
         println!("[SERVER PROCESS_QUERY] Acquired write lock on self.origins.");
-        
+
         println!("[SERVER PROCESS_QUERY] Calling get_origins_from_db...");
         match get_origins_from_db(&self.db).await {
             Ok(db_origins) => {
-                println!("[SERVER PROCESS_QUERY] Successfully got origins from DB: {:?}", db_origins.len());
+                println!(
+                    "[SERVER PROCESS_QUERY] Successfully got origins from DB: {:?}",
+                    db_origins.len()
+                );
                 *origins = db_origins;
             }
             Err(e) => {
-                eprintln!("[SERVER PROCESS_QUERY] Failed to get origins from DB: {}", e);
-                return Err(LifelogError::Other(anyhow::anyhow!("Failed to refresh origins from DB: {}", e)));
+                eprintln!(
+                    "[SERVER PROCESS_QUERY] Failed to get origins from DB: {}",
+                    e
+                );
+                return Err(LifelogError::Other(anyhow::anyhow!(
+                    "Failed to refresh origins from DB: {}",
+                    e
+                )));
             }
         }
 
-        println!("[SERVER PROCESS_QUERY] Iterating over {} origins.", origins.len());
+        println!(
+            "[SERVER PROCESS_QUERY] Iterating over {} origins.",
+            origins.len()
+        );
         for origin in origins.iter() {
             println!("[SERVER PROCESS_QUERY]: Looking at origin {}", origin);
             match get_all_uuids_from_origin(&self.db, &origin).await {
@@ -689,7 +718,10 @@ impl Server {
                     }));
                 }
                 Err(e) => {
-                    eprintln!("[SERVER PROCESS_QUERY] Failed to get uuids from origin {}: {}", origin, e);
+                    eprintln!(
+                        "[SERVER PROCESS_QUERY] Failed to get uuids from origin {}: {}",
+                        origin, e
+                    );
                     // Decide if we should continue or return an error for the whole query
                     // For now, let's log and continue, accumulating partial results
                     // return Err(LifelogError::Database(format!(
@@ -699,7 +731,10 @@ impl Server {
                 }
             }
         }
-        println!("[SERVER PROCESS_QUERY] Finished processing. Returning {} keys.", keys.len());
+        println!(
+            "[SERVER PROCESS_QUERY] Finished processing. Returning {} keys.",
+            keys.len()
+        );
         Ok(keys)
     }
 
@@ -1158,6 +1193,8 @@ async fn get_keys_in_source_not_in_destination(
     source: DataOrigin,
     destination: DataOrigin,
 ) -> Vec<LifelogFrameKey> {
+    // TODO: dude what are you doing? use surrealdb to do this query, don't manuall do the set
+    // difference.
     // Get the record uuids from source
     let uuids_from_source = get_all_uuids_from_origin(&db, &source)
         .await

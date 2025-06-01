@@ -100,21 +100,21 @@ export default function FeatureTabs() {
   // Define all available tabs
   const tabs: TabDefinition[] = [
     {
-      id: "text_upload",
-      label: "Text Upload",
-      icon: FileTextIcon,
-      component: <TextUploadDashboard />,
-      implemented: true,
-      description: "Upload, search, and open files",
-      category: "data"
-    },
-    {
       id: "screen",
       label: "Screenshots",
       icon: CameraIcon,
       component: <ScreenDashboard collectorId={null} />,
       implemented: true,
       description: "Browse captured screenshots",
+      category: "data"
+    },
+    {
+      id: "text_upload",
+      label: "Text Upload",
+      icon: FileTextIcon,
+      component: <TextUploadDashboard />,
+      implemented: true,
+      description: "Upload, search, and open files",
       category: "data"
     },
     {
