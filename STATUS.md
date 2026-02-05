@@ -4,6 +4,11 @@
 
 Implement a runnable, incremental validation suite for `SPEC.md` based on `VALIDATION_SUITE.md`.
 
+## Where To Resume
+
+- Branch to continue from: `validation/planning`
+- Prior branch with build-only changes: `validation/scaffold`
+
 ## Last Verified
 
 - `cargo test -p lifelog-core`
