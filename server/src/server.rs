@@ -345,10 +345,10 @@ impl Server {
             .await?;
 
         let state = SystemState {
-            server_state: ServerState {
+            server_state: Some(ServerState {
                 name: config.server_name.clone(),
                 ..Default::default()
-            },
+            }),
             ..Default::default()
         };
         let state = Arc::new(RwLock::new(state));
@@ -408,7 +408,7 @@ impl Server {
             collector_configs.insert(collector.id.clone(), config);
         }
         let config = SystemConfig {
-            server: self.config.clone(),
+            server: Some(self.config.clone()),
             collectors: collector_configs,
         };
 
@@ -707,33 +707,22 @@ impl Policy for ServerPolicy {
     type ActionType = ServerAction;
 
     fn get_action(&self, state: &Self::StateType) -> Self::ActionType {
-        // Logic to decide the action
-        // For example, look at the history, what actions we are already doing
+        let ss = state.server_state.as_ref().expect("Server state missing");
+        
+        let t_now = ss.timestamp.as_ref().map(|t| {
+            chrono::DateTime::<Utc>::from_timestamp(t.seconds, t.nanos as u32).unwrap_or_default()
+        }).unwrap_or_default();
+        
+        let t_last = ss.timestamp_of_last_sync.as_ref().map(|t| {
+            chrono::DateTime::<Utc>::from_timestamp(t.seconds, t.nanos as u32).unwrap_or_default()
+        }).unwrap_or_default();
 
-        // Look at the last time different maintenance actions were performed
-
-        // See what the current client requests are
-
-        // TODO: Look at the collector states and when a collector is more than x seconds out of
-        // sync ask it for more data
-        let action = if (state.server_state.timestamp - state.server_state.timestamp_of_last_sync)
-            .num_seconds() as f64
+        let action = if (t_now - t_last).num_seconds() as f64
             >= (self.config.collector_sync_interval as f64)
-            && !state
-                .server_state
-                .pending_actions
-                .iter()
-                .any(|a| matches!(a, &ServerActionType::SyncData))
-        // TODO: Refactor so this happens once
+            && !ss.pending_actions.contains(&(ServerActionType::SyncData as i32))
         {
-            // TODO: Add the specific data modality here
-            ServerAction::SyncData("SELECT * FROM screen".to_string()) // TODO: Refactor so that we
-                                                                       // can sync from all collectors
-        } else if !state
-            .server_state
-            .pending_actions
-            .iter()
-            .any(|a| matches!(a, ServerActionType::TransformData))
+            ServerAction::SyncData("SELECT * FROM screen".to_string())
+        } else if !ss.pending_actions.contains(&(ServerActionType::TransformData as i32))
         {
             ServerAction::TransformData(vec![])
         } else {
@@ -818,9 +807,10 @@ impl Server {
 
             // Estimate the state in this function
             let mut state = self.state.write().await;
-            state.server_state.cpu_usage = cpu_usage; // TODO: Get the real CPU usage
-            state.server_state.timestamp = Utc::now();
-            state.server_state.memory_usage = memory_usage; // TODO: Get the real memory usage
+            let ss = state.server_state.as_mut().expect("Server state missing");
+            ss.cpu_usage = cpu_usage; // TODO: Get the real CPU usage
+            ss.timestamp = Some(Utc::now().into());
+            ss.memory_usage = memory_usage; // TODO: Get the real memory usage
                                                             // TODO: Get the real number of threads
                                                             // TODO: There is a race condition here, someone can grab the lock before we can grab it
             state.clone()
@@ -912,8 +902,10 @@ impl Server {
                         .write()
                         .await
                         .server_state
+                        .as_mut()
+                        .expect("Server state missing")
                         .pending_actions
-                        .push(ServerActionType::SyncData);
+                        .push(ServerActionType::SyncData as i32);
                 }
                 // TODO: Refactor so we actually use the query
                 // Get the target data modalities(s) from the query
@@ -934,9 +926,10 @@ impl Server {
                     // TODO: refactor, i dont think we should write lock the state here, diff
                     // function for estimating the state?
                     let mut state = state_clone.write().await;
-                    state.server_state.timestamp_of_last_sync = Utc::now();
-                    state.server_state.pending_actions.retain(|a| {
-                        if let ServerActionType::SyncData = a {
+                    let ss = state.server_state.as_mut().expect("Server state missing");
+                    ss.timestamp_of_last_sync = Some(Utc::now().into());
+                    ss.pending_actions.retain(|&a| {
+                        if a == ServerActionType::SyncData as i32 {
                             return false;
                         }
                         true
@@ -955,8 +948,10 @@ impl Server {
                         .write()
                         .await
                         .server_state
+                        .as_mut()
+                        .expect("Server state missing")
                         .pending_actions
-                        .push(ServerActionType::TransformData); // TODO: Refactor this function s ow e don't hold the state write block
+                        .push(ServerActionType::TransformData as i32); // TODO: Refactor this function s ow e don't hold the state write block
                 }
                 let state_clone = self.state.clone();
                 let db_connection = self.db.clone();
@@ -982,9 +977,11 @@ impl Server {
                         .write()
                         .await
                         .server_state
+                        .as_mut()
+                        .expect("Server state missing")
                         .pending_actions
-                        .retain(|a| {
-                            if let ServerActionType::TransformData = a {
+                        .retain(|&a| {
+                            if a == ServerActionType::TransformData as i32 {
                                 return false;
                             }
                             true

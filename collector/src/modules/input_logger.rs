@@ -10,7 +10,7 @@ use tokio::time::{sleep, Duration};
 
 pub async fn start_logger(config: &InputLoggerConfig) -> Result<()> {
     let config = config.clone();
-    let conn = setup::setup_input_logger_db(&config.output_dir)?;
+    let conn = setup::setup_input_logger_db(std::path::Path::new(&config.output_dir))?;
     let (tx, mut rx) = mpsc::channel(256);
 
     // Spawn the input listener thread (blocking task)

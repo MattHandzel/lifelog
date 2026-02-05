@@ -251,9 +251,9 @@ impl Collector {
 
         let mut setup_errors: Vec<CollectorError> = Vec::new();
 
-        if config.screen.enabled {
+        if config.screen.as_ref().map(|s| s.enabled).unwrap_or(false) {
             let config_clone = Arc::clone(&self.config);
-            match ScreenDataSource::new(config_clone.screen.clone()) {
+            match ScreenDataSource::new(config_clone.screen.clone().unwrap()) {
                 Ok(screen_source) => match screen_source.start() {
                     Ok(ds_handle) => {
                         let running_src = RunningSource::<ScreenConfig> {
@@ -278,9 +278,9 @@ impl Collector {
             }
         }
 
-        if config.browser.enabled {
+        if config.browser.as_ref().map(|b| b.enabled).unwrap_or(false) {
             let config_clone = Arc::clone(&self.config);
-            match BrowserHistorySource::new(config_clone.browser.clone()) {
+            match BrowserHistorySource::new(config_clone.browser.clone().unwrap()) {
                 Ok(browser_source) => match browser_source.start() {
                     Ok(ds_handle) => {
                         let running_src = RunningSource::<BrowserHistoryConfig> {
@@ -376,7 +376,7 @@ impl Collector {
 
         CollectorState {
             name: dev_name,
-            timestamp: chrono::Utc::now(),
+            timestamp: Some(chrono::Utc::now().into()),
             source_states: source_states,
             source_buffer_sizes: buffer_states,
             total_buffer_size: total as u32,

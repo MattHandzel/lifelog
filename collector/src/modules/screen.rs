@@ -172,7 +172,7 @@ impl ScreenLogger {
         let now = Local::now();
         let _ts = now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1e9;
         let ts_fmt = now.format(&self.config.timestamp_format);
-        let out = format!("{}/{}.png", self.config.output_dir.display(), ts_fmt);
+        let out = format!("{}/{}.png", self.config.output_dir, ts_fmt);
         println!("[ScreenLogger] Capturing screenshot to: {}", out);
 
         #[cfg(target_os = "macos")]

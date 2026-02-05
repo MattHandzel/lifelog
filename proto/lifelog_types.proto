@@ -196,7 +196,7 @@ message ServerState {
   float memory_usage = 4;
   float threads = 5;
   google.protobuf.Timestamp timestamp_of_last_sync = 6;
-  repeated string pending_actions = 7;
+  repeated ServerActionType pending_actions = 7;
 }
 
 message SystemConfig {

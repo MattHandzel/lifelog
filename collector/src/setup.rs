@@ -16,15 +16,21 @@ pub fn initialize_project(config: &CollectorConfig) -> std::io::Result<()> {
     // TODO: Check to see if all of these things exist or not
     // TODO: These should be moved inside their respective loggers
 
-    ensure_directory(Path::new(&config.screen.output_dir))?;
+    if let Some(ref s) = config.screen {
+        ensure_directory(Path::new(&s.output_dir))?;
+    }
     //ensure_directory(Path::new(&config.system_performance.output_dir))?;
     //ensure_directory(Path::new(&config.ambient.output_dir))?;
     //ensure_directory(Path::new(&config.weather.output_dir))?;
     //ensure_directory(Path::new(&config.audio.output_dir))?;
     //ensure_directory(Path::new(&config.geolocation.output_dir))?;
     //ensure_directory(Path::new(&config.wifi.output_dir))?;
-    ensure_directory(Path::new(&config.camera.output_dir))?;
-    ensure_directory(Path::new(&config.microphone.output_dir))?;
+    if let Some(ref c) = config.camera {
+        ensure_directory(Path::new(&c.output_dir))?;
+    }
+    if let Some(ref m) = config.microphone {
+        ensure_directory(Path::new(&m.output_dir))?;
+    }
     //ensure_directory(Path::new(&config.input_logger.output_dir))?;
 
     //let keyboard_db = setup_keyboard_db(output_dir)?;

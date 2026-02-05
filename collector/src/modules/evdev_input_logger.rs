@@ -1,6 +1,7 @@
 use crate::setup;
 use chrono::Local;
 use config::InputLoggerConfig;
+use std::path::Path;
 #[cfg(target_os = "linux")]
 use evdev::*;
 use rusqlite::params;
@@ -11,7 +12,7 @@ use tokio::time::{sleep, Duration};
 #[cfg(target_os = "linux")]
 pub async fn start_logger(config: &InputLoggerConfig) {
     // Set up database once to ensure tables exist
-    let _ = setup::setup_input_logger_db(&config.output_dir)
+    let _ = setup::setup_input_logger_db(Path::new(&config.output_dir))
         .expect("Failed to initialize database schema");
 
     // Iterate through all devices in /dev/input/
@@ -56,7 +57,7 @@ pub async fn start_logger(config: &InputLoggerConfig) {
         // Spawn a separate async task for each device
         tokio::spawn(async move {
             // Each device gets its own database connection
-            let conn = match setup::setup_input_logger_db(&output_dir) {
+            let conn = match setup::setup_input_logger_db(Path::new(&output_dir)) {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("Failed to create database connection: {}", e);
