@@ -2,9 +2,6 @@ use async_trait::async_trait;
 use thiserror::Error;
 use tokio::task::JoinHandle;
 
-use std::env;
-use tempfile::NamedTempFile;
-
 #[derive(Debug, Error)]
 pub enum LoggerError {
     #[error("Command execution failed: {0}")]

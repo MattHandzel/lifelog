@@ -167,6 +167,7 @@ export interface ServerConfig {
   database_endpoint: string;
   database_name: string;
   server_name: string;
+  cas_path: string;
 }
 
 export interface ServerState {

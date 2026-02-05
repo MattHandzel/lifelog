@@ -161,10 +161,11 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
                     return quote! {
                         timestamp: {
                             let ts = p.timestamp.unwrap_or_default();
-                            ::lifelog_core::chrono::DateTime::<::lifelog_core::chrono::Utc>::from_utc(
-                                ::lifelog_core::chrono::NaiveDateTime::from_timestamp(ts.seconds, ts.nanos as u32),
-                                ::lifelog_core::chrono::Utc,
-                            )
+                            ::lifelog_core::chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
+                                .unwrap_or_else(|| ::lifelog_core::chrono::DateTime::<::lifelog_core::chrono::Utc>::from_naive_utc_and_offset(
+                                    ::lifelog_core::chrono::NaiveDateTime::MIN,
+                                    ::lifelog_core::chrono::Utc,
+                                ))
                         }
                     };
                 }
@@ -181,10 +182,8 @@ if seg.ident == "DateTime" {
                             return quote! {
                                 #name: {
                                     let ts = p.#name.unwrap_or_default();
-                                    ::lifelog_core::chrono::DateTime::<::lifelog_core::chrono::Utc>::from_utc(
-                                        ::lifelog_core::chrono::NaiveDateTime::from_timestamp(ts.seconds, ts.nanos as u32),
-                                        ::lifelog_core::chrono::Utc,
-                                    )
+                                    ::lifelog_core::chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
+                                        .unwrap_or_default()
                                 }
                             };
                         }
@@ -274,7 +273,7 @@ if seg.ident == "DateTime" {
                     if let Some(GenericArgument::Type(Type::Path(inner))) = args.args.first() {
                         if inner.path.segments.last().unwrap().ident == "Utc" {
                             return quote! {
-                                #name: Some(::prost_types::Timestamp {
+                                #name: Some(::pbjson_types::Timestamp {
                                     seconds: s.#name.timestamp(),
                                     nanos: 1000 * (s.#name.timestamp_subsec_nanos() / 1000) as i32,
                                 })
@@ -292,7 +291,7 @@ if seg.ident == "DateTime" {
                 // timestamp
                 if name == "timestamp" {
                     return quote! {
-                        timestamp: Some(::prost_types::Timestamp {
+                        timestamp: Some(::pbjson_types::Timestamp {
                             seconds: s.timestamp.timestamp(),
                             nanos: 1000 * (s.timestamp.timestamp_subsec_nanos() / 1000) as i32,
                         })

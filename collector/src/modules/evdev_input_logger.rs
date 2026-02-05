@@ -66,7 +66,7 @@ pub async fn start_logger(config: &InputLoggerConfig) {
 
             // Device-specific processing loop
             loop {
-                let timestamp = Local::now().timestamp() as f64
+                let _timestamp = Local::now().timestamp() as f64
                     + Local::now().timestamp_subsec_nanos() as f64 / 1_000_000_000.0;
 
                 match device.fetch_events() {

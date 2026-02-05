@@ -186,6 +186,7 @@ message ServerConfig {
   string database_endpoint = 3;
   string database_name = 4;
   string server_name = 5;
+  string cas_path = 6;
 }
 
 message ServerState {

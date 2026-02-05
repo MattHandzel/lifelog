@@ -9,6 +9,8 @@ chrono = "0.4"
 thiserror = "2"
 image = "0.25"
 sha2 = "0.10"
+async-trait = "0.1"
 
 [dev-dependencies]
 tempfile = "3"
+tokio = { version = "1", features = ["macros", "rt"] }

@@ -318,7 +318,7 @@ fn main() -> Result<()> {
     let config = Config {
         output_paths: hashmap! {
             "typescript".into() => PathBuf::from("../../interface/src/auto_generated_types.ts"),
-            "protobuf".into()  => PathBuf::from("../../proto/lifelog_types.proto"),
+            // "protobuf".into()  => PathBuf::from("../../proto/lifelog_types.proto"),
         },
     };
 

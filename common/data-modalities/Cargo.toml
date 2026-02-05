@@ -17,6 +17,7 @@ thiserror = {workspace=true}
 
 prost-types = { version = "0.13.5"}
 tonic = { version = "0.13.1"}
+pbjson-types = "0.7"
 
 # testing this real quick
 [build-dependencies]

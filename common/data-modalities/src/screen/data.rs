@@ -8,7 +8,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 
 use image;
-use image::io::Reader as ImageReader;
+use image::ImageReader;
 use std::io::Cursor;
 
 #[lifelog_type(Data)]
@@ -61,7 +61,7 @@ impl Modality for ScreenFrame {
 }
 impl Distribution<ScreenFrame> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> ScreenFrame {
-        let image_path: String = rng
+        let _image_path: String = rng
             .sample_iter(&Alphanumeric)
             .take(10)
             .map(char::from)

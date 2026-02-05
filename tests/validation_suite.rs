@@ -17,11 +17,35 @@ fn it_080_crash_restart_durability() {}
 
 #[test]
 #[ignore = "IT-090 (VALIDATION_SUITE.md): requires resumable upload by byte offsets"]
-fn it_090_resume_upload_with_byte_offsets() {}
+fn it_090_resume_upload_with_byte_offsets() {
+    /* Pseudocode:
+      - Setup: Start backend with SurrealDB + CAS.
+      - Act:
+        1. Begin upload session.
+        2. Send chunks 0..K (e.g., 0..1024, 1024..2048).
+        3. Drop connection (simulate by ending stream early).
+        4. Call GetUploadOffset; verify it returns 2048.
+        5. Reconnect; send chunks 2048..3072.
+      - Assert:
+        - Backend has all chunks 0..3072.
+        - Final AckedOffset is 3072.
+        - No duplicate records in 'chunk' table.
+    */
+}
 
 #[test]
 #[ignore = "IT-081 (VALIDATION_SUITE.md): requires ack gating on index completion"]
-fn it_081_ack_implies_queryable() {}
+fn it_081_ack_implies_queryable() {
+    /* Pseudocode:
+      - Setup: Backend with indexer delayed.
+      - Act:
+        1. Upload chunk C at offset K.
+        2. Wait for RPC response.
+      - Assert:
+        - Response AckedOffset is < K+len(C) while indexing is pending.
+        - After indexing signal, AckedOffset advances to K+len(C).
+    */
+}
 
 #[test]
 #[ignore = "IT-100 (VALIDATION_SUITE.md): requires blob separation DB vs CAS"]

@@ -13,6 +13,7 @@ use surrealdb::RecordId;
 //}
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 struct Record {
     id: RecordId,
     timestamp: f64,

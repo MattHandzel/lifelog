@@ -3,6 +3,8 @@ use dirs_next;
 use image;
 
 pub mod cas;
+pub mod chunk;
+pub mod ingest;
 
 pub fn replace_home_dir_in_path(path: String) -> String {
     let home_dir = dirs_next::home_dir().expect("Failed to get home directory");

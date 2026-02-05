@@ -1,4 +1,4 @@
-use super::data_source::{DataSource, DataSourceError, DataSourceHandle};
+use super::data_source::{DataSource, DataSourceHandle};
 use crate::modules::browser_history::BrowserHistorySource;
 use crate::modules::screen::ScreenDataSource;
 use config;
@@ -14,11 +14,9 @@ use tokio::time::Duration;
 use mac_address::get_mac_address;
 
 use config::{BrowserHistoryConfig, ScreenConfig};
-use futures_core::Stream;
 use lifelog_types::CollectorState;
 use tokio::sync::RwLock;
 use tokio_stream::wrappers::ReceiverStream;
-use tokio_stream::StreamExt;
 use tonic::transport::{Channel, Endpoint};
 use tonic::Request;
 
@@ -27,11 +25,9 @@ use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
 
 use lifelog_proto::{
     GetCollectorConfigRequest, GetCollectorConfigResponse, GetCollectorStateResponse,
-    GetDataRequest, GetDataResponse, GetStateRequest, LifelogData, RegisterCollectorRequest,
+    GetDataRequest, GetStateRequest, LifelogData, RegisterCollectorRequest,
     ReportStateRequest, SetCollectorConfigRequest, SetCollectorConfigResponse,
 };
-
-use rand::distr::Distribution; // import the distribution trait o.w. our sampling doesn't work
 
 struct RunningSource<C: Send + Sync + Debug + 'static> {
     instance: Arc<Mutex<Box<dyn DataSource<Config = C> + Send + Sync + 'static>>>,
@@ -337,7 +333,7 @@ impl Collector {
                 Some(mac_addr.to_string())
             }
             Ok(None) => None,
-            Err(e) => None,
+            Err(_e) => None,
         };
 
         if let Some(running_src_trait) = self.sources.get("screen") {
@@ -362,12 +358,9 @@ impl Collector {
 
                     total += screen_buf_size; //TODO: get actual buffer size rather than just vec length
 
-                    if let is_running = screen_ds.is_running() {
-                        let fs = format!("Screen souce running state: {}", is_running);
-                        source_states.push(fs.to_string());
-                    } else {
-                        source_states.push("Could not get screen source state".to_string());
-                    }
+                    let is_running = screen_ds.is_running();
+                    let fs = format!("Screen souce running state: {}", is_running);
+                    source_states.push(fs.to_string());
                 }
             }
         }
@@ -477,7 +470,7 @@ impl CollectorService for GRPCServerCollectorService {
 
     async fn set_config(
         &self,
-        request: tonic::Request<SetCollectorConfigRequest>,
+        _request: tonic::Request<SetCollectorConfigRequest>,
     ) -> Result<tonic::Response<SetCollectorConfigResponse>, tonic::Status> {
         // TODO: Implement Full hot‑reload; for now we just acknowledge receipt.
 

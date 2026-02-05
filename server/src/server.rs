@@ -1,6 +1,5 @@
 use crate::policy::*;
 use anyhow;
-use chrono::Timelike;
 use chrono::Utc;
 use config::ServerPolicyConfig;
 use config::{ServerConfig, SystemConfig};
@@ -12,42 +11,126 @@ use surrealdb::opt::auth::Root;
 use surrealdb::Surreal;
 use thiserror::Error;
 use tokio::sync::RwLock;
-use tonic::{Request, Response, Status};
+use tonic::{Request, Response, Status, Streaming};
 use tonic::{Request as TonicRequest, Response as TonicResponse, Status as TonicStatus};
 
 use std::collections::HashMap;
 use std::time;
-use strum::IntoEnumIterator;
 
 use config::CollectorConfig;
 use lifelog_proto::lifelog_server_service_server::LifelogServerService;
 use lifelog_proto::{
     GetDataRequest, GetDataResponse, GetStateRequest, GetSystemConfigRequest,
-    GetSystemConfigResponse, GetSystemStateResponse, Query, QueryRequest, QueryResponse,
+    GetSystemConfigResponse, GetSystemStateResponse, QueryRequest, QueryResponse,
     RegisterCollectorRequest, RegisterCollectorResponse, ReportStateRequest, ReportStateResponse,
-    SetSystemConfigRequest, SetSystemConfigResponse, Timerange,
+    SetSystemConfigRequest, SetSystemConfigResponse,
+    Chunk, Ack, GetUploadOffsetRequest, GetUploadOffsetResponse,
 };
-use lifelog_types::DataModality;
 
 use lifelog_proto::collector_service_client::CollectorServiceClient;
 
 use data_modalities::*;
-use prost_types::Timestamp;
-use std::collections::HashSet;
 use sysinfo::System;
 
-use futures_core::Stream;
-use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 
 use dashmap::DashSet;
 use once_cell::sync::Lazy;
 use serde::{de::DeserializeOwned, Serialize};
-use surrealdb::sql::{Thing, Value};
 use surrealdb::Error;
 
+use utils::ingest::{IngestBackend, ChunkIngester};
+use utils::cas::FsCas;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ChunkRecord {
+    collector_id: String,
+    stream_id: String,
+    session_id: u64,
+    offset: u64,
+    hash: String,
+    indexed: bool,
+}
+
+async fn ensure_chunk_table(db: &Surreal<Client>) -> surrealdb::Result<()> {
+    if CREATED_TABLES.contains("chunk") {
+        return Ok(());
+    }
+    db.query(r#"
+        DEFINE TABLE chunk SCHEMAFULL;
+        DEFINE FIELD collector_id ON TABLE chunk TYPE string;
+        DEFINE FIELD stream_id ON TABLE chunk TYPE string;
+        DEFINE FIELD session_id ON TABLE chunk TYPE int;
+        DEFINE FIELD offset ON TABLE chunk TYPE int;
+        DEFINE FIELD hash ON TABLE chunk TYPE string;
+        DEFINE FIELD indexed ON TABLE chunk TYPE bool;
+        DEFINE INDEX chunk_session_offset ON TABLE chunk FIELDS collector_id, stream_id, session_id, offset UNIQUE;
+    "#).await?.check()?;
+    CREATED_TABLES.insert("chunk".to_string());
+    Ok(())
+}
+
+struct SurrealIngestBackend {
+    db: Surreal<Client>,
+}
+
+#[async_trait::async_trait]
+impl IngestBackend for SurrealIngestBackend {
+    async fn persist_metadata(
+        &self,
+        collector_id: &str,
+        stream_id: &str,
+        session_id: u64,
+        offset: u64,
+        hash: &str,
+    ) -> Result<(), String> {
+        let db = self.db.clone();
+        ensure_chunk_table(&db).await.map_err(|e| e.to_string())?;
+        
+        let record = ChunkRecord {
+            collector_id: collector_id.to_string(),
+            stream_id: stream_id.to_string(),
+            session_id,
+            offset,
+            hash: hash.to_string(),
+            indexed: false,
+        };
+        
+        // Use a unique ID based on session and offset to ensure idempotency
+        let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
+        
+        let _ : Vec<ChunkRecord> = db.query("UPSERT chunk:$id CONTENT $record")
+            .bind(("id", id))
+            .bind(("record", record))
+            .await
+            .map_err(|e| e.to_string())?
+            .take(0)
+            .map_err(|e| e.to_string())?;
+            
+        Ok(())
+    }
+
+    async fn is_indexed(
+        &self,
+        collector_id: &str,
+        stream_id: &str,
+        session_id: u64,
+        offset: u64,
+    ) -> bool {
+        let db = self.db.clone();
+        let _ = ensure_chunk_table(&db).await;
+
+        let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
+        let record: Option<ChunkRecord> = db.select(("chunk", id))
+            .await
+            .unwrap_or(None);
+            
+        record.map(|r| r.indexed).unwrap_or(false)
+    }
+}
+
 static CREATED_TABLES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
-const SYNC_INTERVAL: i64 = 5; // TODO: Refactor this into policy
+// const SYNC_INTERVAL: i64 = 5; // TODO: Refactor this into policy
 
 // TODO: Refactor the timestamp so it uses datetime instead of string, same with uuid, refactor it
 // so it doesn't use image_bytes but instead uses a file path to the image
@@ -66,7 +149,6 @@ async fn ensure_table(db: &Surreal<Client>, data_origin: &DataOrigin) -> surreal
         DataModality::Screen => ScreenFrame::get_surrealdb_schema(),
         DataModality::Browser => BrowserFrame::get_surrealdb_schema(),
         DataModality::Ocr => OcrFrame::get_surrealdb_schema(),
-        _ => unimplemented!(),
     };
     let ddl = schema_tpl.replace("{table}", &table);
     //db.query(format!(
@@ -200,7 +282,7 @@ impl ServerHandle {
     }
 
     pub async fn report_collector_state(&self, state: CollectorState) -> Result<(), LifelogError> {
-        let mut server = self.server.write().await;
+        let server = self.server.write().await;
         server.report_collector_state(state).await
     }
 
@@ -230,20 +312,24 @@ impl ServerHandle {
 #[derive(Debug, Clone)]
 pub struct Server {
     db: Surreal<Client>,
+    #[allow(dead_code)]
     host: String,
+    #[allow(dead_code)]
     port: u16,
     state: Arc<RwLock<SystemState>>,
     registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
+    #[allow(dead_code)]
     register_interfaces: Arc<RwLock<Vec<RegisteredInterface>>>,
     policy: Arc<RwLock<ServerPolicy>>,
     origins: Arc<RwLock<Vec<DataOrigin>>>,
     transforms: Arc<RwLock<Vec<LifelogTransform>>>, // TODO: These should be registered transforms
     config: ServerConfig,
+    cas: FsCas,
 }
 
 static mut SYS: Option<sysinfo::System> = None;
 
-const SERVER_COMMAND_CHANNEL_BUFFER_SIZE: usize = 100;
+// const SERVER_COMMAND_CHANNEL_BUFFER_SIZE: usize = 100;
 
 impl Server {
     pub async fn new(config: &ServerConfig) -> Result<Self, ServerError> {
@@ -301,6 +387,7 @@ impl Server {
             transforms: Arc::new(RwLock::new(vec![ocr_transform.into()])),
             origins: Arc::new(RwLock::new(origins_vec)),
             config: config.clone(),
+            cas: FsCas::new(config.cas_path.clone()),
         };
 
         Ok(s)
@@ -437,9 +524,9 @@ impl LifelogServerService for GRPCServerLifelogServerService {
     ) -> Result<Response<QueryResponse>, Status> {
         let query_message = request.into_inner().query;
         println!("[QUERY] Received a query request: {:?}", query_message);
-        let server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
+        let _server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
 
-        let mut uuids: Vec<LifelogFrameKey> = vec![];
+        let _uuids: Vec<LifelogFrameKey> = vec![];
         // NOTE: Right now we just return all uuids for a query, in the future actually parse the
         // query message and return the uuids that match
         let query = String::from("");
@@ -475,7 +562,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             inner_request.keys.len()
         );
 
-        let server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
+        let _server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
         let keys = inner_request.keys;
 
         let data: Vec<lifelog_proto::LifelogData> = self
@@ -514,7 +601,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         // Ensure we got a state reported by a registered collector, if not then we ignore it
         match self.server.contains_collector(state.name.clone()).await {
             true => {
-                self.server
+                let _ = self.server
                     .report_collector_state(state.clone().into())
                     .await;
                 Ok(TonicResponse::new(ReportStateResponse {
@@ -538,6 +625,74 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         Ok(TonicResponse::new(GetSystemStateResponse {
             state: Some(state.into()), // TODO: Replace this with the system state
                                        // instead of the server state (i need some work with the proto files)
+        }))
+    }
+
+    async fn upload_chunks(
+        &self,
+        request: Request<Streaming<Chunk>>,
+    ) -> Result<Response<Ack>, Status> {
+        let mut stream = request.into_inner();
+        let mut ingester: Option<ChunkIngester<SurrealIngestBackend>> = None;
+        let mut last_session_info = (String::new(), String::new(), 0u64);
+        let mut last_acked_offset = 0;
+
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result.map_err(|e| Status::internal(format!("Stream error: {}", e)))?;
+            
+            if ingester.is_none() {
+                last_session_info = (chunk.collector_id.clone(), chunk.stream_id.clone(), chunk.session_id);
+                let server = self.server.server.read().await;
+                let backend = SurrealIngestBackend { db: server.db.clone() };
+                let cas = server.cas.clone();
+                ingester = Some(ChunkIngester::new(
+                    backend,
+                    cas,
+                    chunk.collector_id.clone(),
+                    chunk.stream_id.clone(),
+                    chunk.session_id,
+                    chunk.offset,
+                ));
+            }
+            
+            if let Some(ref mut ing) = ingester {
+                let next_offset = ing.apply_chunk(chunk.offset, &chunk.data, &chunk.hash)
+                    .await
+                    .map_err(|e| Status::invalid_argument(format!("Ingest error: {}", e)))?;
+                
+                // REQ-014: ACK only if fully indexed (durable ACK gate)
+                last_acked_offset = ing.get_acked_offset(next_offset).await;
+            }
+        }
+
+        Ok(Response::new(Ack {
+            collector_id: last_session_info.0,
+            stream_id: last_session_info.1,
+            session_id: last_session_info.2,
+            acked_offset: last_acked_offset,
+        }))
+    }
+
+    async fn get_upload_offset(
+        &self,
+        request: Request<GetUploadOffsetRequest>,
+    ) -> Result<Response<GetUploadOffsetResponse>, Status> {
+        let _inner = request.into_inner();
+        let db = self.server.server.read().await.db.clone();
+        
+        // Find the highest offset for this session in the 'chunk' table
+        let mut response = db.query("SELECT offset FROM chunk WHERE collector_id = $c AND stream_id = $s AND session_id = $sess ORDER BY offset DESC LIMIT 1")
+            .bind(("c", _inner.collector_id))
+            .bind(("s", _inner.stream_id))
+            .bind(("sess", _inner.session_id))
+            .await
+            .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
+            
+        let offsets: Vec<u64> = response.take(0)
+            .map_err(|e| Status::internal(format!("Parse error: {}", e)))?;
+            
+        Ok(Response::new(GetUploadOffsetResponse {
+            offset: offsets.first().cloned().unwrap_or(0),
         }))
     }
 }
@@ -637,6 +792,7 @@ impl Server {
     async fn get_state(&self) -> SystemState {
         unsafe {
             // TODO: refactor this to be safe
+            #[allow(static_mut_refs)]
             let sys = SYS.as_mut().expect("System info is not initialized");
             sys.refresh_all();
 
@@ -650,7 +806,7 @@ impl Server {
                 0.0
             };
 
-            let processes = sys.processes().len() as i32;
+            let _processes = sys.processes().len() as i32;
 
             //let total_disk: u64 = sys.disks().iter().map(|d| d.total_space()).sum();
             //let free_disk: u64 = sys.disks().iter().map(|d| d.available_space()).sum();
@@ -738,7 +894,7 @@ impl Server {
         Ok(keys)
     }
 
-    async fn add_audit_log(&self, action: &ServerAction) {
+    async fn add_audit_log(&self, _action: &ServerAction) {
         //println!("Adding audit log for action: {:?}", action);
     }
 
@@ -764,12 +920,13 @@ impl Server {
                 let registered_collectors_clone = self.registered_collectors.clone();
                 let db_connection = self.db.clone();
                 let state_clone = self.state.clone();
+                let _query = query;
                 tokio::spawn(async move {
                     let mut collectors = registered_collectors_clone.write().await;
-                    sync_data_with_collectors(
+                    let _ = sync_data_with_collectors(
                         state.clone(),
                         &db_connection,
-                        query,
+                        _query,
                         &mut collectors,
                     )
                     .await;
@@ -790,7 +947,7 @@ impl Server {
 
                 // Ask the collectors to send data
             }
-            ServerAction::TransformData(untransformed_data_keys) => {
+            ServerAction::TransformData(_untransformed_data_keys) => {
                 // TODO: Move this to policy
                 println!("[TRANSFORM_DATA] Waiting for state write lock to be released");
                 {
@@ -805,7 +962,7 @@ impl Server {
                 let db_connection = self.db.clone();
                 let transforms = self.transforms.clone().read().await.to_vec();
                 println!("[TRANSFORM_DATA] starting thread");
-                let res = tokio::spawn(async move {
+                let _res = tokio::spawn(async move {
                     let mut untransformed_data_keys: Vec<LifelogFrameKey> = vec![];
                     println!("[TRANSFORM_DATA]: Transforming data");
                     for transform in &transforms {
@@ -1094,9 +1251,9 @@ impl From<OcrFrameSurreal> for OcrFrame {
 //
 
 async fn sync_data_with_collectors(
-    state: SystemState,
+    _state: SystemState,
     db: &Surreal<Client>,
-    query: String,
+    _query: String,
     collectors: &mut Vec<RegisteredCollector>,
 ) -> Result<(), LifelogError> {
     for collector in collectors.iter_mut() {
@@ -1130,7 +1287,7 @@ async fn sync_data_with_collectors(
                         DataOriginType::DeviceId(mac.clone()),
                         DataModality::Screen,
                     );
-                    let record = add_data_to_db::<ScreenFrame, ScreenFrameSurreal>(
+                    let _record = add_data_to_db::<ScreenFrame, ScreenFrameSurreal>(
                         &db,
                         c.into(),
                         &data_origin,
@@ -1143,7 +1300,7 @@ async fn sync_data_with_collectors(
                         DataModality::Browser,
                     );
 
-                    let record = add_data_to_db::<BrowserFrame, BrowserFrameSurreal>(
+                    let _record = add_data_to_db::<BrowserFrame, BrowserFrameSurreal>(
                         &db,
                         c.into(),
                         &data_origin,
@@ -1228,13 +1385,11 @@ impl LifelogTransform {
     fn source(&self) -> DataOrigin {
         match self {
             LifelogTransform::OcrTransform(transform) => transform.source(),
-            _ => unimplemented!(),
         }
     }
     fn destination(&self) -> DataOrigin {
         match self {
             LifelogTransform::OcrTransform(transform) => transform.destination(),
-            _ => unimplemented!(),
         }
     }
 }
@@ -1275,7 +1430,6 @@ async fn transform_data(
                         None
                     }
                 }
-                _ => unimplemented!(),
             };
             let transformed_data = match transformed_data {
                 Some(data) => data,
@@ -1353,7 +1507,6 @@ async fn get_data_by_key(
             browser_frame.uuid = key.uuid; //NOTE: This is important. This needs to be fixed with a code refactor
             Ok(browser_frame.into())
         }
-        _ => unimplemented!(),
     }
 }
 

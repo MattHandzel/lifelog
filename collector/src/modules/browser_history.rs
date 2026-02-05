@@ -1,22 +1,17 @@
 use crate::data_source::*;
-use crate::logger::*;
 use async_trait::async_trait;
 use config::BrowserHistoryConfig;
 use std::sync::atomic::{AtomicBool, Ordering};
-use serde::{Deserialize, Serialize};
-use chrono::{DateTime, NaiveDateTime, TimeZone};
+use chrono::Utc;
 use std::{
-    fs::{self, File},
-    io::{Read, Write},
-    path::PathBuf,
+    fs,
+    io::Read,
 };
 
 
 use data_modalities::browser::BrowserFrame;
-use rusqlite::{Connection, Result, Row};
+use rusqlite::Connection;
 use tokio::time::{sleep, Duration};
-use lifelog_core::Utc;
-use thiserror::Error;
 use lifelog_core::Uuid;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
@@ -47,13 +42,13 @@ impl BrowserHistorySource {
                         let unix_micros = ts_micros - WINDOWS_EPOCH_MICROS;
                         let unix_secs = unix_micros / 1_000_000;
                         let unix_nanos = (unix_micros % 1_000_000) * 1_000;
-                        Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(unix_secs, unix_nanos as u32).unwrap_or(NaiveDateTime::MIN))
+                        ::chrono::DateTime::from_timestamp(unix_secs, unix_nanos as u32).unwrap_or_default()
                     })
                     .unwrap_or_else(|_| Utc::now())
             }
             Err(_) => {
                 let windows_epoch_micros_str = WINDOWS_EPOCH_MICROS.to_string();
-                let windows_epoch_dt = Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(WINDOWS_EPOCH_MICROS / 1_000_000, ((WINDOWS_EPOCH_MICROS % 1_000_000) * 1_000) as u32).unwrap_or(NaiveDateTime::MIN));
+                let windows_epoch_dt = ::chrono::DateTime::from_timestamp(WINDOWS_EPOCH_MICROS / 1_000_000, ((WINDOWS_EPOCH_MICROS % 1_000_000) * 1_000) as u32).unwrap_or_default();
                 if let Err(e) = fs::write(&self.config.output_file, &windows_epoch_micros_str) {
                     eprintln!("Error creating output file: {}", e);
                 }
@@ -83,7 +78,7 @@ impl BrowserHistorySource {
                     let unix_micros = visit_time_chrome_micros - WINDOWS_EPOCH_MICROS;
                     let unix_secs = unix_micros / 1_000_000;
                     let unix_nanos = (unix_micros % 1_000_000) * 1_000;
-                    Utc.from_utc_datetime(&NaiveDateTime::from_timestamp_opt(unix_secs, unix_nanos as u32).unwrap_or(NaiveDateTime::MIN))
+                    ::chrono::DateTime::from_timestamp(unix_secs, unix_nanos as u32).unwrap_or_default()
                 },
                 visit_count: row.get::<_, u32>(3)?,
             })
@@ -121,7 +116,7 @@ impl DataSource for BrowserHistorySource {
 
         let source_clone = self.clone();
 
-        let join_handle = tokio::spawn(async move {
+        let _join_handle = tokio::spawn(async move {
             let task_result = source_clone.run().await;
             println!(
                 "[Task] BrowserHistorySource (in-memory) background task finished with result: {:?}",

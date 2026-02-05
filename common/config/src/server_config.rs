@@ -1,39 +1,28 @@
-use lifelog_macros::lifelog_type;
-use serde::{Deserialize, Serialize};
+pub use lifelog_proto::ServerConfig;
 
-#[lifelog_type(Config)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ServerConfig {
-    #[serde(default = "default_server_ip")]
-    pub host: String,
+pub fn default_server_config() -> ServerConfig {
+    ServerConfig {
+        host: default_server_ip(),
+        port: default_server_port(),
+        database_endpoint: default_database_endpoint(),
+        database_name: default_database_name(),
+        server_name: default_server_name(),
+        cas_path: default_cas_path(),
+    }
+}
 
-    #[serde(default = "default_server_port")]
-    pub port: u32, // TODO: REFACTOR TO u16, because it should be u16 but then I have some trouble
-    // for converting from u16 to u32 for the proto buf
-    #[serde(default = "default_database_endpoint")]
-    pub database_endpoint: String,
-
-    #[serde(default = "default_database_name")]
-    pub database_name: String,
-
-    #[serde(default = "default_server_name")]
-    pub server_name: String,
+pub fn default_cas_path() -> String {
+    let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
+    home_dir
+        .join("lifelog")
+        .join("cas")
+        .to_str()
+        .unwrap_or("lifelog/cas")
+        .to_string()
 }
 
 pub fn default_database_endpoint() -> String {
     "127.0.0.1:7183".to_string()
-}
-
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            host: default_server_ip(),
-            port: default_server_port(),
-            database_endpoint: default_database_endpoint(),
-            database_name: default_database_name(),
-            server_name: default_server_name(),
-        }
-    }
 }
 
 pub fn default_server_name() -> String {

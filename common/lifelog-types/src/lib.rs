@@ -173,6 +173,7 @@ pub enum TransformError {
     Unknown,
 }
 
+/*
 enum TextTransformationTypes {
     TextEmbedding,
     EntityExtraction,
@@ -200,6 +201,7 @@ struct TransformExampleStruct {
     output: DataSource,
     config: TransformConfig,
 }
+*/
 
 // TODO: Should this transform's input types and output types by LifelogData types?
 pub trait Transform {
@@ -255,7 +257,7 @@ impl DataOrigin {
         let parts = source.split(':').collect::<Vec<_>>();
         match parts[..] {
             [] => Err(LifelogError::InvalidDataModality(source)),
-            [x] => Err(LifelogError::InvalidDataModality(source)),
+            [_x] => Err(LifelogError::InvalidDataModality(source)),
             [device_id, modality] => Ok(DataOrigin {
                 origin: DataOriginType::DeviceId(device_id.to_string()),
                 modality: DataModality::tryfrom_str(modality)?,

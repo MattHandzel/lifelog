@@ -1,3 +1,5 @@
+# Lifelog v1 Technical Specification (Recreation Target)
+
 # Lifelog v1 Technical Specification
 
 This document specifies the v1 system you are rebuilding: a local-first, multi-device lifelog platform centered on **recall** (timeline + search + replay) and **cross-modal retrieval** (use one stream to filter/locate another).
@@ -576,12 +578,6 @@ In addition to milestones in Section 15, the repo analysis implies these concret
 - Replace transform “set-diff by full UUID scan” with an efficient **incremental transform cursor** model.
 - Align configuration semantics:
   - eliminate any “config-as-JSON-string-in-proto” bridging; keep config typed end-to-end.
-- **Refactor Type System (Proto-First)**:
-  - Current state: Rust structs + macros generate `.proto` files; code manually converts between Rust domain types, Proto types, and Database types.
-  - Target state: `.proto` files are the **single source of truth** for schema definitions.
-  - Rust types should be generated from Proto (via `tonic`/`prost`), with `serde` derives enabled for config/DB compatibility.
-  - Eliminate the "Rust-to-Proto" generation macro.
-  - Remove manual type casting layers in Server/Collector where the types are isomorphic.
 
 ---
 
@@ -796,3 +792,288 @@ Launch-blocking requirements implied by the audit:
 - Query authoring should use progressive disclosure (simple search -> templates -> advanced DSL), even if DSL is the canonical representation.
 - Multi-device must be first-class in UI: device health, backlogs, and “what’s collecting now” must be visible.
 - Privacy must be a first-class surface: pause, per-stream toggles, retention, deletion by time range.
+
+This document specifies the v1 system to be built. It is a local-first, multi-device lifelog platform centered on **recall** (timeline + search + replay) and **cross-modal retrieval**.
+
+This spec defines the goals, invariants, data/time semantics, network contracts, query language requirements, storage boundaries, and reliability guarantees for the project recreation.
+
+---
+
+## 0. Definitions
+
+- **Backend**: The central authority (Server) that schedules ingestion, stores data durably, runs transforms, and serves the UI/API.
+- **Collector**: A device program that captures raw streams, buffers them durably, and follows backend control.
+- **Stream**: An ordered sequence of records from a single source and modality (e.g., “laptop screen”, “desktop audio”).
+- **Record**: An immutable item in a stream. Records are either point events or time intervals.
+- **Blob**: Large payload content (image/audio) stored separately from metadata, referenced by content address (CAS).
+- **Transform**: A deterministic function that produces a derived stream from one or more input streams (e.g., OCR from screen).
+- **Query**: A deterministic, typed expression compiled to an executable plan, supporting cross-stream correlation.
+
+---
+
+## 1. Product Goals
+
+### 1.1 Primary Goal: Recall Anything
+
+The system must allow the user to recall any piece of information from any point in time by:
+
+- Browsing a timeline.
+- Searching across modalities (text, visual features).
+- Replaying a time window step-by-step.
+
+### 1.2 Cross-Modal Reconstruction
+
+The system must support queries of the form:
+
+> Return items from stream A during times where conditions over streams B/C/D were true.
+> _Example_: "Retrieve microphone audio during times where browser URL contains 'youtube' and screen OCR contains '3Blue1Brown'."
+
+### 1.3 Passive Capture, Zero Maintenance
+
+After initial setup, no manual organization is required. Failures are surfaced as quiet alerts.
+
+### 1.4 Local-First Privacy
+
+All ingestion, storage, processing, and queries execute on user-controlled machines. No cloud sync in v1.
+
+---
+
+## 2. Non-Goals (v1)
+
+- Cloud sync or remote storage targets.
+- "Quantified-self analytics" dashboards (focus is purely on recall).
+- Third-party "agent ecosystem" (deferred).
+- Perfect privacy filtering (e.g., automatic incognito detection is best-effort).
+
+---
+
+## 3. Data Modalities & Schema Requirements
+
+Collectors must produce the following streams. The data model is defined via Protobuf (see `lifelog_types.proto` as reference base, extended below).
+
+### 3.1 Primary Modalities (Desktop/Laptop)
+
+#### 3.1.1 Screen Capture
+
+- **Type**: Point record.
+- **Schema**: `ScreenFrame`
+  - `uuid`: string
+  - `timestamp`: Timestamp
+  - `width`: uint32, `height`: uint32
+  - `image_bytes`: bytes (or CAS reference in storage)
+  - `mime_type`: string
+- **Behavior**: Fixed interval capture.
+
+#### 3.1.2 Audio (Microphone & System)
+
+- **Type**: Interval record.
+- **Schema**: `AudioChunk` (New Requirement)
+  - `uuid`: string
+  - `timestamp_start`: Timestamp
+  - `duration_ms`: uint32
+  - `sample_rate`: uint32, `channels`: uint32
+  - `data`: bytes (or CAS reference)
+- **Behavior**: Continuous circular buffering, chunked upload.
+
+#### 3.1.3 Browser Activity
+
+- **Type**: Point/Interval record.
+- **Schema**: `BrowserFrame`
+  - `uuid`: string
+  - `timestamp`: Timestamp
+  - `url`: string
+  - `title`: string
+  - `visit_count`: uint32 (optional context)
+
+#### 3.1.4 App/Window Activity
+
+- **Type**: Interval record (duration of focus).
+- **Schema**: `WindowFrame` (New Requirement)
+  - `uuid`: string
+  - `timestamp`: Timestamp
+  - `app_name`: string
+  - `window_title`: string
+  - `process_id`: uint32
+
+#### 3.1.5 Input Events (Keystrokes/Mouse)
+
+- **Type**: Point records.
+- **Schema**: `InputEvent` (New Requirement)
+  - `uuid`: string
+  - `timestamp`: Timestamp
+  - `device_type`: Enum (Keyboard, Mouse)
+  - `event_type`: Enum (Press, Release, Move, Click)
+  - `payload`: string (Key char or Coordinate)
+  - **Security**: Must be encrypted at rest and in transit.
+
+#### 3.1.6 Shell History
+
+- **Type**: Point record.
+- **Schema**: `ShellCommand` (New Requirement)
+  - `uuid`: string
+  - `timestamp`: Timestamp
+  - `command`: string
+  - `directory`: string
+  - `exit_code`: int32
+
+### 3.2 Secondary/Derived Modalities
+
+- **OCR**: `OcrFrame` (Derived from Screen)
+  - `uuid`: string
+  - `source_screen_uuid`: string
+  - `timestamp`: Timestamp
+  - `text`: string
+  - `confidence`: float
+
+---
+
+## 4. Time Model
+
+### 4.1 Canonical Timeline Time
+
+UI and Queries must use **Corrected Device Time**:
+`t_canonical = t_device + skew_estimate_at_ingest`
+
+- **Device Time**: The raw timestamp captured by the collector.
+- **Ingest Time**: The timestamp when the backend persisted the record.
+- **Skew Estimate**: Maintained by the backend per-collector.
+
+### 4.2 Ordering & Correlation
+
+- **Sequence Numbers**: Each collector stream must have monotonic sequence numbers.
+- **Correlation Operators**:
+  - `WITHIN(A, B, ±Δt)`
+  - `OVERLAPS(intervalA, intervalB)`
+  - `DURING(A, predicate)`
+
+---
+
+## 5. System Architecture
+
+### 5.1 Components
+
+1.  **Backend (Server)**:
+    - Stores metadata in **SurrealDB**.
+    - Stores blobs in **Filesystem CAS**.
+    - Exposes gRPC API for Collectors and UI.
+2.  **Collector**:
+    - Runs on edge devices.
+    - Maintains **Disk-backed Queue** (WAL) for buffering.
+    - Pushes data via `UploadChunks` when authorized.
+3.  **Interface**:
+    - Web/Desktop UI connecting via gRPC to Backend.
+
+### 5.2 Connectivity (NAT-Safe)
+
+- Collectors initiate the connection to the Backend (Long-lived gRPC stream).
+- Backend sends control commands (Pause, Resume, Request Upload) over this channel.
+
+---
+
+## 6. Protocol Contracts (gRPC)
+
+The system is defined by the following gRPC services (merging `lifelog.proto` and v1 requirements).
+
+### 6.1 `LifelogServerService` (Backend)
+
+- **`RegisterCollector(Config) -> SessionID`**: Device enrollment.
+- **`UploadChunks(stream Chunk) -> Ack`**:
+  - `Chunk`: `{ collector_id, stream_id, session_id, offset, data, hash }`
+  - `Ack`: `{ stream_id, acked_offset }`
+  - **Invariant**: Backend only ACKs after metadata + blob + baseline indexes are durable.
+- **`GetUploadOffset(...) -> Offset`**: Resumable upload support.
+- **`ReportState(CollectorState)`**: Health checks.
+- **`Query(QueryRequest) -> QueryResponse`**: Unified search API.
+- **`GetData(DataRequest) -> DataStream`**: Retrieval for playback/export.
+
+### 6.2 `CollectorService` (Collector)
+
+- **`SetConfig(Config)`**: Dynamic reconfiguration.
+- **`PauseCapture/ResumeCapture`**: Safety rails.
+
+---
+
+## 7. Storage & Indexing
+
+### 7.1 Hot Store (SurrealDB)
+
+- **Metadata**: Stores all record fields _except_ heavy blobs.
+- **References**: blobs are stored as `{ hash, size, mime_type }`.
+- **Indexes**:
+  - Time-range index (per stream).
+  - Full-text search index (OCR, URL, Shell, Clipboard).
+
+### 7.2 Blob Store (Filesystem CAS)
+
+- Content-Addressed Storage.
+- Path structure: `data/blobs/{hash_prefix}/{hash}`.
+
+### 7.3 Data Plane Implementation
+
+- **Chunk Unit**: Byte offset within a per-stream session.
+- **Deduplication**: Idempotent writes based on `(collector_id, stream_id, offset)`.
+
+---
+
+## 8. Query Language & Transforms
+
+### 8.1 Transforms
+
+- **Model**: Incremental processing.
+- **Cursor**: Backend maintains `last_processed_sequence` for each transform (e.g., OCR) per stream.
+- **Output**: Writes to a derived stream (e.g., `stream:screen` -> `transform:ocr` -> `stream:screen_ocr`).
+
+### 8.2 Query Execution
+
+- **Input**: Structured `Query` object (Sources, TimeRanges, TextFilters, ImageEmbeddings).
+- **Output**: Stream of `LifelogDataKey` (UUIDs) or full `LifelogData` objects.
+- **Replay**: `GetFrame(t)` returns the interval record covering `t`.
+
+---
+
+## 9. Reliability & Security
+
+### 9.1 Invariants
+
+- **Store Everything**: Default retention is forever.
+- **Don't Lose Data**: Collector buffers to disk until Backend explicit ACK.
+- **Resumable**: Uploads survive network cuts.
+
+### 9.2 Security
+
+- **Transport**: TLS 1.3 required for all gRPC connections.
+- **Enrollment**: Secure pairing token required for `RegisterCollector`.
+- **Sensitive Data**: Keystrokes must be encrypted at application level before storage.
+
+---
+
+## 10. Implementation Roadmap (Recreation Steps)
+
+This roadmap replaces the "Artifact Reconciliation" from the original spec.
+
+1.  **Define Schema**: Create `proto/v1/lifelog.proto` with the complete set of modalities (Section 3).
+2.  **Core Backend**:
+    - Setup SurrealDB connection.
+    - Implement `RegisterCollector` and `ReportState`.
+    - Implement CAS Blob Store.
+3.  **Collector Buffering**:
+    - Implement a disk-backed queue (e.g., using `sled` or a simple file-based WAL) to replace in-memory buffers.
+4.  **Data Plane**:
+    - Implement `UploadChunks` with offset tracking in SurrealDB.
+    - Implement `GetUploadOffset` for resume.
+5.  **Sources**:
+    - Port existing Screen/Browser capture.
+    - Implement Audio/Shell/Input capture.
+6.  **Query & UI**:
+    - Implement Basic Time-Range Query.
+    - Build Timeline UI (React/Tauri).
+7.  **Transforms**:
+    - Port OCR to the new incremental cursor model.
+
+---
+
+## 11. Known Constraints
+
+- **Clock Skew**: The backend must calculate skew; collectors generally trust their local clock for _relative_ timing, but backend normalizes it.
+- **Performance**: Text search queries must return in <200ms for recent data.
+- **Windows/Mac**: Not required for v1 initial release (Linux focus), but architecture must be cross-platform (Rust/Tauri).

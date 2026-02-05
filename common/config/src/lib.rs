@@ -184,10 +184,12 @@ fn default_weather_interval() -> f64 {
     60.0
 }
 
+/*
 // Weather specific function to load API key from environment
 fn load_weather_api_key() -> String {
     env::var("WEATHER_API_KEY").unwrap_or_else(|_| "".to_string())
 }
+*/
 
 #[lifelog_type(Config)]
 #[derive(Debug, Clone, Serialize, Deserialize, From)]
@@ -444,7 +446,7 @@ pub struct TextUploadConfig {
 
 pub fn load_config() -> CollectorConfig {
     let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
-    let lifelog_home_dir = env::var("LIFELOG_HOME_DIR")
+    let _lifelog_home_dir = env::var("LIFELOG_HOME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| home_dir.clone());
 

@@ -2,11 +2,8 @@ use crate::logger::*;
 use async_trait::async_trait;
 use chrono::Local;
 use config::ScreenConfig;
-use rusqlite::params;
-use std::path::Path;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
-use tokio::io::join;
 use tokio::time::{sleep, Duration};
 use data_modalities::screen::ScreenFrame;
 
@@ -16,7 +13,6 @@ use lifelog_core::Utc;
 use std::io::Cursor;
 use lifelog_core::Uuid;
 
-use std::env;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
@@ -74,7 +70,7 @@ impl DataSource for ScreenDataSource {
 
         let source_clone = self.clone();
 
-        let join_handle = tokio::spawn(async move {
+        let _join_handle = tokio::spawn(async move {
             let task_result = source_clone.run().await;
             println!(
                 "[Task] ScreenDataSource (in-memory) background task finished with result: {:?}",
@@ -174,7 +170,7 @@ impl ScreenLogger {
         // let temp_file_path_str = temp_file.to_str().ok_or_else(|| LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, "Invalid temp file path")))?;
 
         let now = Local::now();
-        let ts = now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1e9;
+        let _ts = now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1e9;
         let ts_fmt = now.format(&self.config.timestamp_format);
         let out = format!("{}/{}.png", self.config.output_dir.display(), ts_fmt);
         println!("[ScreenLogger] Capturing screenshot to: {}", out);

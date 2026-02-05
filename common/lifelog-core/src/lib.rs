@@ -66,7 +66,8 @@ pub enum LifelogMacroMetaDataType {
     None,
 }
 
-use core::{slice, str};
+// use core::{slice, str};
+/*
 const fn folder_name(path: &str) -> &str {
     let bytes = path.as_bytes();
     let mut last_slash = 0;
@@ -93,6 +94,7 @@ const fn folder_name(path: &str) -> &str {
         str::from_utf8_unchecked(byte_slice)
     }
 }
+*/
 
 //use system_state::*;
 

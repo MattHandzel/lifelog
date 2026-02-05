@@ -24,8 +24,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_v1alpha()?; // This should be build_v1alpha otherwise the reflection gRPC service
                            // won't work with clients such as grpcui, it could be changed in the future
 
-    let time: DateTime<Utc> = Utc::now();
-    let uuid = Uuid::new_v4();
+    let _time: DateTime<Utc> = Utc::now();
+    let _uuid = Uuid::new_v4();
 
     let server_handle =
         LifelogServerHandle::new(std::sync::Arc::new(tokio::sync::RwLock::new(server)));

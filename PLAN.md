@@ -29,12 +29,27 @@ This plan implements an automated validation suite for `SPEC.md` using `VALIDATI
    - Done when: WITHIN/OVERLAPS semantics exist for point/interval and unit tests cover worked examples.
    - Status: Implemented minimal WITHIN(point,point) + OVERLAPS(interval,interval) in `common/lifelog-core/src/correlation.rs`.
 
-5. Unit: Chunk/Offset + CAS Primitives (UT-040, UT-050..UT-052)
-   - Done when: byte-offset validation + SHA256 hashing + filesystem CAS put/get/dedupe are implemented and tested.
-   - Status: CAS primitive implemented in `common/utils/src/cas.rs`; chunk/offset validation not started.
+5. Unit: Chunk/Offset + CAS Primitives (UT-040, UT-041, UT-042, UT-050..UT-052)
+   - Done when: byte-offset validation + SHA256 hashing + filesystem CAS put/get/dedupe + idempotent apply + ACK gate are implemented and tested.
+   - Status: Implemented in `common/utils/src/cas.rs`, `common/utils/src/chunk.rs`, and `common/utils/src/ingest.rs` with unit tests.
 
 6. Integration Scaffolding (IT-010, IT-060, IT-080, IT-090, IT-081, IT-100, IT-110, IT-130, IT-140, IT-150, IT-160)
    - Done when: there is a consistent way to spin up ephemeral backend components for tests (DB + CAS paths + config), even if tests remain ignored.
+
+7. Refactor: Proto-First Type System
+   - **Goal:** Make `.proto` files the single source of truth. Stop generating them from Rust macros. Eliminate explicit type casting between "Domain Types" and "Proto Types" where they are identical.
+   - **Why:** Reduces maintenance burden, compilation time, and runtime overhead of cloning/converting identical structures.
+   - **Steps:**
+     1. **Snapshot Proto Files:** Ensure `proto/lifelog.proto` and `proto/lifelog_types.proto` contain the latest schema. Commit them.
+     2. **Disable Macro Generation:** Remove/Disable the `lifelog-macros` logic that overwrites these files.
+     3. **Enhance Proto Generation:** Configure `lifelog-proto/build.rs` to add `#[derive(Serialize, Deserialize)]` to generated structs (using `prost-build` config or `pbjson`).
+     4. **Retire Duplicate Structs:** Identify structs in `lifelog-types` that mirror proto messages. Deprecate them.
+     5. **Refactor Usages:**
+        - Update `common/config` to use generated Proto structs (if they satisfy `serde` needs).
+        - Update `server/src/server.rs` to remove `impl From<Domain> for Proto` boilerplate.
+        - Update `lifelog-core` to operate on generated types or traits implemented by them.
+   - **Risks:** `lifelog-types` might contain logic/methods attached to structs.
+     - *Mitigation:* Use Rust's `impl MyGeneratedStruct { ... }` in a separate crate or extension trait to keep helper methods.
 
 ## Risks / Mitigations
 

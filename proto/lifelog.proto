@@ -117,6 +117,32 @@ message ReportStateResponse {
   bool acknowledged = 1;
 }
 
+message Chunk {
+  string collector_id = 1;
+  string stream_id = 2;
+  uint64 session_id = 3;
+  uint64 offset = 4;
+  bytes data = 5;
+  string hash = 6; // sha256 hex
+}
+
+message Ack {
+  string collector_id = 1;
+  string stream_id = 2;
+  uint64 session_id = 3;
+  uint64 acked_offset = 4;
+}
+
+message GetUploadOffsetRequest {
+  string collector_id = 1;
+  string stream_id = 2;
+  uint64 session_id = 3;
+}
+
+message GetUploadOffsetResponse {
+  uint64 offset = 1;
+}
+
 message Embedding {
   repeated float embedding = 1;
 }
@@ -152,6 +178,12 @@ service LifelogServerService {
 
   // This will be used to get the state of the WHOLE system, it will include the state of the server and the state of the collectors as well.
   rpc GetState(GetStateRequest) returns (GetSystemStateResponse);
+
+  // Data Plane: Upload buffered data in chunks
+  rpc UploadChunks(stream Chunk) returns (Ack);
+
+  // Data Plane: Get the last durably persisted offset for a stream session
+  rpc GetUploadOffset(GetUploadOffsetRequest) returns (GetUploadOffsetResponse);
 }
 
 // This is a service that each collector will implement

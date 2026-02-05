@@ -5,9 +5,6 @@ use std::fmt::Debug;
 use crate::logger::LoggerError;
 use tokio::task::JoinHandle;
 
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
 #[derive(Debug)]
 pub struct DataSourceHandle {
     pub join: JoinHandle<Result<(), DataSourceError>>,

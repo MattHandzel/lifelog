@@ -11,10 +11,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let descriptor_set = out_dir.join("lifelog_descriptor.bin");
     tonic_build::configure()
         .build_server(true)
         .build_client(true)
-        .file_descriptor_set_path(out_dir.join("lifelog_descriptor.bin"))
+        .file_descriptor_set_path(&descriptor_set)
+        .extern_path(".google.protobuf.Timestamp", "::pbjson_types::Timestamp")
         .compile_protos(
             &[
                 "../../proto/lifelog.proto",
@@ -23,5 +25,11 @@ fn main() -> Result<(), Box<dyn Error>> {
             &["../../proto"],
         )
         .expect("Failed to compile proto files. IF THIS IS HAPPENING TO YOU BECUASE SOME MESSAGES ARE NOT DEFINED, THEN IT MEANS THE MESSAGES AREN'T BEING AUTOMATICALLY CREATED, TO FIX THIS, COMMENT OUT THIS BUILD SCRIPT (from the tonic_build:configure() to this line) AND BUILD");
+
+    let descriptor_bytes = std::fs::read(&descriptor_set)?;
+    pbjson_build::Builder::new()
+        .register_descriptors(&descriptor_bytes)?
+        .build(&[".lifelog"])?;
+
     Ok(())
 }
