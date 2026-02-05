@@ -6,7 +6,8 @@ Implement a runnable, incremental validation suite for `SPEC.md` based on `VALID
 
 ## Last Verified
 
-- Not yet green: baseline `cargo check/test` currently require Linux native deps (ALSA) and protobuf compilation.
+- `cargo test -p lifelog-core`
+- `cargo test -p utils`
 
 ## How To Verify (Target)
 
@@ -25,4 +26,3 @@ Implement a runnable, incremental validation suite for `SPEC.md` based on `VALID
 ## Blockers
 
 - None, assuming `nix develop` is available for native deps on Linux.
-
