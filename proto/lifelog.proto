@@ -84,8 +84,9 @@ message Query {
   }
 
 message LifelogDataKey {
-  string uuid = 1;
   string origin = 2;
+  string uuid = 1;
+  timestamp 
   }
 
 message QueryRequest {

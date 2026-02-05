@@ -12,3 +12,5 @@ TODOS:
 
 - Improve the collector configs, get a new configuration pipeline for this project (server, collectors, etc.)
 - Implement the get and set config functions for the collectors and server
+
+- Refactor the project so that keys are timestamp, data source
