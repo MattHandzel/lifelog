@@ -12,6 +12,21 @@ members = [
     "common/lifelog-types",
 ]
 
+# Keep the Tauri UI crate in the workspace, but don't build it by default.
+# It pulls in native GUI deps (e.g. glib/gtk) that aren't needed for most
+# backend/collector development or CI checks.
+default-members = [
+    "common/config",
+    "common/data-modalities",
+    "collector",
+    "server",
+    "common/utils",
+    "common/lifelog-core",
+    "common/macros",
+    "common/lifelog-proto",
+    "common/lifelog-types",
+]
+
 resolver = "2"
 
 [workspace.package]
@@ -47,4 +62,3 @@ image = { version = "0.25.6" , features = ["jpeg", "png","webp"]}
 once_cell = "1.21.3"
 futures-core = "0.3.31"
 tokio-stream = { version = "0.1.17", features = ["full"] }
-

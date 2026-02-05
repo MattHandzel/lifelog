@@ -84,10 +84,9 @@ message Query {
   }
 
 message LifelogDataKey {
-  string origin = 2;
   string uuid = 1;
-  timestamp 
-  }
+  string origin = 2;
+}
 
 message QueryRequest {
   Query query = 1; // TODO: Change this to be the query data type we define

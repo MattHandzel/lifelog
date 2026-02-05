@@ -36,7 +36,8 @@ hyprland = "0.4.0-beta.1"
 users = "0.11"
 sysinfo = "0.24" # TODO: Change this to version 0.35 and refactor the other code
 hound = "3.5.1"
-reqwest = { version = "0.11", features = ["json"] }
+# Use Rustls so we don't require system OpenSSL headers/libs for development/CI.
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
 clap = { version = "4.5", features = ["derive"] } 
 crossbeam-channel = "0.5"
 rdev = "0.5"
@@ -72,4 +73,3 @@ dev= ["config/dev"]
 
 [dev-dependencies]
 anyhow = "1"
-

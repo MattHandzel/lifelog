@@ -43,7 +43,8 @@ bytes = { workspace = true }
 dirs = "5.0.1"
 base64 = "0.21.0"
 async-trait = "0.1"
-reqwest = { version = "0.11", features = ["json", "multipart"] }
+# Use Rustls so we don't require system OpenSSL headers/libs for development/CI.
+reqwest = { version = "0.11", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 
 # Cross-platform dependencies
 toml = "0.5"

@@ -3,6 +3,13 @@ use std::error::Error;
 use std::path::PathBuf;
 
 fn main() -> Result<(), Box<dyn Error>> {
+    // Prefer an explicitly-provided `PROTOC`, but fall back to a vendored binary so
+    // `cargo check/test` work on systems without protobuf tooling preinstalled.
+    if env::var_os("PROTOC").is_none() {
+        let protoc = protoc_bin_vendored::protoc_bin_path()?;
+        env::set_var("PROTOC", protoc);
+    }
+
     let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
     tonic_build::configure()
         .build_server(true)
