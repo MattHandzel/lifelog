@@ -8,6 +8,7 @@ Implement a runnable, incremental validation suite for `SPEC.md` based on `VALID
 
 - `cargo test -p lifelog-core`
 - `cargo test -p utils`
+- `nix develop -c cargo check` (passes; warnings remain in `server/` and `common/`)
 
 ## How To Verify (Target)
 
