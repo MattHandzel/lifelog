@@ -2,11 +2,33 @@
 # Used in Tier 2 container chaos tests
 
 FROM rust:1.86-bookworm AS builder
+RUN apt-get update && apt-get install -y \
+    mold \
+    cmake \
+    clang \
+    libclang-dev \
+    pkg-config \
+    libssl-dev \
+    libsqlite3-dev \
+    libasound2-dev \
+    libx11-dev \
+    libxtst-dev \
+    libxi-dev \
+    libleptonica-dev \
+    tesseract-ocr \
+    libtesseract-dev \
+    libv4l-dev \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY . .
 RUN cargo build --release -p lifelog-collector
 
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    tesseract-ocr \
+    libasound2 \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=builder /app/target/release/lifelog-collector /usr/local/bin/lifelog-collector
 ENTRYPOINT ["lifelog-collector"]

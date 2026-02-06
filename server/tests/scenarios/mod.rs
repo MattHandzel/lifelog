@@ -273,6 +273,9 @@ impl ScenarioRunner {
             all_results.extend(results);
         }
 
+        // Clear fault rules before checking invariants — assertions must not be disrupted
+        ctx.fault_controller.clear().await;
+
         // Check invariants
         let mut client = ctx.client();
         for invariant in &scenario.invariants {

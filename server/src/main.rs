@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use config::ServerConfig;
 use lifelog_core::uuid::Uuid;
 use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
 use lifelog_server::server::GRPCServerLifelogServerService;
@@ -14,7 +13,22 @@ use tonic_reflection::server::Builder;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let config = ServerConfig::default();
+    let mut config = config::default_server_config();
+    // Allow env var overrides for containerized deployments
+    if let Ok(host) = std::env::var("LIFELOG_HOST") {
+        config.host = host;
+    }
+    if let Ok(port) = std::env::var("LIFELOG_PORT") {
+        if let Ok(p) = port.parse() {
+            config.port = p;
+        }
+    }
+    if let Ok(db) = std::env::var("LIFELOG_DB_ENDPOINT") {
+        config.database_endpoint = db;
+    }
+    if let Ok(cas) = std::env::var("LIFELOG_CAS_PATH") {
+        config.cas_path = cas;
+    }
     let server = LifelogServer::new(&config).await?;
 
     let addr = format!("{}:{}", config.host, config.port).parse()?;

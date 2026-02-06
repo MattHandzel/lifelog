@@ -74,3 +74,4 @@ lifelog_data/
 # Build artifacts
 expanded.rs
 expanded_config.rs
+worktrees/

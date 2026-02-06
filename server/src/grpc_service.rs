@@ -138,15 +138,13 @@ impl LifelogServerService for GRPCServerLifelogServerService {
     ) -> Result<Response<QueryResponse>, Status> {
         let query_message = request.into_inner().query;
         tracing::info!(query = ?query_message, "Received query request");
-        let _server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
 
-        let _uuids: Vec<LifelogFrameKey> = vec![];
         // NOTE: Right now we just return all uuids for a query, in the future actually parse the
         // query message and return the uuids that match
         let query = String::from("");
         let keys = self
             .server
-            .process_query(query.clone())
+            .process_query(query)
             .await
             .map_err(|e| tonic::Status::internal(format!("Failed to process query: {}", e)))?;
         let proto_keys: Vec<lifelog_proto::LifelogDataKey> = keys
