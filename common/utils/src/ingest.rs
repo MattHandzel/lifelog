@@ -94,22 +94,14 @@ impl<B: IngestBackend> ChunkIngester<B> {
         Ok(next_offset)
     }
 
-    /// Returns the durably ACKed offset.
-    /// UT-042: Only advances if backend reports as indexed.
-    pub async fn get_acked_offset(&self, current_offset: u64) -> u64 {
-        if self.backend.is_indexed(
+    /// Checks if the chunk at the given offset is indexed.
+    pub async fn is_chunk_indexed(&self, offset: u64) -> bool {
+        self.backend.is_indexed(
             &self.collector_id,
             &self.stream_id,
             self.session_id,
-            current_offset,
-        ).await {
-            // In a real implementation, we might track multiple chunks.
-            // For the gate, we check if the requested offset is indexed.
-            current_offset
-        } else {
-            // For v1 simplification, if not indexed, we return 0 or the last ACKed offset.
-            0
-        }
+            offset,
+        ).await
     }
 }
 
@@ -209,11 +201,12 @@ mod tests {
         let hash = sha256_hex(data);
         ingester.apply_chunk(0, data, &hash).await.unwrap();
 
-        // Before indexing: ACK should not advance to 6
-        assert_eq!(ingester.get_acked_offset(6).await, 0);
+        // Before indexing: should be false
+        assert_eq!(ingester.is_chunk_indexed(0).await, false);
 
-        // After indexing: ACK advances to 6
-        backend.indexed.lock().unwrap().insert(("c1".into(), "s1".into(), 123, 6));
-        assert_eq!(ingester.get_acked_offset(6).await, 6);
+        // After indexing (mock backend update)
+        // Note: we insert '0' because that is the chunk start offset
+        backend.indexed.lock().unwrap().insert(("c1".into(), "s1".into(), 123, 0));
+        assert_eq!(ingester.is_chunk_indexed(0).await, true);
     }
 }

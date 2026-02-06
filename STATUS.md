@@ -21,19 +21,19 @@ Expanding automated validation coverage and finishing remaining data modality mi
 
 ## What Changed Last
 
+- **IT-081 Verified**: ACK Gate implemented and verified. Backend now only ACKs chunks if they are marked as indexed.
+- **ChunkIngester Fixed**: Corrected logic to check `is_chunk_indexed` on the start offset.
+- **SurrealIngestBackend Improved**: Now uses `CREATE` instead of `UPSERT` to be idempotent without overwriting `indexed` status.
+- **Integration Test Scaffolding**: `TestContext` now exposes `db_addr` for direct DB manipulation in tests.
 - **Proto-First Refactor Completed**: All Config and State types now use `lifelog_proto` generated structs. Manual type conversion layers removed.
-- **Integration Test Scaffolding**: Implemented `TestContext` harness that automates ephemeral SurrealDB and Server lifecycle for verification.
 - **IT-090 Verified**: Resumable chunked upload protocol is now verified by a real integration test.
-- **Documentation Updated**: Added `docs/architecture/proto-system.md` and refreshed `docs/internal-data-representation.md`.
-- **DevEx Improved**: Added a `justfile` to simplify workspace checks and tests.
-- **Warning-Free Build**: Fixed all build warnings across the workspace.
 
 ## What's Next
 
-- Implement `IT-081` (ACK Gate) integration test.
-- Wire up real SurrealDB metadata persistence in `SurrealIngestBackend` (it currently upserts chunk metadata but doesn't yet trigger indexing).
+- Wire up real SurrealDB metadata persistence in `SurrealIngestBackend` (parse chunk data and insert actual records).
+- Implement `IT-100` (Blob Separation) and `IT-110` (OCR Transform).
 - Migrate Modality types (`ScreenFrame`, `BrowserFrame`) to re-exports.
 
 ## Blockers
 
-- None, assuming `nix develop` is available for native deps on Linux.
+- None.

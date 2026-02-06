@@ -96,15 +96,24 @@ impl IngestBackend for SurrealIngestBackend {
         let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
         println!("[SERVER] Persisting chunk metadata: id={}, offset={}, length={}", id, offset, length);
         
-        let _ : Vec<ChunkRecord> = db.query("UPSERT type::thing('upload_chunks', $id) CONTENT $record")
-            .bind(("id", id))
-            .bind(("record", record))
-            .await
-            .map_err(|e| e.to_string())?
-            .take(0)
-            .map_err(|e| e.to_string())?;
-            
-        Ok(())
+        // Use CREATE to avoid overwriting existing records (preserving 'indexed' state)
+        // If it exists, we assume it's the same chunk (idempotency)
+        let result = db.create::<Option<ChunkRecord>>(( "upload_chunks", &id ))
+            .content(record)
+            .await;
+
+        match result {
+            Ok(_) => Ok(()),
+            Err(surrealdb::Error::Db(surrealdb::error::Db::RecordExists { .. })) => Ok(()),
+            Err(e) => {
+                // Check if error string contains "already exists" as fallback for other error variants
+                if e.to_string().contains("already exists") {
+                    Ok(())
+                } else {
+                    Err(e.to_string())
+                }
+            }
+        }
     }
 
     async fn is_indexed(
@@ -658,7 +667,9 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                     .map_err(|e| Status::invalid_argument(format!("Ingest error: {}", e)))?;
                 
                 // REQ-014: ACK only if fully indexed (durable ACK gate)
-                last_acked_offset = ing.get_acked_offset(next_offset).await;
+                if ing.is_chunk_indexed(chunk.offset).await {
+                    last_acked_offset = next_offset;
+                }
             }
         }
 

@@ -12,6 +12,7 @@ use tokio::sync::RwLock;
 
 pub struct TestContext {
     pub server_addr: String,
+    pub db_addr: String,
     pub db_process: Child,
     #[allow(dead_code)]
     pub temp_dir: TempDir,
@@ -46,7 +47,7 @@ impl TestContext {
         let config = ServerConfig {
             host: "127.0.0.1".to_string(),
             port: server_port as u32,
-            database_endpoint: db_addr,
+            database_endpoint: db_addr.clone(),
             database_name: "test_db".to_string(),
             server_name: "TestServer".to_string(),
             cas_path: temp_dir.path().join("cas").display().to_string(),
@@ -81,6 +82,7 @@ impl TestContext {
 
         Self {
             server_addr,
+            db_addr,
             db_process,
             temp_dir,
             client,
