@@ -10,10 +10,10 @@ pub use server_config::*;
 
 // Re-export all config types from lifelog_proto
 pub use lifelog_proto::{
-    SystemConfig, CollectorConfig, BrowserHistoryConfig, ScreenConfig,
-    CameraConfig, MicrophoneConfig, ProcessesConfig, HyprlandConfig,
-    NetworkConfig, SystemPerformanceConfig, AmbientConfig, WeatherConfig,
-    AudioConfig, GeoConfig, WifiConfig, InputLoggerConfig, TextUploadConfig,
+    AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, CollectorConfig, GeoConfig,
+    HyprlandConfig, InputLoggerConfig, MicrophoneConfig, NetworkConfig, ProcessesConfig,
+    ScreenConfig, SystemConfig, SystemPerformanceConfig, TextUploadConfig, WeatherConfig,
+    WifiConfig,
 };
 
 pub fn load_config() -> CollectorConfig {
@@ -31,13 +31,17 @@ pub fn load_config() -> CollectorConfig {
         .collect();
 
     println!("Using the config file at: {:?}", config_path);
-    
+
     let config_str = if config_path.exists() {
         fs::read_to_string(&config_path).unwrap_or_else(|_| String::new())
     } else {
-        println!("Config file does not exist at {:?}, creating default", config_path);
+        println!(
+            "Config file does not exist at {:?}, creating default",
+            config_path
+        );
         let default_config = create_default_config();
-        let config_str = toml::to_string(&default_config).expect("Failed to serialize default config");
+        let config_str =
+            toml::to_string(&default_config).expect("Failed to serialize default config");
         if let Some(parent) = config_path.parent() {
             let _ = fs::create_dir_all(parent);
         }

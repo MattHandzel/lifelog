@@ -83,7 +83,9 @@ impl Transform for OcrTransform {
                 // For now, this will likely lead to Tesseract error or empty output.
                 // This path should ideally not be hit if LifelogImage is valid.
                 // Consider returning TransformError::ImageConversionFailed or similar.
-                eprintln!("[OCR TRANSFORM] Failed to create rusty_tesseract::Image from dynamic_image");
+                eprintln!(
+                    "[OCR TRANSFORM] Failed to create rusty_tesseract::Image from dynamic_image"
+                );
                 // Let's return an empty OcrFrame to avoid panicking here
                 return Ok(OcrFrame {
                     text: String::new(),
@@ -166,7 +168,9 @@ mod tests {
         };
 
         // We don't assert on specific text output here; OCR output varies by environment.
-        let out = transform.apply(input).expect("OCR transform should not error");
+        let out = transform
+            .apply(input)
+            .expect("OCR transform should not error");
         assert_eq!(out.uuid, uuid);
         assert_eq!(out.timestamp, timestamp);
     }

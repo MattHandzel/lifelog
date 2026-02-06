@@ -2,16 +2,16 @@ use crate::logger::*;
 use async_trait::async_trait;
 use chrono::Local;
 use config::ScreenConfig;
+use data_modalities::screen::ScreenFrame;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::time::{sleep, Duration};
-use data_modalities::screen::ScreenFrame;
 
 use image::GenericImageView;
 use image::ImageReader;
 use lifelog_core::Utc;
-use std::io::Cursor;
 use lifelog_core::Uuid;
+use std::io::Cursor;
 
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -110,8 +110,6 @@ impl DataSource for ScreenDataSource {
 
                     let (width, height) = img.dimensions();
 
-                    
-
                     let captured = ScreenFrame {
                         uuid: Uuid::new_v4(), //use v6
                         width: width,
@@ -203,7 +201,10 @@ impl ScreenLogger {
         let image_data = tokio::fs::read(&out).await.map_err(LoggerError::Io)?;
 
         if let Err(e) = tokio::fs::remove_file(&out).await {
-            eprintln!("[ScreenLogger] Failed to delete temporary screenshot: {}", e);
+            eprintln!(
+                "[ScreenLogger] Failed to delete temporary screenshot: {}",
+                e
+            );
         }
 
         Ok(image_data)

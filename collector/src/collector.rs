@@ -3,6 +3,7 @@ use crate::modules::browser_history::BrowserHistorySource;
 use crate::modules::screen::ScreenDataSource;
 use config;
 use data_modalities::{browser::BrowserFrame, screen::ScreenFrame};
+use mac_address::get_mac_address;
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt;
@@ -11,7 +12,6 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::task::AbortHandle;
 use tokio::time::Duration;
-use mac_address::get_mac_address;
 
 use config::{BrowserHistoryConfig, ScreenConfig};
 use lifelog_types::CollectorState;
@@ -25,8 +25,8 @@ use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
 
 use lifelog_proto::{
     GetCollectorConfigRequest, GetCollectorConfigResponse, GetCollectorStateResponse,
-    GetDataRequest, GetStateRequest, LifelogData, RegisterCollectorRequest,
-    ReportStateRequest, SetCollectorConfigRequest, SetCollectorConfigResponse,
+    GetDataRequest, GetStateRequest, LifelogData, RegisterCollectorRequest, ReportStateRequest,
+    SetCollectorConfigRequest, SetCollectorConfigResponse,
 };
 
 struct RunningSource<C: Send + Sync + Debug + 'static> {
@@ -340,9 +340,9 @@ impl Collector {
             if let Some(running_screen_src) =
                 (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>()
             {
-                let source_dyn_box_ref: &Arc<Mutex<
-                    Box<dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static>,
-                >> = &running_screen_src.instance;
+                let source_dyn_box_ref: &Arc<
+                    Mutex<Box<dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static>>,
+                > = &running_screen_src.instance;
                 let source_dyn_ref = &**source_dyn_box_ref;
 
                 if let Some(screen_ds) =
@@ -366,12 +366,8 @@ impl Collector {
         }
 
         let dev_name = match mac_address_variable {
-            Some(s) => {
-                s
-            }
-            None => {
-                self.client_id.clone()
-            }
+            Some(s) => s,
+            None => self.client_id.clone(),
         };
 
         CollectorState {
@@ -510,14 +506,24 @@ impl CollectorService for GRPCServerCollectorService {
                 if let Some(running_screen_src) = running {
                     let instance_arc = &running_screen_src.instance;
                     let mut guard = instance_arc.lock().await;
-                    let boxed_dyn_data_source: &mut Box<dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static> = &mut *guard;
-                    let inner_dyn_data_source_ref: &mut (dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static) = &mut **boxed_dyn_data_source;
+                    let boxed_dyn_data_source: &mut Box<
+                        dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static,
+                    > = &mut *guard;
+                    let inner_dyn_data_source_ref: &mut (dyn DataSource<Config = ScreenConfig>
+                              + Send
+                              + Sync
+                              + 'static) = &mut **boxed_dyn_data_source;
 
-                    if let Some(screen_ds_mut) = (inner_dyn_data_source_ref as &mut dyn Any).downcast_mut::<ScreenDataSource>() {
+                    if let Some(screen_ds_mut) = (inner_dyn_data_source_ref as &mut dyn Any)
+                        .downcast_mut::<ScreenDataSource>()
+                    {
                         match screen_ds_mut.get_data().await {
                             Ok(images) => {
                                 println!("[gRPC] clearing image buffer!");
-                                screen_ds_mut.clear_buffer().await.unwrap_or_else(|e| eprintln!("Error clearing buffer: {}", e));
+                                screen_ds_mut
+                                    .clear_buffer()
+                                    .await
+                                    .unwrap_or_else(|e| eprintln!("Error clearing buffer: {}", e));
                                 images
                             }
                             Err(e) => {
@@ -525,12 +531,10 @@ impl CollectorService for GRPCServerCollectorService {
                                 Vec::new()
                             }
                         }
-                    }
-                    else {
+                    } else {
                         eprintln!("[gRPC] could not downcast to ScreenDataSource");
                         Vec::new()
                     }
-
                 } else {
                     eprintln!("[gRPC] 'screen' source not found or wrong type");
                     Vec::new()
@@ -579,10 +583,17 @@ impl CollectorService for GRPCServerCollectorService {
                 if let Some(running_browser_src) = running {
                     let instance_arc = &running_browser_src.instance;
                     let mut guard = instance_arc.lock().await;
-                    let boxed_dyn_data_source: &mut Box<dyn DataSource<Config = BrowserHistoryConfig> + Send + Sync + 'static> = &mut *guard;
-                    let inner_dyn_data_source_ref: &mut (dyn DataSource<Config = BrowserHistoryConfig> + Send + Sync + 'static) = &mut **boxed_dyn_data_source;
+                    let boxed_dyn_data_source: &mut Box<
+                        dyn DataSource<Config = BrowserHistoryConfig> + Send + Sync + 'static,
+                    > = &mut *guard;
+                    let inner_dyn_data_source_ref: &mut (dyn DataSource<Config = BrowserHistoryConfig>
+                              + Send
+                              + Sync
+                              + 'static) = &mut **boxed_dyn_data_source;
 
-                    if let Some(browser_ds) = (inner_dyn_data_source_ref as &mut dyn Any).downcast_mut::<BrowserHistorySource>() {
+                    if let Some(browser_ds) = (inner_dyn_data_source_ref as &mut dyn Any)
+                        .downcast_mut::<BrowserHistorySource>()
+                    {
                         match browser_ds.get_data() {
                             Ok(history) => history,
                             Err(e) => {

@@ -1,5 +1,5 @@
-use crate::chunk::{ChunkOffsetValidator, OffsetPolicy, ChunkError};
 use crate::cas::FsCas;
+use crate::chunk::{ChunkError, ChunkOffsetValidator, OffsetPolicy};
 use async_trait::async_trait;
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
@@ -75,33 +75,37 @@ impl<B: IngestBackend> ChunkIngester<B> {
             offset,
             bytes,
             hash,
-            OffsetPolicy::Resume { allow_offset: offset },
+            OffsetPolicy::Resume {
+                allow_offset: offset,
+            },
         )?;
 
         // UT-050: Store in CAS (deduplicated by FsCas)
-        self.cas.put(bytes).map_err(|e| IngestError::Backend(e.to_string()))?;
+        self.cas
+            .put(bytes)
+            .map_err(|e| IngestError::Backend(e.to_string()))?;
 
         // UT-041: Idempotent metadata persistence
-        self.backend.persist_metadata(
-            &self.collector_id,
-            &self.stream_id,
-            self.session_id,
-            offset,
-            bytes.len() as u64,
-            hash,
-        ).await.map_err(IngestError::Backend)?;
+        self.backend
+            .persist_metadata(
+                &self.collector_id,
+                &self.stream_id,
+                self.session_id,
+                offset,
+                bytes.len() as u64,
+                hash,
+            )
+            .await
+            .map_err(IngestError::Backend)?;
 
         Ok(next_offset)
     }
 
     /// Checks if the chunk at the given offset is indexed.
     pub async fn is_chunk_indexed(&self, offset: u64) -> bool {
-        self.backend.is_indexed(
-            &self.collector_id,
-            &self.stream_id,
-            self.session_id,
-            offset,
-        ).await
+        self.backend
+            .is_indexed(&self.collector_id, &self.stream_id, self.session_id, offset)
+            .await
     }
 }
 
@@ -109,8 +113,8 @@ impl<B: IngestBackend> ChunkIngester<B> {
 mod tests {
     use super::*;
     use crate::cas::sha256_hex;
-    use std::sync::Mutex;
     use std::collections::HashSet;
+    use std::sync::Mutex;
 
     struct MockBackend {
         persisted: Mutex<HashSet<(String, String, u64, u64)>>,
@@ -138,7 +142,12 @@ mod tests {
             _hash: &str,
         ) -> Result<(), String> {
             let mut p = self.persisted.lock().unwrap();
-            p.insert((collector_id.to_string(), stream_id.to_string(), session_id, offset));
+            p.insert((
+                collector_id.to_string(),
+                stream_id.to_string(),
+                session_id,
+                offset,
+            ));
             Ok(())
         }
 
@@ -150,7 +159,12 @@ mod tests {
             offset: u64,
         ) -> bool {
             let i = self.indexed.lock().unwrap();
-            i.contains(&(collector_id.to_string(), stream_id.to_string(), session_id, offset))
+            i.contains(&(
+                collector_id.to_string(),
+                stream_id.to_string(),
+                session_id,
+                offset,
+            ))
         }
     }
 
@@ -159,14 +173,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cas = FsCas::new(dir.path());
         let backend = MockBackend::new();
-        let mut ingester = ChunkIngester::new(
-            &backend,
-            cas,
-            "c1".into(),
-            "s1".into(),
-            123,
-            0
-        );
+        let mut ingester = ChunkIngester::new(&backend, cas, "c1".into(), "s1".into(), 123, 0);
 
         let data = b"chunk1";
         let hash = sha256_hex(data);
@@ -178,7 +185,7 @@ mod tests {
         // Second apply (same chunk)
         // Resume policy allows same offset
         ingester.apply_chunk(0, data, &hash).await.unwrap();
-        
+
         // Assert: still only one record in "database" (mock)
         assert_eq!(backend.persisted.lock().unwrap().len(), 1);
     }
@@ -188,14 +195,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let cas = FsCas::new(dir.path());
         let backend = MockBackend::new();
-        let mut ingester = ChunkIngester::new(
-            &backend,
-            cas,
-            "c1".into(),
-            "s1".into(),
-            123,
-            0
-        );
+        let mut ingester = ChunkIngester::new(&backend, cas, "c1".into(), "s1".into(), 123, 0);
 
         let data = b"chunk1";
         let hash = sha256_hex(data);
@@ -206,7 +206,11 @@ mod tests {
 
         // After indexing (mock backend update)
         // Note: we insert '0' because that is the chunk start offset
-        backend.indexed.lock().unwrap().insert(("c1".into(), "s1".into(), 123, 0));
+        backend
+            .indexed
+            .lock()
+            .unwrap()
+            .insert(("c1".into(), "s1".into(), 123, 0));
         assert_eq!(ingester.is_chunk_indexed(0).await, true);
     }
 }

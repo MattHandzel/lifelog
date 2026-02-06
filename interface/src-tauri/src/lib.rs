@@ -23,9 +23,8 @@ pub use utils::*;
 // Define utility functions for loading configs
 pub mod config_utils {
     pub use config::{
-        load_config, CameraConfig, ConfigManager, ProcessesConfig, ScreenConfig,
+        load_config, CameraConfig, ConfigManager, MicrophoneConfig, ProcessesConfig, ScreenConfig,
         TextUploadConfig,
-        MicrophoneConfig
     };
 
     pub fn load_text_upload_config() -> TextUploadConfig {
@@ -51,7 +50,7 @@ pub mod config_utils {
         let config = load_config();
         config.camera.clone()
     }
-    
+
     pub fn load_microphone_config() -> config::MicrophoneConfig {
         let config = load_config();
         config.microphone.clone()

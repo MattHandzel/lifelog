@@ -5,8 +5,7 @@ pub mod lifelog {
 
 pub use lifelog::*;
 
-pub const FILE_DESCRIPTOR_SET: &[u8] =
-    tonic::include_file_descriptor_set!("lifelog_descriptor");
+pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("lifelog_descriptor");
 
 #[cfg(test)]
 mod tests {

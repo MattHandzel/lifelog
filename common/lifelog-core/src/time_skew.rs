@@ -45,10 +45,7 @@ pub fn estimate_skew(samples: &[(DateTime<Utc>, DateTime<Utc>)]) -> SkewEstimate
     let median_ms = median_i64(&offsets);
 
     // Median absolute deviation as a robust jitter measure.
-    let mut abs_devs: Vec<i64> = offsets
-        .iter()
-        .map(|v| (v - median_ms).abs())
-        .collect();
+    let mut abs_devs: Vec<i64> = offsets.iter().map(|v| (v - median_ms).abs()).collect();
     abs_devs.sort_unstable();
     let mad_ms = median_i64(&abs_devs);
 
@@ -118,8 +115,14 @@ mod tests {
         let d0 = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
         let samples = vec![
             (d0, d0 + Duration::seconds(5)),
-            (d0 + Duration::seconds(10), d0 + Duration::seconds(10) + Duration::seconds(6)),
-            (d0 + Duration::seconds(20), d0 + Duration::seconds(20) + Duration::seconds(4)),
+            (
+                d0 + Duration::seconds(10),
+                d0 + Duration::seconds(10) + Duration::seconds(6),
+            ),
+            (
+                d0 + Duration::seconds(20),
+                d0 + Duration::seconds(20) + Duration::seconds(4),
+            ),
         ];
         let est = estimate_skew(&samples);
         assert_eq!(est.offset, Duration::seconds(5));
@@ -127,4 +130,3 @@ mod tests {
         assert_ne!(est.time_quality, TimeQuality::Good);
     }
 }
-

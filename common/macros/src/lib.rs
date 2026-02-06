@@ -5,9 +5,8 @@ use quote::{quote, ToTokens};
 use serde_json::json;
 use std::{env, fs::OpenOptions, io::Write, path::PathBuf};
 use syn::{
-    parse::Parse, parse::ParseStream, parse_macro_input,
-    AngleBracketedGenericArguments, Fields, GenericArgument, Ident, Item, PathArguments, Result,
-    Type,
+    parse::Parse, parse::ParseStream, parse_macro_input, AngleBracketedGenericArguments, Fields,
+    GenericArgument, Ident, Item, PathArguments, Result, Type,
 };
 
 /// `#[lifelog_type(...)]` accepts `Data`, `Config`, or else = `None`

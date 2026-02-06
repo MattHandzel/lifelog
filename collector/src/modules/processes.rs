@@ -1,12 +1,12 @@
 use chrono::Local;
 use config::ProcessesConfig;
+use serde::{Deserialize, Serialize};
 use std::fs;
+use surrealdb::Connection;
+use surrealdb::RecordId;
+use surrealdb::Surreal;
 use tokio::time::{sleep, Duration};
 use users::{Users, UsersCache};
-use surrealdb::Surreal;
-use surrealdb::Connection;
-use serde::{Deserialize, Serialize};
-use surrealdb::RecordId;
 //impl DataLogger for ProcessLogger {
 //
 //
@@ -47,8 +47,10 @@ struct ProcessLog {
 }
 
 // TODO: Make this logger work with windows (see how activity watch does this)
-pub async fn start_logger<C>(config: &ProcessesConfig, db: &Surreal<C>) -> surrealdb::Result<()> where
-C: Connection, {
+pub async fn start_logger<C>(config: &ProcessesConfig, db: &Surreal<C>) -> surrealdb::Result<()>
+where
+    C: Connection,
+{
     let users_cache = UsersCache::new();
 
     loop {
@@ -57,21 +59,23 @@ C: Connection, {
 
         if let Ok(processes) = get_process_info(&users_cache) {
             for process in processes {
-                let _: Vec<Record> = db.upsert("screen").content(ProcessLog {
-                    timestamp: timestamp,
-                    pid: process.pid,
-                    ppid: process.ppid,
-                    name: process.name,
-                    exe: process.exe,
-                    cmdline: process.cmdline,
-                    status: process.status,
-                    cpu_usage: process.cpu_usage,
-                    memory_usage: process.memory_usage,
-                    threads: process.threads,
-                    user: process.user,
-                    start_time: process.start_time,
-                })
-                .await?;
+                let _: Vec<Record> = db
+                    .upsert("screen")
+                    .content(ProcessLog {
+                        timestamp: timestamp,
+                        pid: process.pid,
+                        ppid: process.ppid,
+                        name: process.name,
+                        exe: process.exe,
+                        cmdline: process.cmdline,
+                        status: process.status,
+                        cpu_usage: process.cpu_usage,
+                        memory_usage: process.memory_usage,
+                        threads: process.threads,
+                        user: process.user,
+                        start_time: process.start_time,
+                    })
+                    .await?;
             }
         }
 

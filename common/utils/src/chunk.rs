@@ -150,7 +150,12 @@ mod tests {
             .unwrap();
 
         let resume = v
-            .validate_chunk(0, a, &sha256_hex(a), OffsetPolicy::Resume { allow_offset: 0 })
+            .validate_chunk(
+                0,
+                a,
+                &sha256_hex(a),
+                OffsetPolicy::Resume { allow_offset: 0 },
+            )
             .unwrap();
         assert_eq!(resume, 3);
     }

@@ -1,11 +1,11 @@
 use crate::setup;
 use chrono::Local;
 use config::InputLoggerConfig;
-use std::path::Path;
 #[cfg(target_os = "linux")]
 use evdev::*;
 use rusqlite::params;
 use std::fs;
+use std::path::Path;
 use std::time::SystemTime;
 use tokio::time::{sleep, Duration};
 

@@ -14,7 +14,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]") // Add serde derive attributes to generated message types
         .compile_protos(
             &[
-                "../../proto/lifelog.proto", // Path relative to build.rs
+                "../../proto/lifelog.proto",       // Path relative to build.rs
                 "../../proto/lifelog_types.proto", // Path relative to build.rs
             ],
             &["../../proto/"], // Include path for imports within protos

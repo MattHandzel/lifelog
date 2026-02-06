@@ -1,14 +1,14 @@
+use config::ServerConfig;
+use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
+use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
+use lifelog_server::server::{GRPCServerLifelogServerService, Server};
 use std::process::{Child, Command};
+use std::sync::Arc;
 use std::time::Duration;
 use tempfile::TempDir;
+use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tonic::transport::Channel;
-use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
-use config::ServerConfig;
-use lifelog_server::server::{Server, GRPCServerLifelogServerService};
-use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 pub struct TestContext {
     pub server_addr: String,
@@ -24,7 +24,7 @@ impl TestContext {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let db_port = portpicker::pick_unused_port().expect("No ports available");
         let server_port = portpicker::pick_unused_port().expect("No ports available");
-        
+
         let db_addr = format!("127.0.0.1:{}", db_port);
         let server_addr = format!("http://127.0.0.1:{}", server_port);
 
@@ -60,7 +60,7 @@ impl TestContext {
         };
 
         let addr = format!("127.0.0.1:{}", server_port).parse().unwrap();
-        
+
         // Spawn the gRPC server in a background task
         tokio::spawn(async move {
             tonic::transport::Server::builder()

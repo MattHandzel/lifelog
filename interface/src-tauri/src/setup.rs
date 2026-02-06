@@ -24,7 +24,10 @@ pub fn initialize_project() -> std::io::Result<()> {
     let mut sys = System::new_all();
     sys.refresh_all();
 
-    println!("System initialized. Total processes: {}", sys.processes().len());
+    println!(
+        "System initialized. Total processes: {}",
+        sys.processes().len()
+    );
 
     // // Example: Print process names (Corrected println! usage)
     // for (pid, process) in sys.processes() {

@@ -9,7 +9,10 @@ pub struct ReplayStep {
 /// Map screen point frames into replay intervals:
 /// - frames are point timestamps
 /// - steps are `[t_i, t_{i+1})`, with the last step ending at `window_end`
-pub fn build_replay_steps(mut frame_times: Vec<DateTime<Utc>>, window_end: DateTime<Utc>) -> Vec<ReplayStep> {
+pub fn build_replay_steps(
+    mut frame_times: Vec<DateTime<Utc>>,
+    window_end: DateTime<Utc>,
+) -> Vec<ReplayStep> {
     frame_times.sort();
     frame_times.dedup();
 
@@ -20,7 +23,10 @@ pub fn build_replay_steps(mut frame_times: Vec<DateTime<Utc>>, window_end: DateT
             if t0 >= window_end {
                 Vec::new()
             } else {
-                vec![ReplayStep { start: t0, end: window_end }]
+                vec![ReplayStep {
+                    start: t0,
+                    end: window_end,
+                }]
             }
         }
         _ => {
@@ -80,4 +86,3 @@ mod tests {
         assert_eq!(steps, vec![ReplayStep { start: t0, end }]);
     }
 }
-

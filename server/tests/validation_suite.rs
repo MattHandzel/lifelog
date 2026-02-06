@@ -53,12 +53,16 @@ async fn it_090_resume_upload_with_byte_offsets() {
     assert_eq!(ack.acked_offset, 0);
 
     // 2. Get offset (should be 11 because we have chunk 0..11)
-    let offset_resp = client.get_upload_offset(lifelog_proto::GetUploadOffsetRequest {
-        collector_id: collector_id.to_string(),
-        stream_id: stream_id.to_string(),
-        session_id,
-    }).await.expect("Get offset failed").into_inner();
-    
+    let offset_resp = client
+        .get_upload_offset(lifelog_proto::GetUploadOffsetRequest {
+            collector_id: collector_id.to_string(),
+            stream_id: stream_id.to_string(),
+            session_id,
+        })
+        .await
+        .expect("Get offset failed")
+        .into_inner();
+
     assert_eq!(offset_resp.offset, 11);
 
     // 3. Upload second chunk at offset 11
@@ -76,14 +80,18 @@ async fn it_090_resume_upload_with_byte_offsets() {
     let stream = tokio_stream::iter(vec![chunk2]);
     let response = client.upload_chunks(stream).await.expect("Upload failed");
     let _ack = response.into_inner();
-    
+
     // Verify highest offset in DB is now 11 + 10 = 21
-    let offset_resp = client.get_upload_offset(lifelog_proto::GetUploadOffsetRequest {
-        collector_id: collector_id.to_string(),
-        stream_id: stream_id.to_string(),
-        session_id,
-    }).await.expect("Get offset failed").into_inner();
-    
+    let offset_resp = client
+        .get_upload_offset(lifelog_proto::GetUploadOffsetRequest {
+            collector_id: collector_id.to_string(),
+            stream_id: stream_id.to_string(),
+            session_id,
+        })
+        .await
+        .expect("Get offset failed")
+        .into_inner();
+
     assert_eq!(offset_resp.offset, 21);
 }
 
@@ -110,32 +118,50 @@ async fn it_081_ack_implies_queryable() {
     // 1. Upload chunk. Default backend has indexed=false.
     // Expect acked_offset = 0 (chunk received but not indexed).
     let stream = tokio_stream::iter(vec![chunk.clone()]);
-    let response = client.upload_chunks(stream).await.expect("Upload failed").into_inner();
-    
-    assert_eq!(response.acked_offset, 0, "ACK should be 0 because indexing is pending");
+    let response = client
+        .upload_chunks(stream)
+        .await
+        .expect("Upload failed")
+        .into_inner();
+
+    assert_eq!(
+        response.acked_offset, 0,
+        "ACK should be 0 because indexing is pending"
+    );
 
     // 2. Simulate "Indexer" completing work.
     // We manually flip 'indexed' to true in SurrealDB for this chunk.
-    let db = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(&ctx.db_addr).await.expect("DB Connect failed");
+    let db = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(&ctx.db_addr)
+        .await
+        .expect("DB Connect failed");
     db.signin(surrealdb::opt::auth::Root {
         username: "root",
         password: "root",
-    }).await.expect("DB Signin failed");
-    db.use_ns("lifelog").use_db("test_db").await.expect("DB Select failed");
+    })
+    .await
+    .expect("DB Signin failed");
+    db.use_ns("lifelog")
+        .use_db("test_db")
+        .await
+        .expect("DB Select failed");
 
     let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, 0);
-    
+
     #[derive(serde::Deserialize)]
     struct ChunkRec {
         indexed: bool,
     }
 
     // Check it exists first
-    let result: Option<ChunkRec> = db.select(("upload_chunks", &id)).await.expect("Select failed");
+    let result: Option<ChunkRec> = db
+        .select(("upload_chunks", &id))
+        .await
+        .expect("Select failed");
     assert!(result.is_some(), "Chunk record should exist");
 
     // Update to indexed=true
-    let _updated: Option<ChunkRec> = db.query("UPDATE type::thing('upload_chunks', $id) SET indexed = true")
+    let _updated: Option<ChunkRec> = db
+        .query("UPDATE type::thing('upload_chunks', $id) SET indexed = true")
         .bind(("id", id.clone()))
         .await
         .expect("Update failed")
@@ -145,9 +171,17 @@ async fn it_081_ack_implies_queryable() {
     // 3. Upload next chunk (or same chunk to probe ACK).
     // If we re-send the same chunk, apply_chunk is idempotent, and it should check indexing again.
     let stream = tokio_stream::iter(vec![chunk]);
-    let response = client.upload_chunks(stream).await.expect("Upload failed").into_inner();
+    let response = client
+        .upload_chunks(stream)
+        .await
+        .expect("Upload failed")
+        .into_inner();
 
-    assert_eq!(response.acked_offset, data.len() as u64, "ACK should advance after indexing is complete");
+    assert_eq!(
+        response.acked_offset,
+        data.len() as u64,
+        "ACK should advance after indexing is complete"
+    );
 }
 
 #[test]
@@ -173,4 +207,3 @@ fn it_150_observability_surface() {}
 #[test]
 #[ignore = "IT-160 (VALIDATION_SUITE.md): requires performance suite entrypoint"]
 fn it_160_performance_suite_smoke() {}
-

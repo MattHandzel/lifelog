@@ -57,8 +57,8 @@ mod tests {
     fn overlaps_matches_worked_example() {
         let base = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
         let a = TimeInterval::new(base, base + Duration::minutes(5)).unwrap();
-        let b = TimeInterval::new(base + Duration::minutes(4), base + Duration::minutes(10)).unwrap();
+        let b =
+            TimeInterval::new(base + Duration::minutes(4), base + Duration::minutes(10)).unwrap();
         assert!(a.overlaps(b));
     }
 }
-
