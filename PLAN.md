@@ -53,3 +53,42 @@ This plan implements an automated validation suite for `SPEC.md` using `VALIDATI
 - L1: `nix develop -c cargo check`
 - L3: `nix develop -c cargo test`
 - L4: AC replay: each implemented test links back to `VALIDATION_SUITE.md` section/test ID in comments.
+
+## Phase 2: Architectural Consolidation
+
+This phase addresses architectural debt and "Dual-Source of Truth" issues identified during the initial refactor.
+
+### 1. Connection Model: Collector-Initiated Control Stream
+- **Goal:** Solve NAT/Firewall traversal by eliminating the "Dial-Back" model.
+- **Tasks:**
+  - [ ] Implement long-lived bidirectional gRPC stream for Control Plane (Collector -> Server).
+  - [ ] Move `ReportState` and `RegisterCollector` into the stream initiation.
+  - [ ] Implement Server-to-Collector commands (e.g., "Begin Upload") as messages over the long-lived stream.
+  - [ ] Remove `CollectorService` gRPC server from the collector process.
+
+### 2. Explicit Database Schema & Migrations
+- **Goal:** Eliminate `ensure_table` on-the-fly creation for predictable query planning.
+- **Tasks:**
+  - [ ] Create a `schema/` directory or module containing explicit SurrealDB DDL for all modalities.
+  - [ ] Implement a startup migration/initialization task in the Server that ensures all tables and indices exist.
+  - [ ] Move `get_surrealdb_schema()` from the `Modality` trait to a centralized schema registry.
+
+### 3. Error Type Consolidation
+- **Goal:** Unify `LifelogError`, `ServerError`, `CollectorError`, etc., into a cohesive hierarchy.
+- **Tasks:**
+  - [ ] Define a master `LifelogError` in `common/lifelog-types`.
+  - [ ] Use `thiserror` to wrap lower-level errors (IO, gRPC, DB) with semantic context.
+  - [ ] Refactor modules to use the unified error type where appropriate, reducing reliance on `anyhow::Error`.
+
+### 4. Config & Proto Validation Bridge
+- **Goal:** Ensure Proto-first data types are validated against Rust config defaults.
+- **Tasks:**
+  - [ ] Implement a `Validate` trait for Proto-generated types.
+  - [ ] Create a "Safe Config" layer that converts raw Proto configs into validated Rust domain objects with defaults applied.
+  - [ ] Ensure all gRPC entry points validate incoming configs before they reach the core logic.
+
+## Phase 3: Final Verification & Performance
+- [ ] Implement `IT-010` (Cross-modal query E2E).
+- [ ] Implement `IT-110` (OCR Transform Pipeline).
+- [ ] Execute `IT-160` (Performance Suite) and establish baselines.
+
