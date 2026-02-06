@@ -1,5 +1,4 @@
 use crate::server::LifelogData;
-use anyhow;
 use lifelog_core::uuid::Uuid;
 use lifelog_types::*;
 use surrealdb::engine::remote::ws::Client;
@@ -7,83 +6,80 @@ use surrealdb::Surreal;
 
 use crate::surreal_types::*;
 
+/// Validates a table name contains only safe characters (alphanumeric,
+/// underscore, colon, hyphen). Prevents SQL injection via table names.
+fn validate_table_name(name: String) -> Result<String, LifelogError> {
+    if name
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '_' || c == ':' || c == '-')
+    {
+        Ok(name)
+    } else {
+        Err(LifelogError::Database(format!(
+            "invalid table name: {name}"
+        )))
+    }
+}
+
 pub(crate) async fn get_all_uuids_from_origin(
     db: &Surreal<Client>,
     data_origin: &DataOrigin,
-) -> Result<Vec<Uuid>, surrealdb::Error> {
-    let table = data_origin.get_table_name();
-    let sql = format!("SELECT VALUE record::id(id) as uuid FROM `{table}`"); //FIX: Sql injection
+) -> Result<Vec<Uuid>, LifelogError> {
+    let table = validate_table_name(data_origin.get_table_name())?;
+    let sql = format!("SELECT VALUE record::id(id) as uuid FROM `{table}`");
     let uuids: Vec<String> = db
         .query(sql)
         .await
-        .expect("Couldn't do the query")
+        .map_err(|e| LifelogError::Database(format!("query failed: {}", e)))?
         .take(0)
-        .expect("We should only ever have one query");
+        .map_err(|e| LifelogError::Database(format!("take(0) failed: {}", e)))?;
     let uuids = uuids
         .into_iter()
-        .map(|s| {
-            let uuid = s.parse::<Uuid>().expect("Unable to go from string to uuid");
-            uuid
-        })
-        .collect::<Vec<Uuid>>();
+        .filter_map(|s| s.parse::<Uuid>().ok())
+        .collect();
     Ok(uuids)
 }
 
 pub(crate) async fn get_data_by_key(
     db: &Surreal<Client>,
     key: &LifelogFrameKey,
-) -> Result<LifelogData, anyhow::Error> {
+) -> Result<LifelogData, LifelogError> {
+    let table = key.origin.get_table_name();
+    let id = key.uuid.to_string();
+
     match key.origin.modality {
         DataModality::Screen => {
             let row: Option<ScreenFrameSurreal> = db
-                .select((key.origin.get_table_name(), key.uuid.to_string()))
-                .await?;
-            let mut screen_frame: data_modalities::ScreenFrame = row
-                .expect(
-                    format!(
-                        "Unabled to find record <{}>:<{}>",
-                        key.origin.get_table_name(),
-                        key.uuid
-                    )
-                    .as_str(),
-                )
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?;
+            let mut frame: data_modalities::ScreenFrame = row
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?
                 .into();
-            screen_frame.uuid = key.uuid; //NOTE: This is important. This needs to be fixed with a code refactor
-            Ok(screen_frame.into())
+            frame.uuid = key.uuid;
+            Ok(frame.into())
         }
         DataModality::Ocr => {
             let row: Option<OcrFrameSurreal> = db
-                .select((key.origin.get_table_name(), key.uuid.to_string()))
-                .await?;
-            let mut ocr_frame: data_modalities::OcrFrame = row
-                .expect(
-                    format!(
-                        "Unabled to find record <{}>:<{}>",
-                        key.origin.get_table_name(),
-                        key.uuid
-                    )
-                    .as_str(),
-                )
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?;
+            let mut frame: data_modalities::OcrFrame = row
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?
                 .into();
-            ocr_frame.uuid = key.uuid; //NOTE: This is important. This needs to be fixed with a code refactor
-            Ok(ocr_frame.into())
+            frame.uuid = key.uuid;
+            Ok(frame.into())
         }
         DataModality::Browser => {
             let row: Option<BrowserFrameSurreal> = db
-                .select((key.origin.get_table_name(), key.uuid.to_string()))
-                .await?;
-            let mut browser_frame: data_modalities::BrowserFrame = row
-                .expect(
-                    format!(
-                        "Unabled to find record <{}>:<{}>",
-                        key.origin.get_table_name(),
-                        key.uuid
-                    )
-                    .as_str(),
-                )
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?;
+            let mut frame: data_modalities::BrowserFrame = row
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?
                 .into();
-            browser_frame.uuid = key.uuid; //NOTE: This is important. This needs to be fixed with a code refactor
-            Ok(browser_frame.into())
+            frame.uuid = key.uuid;
+            Ok(frame.into())
         }
     }
 }

@@ -29,7 +29,10 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         request: TonicRequest<RegisterCollectorRequest>,
     ) -> Result<TonicResponse<RegisterCollectorResponse>, TonicStatus> {
         let inner = request.into_inner();
-        let collector_config: CollectorConfig = inner.config.unwrap().into();
+        let collector_config: CollectorConfig = inner
+            .config
+            .ok_or_else(|| TonicStatus::invalid_argument("missing config"))?
+            .into();
         let collector_ip = format!(
             "http://{}:{}",
             collector_config.host.clone(),
@@ -174,12 +177,10 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         _request: tonic::Request<ReportStateRequest>,
     ) -> Result<TonicResponse<ReportStateResponse>, TonicStatus> {
-        let state = _request.into_inner().state.unwrap();
-        println!(
-            "Received a report state request! {} {:?}",
-            state.name,
-            state.timestamp.unwrap()
-        );
+        let state = _request
+            .into_inner()
+            .state
+            .ok_or_else(|| TonicStatus::invalid_argument("missing state"))?;
         // Ensure we got a state reported by a registered collector, if not then we ignore it
         match self.server.contains_collector(state.name.clone()).await {
             true => {

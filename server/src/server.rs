@@ -7,7 +7,7 @@ use data_modalities::*;
 use lifelog_types::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time;
 use surrealdb::engine::remote::ws::{Client, Ws};
 use surrealdb::opt::auth::Root;
@@ -126,14 +126,21 @@ pub struct Server {
     pub(crate) cas: FsCas,
 }
 
-static mut SYS: Option<sysinfo::System> = None;
+static SYS: OnceLock<Mutex<sysinfo::System>> = OnceLock::new();
 
 impl Server {
     pub async fn new(config: &ServerConfig) -> Result<Self, LifelogError> {
         // Validate config before doing anything
         config.validate()?;
 
-        let db = Surreal::new::<Ws>(&config.database_endpoint).await.expect("Could not connect to the database, do you have it running? surreal start --user root --pass root --log debug rocksdb://~/lifelog/database --bind \"127.0.0.1:7183\"");
+        let db = Surreal::new::<Ws>(&config.database_endpoint)
+            .await
+            .map_err(|e| {
+                LifelogError::Database(format!(
+                    "Could not connect to database at {}: {}",
+                    config.database_endpoint, e
+                ))
+            })?;
         db.signin(Root {
             username: "root",
             password: "root",
@@ -158,9 +165,7 @@ impl Server {
         let policy = Arc::new(RwLock::new(ServerPolicy {
             config: ServerPolicyConfig::default(),
         }));
-        unsafe {
-            SYS = Some(sysinfo::System::new_all());
-        }
+        SYS.get_or_init(|| Mutex::new(sysinfo::System::new_all()));
 
         let ocr_transform = OcrTransform::new(
             DataOrigin::new(
@@ -174,14 +179,9 @@ impl Server {
         );
 
         // Run startup schema migrations (ensures all tables + indexes exist)
-        crate::schema::run_startup_migrations(&db)
-            .await
-            .expect("Failed to run startup schema migrations");
+        crate::schema::run_startup_migrations(&db).await?;
 
-        let origins_vec = get_origins_from_db(&db)
-            .await
-            .expect("Failed to get origins from db");
-        println!("[INSTANTIATION]: Origins: {:?}", origins_vec);
+        let origins_vec = get_origins_from_db(&db).await?;
 
         let s = Self {
             db,
@@ -210,7 +210,12 @@ impl Server {
                 .await?
                 .into_inner()
                 .config
-                .unwrap() // TODO: Instead of panicing we should get reutrn null
+                .ok_or_else(|| {
+                    LifelogError::Other(anyhow::anyhow!(
+                        "Collector {} returned no config",
+                        collector.id
+                    ))
+                })?
                 .into();
             collector_configs.insert(collector.id.clone(), config);
         }
@@ -232,10 +237,9 @@ impl Server {
     async fn get_data(&self, req: Vec<LifelogFrameKey>) -> Result<Vec<LifelogData>, LifelogError> {
         let mut datas: Vec<LifelogData> = vec![];
         for key in req.iter() {
-            let data: LifelogData = get_data_by_key(&self.db, key) // TODO: Refactor this so it's faster,
-                // less db queries
-                .await
-                .expect(format!("Unable to get data by key: {}", key).as_str());
+            let data: LifelogData = get_data_by_key(&self.db, key).await.map_err(|e| {
+                LifelogError::Database(format!("Unable to get data by key {}: {}", key, e))
+            })?;
 
             datas.push(data);
         }
@@ -253,7 +257,9 @@ impl Policy for ServerPolicy {
     type ActionType = ServerAction;
 
     fn get_action(&self, state: &Self::StateType) -> Self::ActionType {
-        let ss = state.server_state.as_ref().expect("Server state missing");
+        let Some(ss) = state.server_state.as_ref() else {
+            return ServerAction::Sleep(tokio::time::Duration::from_millis(100));
+        };
 
         let t_now = ss
             .timestamp
@@ -339,34 +345,27 @@ impl Server {
     }
 
     async fn get_state(&self) -> SystemState {
-        unsafe {
-            // TODO: refactor this to be safe
-            #[allow(static_mut_refs)]
-            let sys = SYS.as_mut().expect("System info is not initialized");
+        let (cpu_usage, memory_usage) = {
+            let mut sys = SYS
+                .get()
+                .expect("SYS must be initialized in Server::new()")
+                .lock()
+                .expect("SYS mutex poisoned");
             sys.refresh_all();
+            let cpu = sys.global_cpu_usage() / 100.0;
+            let total = sys.total_memory() as f32;
+            let used = sys.used_memory() as f32;
+            let mem = if total > 0.0 { used / total } else { 0.0 };
+            (cpu, mem)
+        };
 
-            let cpu_usage = (sys.global_cpu_usage() as f32) / 100.0; // [0-1]
-
-            let total_mem = sys.total_memory() as f32; // KiB
-            let used_mem = sys.used_memory() as f32;
-            let memory_usage = if total_mem > 0.0 {
-                used_mem / total_mem
-            } else {
-                0.0
-            };
-
-            let _processes = sys.processes().len() as i32;
-
-            // Estimate the state in this function
-            let mut state = self.state.write().await;
-            let ss = state.server_state.as_mut().expect("Server state missing");
-            ss.cpu_usage = cpu_usage; // TODO: Get the real CPU usage
+        let mut state = self.state.write().await;
+        if let Some(ss) = state.server_state.as_mut() {
+            ss.cpu_usage = cpu_usage;
             ss.timestamp = Some(Utc::now().into());
-            ss.memory_usage = memory_usage; // TODO: Get the real memory usage
-                                            // TODO: Get the real number of threads
-                                            // TODO: There is a race condition here, someone can grab the lock before we can grab it
-            state.clone()
+            ss.memory_usage = memory_usage;
         }
+        state.clone()
     }
 
     async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
@@ -443,14 +442,9 @@ impl Server {
             }
             ServerAction::SyncData(query) => {
                 {
-                    self.state
-                        .write()
-                        .await
-                        .server_state
-                        .as_mut()
-                        .expect("Server state missing")
-                        .pending_actions
-                        .push(ServerActionType::SyncData as i32);
+                    if let Some(ss) = self.state.write().await.server_state.as_mut() {
+                        ss.pending_actions.push(ServerActionType::SyncData as i32);
+                    }
                 }
                 // TODO: Refactor so we actually use the query
                 // Get the target data modalities(s) from the query
@@ -471,36 +465,25 @@ impl Server {
                     // TODO: refactor, i dont think we should write lock the state here, diff
                     // function for estimating the state?
                     let mut state = state_clone.write().await;
-                    let ss = state.server_state.as_mut().expect("Server state missing");
-                    ss.timestamp_of_last_sync = Some(Utc::now().into());
-                    ss.pending_actions.retain(|&a| {
-                        if a == ServerActionType::SyncData as i32 {
-                            return false;
-                        }
-                        true
-                    });
+                    if let Some(ss) = state.server_state.as_mut() {
+                        ss.timestamp_of_last_sync = Some(Utc::now().into());
+                        ss.pending_actions
+                            .retain(|&a| a != ServerActionType::SyncData as i32);
+                    }
                 });
             }
             ServerAction::TransformData(_untransformed_data_keys) => {
-                // TODO: Move this to policy
-                println!("[TRANSFORM_DATA] Waiting for state write lock to be released");
                 {
-                    self.state
-                        .write()
-                        .await
-                        .server_state
-                        .as_mut()
-                        .expect("Server state missing")
-                        .pending_actions
-                        .push(ServerActionType::TransformData as i32); // TODO: Refactor this function s ow e don't hold the state write block
+                    if let Some(ss) = self.state.write().await.server_state.as_mut() {
+                        ss.pending_actions
+                            .push(ServerActionType::TransformData as i32);
+                    }
                 }
                 let state_clone = self.state.clone();
                 let db_connection = self.db.clone();
                 let transforms = self.transforms.clone().read().await.to_vec();
-                println!("[TRANSFORM_DATA] starting thread");
                 let _res = tokio::spawn(async move {
                     let mut untransformed_data_keys: Vec<LifelogFrameKey> = vec![];
-                    println!("[TRANSFORM_DATA]: Transforming data");
                     for transform in &transforms {
                         untransformed_data_keys.extend(
                             get_keys_in_source_not_in_destination(
@@ -513,20 +496,10 @@ impl Server {
                     }
 
                     transform_data(&db_connection, untransformed_data_keys, transforms).await;
-                    // TODO: Refactor so not directly calling the .write on state
-                    state_clone
-                        .write()
-                        .await
-                        .server_state
-                        .as_mut()
-                        .expect("Server state missing")
-                        .pending_actions
-                        .retain(|&a| {
-                            if a == ServerActionType::TransformData as i32 {
-                                return false;
-                            }
-                            true
-                        });
+                    if let Some(ss) = state_clone.write().await.server_state.as_mut() {
+                        ss.pending_actions
+                            .retain(|&a| a != ServerActionType::TransformData as i32);
+                    }
                 });
             }
             _ => todo!(),

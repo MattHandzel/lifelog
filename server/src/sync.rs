@@ -16,37 +16,31 @@ pub(crate) async fn sync_data_with_collectors(
     collectors: &mut Vec<RegisteredCollector>,
 ) -> Result<(), LifelogError> {
     for collector in collectors.iter_mut() {
-        // TODO: Parallelize this
-        println!("Syncing data with collector: {:?}", collector);
-        // TODO: This code can fail here (notice the unwraps, I should handle it.
         let mut stream = collector
             .grpc_client
             .get_data(GetDataRequest { keys: vec![] })
             .await
-            .unwrap()
+            .map_err(|e| LifelogError::GrpcStatus(e))?
             .into_inner();
-        println!("Defined the stream here...");
-        let mut data = vec![];
 
+        let mut data = vec![];
         while let Some(chunk) = stream.next().await {
-            data.push(chunk.unwrap().payload);
+            if let Ok(chunk) = chunk {
+                data.push(chunk.payload);
+            }
         }
-        println!("Done receiving data");
         let mac = collector.mac.clone();
 
-        // TODO: REFACTOR THIS FUNCTION
         for chunk in data {
-            // record id = random UUID
-            let chunk = chunk.unwrap();
+            let Some(chunk) = chunk else { continue };
 
-            // TODO: this can be automated with a macro
             match chunk {
                 lifelog_proto::lifelog_data::Payload::Screenframe(c) => {
                     let data_origin = DataOrigin::new(
                         DataOriginType::DeviceId(mac.clone()),
                         DataModality::Screen,
                     );
-                    let _record = add_data_to_db::<ScreenFrame, ScreenFrameSurreal>(
+                    let _ = add_data_to_db::<ScreenFrame, ScreenFrameSurreal>(
                         db,
                         c.into(),
                         &data_origin,
@@ -58,15 +52,14 @@ pub(crate) async fn sync_data_with_collectors(
                         DataOriginType::DeviceId(mac.clone()),
                         DataModality::Browser,
                     );
-
-                    let _record = add_data_to_db::<BrowserFrame, BrowserFrameSurreal>(
+                    let _ = add_data_to_db::<BrowserFrame, BrowserFrameSurreal>(
                         db,
                         c.into(),
                         &data_origin,
                     )
                     .await;
                 }
-                _ => unimplemented!(),
+                _ => {}
             };
         }
     }
@@ -78,28 +71,19 @@ pub(crate) async fn get_keys_in_source_not_in_destination(
     source: DataOrigin,
     destination: DataOrigin,
 ) -> Vec<LifelogFrameKey> {
-    // TODO: dude what are you doing? use surrealdb to do this query, don't manuall do the set
-    // difference.
-    // Get the record uuids from source
-    let uuids_from_source = get_all_uuids_from_origin(db, &source)
-        .await
-        .expect(format!("Unable to get uuids from source: {}", source).as_str());
+    let uuids_from_source = match get_all_uuids_from_origin(db, &source).await {
+        Ok(uuids) => uuids,
+        Err(_) => return vec![],
+    };
 
-    // Get the record uuids from destination
-    let uuids_from_destination = get_all_uuids_from_origin(db, &destination)
-        .await
-        .expect(format!("Unable to get uuids from destination: {}", destination).as_str());
+    let uuids_from_destination = match get_all_uuids_from_origin(db, &destination).await {
+        Ok(uuids) => uuids,
+        Err(_) => return vec![],
+    };
 
-    // Get the record uuids from source that are not in destination
-    let uuids_in_source_not_in_destination: Vec<LifelogFrameKey> = uuids_from_source
-        .iter()
+    uuids_from_source
+        .into_iter()
         .filter(|uuid| !uuids_from_destination.contains(uuid))
-        .cloned()
-        .map(|uuid| {
-            let key = LifelogFrameKey::new(uuid, source.clone());
-            key
-        })
-        .collect();
-
-    uuids_in_source_not_in_destination
+        .map(|uuid| LifelogFrameKey::new(uuid, source.clone()))
+        .collect()
 }

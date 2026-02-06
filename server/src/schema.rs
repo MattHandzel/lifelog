@@ -77,8 +77,12 @@ pub(crate) async fn ensure_table_schema(
         return Ok(());
     }
 
-    let schema = schema_for(data_origin.modality)
-        .expect("Unknown modality — add a TableSchema entry in schema.rs");
+    let schema = schema_for(data_origin.modality).ok_or_else(|| {
+        surrealdb::Error::Api(surrealdb::error::Api::Query(format!(
+            "No schema defined for modality {:?}",
+            data_origin.modality
+        )))
+    })?;
 
     let fields = schema.fields_ddl.replace("{table}", &table);
     let indexes = schema.indexes_ddl.replace("{table}", &table);

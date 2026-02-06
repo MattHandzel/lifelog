@@ -5,7 +5,6 @@ use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use surrealdb::engine::remote::ws::Client;
-use surrealdb::Error;
 use surrealdb::Surreal;
 
 pub(crate) static CREATED_TABLES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
@@ -29,24 +28,18 @@ where
     SurrealType: Serialize + DeserializeOwned + 'static,
 {
     let uuid = data.uuid();
-    let table = format!("{}", data_origin.get_table_name());
-    ensure_table(db, data_origin).await.unwrap();
+    let table = data_origin.get_table_name();
+    ensure_table(db, data_origin).await?;
     let data: SurrealType = data.into();
-    let record: Result<Option<SurrealType>, Error> = db
+    let record: Option<SurrealType> = db
         .create((table.clone(), uuid.to_string()))
         .content(data)
-        .await;
-    println!("[SURREAL]: Created <{}:{}>", table, uuid);
-    match record {
-        Err(e) => {
-            eprintln!("{}", e);
-            Err(e)
-        }
-        Ok(record) => {
-            let record = record.expect(format!("Unable to create row in table {}", table).as_str());
-            Ok(record)
-        }
-    }
+        .await?;
+    record.ok_or_else(|| {
+        surrealdb::Error::Api(surrealdb::error::Api::Query(format!(
+            "CREATE returned None for {table}:{uuid}"
+        )))
+    })
 }
 
 pub async fn get_tables(db: &Surreal<Client>) -> Result<Vec<String>, LifelogError> {
@@ -63,7 +56,8 @@ pub async fn get_tables(db: &Surreal<Client>) -> Result<Vec<String>, LifelogErro
     let info: Option<Info> = resp
         .take(0)
         .map_err(|e| LifelogError::Database(format!("{}", e)))?;
-    let info = info.ok_or_else(|| LifelogError::Database("INFO FOR DB failed!!!".to_string()))?;
+    let info =
+        info.ok_or_else(|| LifelogError::Database("INFO FOR DB returned no data".to_string()))?;
     Ok(info.tables.keys().cloned().collect())
 }
 
@@ -73,13 +67,7 @@ pub(crate) async fn get_origins_from_db(
     let tables = get_tables(db).await?;
     let origins = tables
         .iter()
-        .map(|table| {
-            let origin = DataOrigin::tryfrom_string(table.clone());
-            origin
-        })
-        .filter(Result::is_ok)
-        .map(|origin| origin.expect("this should never happen"))
-        .collect::<Vec<DataOrigin>>();
-
+        .filter_map(|table| DataOrigin::tryfrom_string(table.clone()).ok())
+        .collect();
     Ok(origins)
 }

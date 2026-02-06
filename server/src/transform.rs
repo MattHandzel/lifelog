@@ -39,46 +39,46 @@ pub(crate) async fn transform_data(
     transforms: Vec<LifelogTransform>,
 ) {
     for key in untransformed_data_keys.iter() {
-        let data_to_transform: LifelogData = get_data_by_key(db, key)
-            .await
-            .expect(format!("Unable to get data by key: {}", key).as_str());
-        println!(
-            "[TRANSFORM_DATA]: Transforming data: <{}>:<{}>",
-            key.origin.get_table_name(),
-            key.uuid
-        );
+        let data_to_transform: LifelogData = match get_data_by_key(db, key).await {
+            Ok(data) => data,
+            Err(_) => continue,
+        };
+
         for transform in transforms.iter() {
-            // Check what transforms apply to these keys
             let transformed_data: Option<LifelogData> = match transform {
                 LifelogTransform::OcrTransform(transform) => {
                     if key.origin == transform.source() {
-                        let mut result = transform
-                                .apply(data_to_transform.clone().try_into().expect("Data source is not a lifelog image!"))
-                                .expect(format!("This should never error because the origins {} {} are the same", key.origin, transform.source()).as_str());
-
-                        result.uuid = key.uuid; // NOTE: THIS IS IMPORTANT. THIS NEEDS TO BE FIXED
-                                                // WITH A CODE REFACTOR
-                        Some(result.into())
+                        let image: LifelogImage = match data_to_transform.clone().try_into() {
+                            Ok(img) => img,
+                            Err(_) => continue,
+                        };
+                        match transform.apply(image) {
+                            Ok(mut result) => {
+                                result.uuid = key.uuid;
+                                Some(result.into())
+                            }
+                            Err(_) => None,
+                        }
                     } else {
                         None
                     }
                 }
             };
-            let transformed_data = match transformed_data {
-                Some(data) => data,
-                None => continue,
+
+            let Some(transformed_data) = transformed_data else {
+                continue;
             };
+
             match transformed_data {
                 LifelogData::OcrFrame(ocr_frame) => {
-                    add_data_to_db::<OcrFrame, OcrFrameSurreal>(
+                    let _ = add_data_to_db::<OcrFrame, OcrFrameSurreal>(
                         db,
                         ocr_frame,
                         &transform.destination(),
                     )
-                    .await
-                    .unwrap();
+                    .await;
                 }
-                _ => unimplemented!(),
+                _ => {}
             }
         }
     }
