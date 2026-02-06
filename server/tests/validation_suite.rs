@@ -43,13 +43,17 @@ async fn it_090_resume_upload_with_byte_offsets() {
     let stream_id = "test-stream";
     let session_id = 12345u64;
 
+    let stream_identity = Some(lifelog_proto::StreamIdentity {
+        collector_id: collector_id.to_string(),
+        stream_id: stream_id.to_string(),
+        session_id,
+    });
+
     // 1. Upload first chunk
     let data1 = b"hello world";
     let hash1 = utils::cas::sha256_hex(data1);
     let chunk1 = lifelog_proto::Chunk {
-        collector_id: collector_id.to_string(),
-        stream_id: stream_id.to_string(),
-        session_id,
+        stream: stream_identity.clone(),
         offset: 0,
         data: data1.to_vec(),
         hash: hash1,
@@ -64,9 +68,7 @@ async fn it_090_resume_upload_with_byte_offsets() {
     // 2. Get offset (should be 11 because we have chunk 0..11)
     let offset_resp = client
         .get_upload_offset(lifelog_proto::GetUploadOffsetRequest {
-            collector_id: collector_id.to_string(),
-            stream_id: stream_id.to_string(),
-            session_id,
+            stream: stream_identity.clone(),
         })
         .await
         .expect("Get offset failed")
@@ -78,9 +80,7 @@ async fn it_090_resume_upload_with_byte_offsets() {
     let data2 = b" next part"; // length 10
     let hash2 = utils::cas::sha256_hex(data2);
     let chunk2 = lifelog_proto::Chunk {
-        collector_id: collector_id.to_string(),
-        stream_id: stream_id.to_string(),
-        session_id,
+        stream: stream_identity.clone(),
         offset: 11,
         data: data2.to_vec(),
         hash: hash2,
@@ -93,9 +93,7 @@ async fn it_090_resume_upload_with_byte_offsets() {
     // Verify highest offset in DB is now 11 + 10 = 21
     let offset_resp = client
         .get_upload_offset(lifelog_proto::GetUploadOffsetRequest {
-            collector_id: collector_id.to_string(),
-            stream_id: stream_id.to_string(),
-            session_id,
+            stream: stream_identity.clone(),
         })
         .await
         .expect("Get offset failed")
@@ -114,12 +112,16 @@ async fn it_081_ack_implies_queryable() {
     let stream_id = "test-stream-81";
     let session_id = 9999u64;
 
-    let data = b"chunk1";
-    let hash = utils::cas::sha256_hex(data);
-    let chunk = lifelog_proto::Chunk {
+    let stream_identity = Some(lifelog_proto::StreamIdentity {
         collector_id: collector_id.to_string(),
         stream_id: stream_id.to_string(),
         session_id,
+    });
+
+    let data = b"chunk1";
+    let hash = utils::cas::sha256_hex(data);
+    let chunk = lifelog_proto::Chunk {
+        stream: stream_identity.clone(),
         offset: 0,
         data: data.to_vec(),
         hash: hash.clone(),

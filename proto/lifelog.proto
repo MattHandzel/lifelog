@@ -54,11 +54,6 @@ message GetDataResponse {
   repeated LifelogData data = 1;
 }
 
-message UUID {
-  string uuid = 1;
-}
-
-
 // This is a message that the interface will send to the server to get the data it wants
 message Query {
   // Example Query: "find my browser usage between [2025-01-01, 202-02-01] where my screen looked similar to this {image}, and the browser title had the word 'lifelog' in it"
@@ -118,25 +113,19 @@ message ReportStateResponse {
 }
 
 message Chunk {
-  string collector_id = 1;
-  string stream_id = 2;
-  uint64 session_id = 3;
-  uint64 offset = 4;
-  bytes data = 5;
-  string hash = 6; // sha256 hex
+  StreamIdentity stream = 1;
+  uint64 offset = 2;
+  bytes data = 3;
+  string hash = 4; // sha256 hex
 }
 
 message Ack {
-  string collector_id = 1;
-  string stream_id = 2;
-  uint64 session_id = 3;
-  uint64 acked_offset = 4;
+  StreamIdentity stream = 1;
+  uint64 acked_offset = 2;
 }
 
 message GetUploadOffsetRequest {
-  string collector_id = 1;
-  string stream_id = 2;
-  uint64 session_id = 3;
+  StreamIdentity stream = 1;
 }
 
 message GetUploadOffsetResponse {
@@ -146,16 +135,6 @@ message GetUploadOffsetResponse {
 message Embedding {
   repeated float embedding = 1;
 }
-
-message Timerange {
-
-  google.protobuf.Timestamp start = 1;
-
-  google.protobuf.Timestamp end = 2;
-
-}
-
-
 
 enum CommandType {
 
@@ -181,82 +160,192 @@ message ServerCommand {
 
 
 
-message ControlMessage {
+message SuggestUploadRequest {
 
-  string collector_id = 1;
 
-  oneof msg {
 
-    RegisterCollectorRequest register = 2;
+  bool charging = 1;
 
-    ReportStateRequest state = 3;
 
-    string heartbeat = 4;
 
-  }
+  bool idle = 2;
+
+
+
+  bool on_lan = 3;
+
+
+
+  uint64 backlog_size = 4;
+
+
 
 }
 
 
 
+
+
+
+
+message ControlMessage {
+
+
+
+  string collector_id = 1;
+
+
+
+  oneof msg {
+
+
+
+    RegisterCollectorRequest register = 2;
+
+
+
+    ReportStateRequest state = 3;
+
+
+
+    string heartbeat = 4;
+
+
+
+    SuggestUploadRequest suggest_upload = 5;
+
+
+
+  }
+
+
+
+}
+
+
+
+
+
+
+
 // -----------------------------------------------------------------------------
+
+
 
 // Services
 
+
+
 // -----------------------------------------------------------------------------
+
+
+
+
 
 
 
 // This is a service that the lifelog server will implement
 
+
+
 service LifelogServerService {
 
+
+
   // Bidirectional control channel initiated by the collector
+
+
 
   rpc ControlStream(stream ControlMessage) returns (stream ServerCommand);
 
 
 
-  // This is a service that the collectors call to be registered to the server.
-  // This is required because server is unaware of what collectors exist. Once a collector is added, the server can request data from the collector when it has a convenient time to do so
-  rpc RegisterCollector(RegisterCollectorRequest) returns (RegisterCollectorResponse);
+
+
+
 
   // This simply returns the configuration of the WHOLE system. It will return the configuration of the server as well as all collectors. This can be used to see how the system is configured
+
+
+
   rpc GetConfig(GetSystemConfigRequest) returns (GetSystemConfigResponse);
 
+
+
+
+
+
+
   // This is used to update the configuration of the WHOLE system. You will pass in a SystemConfig and the system will forward the new config to any collectors.
+
+
+
   rpc SetConfig(SetSystemConfigRequest) returns (SetSystemConfigResponse);
 
+
+
+
+
+
+
   // This is a service where some program requests uuid's of the data types it wants from the server and the server will graciously respond with a lifelog array that contains them
+
+
+
   rpc GetData(GetDataRequest) returns (GetDataResponse);
 
+
+
+
+
+
+
   // This service will be used for the user to be able to enact a specific query, the query will respond with the uuid's of data types that match the query. You can pair this with `GetData` to have the server run a query and then respond with the data the query selects. Having it be split this way gives the client more control over what data they request/how much they get/when they get their data.
+
+
+
   rpc Query(QueryRequest) returns (QueryResponse);
 
-  // This is used by collectors to report their state to the server. The server will use this to keep track of the state of each collector. This is useful for debugging and monitoring purposes.
-  rpc ReportState(ReportStateRequest) returns (ReportStateResponse);
+
+
+
+
+
 
   // This will be used to get the state of the WHOLE system, it will include the state of the server and the state of the collectors as well.
+
+
+
   rpc GetState(GetStateRequest) returns (GetSystemStateResponse);
 
+
+
+
+
+
+
   // Data Plane: Upload buffered data in chunks
+
+
+
   rpc UploadChunks(stream Chunk) returns (Ack);
 
+
+
+
+
+
+
   // Data Plane: Get the last durably persisted offset for a stream session
+
+
+
   rpc GetUploadOffset(GetUploadOffsetRequest) returns (GetUploadOffsetResponse);
+
+
+
 }
 
-// This is a service that each collector will implement
-service CollectorService {
-  // This rpc will return the state of the collector when an entity requests it
-  rpc GetState(GetStateRequest) returns (GetCollectorStateResponse);
 
-  // This rpc gets the collector's config
-  rpc GetConfig(GetCollectorConfigRequest) returns (GetCollectorConfigResponse);
 
-  // This rpc sets the collector's config
-  rpc SetConfig(SetCollectorConfigRequest) returns (SetCollectorConfigResponse);
 
-  // This rpc will be used to get the data from the collector. The collector will respond with the data that it has. This is useful for when the server wants to get data from the collector.
-  rpc GetData(GetDataRequest) returns (stream LifelogData);
-}

@@ -5,6 +5,21 @@ import "google/protobuf/timestamp.proto";
 import "google/protobuf/any.proto";
 import "google/protobuf/wrappers.proto";
 
+message UUID {
+  string uuid = 1;
+}
+
+message Timerange {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+}
+
+message StreamIdentity {
+  string collector_id = 1;
+  string stream_id = 2;
+  uint64 session_id = 3;
+}
+
 message ActorConfig {
 }
 
@@ -84,6 +99,7 @@ enum DataModality {
   Clipboard = 5;
   ShellHistory = 6;
   WindowActivity = 7;
+  Mouse = 8;
 }
 
 message GeoConfig {
@@ -219,6 +235,21 @@ message WindowActivityFrame {
   float duration_secs = 6;
 }
 
+message MouseFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  double x = 3;
+  double y = 4;
+  enum MouseButton {
+    None = 0;
+    Left = 1;
+    Right = 2;
+    Middle = 3;
+  }
+  MouseButton button = 5;
+  bool pressed = 6;
+}
+
 enum ServerActionType {
   Querying = 0;
   GetData = 1;
@@ -301,5 +332,6 @@ message LifelogData {
     ClipboardFrame clipboardframe = 6;
     ShellHistoryFrame shellhistoryframe = 7;
     WindowActivityFrame windowactivityframe = 8;
+    MouseFrame mouseframe = 9;
   }
 }

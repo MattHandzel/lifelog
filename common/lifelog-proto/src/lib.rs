@@ -51,7 +51,7 @@ impl TryFrom<LifelogDataKey> for LifelogFrameKey {
             uuid: parse_uuid(&key.uuid),
             origin: DataOrigin::tryfrom_string(key.origin).map_err(|e| {
                 LifelogError::Validation {
-                    field: "origin",
+                    field: "origin".to_string(),
                     reason: format!("LifelogDataKey contained invalid origin: {e}"),
                 }
             })?,
@@ -74,31 +74,31 @@ impl Validate for ServerConfig {
     fn validate(&self) -> Result<(), LifelogError> {
         if self.host.is_empty() {
             return Err(LifelogError::Validation {
-                field: "host",
+                field: "host".to_string(),
                 reason: "must not be empty".to_string(),
             });
         }
         if self.port == 0 || self.port > 65535 {
             return Err(LifelogError::Validation {
-                field: "port",
+                field: "port".to_string(),
                 reason: format!("must be between 1 and 65535, got {}", self.port),
             });
         }
         if self.database_endpoint.is_empty() {
             return Err(LifelogError::Validation {
-                field: "database_endpoint",
+                field: "database_endpoint".to_string(),
                 reason: "must not be empty".to_string(),
             });
         }
         if self.database_name.is_empty() {
             return Err(LifelogError::Validation {
-                field: "database_name",
+                field: "database_name".to_string(),
                 reason: "must not be empty".to_string(),
             });
         }
         if self.server_name.is_empty() {
             return Err(LifelogError::Validation {
-                field: "server_name",
+                field: "server_name".to_string(),
                 reason: "must not be empty".to_string(),
             });
         }
@@ -110,21 +110,58 @@ impl Validate for CollectorConfig {
     fn validate(&self) -> Result<(), LifelogError> {
         if self.id.is_empty() {
             return Err(LifelogError::Validation {
-                field: "id",
+                field: "id".to_string(),
                 reason: "collector ID must not be empty".to_string(),
             });
         }
         if self.host.is_empty() {
             return Err(LifelogError::Validation {
-                field: "host",
+                field: "host".to_string(),
                 reason: "must not be empty".to_string(),
             });
         }
         if self.port == 0 || self.port > 65535 {
             return Err(LifelogError::Validation {
-                field: "port",
+                field: "port".to_string(),
                 reason: format!("must be between 1 and 65535, got {}", self.port),
             });
+        }
+
+        if let Some(screen) = &self.screen {
+            if screen.enabled && screen.interval <= 0.0 {
+                return Err(LifelogError::Validation {
+                    field: "screen.interval".to_string(),
+                    reason: "must be positive".to_string(),
+                });
+            }
+        }
+
+        if let Some(microphone) = &self.microphone {
+            if microphone.enabled && microphone.sample_rate == 0 {
+                return Err(LifelogError::Validation {
+                    field: "microphone.sample_rate".to_string(),
+                    reason: "must be positive".to_string(),
+                });
+            }
+        }
+
+        Ok(())
+    }
+}
+
+impl Validate for SystemConfig {
+    fn validate(&self) -> Result<(), LifelogError> {
+        if let Some(server) = &self.server {
+            server.validate()?;
+        }
+        for (id, config) in &self.collectors {
+            config.validate().map_err(|e| match e {
+                LifelogError::Validation { field, reason } => LifelogError::Validation {
+                    field: format!("collectors[{}].{}", id, field),
+                    reason,
+                },
+                _ => e,
+            })?;
         }
         Ok(())
     }
@@ -364,6 +401,30 @@ impl Modality for WindowActivityFrame {
             DEFINE FIELD window_title  ON `{table}` TYPE string;
             DEFINE FIELD focused       ON `{table}` TYPE bool;
             DEFINE FIELD duration_secs ON `{table}` TYPE float;
+        "#
+    }
+}
+
+// MouseFrame
+impl DataType for MouseFrame {
+    fn uuid(&self) -> CoreUuid {
+        parse_uuid(&self.uuid)
+    }
+    fn timestamp(&self) -> DateTime<Utc> {
+        to_dt(self.timestamp)
+    }
+}
+impl Modality for MouseFrame {
+    fn get_table_name() -> &'static str {
+        "mouse"
+    }
+    fn get_surrealdb_schema() -> &'static str {
+        r#"
+            DEFINE FIELD timestamp ON `{table}` TYPE datetime;
+            DEFINE FIELD x         ON `{table}` TYPE float;
+            DEFINE FIELD y         ON `{table}` TYPE float;
+            DEFINE FIELD button    ON `{table}` TYPE int;
+            DEFINE FIELD pressed   ON `{table}` TYPE bool;
         "#
     }
 }
