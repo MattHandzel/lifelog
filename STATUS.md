@@ -2,40 +2,37 @@
 
 ## Current Objective
 
-Implement chunk offset validation tests (UT-040) for the validation suite.
+Expanding automated validation coverage and finishing remaining data modality migrations.
 
 ## Where To Resume
 
-- Branch to continue from: `validation/planning`
-- Prior branch with build-only changes: `validation/scaffold`
+- Branch: `refactor/proto-first-completion`
 
 ## Last Verified
 
-- `nix develop -c cargo check` (passes)
-- `nix develop -c cargo test -p utils` (passes all 7 tests, including UT-041/042)
+- `just check` (passes)
+- `just test` (passes)
+- `just test-e2e` (passes: IT-090 verified)
 
 ## How To Verify (Target)
 
-- `nix develop -c cargo check`
-- `nix develop -c cargo test -p utils`
+- `just check`
+- `just test-e2e`
 
 ## What Changed Last
 
-- Added `UploadChunks` and `GetUploadOffset` RPCs to `lifelog.proto`.
-- Implemented `ChunkIngester` in `common/utils` with async `IngestBackend` trait.
-- Added unit tests UT-041 (Idempotent Apply) and UT-042 (Durable ACK Gate) to `utils`.
-- Implemented `SurrealIngestBackend` stub and `Server` integration in `lifelog-server`.
-- **Proto-First Refactor**:
-  - Disabled automatic overwriting of `.proto` files by `lifelog-macros`.
-  - Configured `lifelog-proto` to generate `serde::Serialize`/`Deserialize` implementations using `pbjson`.
-  - Replaced `common/config::ServerConfig` with `lifelog_proto::ServerConfig` to eliminate type duplication and manual conversion.
-  - Updated `lifelog-types` and `data-modalities` to compatibility with `pbjson_types`.
+- **Proto-First Refactor Completed**: All Config and State types now use `lifelog_proto` generated structs. Manual type conversion layers removed.
+- **Integration Test Scaffolding**: Implemented `TestContext` harness that automates ephemeral SurrealDB and Server lifecycle for verification.
+- **IT-090 Verified**: Resumable chunked upload protocol is now verified by a real integration test.
+- **Documentation Updated**: Added `docs/architecture/proto-system.md` and refreshed `docs/internal-data-representation.md`.
+- **DevEx Improved**: Added a `justfile` to simplify workspace checks and tests.
+- **Warning-Free Build**: Fixed all build warnings across the workspace.
 
 ## What's Next
 
-- Migrate remaining config structs (`CollectorConfig`, etc.) to use `lifelog_proto` types.
-- Implement integration test scaffolding (IT-090) in `tests/validation_suite.rs`.
-- Wire up real SurrealDB metadata persistence in `SurrealIngestBackend`.
+- Implement `IT-081` (ACK Gate) integration test.
+- Wire up real SurrealDB metadata persistence in `SurrealIngestBackend` (it currently upserts chunk metadata but doesn't yet trigger indexing).
+- Migrate Modality types (`ScreenFrame`, `BrowserFrame`) to re-exports.
 
 ## Blockers
 
