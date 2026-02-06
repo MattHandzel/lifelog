@@ -5,6 +5,8 @@
 **Nix is required.** All cargo commands must run inside `nix develop`.
 Use `just` recipes (which wrap nix) instead of raw cargo.
 
+**Worktrees:** Feature branches use git worktrees in `~/.config/superpowers/worktrees/lifelog/`
+
 | Command              | What it does                                 |
 | -------------------- | -------------------------------------------- |
 | `just check`         | `cargo check --all-targets`                  |
