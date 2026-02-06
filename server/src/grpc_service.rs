@@ -38,15 +38,12 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             collector_config.host.clone(),
             collector_config.port.clone()
         );
-        println!(
-            "Received a register collector request from: {:?} for collector ID: {}",
-            collector_ip, collector_config.id
-        );
+        tracing::info!(ip = %collector_ip, id = %collector_config.id, "Register collector request");
 
         let endpoint = tonic::transport::Endpoint::from_shared(collector_ip.clone());
         match endpoint {
             Err(ref e) => {
-                println!("Endpoint: {:?}", endpoint);
+                tracing::error!(?endpoint, "Invalid endpoint");
                 Err(TonicStatus::internal(format!(
                     "Failed to create endpoint: {}",
                     e
@@ -71,7 +68,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
 
                 self.server.register_collector(collector.clone()).await;
 
-                println!("Registering collector: {:?}", collector);
+                tracing::info!(id = %actual_mac_id, "Collector registered");
 
                 Ok(TonicResponse::new(RegisterCollectorResponse {
                     success: true,
@@ -99,7 +96,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         _request: tonic::Request<SetSystemConfigRequest>,
     ) -> Result<TonicResponse<SetSystemConfigResponse>, TonicStatus> {
-        println!("Received a set config request!");
+        tracing::info!("Received set config request");
         Ok(TonicResponse::new(SetSystemConfigResponse::default()))
     }
 
@@ -108,7 +105,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         request: Request<QueryRequest>,
     ) -> Result<Response<QueryResponse>, Status> {
         let query_message = request.into_inner().query;
-        println!("[QUERY] Received a query request: {:?}", query_message);
+        tracing::info!(query = ?query_message, "Received query request");
         let _server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
 
         let _uuids: Vec<LifelogFrameKey> = vec![];
@@ -130,10 +127,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             })
             .collect();
         let response = QueryResponse { keys: proto_keys };
-        println!(
-            "[SERVER QUERY] Responding to QueryRequest with {} keys",
-            response.keys.len()
-        );
+        tracing::info!(count = response.keys.len(), "Query response");
         Ok(Response::new(response))
     }
 
@@ -142,10 +136,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         request: Request<GetDataRequest>,
     ) -> Result<Response<GetDataResponse>, Status> {
         let inner_request = request.into_inner();
-        println!(
-            "[SERVER GET_DATA] Received GetDataRequest with {} keys",
-            inner_request.keys.len()
-        );
+        tracing::info!(count = inner_request.keys.len(), "Received GetDataRequest");
 
         let _server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
         let keys = inner_request.keys;
@@ -164,10 +155,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             .collect();
 
         let response = GetDataResponse { data: data };
-        println!(
-            "[SERVER GET_DATA] Responding to GetDataRequest with {} data items",
-            response.data.len()
-        );
+        tracing::info!(count = response.data.len(), "GetData response");
         Ok(Response::new(response))
     }
 
@@ -203,7 +191,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         _request: tonic::Request<GetStateRequest>,
     ) -> Result<TonicResponse<GetSystemStateResponse>, TonicStatus> {
-        println!("Received a get state request!");
+        tracing::debug!("Received get state request");
         let state = self.server.get_state().await;
         //let proto_state = s
         Ok(TonicResponse::new(GetSystemStateResponse {

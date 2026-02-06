@@ -66,11 +66,11 @@ impl ServerHandle {
 
         if let Some(existing_collector) = collectors_vec.iter_mut().find(|c| c.id == collector.id) {
             // Collector already exists, update it
-            println!("Updating existing collector: {:?}", collector.id);
+            tracing::info!("Updating existing collector: {:?}", collector.id);
             *existing_collector = collector;
         } else {
             // Collector does not exist, add it
-            println!("Adding new collector: {:?}", collector.id);
+            tracing::info!("Adding new collector: {:?}", collector.id);
             collectors_vec.push(collector);
         }
     }
@@ -86,10 +86,7 @@ impl ServerHandle {
     }
 
     pub async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
-        println!(
-            "[PROCESS_QUERY]: Requesting server lock for query {}",
-            query
-        );
+        tracing::debug!(query = %query, "Requesting server lock for process_query");
         self.server.read().await.process_query(query).await
     }
 
@@ -111,14 +108,8 @@ impl ServerHandle {
 #[derive(Debug, Clone)]
 pub struct Server {
     pub(crate) db: Surreal<Client>,
-    #[allow(dead_code)]
-    host: String,
-    #[allow(dead_code)]
-    port: u16,
     state: Arc<RwLock<SystemState>>,
     pub(crate) registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
-    #[allow(dead_code)]
-    register_interfaces: Arc<RwLock<Vec<RegisteredInterface>>>,
     policy: Arc<RwLock<ServerPolicy>>,
     origins: Arc<RwLock<Vec<DataOrigin>>>,
     transforms: Arc<RwLock<Vec<LifelogTransform>>>, // TODO: These should be registered transforms
@@ -185,11 +176,8 @@ impl Server {
 
         let s = Self {
             db,
-            host: config.host.clone(),
-            port: config.port as u16,
             state,
             registered_collectors: Arc::new(RwLock::new(vec![])),
-            register_interfaces: Arc::new(RwLock::new(vec![])),
             policy,
             transforms: Arc::new(RwLock::new(vec![ocr_transform.into()])),
             origins: Arc::new(RwLock::new(origins_vec)),
@@ -332,10 +320,7 @@ impl Server {
     // collector. Are there any problems with this?
     async fn contains_collector(&self, collector_name: String) -> bool {
         let collectors = self.registered_collectors.read().await;
-        println!(
-            "Checking if collector {} is registered: {:?}",
-            collector_name, collectors
-        );
+        tracing::debug!(collector = %collector_name, "Checking if collector is registered");
         for collector in collectors.iter() {
             if collector.id == collector_name {
                 return true;
@@ -369,30 +354,18 @@ impl Server {
     }
 
     async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
-        println!(
-            "[SERVER PROCESS_QUERY] Entered process_query for query: {}",
-            query
-        );
+        tracing::debug!(query = %query, "Entered process_query");
         let mut keys: Vec<LifelogFrameKey> = vec![];
 
-        println!("[SERVER PROCESS_QUERY] Attempting to get write lock on self.origins...");
         let mut origins = self.origins.write().await;
-        println!("[SERVER PROCESS_QUERY] Acquired write lock on self.origins.");
 
-        println!("[SERVER PROCESS_QUERY] Calling get_origins_from_db...");
         match get_origins_from_db(&self.db).await {
             Ok(db_origins) => {
-                println!(
-                    "[SERVER PROCESS_QUERY] Successfully got origins from DB: {:?}",
-                    db_origins.len()
-                );
+                tracing::debug!(count = db_origins.len(), "Refreshed origins from DB");
                 *origins = db_origins;
             }
             Err(e) => {
-                eprintln!(
-                    "[SERVER PROCESS_QUERY] Failed to get origins from DB: {}",
-                    e
-                );
+                tracing::error!(error = %e, "Failed to get origins from DB");
                 return Err(LifelogError::Other(anyhow::anyhow!(
                     "Failed to refresh origins from DB: {}",
                     e
@@ -400,12 +373,8 @@ impl Server {
             }
         }
 
-        println!(
-            "[SERVER PROCESS_QUERY] Iterating over {} origins.",
-            origins.len()
-        );
         for origin in origins.iter() {
-            println!("[SERVER PROCESS_QUERY]: Looking at origin {}", origin);
+            tracing::trace!(origin = %origin, "Querying UUIDs for origin");
             match get_all_uuids_from_origin(&self.db, origin).await {
                 Ok(uuids_from_origin) => {
                     keys.extend(uuids_from_origin.iter().map(|uuid| LifelogFrameKey {
@@ -414,17 +383,11 @@ impl Server {
                     }));
                 }
                 Err(e) => {
-                    eprintln!(
-                        "[SERVER PROCESS_QUERY] Failed to get uuids from origin {}: {}",
-                        origin, e
-                    );
+                    tracing::warn!(origin = %origin, error = %e, "Failed to get UUIDs from origin");
                 }
             }
         }
-        println!(
-            "[SERVER PROCESS_QUERY] Finished processing. Returning {} keys.",
-            keys.len()
-        );
+        tracing::debug!(count = keys.len(), "Process query complete");
         Ok(keys)
     }
 

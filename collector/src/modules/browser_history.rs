@@ -49,7 +49,7 @@ impl BrowserHistorySource {
                 )
                 .unwrap_or_default();
                 if let Err(e) = fs::write(&self.config.output_file, &windows_epoch_micros_str) {
-                    eprintln!("Error creating output file: {}", e);
+                    tracing::error!(error = %e, "Error creating output file");
                 }
                 windows_epoch_dt
             }
@@ -95,7 +95,7 @@ impl BrowserHistorySource {
         }
 
         if let Err(e) = fs::write(&self.config.output_file, now_chrome_micros.to_string()) {
-            eprintln!("Error saving last query time (Chrome format): {}", e);
+            tracing::error!(error = %e, "Error saving last query time (Chrome format)");
         }
 
         Ok(history_entries)
@@ -112,25 +112,22 @@ impl DataSource for BrowserHistorySource {
 
     fn start(&self) -> Result<DataSourceHandle, DataSourceError> {
         if RUNNING.load(Ordering::SeqCst) {
-            eprintln!("ScreenDataSource: Start called but task is already running.");
+            tracing::warn!("BrowserHistorySource: Start called but task is already running.");
             return Err(DataSourceError::AlreadyRunning);
         }
 
-        println!("ScreenDataSource: Starting data source task to store in memory...");
+        tracing::info!("BrowserHistorySource: Starting data source task to store in memory");
         RUNNING.store(true, Ordering::SeqCst);
 
         let source_clone = self.clone();
 
         let _join_handle = tokio::spawn(async move {
             let task_result = source_clone.run().await;
-            println!(
-                "[Task] BrowserHistorySource (in-memory) background task finished with result: {:?}",
-                task_result
-            );
+            tracing::info!(result = ?task_result, "BrowserHistorySource (in-memory) background task finished");
             task_result
         });
 
-        println!("BrowserHistorySource: Data source task (in-memory) started successfully.");
+        tracing::info!("BrowserHistorySource: Data source task (in-memory) started successfully");
         let new_join_handle = tokio::spawn(async { Ok(()) });
         Ok(DataSourceHandle {
             join: new_join_handle,
@@ -147,7 +144,7 @@ impl DataSource for BrowserHistorySource {
         while RUNNING.load(Ordering::SeqCst) {
             sleep(Duration::from_secs_f64(5.0)).await; //fixme
         }
-        println!("BrowserHistorySource: In-memory run loop finished.");
+        tracing::info!("BrowserHistorySource: In-memory run loop finished");
         Ok(())
     }
 

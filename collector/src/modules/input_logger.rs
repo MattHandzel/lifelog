@@ -170,7 +170,7 @@ enum InputEvent {
 }
 
 fn log_key_event(conn: &Connection, pressed: bool, key: &str, timestamp: f64) -> Result<()> {
-    println!("Key: {:?} {:?}", key, pressed);
+    tracing::debug!(key, pressed, "Key event");
     conn.execute(
         "INSERT INTO key_events VALUES (?1, ?2, ?3)",
         params![timestamp, if pressed { "press" } else { "release" }, key],
@@ -179,7 +179,7 @@ fn log_key_event(conn: &Connection, pressed: bool, key: &str, timestamp: f64) ->
 }
 
 fn log_mouse_button(conn: &Connection, pressed: bool, button: &str, timestamp: f64) -> Result<()> {
-    println!("Mouse: {:?} {:?}", button, pressed);
+    tracing::debug!(button, pressed, "Mouse event");
     conn.execute(
         "INSERT INTO mouse_buttons VALUES (?1, ?2, ?3)",
         params![timestamp, if pressed { "press" } else { "release" }, button],

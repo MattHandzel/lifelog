@@ -24,10 +24,12 @@ struct Cli {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt::init();
+
     // TODO: How to make it so that when the computer suspends all loggers are restarted so the
     // time is aligned
     #[cfg(feature = "dev")]
-    println!("DEVELOPMENT MODE");
+    tracing::info!("DEVELOPMENT MODE");
 
     let binary_name = std::env::current_exe()
         .ok()
@@ -37,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .unwrap_or_else(|| "unknown".to_string());
 
-    println!("Starting Life Logger! Binary: {}", binary_name);
+    tracing::info!(binary = %binary_name, "Starting Life Logger");
     let config = Arc::new(load_config());
 
     // Check to see if there is another instance of lifelog running
@@ -45,7 +47,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if setup::n_processes_already_running(&binary_name, 2) {
         // need n=2 b/c when this process runs
         // it has same binary name as the one that is running
-        println!("Another instance of lifelog is already running. Exiting...");
+        tracing::warn!("Another instance of lifelog is already running. Exiting...");
 
         #[cfg(not(feature = "dev"))]
         return Ok(());
@@ -109,7 +111,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // NOTE: CollectorServiceServer should be started before collector tries to connect to the
     // Server because the server is expecting to be able to connect to the collector
     let server_handle = tokio::spawn(async move {
-        println!("Starting collector on {}", addr);
+        tracing::info!(addr = %addr, "Starting collector gRPC server");
         tonic::transport::Server::builder()
             .add_service(reflection_service)
             .add_service(CollectorServiceServer::new(grpc_server))
@@ -126,6 +128,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let _ = try_join!(server_handle)?; // or handle each individually
 
-    println!("collector started successfully.");
+    tracing::info!("Collector started successfully");
     Ok(())
 }

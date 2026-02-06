@@ -83,9 +83,7 @@ impl Transform for OcrTransform {
                 // For now, this will likely lead to Tesseract error or empty output.
                 // This path should ideally not be hit if LifelogImage is valid.
                 // Consider returning TransformError::ImageConversionFailed or similar.
-                eprintln!(
-                    "[OCR TRANSFORM] Failed to create rusty_tesseract::Image from dynamic_image"
-                );
+                tracing::warn!("Failed to create rusty_tesseract::Image from dynamic_image");
                 // Let's return an empty OcrFrame to avoid panicking here
                 return Ok(OcrFrame {
                     text: String::new(),
@@ -105,7 +103,7 @@ impl Transform for OcrTransform {
         let data_output = match rusty_tesseract::image_to_string(&img, &args) {
             Ok(text) => text,
             Err(e) => {
-                eprintln!("[OCR TRANSFORM] Tesseract processing error: {:?}", e);
+                tracing::warn!(error = ?e, "Tesseract processing error");
                 // Return empty string, allowing the transform to "succeed" with no text.
                 // Depending on requirements, one might want to propagate this as an error.
                 String::new()

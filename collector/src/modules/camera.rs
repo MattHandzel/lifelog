@@ -50,7 +50,7 @@ pub async fn capture_frame(_config: &CameraConfig) -> Result<CameraFrame> {
 
     #[cfg(target_os = "macos")]
     {
-        println!("Attempting to capture frame with imagesnap...");
+        tracing::debug!("Attempting to capture frame with imagesnap");
 
         // First check if imagesnap is installed
         let check = Command::new("which").arg("imagesnap").output();
@@ -82,7 +82,7 @@ pub async fn capture_frame(_config: &CameraConfig) -> Result<CameraFrame> {
                         "No cameras were detected by imagesnap. Check camera connections and permissions."
                     ));
                 }
-                println!("Available cameras: {}", devices_str.trim());
+                tracing::debug!(devices = %devices_str.trim(), "Available cameras");
             }
             Err(e) => {
                 return Err(std::io::Error::new(
@@ -102,7 +102,7 @@ pub async fn capture_frame(_config: &CameraConfig) -> Result<CameraFrame> {
         let temp_file = NamedTempFile::new()?;
         let temp_path = temp_file.path().to_string_lossy().to_string();
 
-        println!("Capturing image to temp file: {}", temp_path);
+        tracing::debug!(path = %temp_path, "Capturing image to temp file");
 
         // Use imagesnap to capture a frame from the default camera
         let output = Command::new("imagesnap")
@@ -144,7 +144,7 @@ pub async fn capture_frame(_config: &CameraConfig) -> Result<CameraFrame> {
                     ));
                 }
 
-                println!("Successfully captured image: {} bytes", metadata.len());
+                tracing::info!(bytes = metadata.len(), "Successfully captured image");
 
                 // Read the captured image
                 let image_data = fs::read(&temp_path)?;
@@ -187,14 +187,14 @@ pub async fn capture_frame(_config: &CameraConfig) -> Result<CameraFrame> {
 
 pub async fn start_camera_logger(config: &CameraConfig) -> Result<()> {
     if !config.enabled {
-        println!("Camera logger not started because it's disabled in config");
+        tracing::info!("Camera logger not started because it's disabled in config");
         return Ok(());
     }
 
     #[cfg(target_os = "linux")]
     {
         // Linux-specific implementation
-        println!("Starting camera logger (Linux)");
+        tracing::info!("Starting camera logger (Linux)");
 
         // Clone the config and spawn the Linux-specific logger
         let config_clone = config.clone();
@@ -206,7 +206,7 @@ pub async fn start_camera_logger(config: &CameraConfig) -> Result<()> {
     #[cfg(target_os = "macos")]
     {
         // MacOS implementation
-        println!("Starting camera logger (macOS)");
+        tracing::info!("Starting camera logger (macOS)");
 
         // Create output directory if it doesn't exist
         fs::create_dir_all(&config.output_dir)?;
@@ -220,7 +220,7 @@ pub async fn start_camera_logger(config: &CameraConfig) -> Result<()> {
 
     #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
-        println!("Camera logging is not supported on this platform");
+        tracing::info!("Camera logging is not supported on this platform");
     }
 
     Ok(())
@@ -258,20 +258,20 @@ pub async fn start_logger(config: &CameraConfig) {
 
 #[cfg(target_os = "macos")]
 pub async fn start_logger(config: &CameraConfig) {
-    println!("Starting camera logger on macOS using imagesnap");
+    tracing::info!("Starting camera logger on macOS using imagesnap");
 
     // Verify imagesnap is available
     let check_result = Command::new("which").arg("imagesnap").output();
 
     match check_result {
         Err(_) => {
-            eprintln!("ERROR: imagesnap not found! Please install it with: brew install imagesnap");
-            eprintln!("Camera logger cannot start without imagesnap. Exiting.");
+            tracing::error!("imagesnap not found. Please install it with: brew install imagesnap");
+            tracing::error!("Camera logger cannot start without imagesnap. Exiting.");
             return;
         }
         Ok(output) if !output.status.success() => {
-            eprintln!("ERROR: imagesnap not found! Please install it with: brew install imagesnap");
-            eprintln!("Camera logger cannot start without imagesnap. Exiting.");
+            tracing::error!("imagesnap not found. Please install it with: brew install imagesnap");
+            tracing::error!("Camera logger cannot start without imagesnap. Exiting.");
             return;
         }
         _ => {
@@ -281,16 +281,16 @@ pub async fn start_logger(config: &CameraConfig) {
             match devices_result {
                 Ok(output) => {
                     let output_str = String::from_utf8_lossy(&output.stdout);
-                    println!("Available cameras: {}", output_str);
+                    tracing::debug!(cameras = %output_str, "Available cameras");
 
                     if !output_str.contains("Video Devices:") {
-                        eprintln!("ERROR: No cameras found by imagesnap!");
-                        eprintln!("Make sure your camera is connected and permissions are granted");
+                        tracing::error!("No cameras found by imagesnap");
+                        tracing::error!("Make sure your camera is connected and permissions are granted");
                         return;
                     }
                 }
                 Err(e) => {
-                    eprintln!("ERROR checking camera devices: {}", e);
+                    tracing::error!(error = %e, "Error checking camera devices");
                 }
             }
         }
@@ -298,13 +298,13 @@ pub async fn start_logger(config: &CameraConfig) {
 
     // Ensure output directory exists
     if let Err(e) = fs::create_dir_all(&config.output_dir) {
-        eprintln!("ERROR: Failed to create output directory: {}", e);
+        tracing::error!(error = %e, "Failed to create output directory");
         return;
     }
 
-    println!(
-        "✓ Camera checks passed! Starting capture loop with interval: {} seconds",
-        config.interval
+    tracing::info!(
+        interval_secs = config.interval,
+        "Camera checks passed, starting capture loop"
     );
 
     // Main capture loop
@@ -316,7 +316,7 @@ pub async fn start_logger(config: &CameraConfig) {
 
         // Capture with better error handling and output
         let capture_start = std::time::Instant::now();
-        println!("Capturing frame to: {}", output_path_str);
+        tracing::debug!(path = %output_path_str, "Capturing frame");
 
         // Use imagesnap to capture a frame
         let result = Command::new("imagesnap")
@@ -329,62 +329,62 @@ pub async fn start_logger(config: &CameraConfig) {
             Ok(output) => {
                 if output.status.success() {
                     let duration = capture_start.elapsed();
-                    println!("✓ Camera capture successful! Took {:?}", duration);
+                    tracing::info!(duration = ?duration, "Camera capture successful");
 
                     // Check if the file was actually created with content
                     match fs::metadata(&output_path) {
                         Ok(meta) if meta.len() > 0 => {
-                            println!(
-                                "  ✓ Saved image: {} ({} bytes)",
-                                output_path_str,
-                                meta.len()
+                            tracing::debug!(
+                                path = %output_path_str,
+                                bytes = meta.len(),
+                                "Saved image"
                             );
                         }
                         Ok(_) => {
-                            eprintln!("  ⚠ Warning: Saved image file is empty!");
+                            tracing::warn!("Saved image file is empty");
                         }
                         Err(e) => {
-                            eprintln!("  ⚠ Warning: Failed to verify saved image: {}", e);
+                            tracing::warn!(error = %e, "Failed to verify saved image");
                         }
                     }
                 } else {
-                    eprintln!("❌ Failed to capture camera frame: {}", output.status);
+                    tracing::error!(status = %output.status, "Failed to capture camera frame");
                     if !output.stderr.is_empty() {
-                        eprintln!(
-                            "  Error output: {}",
-                            String::from_utf8_lossy(&output.stderr)
+                        tracing::error!(
+                            stderr = %String::from_utf8_lossy(&output.stderr),
+                            "Capture error output"
                         );
                     }
                 }
             }
             Err(e) => {
                 if e.kind() == ErrorKind::NotFound {
-                    eprintln!("❌ ERROR: imagesnap utility not found. Install with 'brew install imagesnap'");
+                    tracing::error!("imagesnap utility not found. Install with 'brew install imagesnap'");
                     // Only print the error once, then exit the loop
                     break;
                 } else {
-                    eprintln!("❌ Failed to execute imagesnap: {}", e);
+                    tracing::error!(error = %e, "Failed to execute imagesnap");
                 }
             }
         }
 
         // Check if logging is still enabled
         if !config.enabled {
-            println!("Camera logging disabled in config, stopping logger");
+            tracing::info!("Camera logging disabled in config, stopping logger");
             break;
         }
 
         // Wait for the configured interval before next capture
-        println!("Waiting {} seconds until next capture...", config.interval);
+        tracing::debug!(interval_secs = config.interval, "Waiting until next capture");
         sleep(Duration::from_secs_f64(config.interval)).await;
     }
 
-    println!("🛑 Camera logger stopped");
+    tracing::info!("Camera logger stopped");
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 pub async fn start_logger(_config: &CameraConfig) {
-    println!("Camera logging is not supported on this platform");
+    tracing::info!("Camera logging is not supported on this platform");
 }
 
 //fn save_frame(frame: &Frame, path: &Path) -> std::io::Result<()> {
@@ -396,11 +396,11 @@ pub async fn start_logger(_config: &CameraConfig) {
 fn save_frame(frame: &Frame, path: &Path) -> std::io::Result<()> {
     match std::fs::write(path, &frame[..]) {
         Ok(_) => {
-            println!("Frame saved to: {}", path.display());
+            tracing::debug!(path = %path.display(), "Frame saved");
             Ok(())
         }
         Err(e) => {
-            eprintln!("Failed to save frame: {}", e);
+            tracing::error!(error = %e, "Failed to save frame");
             Err(e)
         }
     }

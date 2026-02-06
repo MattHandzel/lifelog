@@ -16,17 +16,23 @@ just test-e2e    # integration suite (needs SurrealDB running)
 just validate    # fmt + check + clippy + test (full gate)
 ```
 
+## Operating Instructions
+
+1. Open only the minimum files needed.
+2. Run noisy commands through `tools/ai/run_and_digest.sh` and share only the digest.
+3. Summarize diffs with `tools/ai/git_diff_digest.sh`.
+
 ## Command Reference
 
-| Command               | What it does                                          |
-|-----------------------|-------------------------------------------------------|
-| `just check`          | `cargo check --all-targets` (fast compile check)      |
-| `just test`           | `cargo test --all-targets` (unit + lib tests)         |
-| `just test-e2e`       | Integration suite against live SurrealDB              |
-| `just validate`       | Full quality gate (fmt, check, clippy, test)          |
-| `just run-server`     | Start the lifelog server backend                      |
-| `just run-collector`  | Start the collector daemon                            |
-| `just clean-tests`    | Remove `/tmp/lifelog-test-*` artifacts                |
+| Command              | What it does                                     |
+| -------------------- | ------------------------------------------------ |
+| `just check`         | `cargo check --all-targets` (fast compile check) |
+| `just test`          | `cargo test --all-targets` (unit + lib tests)    |
+| `just test-e2e`      | Integration suite against live SurrealDB         |
+| `just validate`      | Full quality gate (fmt, check, clippy, test)     |
+| `just run-server`    | Start the lifelog server backend                 |
+| `just run-collector` | Start the collector daemon                       |
+| `just clean-tests`   | Remove `/tmp/lifelog-test-*` artifacts           |
 
 ## Architecture Overview
 
@@ -49,18 +55,18 @@ proto/lifelog.proto, lifelog_types.proto
 
 ### Workspace Crates
 
-| Crate                  | Purpose                                    |
-|------------------------|--------------------------------------------|
-| `common/lifelog-proto` | Protobuf codegen (build.rs generates code) |
-| `common/lifelog-types` | Core domain types, error types, traits     |
-| `common/config`        | Configuration structs (proto-backed)       |
-| `common/utils`         | CAS storage, chunk validation, ingestion   |
-| `common/data-modalities` | Frame types + OCR transform              |
-| `common/lifelog-core`  | Pure algorithms (no IO)                    |
-| `common/macros`        | Procedural macros                          |
-| `server`               | gRPC server, SurrealDB backend, policy loop|
-| `collector`            | Device data collection daemon              |
-| `interface/src-tauri`  | Desktop UI (excluded from default builds)  |
+| Crate                    | Purpose                                     |
+| ------------------------ | ------------------------------------------- |
+| `common/lifelog-proto`   | Protobuf codegen (build.rs generates code)  |
+| `common/lifelog-types`   | Core domain types, error types, traits      |
+| `common/config`          | Configuration structs (proto-backed)        |
+| `common/utils`           | CAS storage, chunk validation, ingestion    |
+| `common/data-modalities` | Frame types + OCR transform                 |
+| `common/lifelog-core`    | Pure algorithms (no IO)                     |
+| `common/macros`          | Procedural macros                           |
+| `server`                 | gRPC server, SurrealDB backend, policy loop |
+| `collector`              | Device data collection daemon               |
+| `interface/src-tauri`    | Desktop UI (excluded from default builds)   |
 
 ## Coding Conventions
 
@@ -106,10 +112,22 @@ just merge-agent my-task-name
 ```
 
 **Conventions:**
+
 - Branch naming: `agent/<kebab-case-description>`
 - All branches fork from current working branch
 - Worktrees live at `../lifelog-worktrees/<name>`
 - Run `just validate` in the worktree before reporting done
+
+## AI Tools (`tools/ai/`)
+
+| Tool | Use instead of | Example |
+|------|---------------|---------|
+| `check_digest.sh` | raw `cargo check` | `tools/ai/check_digest.sh nix develop --command cargo check --all-targets` |
+| `run_and_digest.sh` | raw command execution | `tools/ai/run_and_digest.sh -- just test` |
+| `scope_changes.sh` | grep count for scoping | `tools/ai/scope_changes.sh 'println!' collector/src/` |
+| `file_summary.sh` | reading full files | `tools/ai/file_summary.sh server/src/server.rs` |
+| `git_diff_digest.sh` | `git diff` | `tools/ai/git_diff_digest.sh` |
+| `bulk_replace.sh` | sequential Edit calls | `tools/ai/bulk_replace.sh 'old' 'new' src/*.rs` |
 
 ## Anti-Patterns
 

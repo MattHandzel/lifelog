@@ -13,12 +13,14 @@ use tonic_reflection::server::Builder;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt::init();
+
     let config = ServerConfig::default();
     let server = LifelogServer::new(&config).await?;
 
     let addr = format!("{}:{}", config.host, config.port).parse()?;
 
-    println!("Starting server on {}", addr);
+    tracing::info!("Starting server on {}", addr);
     let reflection_service = Builder::configure()
         .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
         .build_v1alpha()?; // This should be build_v1alpha otherwise the reflection gRPC service

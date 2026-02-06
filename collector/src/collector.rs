@@ -141,12 +141,12 @@ impl CollectorHandle {
             {
                 let mut collector = collector.write().await;
                 if let Err(e) = collector.report_state().await {
-                    eprintln!("Failed to report state: {}", e);
+                    tracing::error!(error = %e, "Failed to report state");
                     // Try and handshake again
                     if let Err(e) = collector.handshake().await {
-                        eprintln!("Failed to re-establish connection: {}", e);
+                        tracing::error!(error = %e, "Failed to re-establish connection");
                     } else {
-                        println!("Re-established connection.");
+                        tracing::info!("Re-established connection");
                     }
                 }
             } // TODO: Need to drop the lock  here (maybe refactor it so that functions call for
@@ -188,7 +188,7 @@ impl Collector {
     /// This function connects the collector to the main lifelog server, it initializes the
     /// grpc_client object and can be called at anytime to reconnect to the server.
     pub async fn handshake(&mut self) -> Result<(), CollectorError> {
-        println!("Attempting gRPC connection to {}...", self.server_address);
+        tracing::info!(addr = %self.server_address, "Attempting gRPC connection");
 
         let endpoint = Endpoint::from_shared(self.server_address.clone())
             .map_err(|e| CollectorError::Other(format!("Invalid server address: {}", e)))?
@@ -197,19 +197,19 @@ impl Collector {
         let channel = endpoint.connect().await?;
         let mut client = LifelogServerServiceClient::new(channel);
 
-        println!("Connected. Performing handshake...");
+        tracing::info!("Connected. Performing handshake");
 
         // Get the actual MAC address
         let mac_addr_string = match get_mac_address() {
             Ok(Some(mac)) => mac.to_string().replace(":", ""), // Normalize to remove colons, like server expects
             Ok(None) => {
                 let err_msg = "MAC address not found".to_string();
-                eprintln!("{}", err_msg);
+                tracing::error!("{}", err_msg);
                 return Err(CollectorError::RegistrationFailed(err_msg));
             }
             Err(e) => {
                 let err_msg = format!("Error getting MAC address: {}", e);
-                eprintln!("{}", err_msg);
+                tracing::error!("{}", err_msg);
                 return Err(CollectorError::RegistrationFailed(err_msg));
             }
         };
@@ -226,15 +226,12 @@ impl Collector {
         let handshake_response = response.into_inner();
 
         if handshake_response.success {
-            println!(
-                "Handshake successful. Session ID: {:?}",
-                handshake_response.session_id
-            );
+            tracing::info!(session_id = ?handshake_response.session_id, "Handshake successful");
             self.grpc_client = Some(client);
             Ok(())
         } else {
             let err_msg = format!("Server rejected handshake");
-            eprintln!("{}", err_msg);
+            tracing::error!("{}", err_msg);
             Err(CollectorError::RegistrationFailed(err_msg))
         }
     }
@@ -266,13 +263,13 @@ impl Collector {
                     Err(e) => {
                         let err =
                             CollectorError::SourceSetupError("screen".to_string(), Box::new(e));
-                        eprintln!("{}", err);
+                        tracing::error!("{}", err);
                         setup_errors.push(err);
                     }
                 },
                 Err(e) => {
                     let err = CollectorError::SourceSetupError("screen".to_string(), Box::new(e));
-                    eprintln!("{}", err);
+                    tracing::error!("{}", err);
                     setup_errors.push(err);
                 }
             }
@@ -293,13 +290,13 @@ impl Collector {
                     Err(e) => {
                         let err =
                             CollectorError::SourceSetupError("browser".to_string(), Box::new(e));
-                        eprintln!("{}", err);
+                        tracing::error!("{}", err);
                         setup_errors.push(err);
                     }
                 },
                 Err(e) => {
                     let err = CollectorError::SourceSetupError("browser".to_string(), Box::new(e));
-                    eprintln!("{}", err);
+                    tracing::error!("{}", err);
                     setup_errors.push(err);
                 }
             }
@@ -308,15 +305,15 @@ impl Collector {
         // For now I've removed the other sources.
         // But they should be added back here when they're reimplmemented!
 
-        println!("Sources started. Active: {:?}", self.sources.keys());
+        tracing::info!(active_sources = ?self.sources.keys(), "Sources started");
 
         if let Err(e) = self.report_state().await {
-            eprintln!("Failed to report initial status: {}", e);
+            tracing::error!(error = %e, "Failed to report initial status");
             // Decide if this error should propagate or just be logged?
         }
 
         if !setup_errors.is_empty() {
-            eprintln!("Warning: Some sources failed to start.");
+            tracing::warn!("Some sources failed to start");
         }
 
         Ok(())
@@ -329,7 +326,7 @@ impl Collector {
 
         let mac_address_variable: Option<String> = match get_mac_address() {
             Ok(Some(mac_addr)) => {
-                println!("MAC addr = {}", mac_addr);
+                tracing::debug!(mac_addr = %mac_addr, "Resolved MAC address");
                 Some(mac_addr.to_string())
             }
             Ok(None) => None,
@@ -384,7 +381,7 @@ impl Collector {
         let current_state: lifelog_proto::CollectorState = self._get_state().await.into();
         if let Some(client) = self.grpc_client.as_mut() {
             let active_sources: Vec<String> = self.sources.keys().cloned().collect();
-            println!("Reporting status: Active sources = {:?}", active_sources);
+            tracing::info!(active_sources = ?active_sources, "Reporting status");
 
             let request = Request::new(ReportStateRequest {
                 state: Some(current_state),
@@ -394,15 +391,15 @@ impl Collector {
             let status_response = response.into_inner();
 
             if status_response.acknowledged {
-                println!("Server acknowledged status report.");
+                tracing::info!("Server acknowledged status report");
                 Ok(())
             } else {
                 let err_msg = "Server did not acknowledge status report".to_string();
-                eprintln!("{}", err_msg);
+                tracing::error!("{}", err_msg);
                 Err(CollectorError::Other(err_msg))
             }
         } else {
-            eprintln!("Cannot report status: gRPC client not connected.");
+            tracing::error!("Cannot report status: gRPC client not connected");
             Err(CollectorError::NotConnected)
         }
     }
@@ -410,25 +407,25 @@ impl Collector {
     pub fn send_data(&mut self) {}
 
     pub fn stop(&mut self) {
-        println!("Stopping Collector and sources...");
+        tracing::info!("Stopping Collector and sources");
 
         if let Some(handle) = self.task.take() {
             handle.abort();
-            println!("Aborted internal Collector task.");
+            tracing::info!("Aborted internal Collector task");
         }
 
         for (name, _handle) in self.sources.drain() {
-            println!("Stopping sources: {}", name);
+            tracing::info!(source = %name, "Stopping source");
             // handle.stop(); // Assuming SourceHandle has a stop method
         }
         self.sources.clear();
 
         self.grpc_client = None;
-        println!("Collector stopped.");
+        tracing::info!("Collector stopped");
     }
 
     pub async fn restart(&mut self) -> Result<(), CollectorError> {
-        println!("Restarting Collector...");
+        tracing::info!("Restarting Collector");
         self.stop();
         tokio::time::sleep(Duration::from_secs(1)).await;
         self.start().await
@@ -486,7 +483,7 @@ impl CollectorService for GRPCServerCollectorService {
         &self,
         _request: tonic::Request<GetDataRequest>,
     ) -> Result<tonic::Response<Self::GetDataStream>, tonic::Status> {
-        println!("[gRPC] Starting data send...");
+        tracing::debug!("Starting data send");
         const MAX_DATA_PER_CHANNEL: usize = 32;
         let (tx, rx) = tokio::sync::mpsc::channel(MAX_DATA_PER_CHANNEL);
         let collector_handle = self.collector.clone();
@@ -501,7 +498,7 @@ impl CollectorService for GRPCServerCollectorService {
                 let running: Option<&RunningSource<ScreenConfig>> =
                     (running_source as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>();
 
-                println!("{:?}", running);
+                tracing::debug!(running_source = ?running, "Screen source state");
 
                 if let Some(running_screen_src) = running {
                     let instance_arc = &running_screen_src.instance;
@@ -519,32 +516,31 @@ impl CollectorService for GRPCServerCollectorService {
                     {
                         match screen_ds_mut.get_data().await {
                             Ok(images) => {
-                                println!("[gRPC] clearing image buffer!");
-                                screen_ds_mut
-                                    .clear_buffer()
-                                    .await
-                                    .unwrap_or_else(|e| eprintln!("Error clearing buffer: {}", e));
+                                tracing::debug!("Clearing image buffer");
+                                screen_ds_mut.clear_buffer().await.unwrap_or_else(
+                                    |e| tracing::error!(error = %e, "Error clearing buffer"),
+                                );
                                 images
                             }
                             Err(e) => {
-                                eprintln!("Failed to get buffer from ScreenDataSource! {:}", e);
+                                tracing::error!(error = %e, "Failed to get buffer from ScreenDataSource");
                                 Vec::new()
                             }
                         }
                     } else {
-                        eprintln!("[gRPC] could not downcast to ScreenDataSource");
+                        tracing::error!("Could not downcast to ScreenDataSource");
                         Vec::new()
                     }
                 } else {
-                    eprintln!("[gRPC] 'screen' source not found or wrong type");
+                    tracing::error!("'screen' source not found or wrong type");
                     Vec::new()
                 }
             };
 
             if images.is_empty() {
-                println!("[gRPC] No images to send.");
+                tracing::debug!("No images to send");
             } else {
-                println!("[gRPC] Sending {} images.", images.len());
+                tracing::debug!(count = images.len(), "Sending images");
             }
 
             for screen_frame in images {
@@ -559,17 +555,17 @@ impl CollectorService for GRPCServerCollectorService {
                             )),
                         };
                         if tx.send(Ok(data_to_send)).await.is_err() {
-                            eprintln!("[gRPC] receiver dropped, stopping send");
+                            tracing::error!("Receiver dropped, stopping send");
                             break;
                         }
                     }
                     Err(e) => {
-                        eprintln!("[gRPC] conversion error: {:?}", e);
+                        tracing::error!(error = ?e, "Screen frame conversion error");
                     }
                 }
             }
 
-            println!("[gRPC] Finished sending from ScreenDataSource.");
+            tracing::debug!("Finished sending from ScreenDataSource");
 
             let browser_entries: Vec<BrowserFrame> = {
                 let read_guard = collector_handle.collector.read().await;
@@ -578,7 +574,7 @@ impl CollectorService for GRPCServerCollectorService {
                     as &dyn Any)
                     .downcast_ref::<RunningSource<BrowserHistoryConfig>>();
 
-                println!("{:?}", running);
+                tracing::debug!(running_source = ?running, "Browser source state");
 
                 if let Some(running_browser_src) = running {
                     let instance_arc = &running_browser_src.instance;
@@ -597,26 +593,26 @@ impl CollectorService for GRPCServerCollectorService {
                         match browser_ds.get_data() {
                             Ok(history) => history,
                             Err(e) => {
-                                eprintln!("Failed to get buffer from BrowserHistorySource! {:}", e);
+                                tracing::error!(error = %e, "Failed to get buffer from BrowserHistorySource");
                                 Vec::new()
                             }
                         }
                     } else {
-                        eprintln!("[gRPC] could not downcast to BrowserHistorySource");
+                        tracing::error!("Could not downcast to BrowserHistorySource");
                         Vec::new()
                     }
                 } else {
-                    eprintln!("[gRPC] 'browser' source not found or wrong type");
+                    tracing::error!("'browser' source not found or wrong type");
                     Vec::new()
                 }
             };
 
             if browser_entries.is_empty() {
-                println!("[gRPC] No browser history to send.");
+                tracing::debug!("No browser history to send");
             } else {
-                println!(
-                    "[gRPC] Sending {} browser history entries.",
-                    browser_entries.len()
+                tracing::debug!(
+                    count = browser_entries.len(),
+                    "Sending browser history entries"
                 );
             }
 
@@ -632,17 +628,17 @@ impl CollectorService for GRPCServerCollectorService {
                             )),
                         };
                         if tx.send(Ok(data_to_send)).await.is_err() {
-                            eprintln!("[gRPC] receiver dropped, stopping send");
+                            tracing::error!("Receiver dropped, stopping send");
                             break;
                         }
                     }
                     Err(e) => {
-                        eprintln!("[gRPC] conversion error: {:?}", e);
+                        tracing::error!(error = ?e, "Browser frame conversion error");
                     }
                 }
             }
 
-            println!("[gRPC] Finished sending from BrowserHistorySource.");
+            tracing::debug!("Finished sending from BrowserHistorySource");
         });
 
         Ok(tonic::Response::new(ReceiverStream::new(rx)))

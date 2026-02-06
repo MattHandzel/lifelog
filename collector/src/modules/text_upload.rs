@@ -125,10 +125,10 @@ pub async fn upload_file(
         ],
     )?;
 
-    println!(
-        "File uploaded: {} -> {}",
-        original_filename,
-        dest_path.display()
+    tracing::info!(
+        filename = original_filename,
+        dest = %dest_path.display(),
+        "File uploaded"
     );
 
     Ok(TextFile {

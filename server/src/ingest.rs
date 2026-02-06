@@ -46,10 +46,7 @@ impl IngestBackend for SurrealIngestBackend {
 
         // Use a unique ID based on session and offset to ensure idempotency
         let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
-        println!(
-            "[SERVER] Persisting chunk metadata: id={}, offset={}, length={}",
-            id, offset, length
-        );
+        tracing::debug!(id = %id, offset, length, "Persisting chunk metadata");
 
         // Use CREATE to avoid overwriting existing records (preserving 'indexed' state)
         // If it exists, we assume it's the same chunk (idempotency)

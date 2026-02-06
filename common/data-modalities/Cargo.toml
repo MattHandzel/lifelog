@@ -17,6 +17,7 @@ lifelog-types = { path = "../lifelog-types" }
 utils = { path = "../utils" }
 image = {workspace = true}
 thiserror = {workspace=true}
+tracing = {workspace = true}
 
 prost-types = { version = "0.13.5"}
 tonic = { version = "0.13.1"}

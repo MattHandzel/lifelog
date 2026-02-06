@@ -22,7 +22,7 @@ pub async fn start_logger(config: &InputLoggerConfig) {
         let entry = match entry {
             Ok(e) => e,
             Err(e) => {
-                eprintln!("Error reading directory entry: {}", e);
+                tracing::error!(error = %e, "Error reading directory entry");
                 continue;
             }
         };
@@ -31,7 +31,7 @@ pub async fn start_logger(config: &InputLoggerConfig) {
         let path_str = match path.to_str() {
             Some(s) => s,
             None => {
-                eprintln!("Invalid path: {:?}", path);
+                tracing::warn!(path = ?path, "Invalid path");
                 continue;
             }
         };
@@ -40,14 +40,14 @@ pub async fn start_logger(config: &InputLoggerConfig) {
         let mut device = match Device::open(path_str) {
             Ok(d) => d,
             Err(e) => {
-                eprintln!("Failed to open {}: {} (permissions?)", path_str, e);
+                tracing::warn!(path = %path_str, error = %e, "Failed to open device (permissions?)");
                 continue;
             }
         };
 
         // Configure non-blocking mode for async compatibility
         if let Err(e) = device.set_nonblocking(true) {
-            eprintln!("Failed to set non-blocking mode for {}: {}", path_str, e);
+            tracing::error!(path = %path_str, error = %e, "Failed to set non-blocking mode");
             continue;
         }
 
@@ -60,7 +60,7 @@ pub async fn start_logger(config: &InputLoggerConfig) {
             let conn = match setup::setup_input_logger_db(Path::new(&output_dir)) {
                 Ok(c) => c,
                 Err(e) => {
-                    eprintln!("Failed to create database connection: {}", e);
+                    tracing::error!(error = %e, "Failed to create database connection");
                     return;
                 }
             };
@@ -94,7 +94,7 @@ pub async fn start_logger(config: &InputLoggerConfig) {
                                     event.value()
                                 ],
                             ) {
-                                eprintln!("Database error: {}", e);
+                                tracing::error!(error = %e, "Database error");
                             }
                         }
                     }
@@ -103,7 +103,7 @@ pub async fn start_logger(config: &InputLoggerConfig) {
                         sleep(Duration::from_millis(10)).await;
                     }
                     Err(e) => {
-                        eprintln!("Critical error reading events: {}", e);
+                        tracing::error!(error = %e, "Critical error reading events");
                         break;
                     }
                 }
@@ -119,7 +119,7 @@ pub async fn start_logger(config: &InputLoggerConfig) {
 
 #[cfg(not(target_os = "linux"))]
 pub async fn start_logger(config: &InputLoggerConfig) {
-    println!("Evdev input logging is only available on Linux");
+    tracing::warn!("Evdev input logging is only available on Linux");
 
     // Set up database to ensure tables exist
     let _ = setup::setup_input_logger_db(&config.output_dir)

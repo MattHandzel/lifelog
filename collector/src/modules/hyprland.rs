@@ -30,7 +30,7 @@ impl DataLogger for HyprlandLogger {
     
                 let task_result = logger.run().await;
     
-                println!("[Task] Background task finished with result: {:?}", task_result);
+                tracing::debug!(?task_result, "Background task finished");
     
                 task_result
             });

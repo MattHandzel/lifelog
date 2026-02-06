@@ -35,11 +35,20 @@ impl From<ScreenFrame> for LifelogImage {
 
 impl From<ScreenFrame> for image::DynamicImage {
     fn from(frame: ScreenFrame) -> Self {
-        ImageReader::new(Cursor::new(frame.image_bytes))
-            .with_guessed_format()
-            .expect("Unable to guess image format")
-            .decode()
-            .expect("Unable to decode image")
+        let reader = match ImageReader::new(Cursor::new(frame.image_bytes)).with_guessed_format() {
+            Ok(r) => r,
+            Err(e) => {
+                tracing::warn!(uuid = %frame.uuid, error = %e, "Unable to guess image format, returning fallback image");
+                return image::DynamicImage::new_rgba8(1, 1);
+            }
+        };
+        match reader.decode() {
+            Ok(img) => img,
+            Err(e) => {
+                tracing::warn!(uuid = %frame.uuid, error = %e, "Unable to decode image, returning fallback image");
+                image::DynamicImage::new_rgba8(1, 1)
+            }
+        }
     }
 }
 

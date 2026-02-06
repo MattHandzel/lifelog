@@ -2,7 +2,7 @@ use config::CollectorConfig;
 use rusqlite::Connection;
 use std::fs;
 use std::path::Path;
-use sysinfo::{ProcessExt, System, SystemExt};
+use sysinfo::System;
 
 // Ensures the directory exists, creating it if necessary.
 pub fn ensure_directory(path: &Path) -> std::io::Result<()> {
@@ -44,7 +44,7 @@ pub fn n_processes_already_running(
 ) -> bool {
     let system = System::new_all();
     let mut process_count = 0;
-    for process in system.processes_by_name(process_name) {
+    for process in system.processes_by_name(std::ffi::OsStr::new(process_name)) {
         if process.name() == process_name {
             process_count += 1;
             if process_count >= num_processes_that_should_be_running {

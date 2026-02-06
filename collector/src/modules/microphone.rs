@@ -6,7 +6,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{WavSpec, WavWriter};
 use std::fs;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use tokio::time::{sleep, Duration as TokioDuration};
@@ -20,7 +20,7 @@ static RECORDING_PAUSED: AtomicBool = AtomicBool::new(false);
 static AUTO_RECORDING_ENABLED: AtomicBool = AtomicBool::new(false);
 
 // Shared config for updating settings during runtime
-static mut CURRENT_CONFIG: Option<Mutex<MicrophoneConfig>> = None;
+static CURRENT_CONFIG: OnceLock<Mutex<MicrophoneConfig>> = OnceLock::new();
 
 pub struct MicrophoneLogger {
     config: MicrophoneConfig,
@@ -50,7 +50,7 @@ impl DataLogger for MicrophoneLogger {
 
             let task_result = logger.run().await;
 
-            println!("[Task] Background task finished with result: {:?}", task_result);
+            tracing::debug!(result = ?task_result, "Background task finished");
 
             task_result
         });
@@ -60,12 +60,10 @@ impl DataLogger for MicrophoneLogger {
 
     async fn run(&self) -> Result<(), LoggerError> {
         let config = self.config.clone();
-        println!("Starting microphone logger with config: {:?}", config);
+        tracing::info!(config = ?config, "Starting microphone logger");
 
         // Store config for runtime updates
-        unsafe {
-            CURRENT_CONFIG = Some(Mutex::new(config.clone()));
-        }
+        let _ = CURRENT_CONFIG.set(Mutex::new(config.clone()));
 
         // Initialize flags
         AUTO_RECORDING_ENABLED.store(config.enabled, Ordering::SeqCst);
@@ -74,33 +72,31 @@ impl DataLogger for MicrophoneLogger {
 
         // Ensure output directory exists
         if let Err(e) = fs::create_dir_all(&config.output_dir) {
-            eprintln!("Failed to create output directory: {}", e);
+            tracing::error!(error = %e, "Failed to create output directory");
         }
 
         // Spawn the auto‑recording scheduler
         {
             let cfg = config.clone();
             tokio::spawn(async move {
-                println!("Starting auto‑recording scheduler");
+                tracing::info!("Starting auto-recording scheduler");
                 loop {
                     if !AUTO_RECORDING_ENABLED.load(Ordering::SeqCst) {
                         sleep(TokioDuration::from_secs(1)).await;
                         continue;
                     }
-                    let interval_secs = unsafe {
-                        CURRENT_CONFIG
-                            .as_ref()
-                            .map(|m| m.lock().unwrap().capture_interval_secs)
-                            .unwrap_or(cfg.capture_interval_secs)
-                    }
-                    .max(1);
+                    let interval_secs = CURRENT_CONFIG
+                        .get()
+                        .map(|m| m.lock().expect("mutex poisoned").capture_interval_secs)
+                        .unwrap_or(cfg.capture_interval_secs)
+                        .max(1);
 
                     if !RECORDING_ENABLED.load(Ordering::SeqCst) {
-                        println!("Auto‑recording: starting new recording");
+                        tracing::info!("Auto-recording: starting new recording");
                         RECORDING_ENABLED.store(true, Ordering::SeqCst);
                         RECORDING_PAUSED.store(false, Ordering::SeqCst);
                     }
-                    println!("Scheduler waiting {}s", interval_secs);
+                    tracing::debug!(interval_secs, "Scheduler waiting");
                     sleep(TokioDuration::from_secs(interval_secs)).await;
                 }
             });
@@ -139,7 +135,7 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
     let device = match host.default_input_device() {
         Some(d) => d,
         None => {
-            eprintln!("No input device available!");
+            tracing::error!("No input device available");
             return;
         }
     };
@@ -147,7 +143,7 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
     let input_config = match device.default_input_config() {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("Failed to get default input config: {}", e);
+            tracing::error!(error = %e, "Failed to get default input config");
             return;
         }
     };
@@ -160,10 +156,10 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
         sample_format: hound::SampleFormat::Int,
     };
 
-    println!(
-        "Audio settings - Sample rate: {:?}, Channels: {:?}",
-        input_config.sample_rate().0,
-        input_config.channels()
+    tracing::debug!(
+        sample_rate = input_config.sample_rate().0,
+        channels = input_config.channels(),
+        "Audio settings"
     );
 
     loop {
@@ -172,15 +168,13 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
             continue;
         }
 
-        let current_config = unsafe {
-            CURRENT_CONFIG
-                .as_ref()
-                .map(|m| m.lock().unwrap().clone())
-                .unwrap_or_else(|| config.clone())
-        };
+        let current_config = CURRENT_CONFIG
+            .get()
+            .map(|m| m.lock().expect("mutex poisoned").clone())
+            .unwrap_or_else(|| config.clone());
 
         if let Err(e) = fs::create_dir_all(&current_config.output_dir) {
-            eprintln!("Failed to create output directory: {}", e);
+            tracing::error!(error = %e, "Failed to create output directory");
             RECORDING_ENABLED.store(false, Ordering::SeqCst);
             continue;
         }
@@ -191,12 +185,12 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
             current_config.output_dir.to_str().unwrap(),
             timestamp
         );
-        println!("Creating new audio file: {}", output_path);
+        tracing::info!(path = %output_path, "Creating new audio file");
 
         let writer = match WavWriter::create(&output_path, spec) {
             Ok(w) => w,
             Err(e) => {
-                eprintln!("Failed to create WAV file: {}", e);
+                tracing::error!(error = %e, "Failed to create WAV file");
                 RECORDING_ENABLED.store(false, Ordering::SeqCst);
                 thread::sleep(Duration::from_secs(1));
                 continue;
@@ -218,7 +212,7 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
                             for &sample in data {
                                 let sample = (sample * i16::MAX as f32) as i16;
                                 if let Err(e) = w.write_sample(sample) {
-                                    eprintln!("Error writing sample: {}", e);
+                                    tracing::error!(error = %e, "Error writing sample");
                                     break;
                                 }
                             }
@@ -227,7 +221,7 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
                 }
             },
             move |err| {
-                eprintln!("An error occurred on the input audio stream: {}", err);
+                tracing::error!(error = %err, "An error occurred on the input audio stream");
                 if let Ok(mut guard) = err_writer.lock() {
                     *guard = None;
                 }
@@ -236,7 +230,7 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
         ) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("Failed to build input stream: {}", e);
+                tracing::error!(error = %e, "Failed to build input stream");
                 RECORDING_ENABLED.store(false, Ordering::SeqCst);
                 thread::sleep(Duration::from_secs(1));
                 continue;
@@ -244,13 +238,13 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
         };
 
         if let Err(e) = stream.play() {
-            eprintln!("Failed to start audio stream: {}", e);
+            tracing::error!(error = %e, "Failed to start audio stream");
             RECORDING_ENABLED.store(false, Ordering::SeqCst);
             thread::sleep(Duration::from_secs(1));
             continue;
         }
 
-        println!("Audio recording started");
+        tracing::info!("Audio recording started");
 
         let mut chunk_timer = Duration::from_secs(0);
         let check_interval = Duration::from_millis(100);
@@ -265,10 +259,10 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
             thread::sleep(check_interval);
 
             if !RECORDING_ENABLED.load(Ordering::SeqCst) {
-                println!("Recording stopped by user");
+                tracing::info!("Recording stopped by user");
                 stream
                     .pause()
-                    .unwrap_or_else(|e| eprintln!("Failed to pause stream: {}", e));
+                    .unwrap_or_else(|e| tracing::error!(error = %e, "Failed to pause stream"));
                 break;
             }
 
@@ -277,10 +271,10 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
             }
 
             if chunk_timer.as_secs() >= chunk_duration_secs {
-                println!("Chunk duration reached, finalizing recording");
+                tracing::debug!("Chunk duration reached, finalizing recording");
                 stream
                     .pause()
-                    .unwrap_or_else(|e| eprintln!("Failed to pause stream: {}", e));
+                    .unwrap_or_else(|e| tracing::error!(error = %e, "Failed to pause stream"));
                 if !AUTO_RECORDING_ENABLED.load(Ordering::SeqCst) {
                     RECORDING_ENABLED.store(false, Ordering::SeqCst);
                 }
@@ -291,18 +285,18 @@ fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
         if let Ok(mut guard) = writer.lock() {
             if let Some(w) = guard.take() {
                 if let Err(e) = w.finalize() {
-                    eprintln!("Error finalizing WAV file: {}", e);
+                    tracing::error!(error = %e, "Error finalizing WAV file");
                 }
             }
         }
 
-        println!("Recording chunk completed");
+        tracing::info!("Recording chunk completed");
     }
 }
 
 #[cfg(target_os = "macos")]
 fn blocking_macos_recording_loop(config: MicrophoneConfig) {
-    println!("Using macOS-specific recording implementation");
+    tracing::info!("Using macOS-specific recording implementation");
 
     let has_sox = Command::new("which")
         .arg("sox")
@@ -311,7 +305,7 @@ fn blocking_macos_recording_loop(config: MicrophoneConfig) {
         .unwrap_or(false);
 
     if !has_sox {
-        eprintln!(
+        tracing::error!(
             "SoX not found. Please install SoX with 'brew install sox' to enable audio recording."
         );
         return;
@@ -319,7 +313,7 @@ fn blocking_macos_recording_loop(config: MicrophoneConfig) {
 
     let base_dir = config.output_dir.clone();
     if let Err(e) = fs::create_dir_all(&base_dir) {
-        eprintln!("Failed to create output directory: {}", e);
+        tracing::error!(error = %e, "Failed to create output directory");
         return;
     }
 
@@ -337,7 +331,7 @@ fn blocking_macos_recording_loop(config: MicrophoneConfig) {
         };
 
         if let Err(e) = fs::create_dir_all(&current_config.output_dir) {
-            eprintln!("Failed to create output directory: {}", e);
+            tracing::error!(error = %e, "Failed to create output directory");
             RECORDING_ENABLED.store(false, Ordering::SeqCst);
             continue;
         }
@@ -348,7 +342,7 @@ fn blocking_macos_recording_loop(config: MicrophoneConfig) {
             current_config.output_dir.to_str().unwrap(),
             timestamp
         );
-        println!("Creating new audio file with SoX: {}", output_path);
+        tracing::info!(path = %output_path, "Creating new audio file with SoX");
 
         let mut cmd = Command::new("rec");
         cmd.arg("-c")
@@ -364,12 +358,12 @@ fn blocking_macos_recording_loop(config: MicrophoneConfig) {
             .arg("0")
             .arg(current_config.chunk_duration_secs.to_string());
 
-        println!("Starting SoX recording command: {:?}", cmd);
+        tracing::debug!(command = ?cmd, "Starting SoX recording command");
 
         let mut recording = match cmd.spawn() {
             Ok(child) => child,
             Err(e) => {
-                eprintln!("Failed to start recording with SoX: {}", e);
+                tracing::error!(error = %e, "Failed to start recording with SoX");
                 RECORDING_ENABLED.store(false, Ordering::SeqCst);
                 thread::sleep(Duration::from_secs(1));
                 continue;
@@ -386,35 +380,35 @@ fn blocking_macos_recording_loop(config: MicrophoneConfig) {
         }
 
         let _ = recording.wait();
-        println!("macOS recording chunk completed");
+        tracing::info!("macOS recording chunk completed");
     }
 }
 
 // Control functions
 pub fn pause_recording() {
     RECORDING_PAUSED.store(true, Ordering::SeqCst);
-    println!("Recording paused");
+    tracing::info!("Recording paused");
 }
 pub fn resume_recording() {
     RECORDING_PAUSED.store(false, Ordering::SeqCst);
-    println!("Recording resumed");
+    tracing::info!("Recording resumed");
 }
 pub fn start_recording() {
     RECORDING_ENABLED.store(true, Ordering::SeqCst);
     RECORDING_PAUSED.store(false, Ordering::SeqCst);
-    println!("Recording started");
+    tracing::info!("Recording started");
 }
 pub fn stop_recording() {
     RECORDING_ENABLED.store(false, Ordering::SeqCst);
-    println!("Recording stopped");
+    tracing::info!("Recording stopped");
 }
 pub fn enable_auto_recording() {
     AUTO_RECORDING_ENABLED.store(true, Ordering::SeqCst);
-    println!("Auto recording enabled");
+    tracing::info!("Auto recording enabled");
 }
 pub fn disable_auto_recording() {
     AUTO_RECORDING_ENABLED.store(false, Ordering::SeqCst);
-    println!("Auto recording disabled");
+    tracing::info!("Auto recording disabled");
 }
 
 pub fn is_recording() -> bool {
@@ -432,7 +426,7 @@ pub fn update_settings(config: &MicrophoneConfig) {
         if let Some(ref mutex) = CURRENT_CONFIG {
             if let Ok(mut current) = mutex.lock() {
                 *current = config.clone();
-                println!("Updated microphone settings: {:?}", config);
+                tracing::debug!(config = ?config, "Updated microphone settings");
             }
         }
     }

@@ -70,3 +70,7 @@ lifelogging.md
 node_modules/
 lifelog_data/
 /lifelog_data/
+
+# Build artifacts
+expanded.rs
+expanded_config.rs

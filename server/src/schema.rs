@@ -97,7 +97,7 @@ pub(crate) async fn ensure_table_schema(
 
     db.query(ddl.clone()).await?;
     CREATED_TABLES.insert(table.to_owned());
-    println!("Ensuring table schema: {}", table);
+    tracing::info!(table = %table, "Ensured table schema");
     Ok(())
 }
 

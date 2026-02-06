@@ -2,6 +2,16 @@
 
 The vision for the project is a software system that allows users to store information about themselves from various data sources locally, process their data into more meaningful representations, and finally have an interface to be able to interact with it in an intuitive manner to help them complete their tasks.
 
+## AI Token-Efficient Workflow
+
+For coding agents (Claude Code, etc.), the repo includes a small context surface and output digests to reduce token usage.
+
+1. Read `docs/REPO_MAP.md` (stable navigation).
+2. If scouting, use `prompts/agent_repo_scout.md` to produce a short file shortlist.
+3. Open only the minimum files needed.
+4. Run noisy commands through `tools/ai/run_and_digest.sh` and share only the digest.
+5. Summarize diffs with `tools/ai/git_diff_digest.sh`.
+
 ## Installation
 
 #### Build Dependencies

@@ -23,7 +23,6 @@ thiserror = "2"
 anyhow = {workspace = true}
 serde_json = "1.0"
 clap = "4.5.37"
-# rust-bert = "0.23.0"
 surrealdb = {workspace = true}
 async-trait = "0.1.88"
 serde = { workspace = true, features = ["derive"] }
@@ -40,6 +39,8 @@ futures-core = {workspace = true}
 strum = { version = "0.27.1", features = ["derive"] }
 sysinfo = { version = "0.35.0", features = ["network", "multithread", "disk"] }
 tokio-stream = {workspace = true}
+tracing = {workspace = true}
+tracing-subscriber = {workspace = true}
 
 [build-dependencies]
 tonic-build = {workspace = true}

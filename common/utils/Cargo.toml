@@ -7,10 +7,10 @@ edition = "2021"
 workspace = true
 
 [dependencies]
-dirs-next = "2.0"
-chrono = "0.4"
-thiserror = "2"
-image = "0.25"
+chrono = { workspace = true }
+thiserror = { workspace = true }
+image = { workspace = true }
+directories = { workspace = true }
 sha2 = "0.10"
 async-trait = "0.1"
 

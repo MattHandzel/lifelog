@@ -61,25 +61,22 @@ impl DataSource for ScreenDataSource {
 
     fn start(&self) -> Result<DataSourceHandle, DataSourceError> {
         if RUNNING.load(Ordering::SeqCst) {
-            eprintln!("ScreenDataSource: Start called but task is already running.");
+            tracing::warn!("ScreenDataSource: Start called but task is already running.");
             return Err(DataSourceError::AlreadyRunning);
         }
 
-        println!("ScreenDataSource: Starting data source task to store in memory...");
+        tracing::info!("ScreenDataSource: Starting data source task to store in memory");
         RUNNING.store(true, Ordering::SeqCst);
 
         let source_clone = self.clone();
 
         let _join_handle = tokio::spawn(async move {
             let task_result = source_clone.run().await;
-            println!(
-                "[Task] ScreenDataSource (in-memory) background task finished with result: {:?}",
-                task_result
-            );
+            tracing::info!(result = ?task_result, "ScreenDataSource (in-memory) background task finished");
             task_result
         });
 
-        println!("ScreenDataSource: Data source task (in-memory) started successfully.");
+        tracing::info!("ScreenDataSource: Data source task (in-memory) started successfully");
         let new_join_handle = tokio::spawn(async { Ok(()) });
         Ok(DataSourceHandle {
             join: new_join_handle,
@@ -122,21 +119,18 @@ impl DataSource for ScreenDataSource {
                     let mut store_guard = self.buffer.lock().await;
                     store_guard.push(captured);
 
-                    println!(
-                        "ScreenDataSource: Stored screen capture in memory ({} images total)",
-                        store_guard.len()
+                    tracing::debug!(
+                        total_images = store_guard.len(),
+                        "ScreenDataSource: Stored screen capture in memory"
                     );
                 }
                 Err(e) => {
-                    eprintln!(
-                        "ScreenDataSource: Failed to capture screen data for in-memory store: {}",
-                        e
-                    );
+                    tracing::error!(error = %e, "ScreenDataSource: Failed to capture screen data for in-memory store");
                 }
             }
             sleep(Duration::from_secs_f64(self.config.interval)).await;
         }
-        println!("ScreenDataSource: In-memory run loop finished.");
+        tracing::info!("ScreenDataSource: In-memory run loop finished");
         Ok(())
     }
 
@@ -171,7 +165,7 @@ impl ScreenLogger {
         let _ts = now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1e9;
         let ts_fmt = now.format(&self.config.timestamp_format);
         let out = format!("{}/{}.png", self.config.output_dir, ts_fmt);
-        println!("[ScreenLogger] Capturing screenshot to: {}", out);
+        tracing::debug!(path = %out, "Capturing screenshot");
 
         #[cfg(target_os = "macos")]
         {
@@ -201,10 +195,7 @@ impl ScreenLogger {
         let image_data = tokio::fs::read(&out).await.map_err(LoggerError::Io)?;
 
         if let Err(e) = tokio::fs::remove_file(&out).await {
-            eprintln!(
-                "[ScreenLogger] Failed to delete temporary screenshot: {}",
-                e
-            );
+            tracing::warn!(error = %e, "Failed to delete temporary screenshot");
         }
 
         Ok(image_data)
@@ -224,10 +215,7 @@ impl DataLogger for ScreenLogger {
         let join = tokio::spawn(async move {
             let task_result = logger.run().await;
 
-            println!(
-                "[Task] Background task finished with result: {:?}",
-                task_result
-            );
+            tracing::info!(result = ?task_result, "Background task finished");
 
             task_result
         });

@@ -17,7 +17,9 @@ pub use lifelog_proto::{
 };
 
 pub fn load_config() -> CollectorConfig {
-    let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
+    let home_dir = directories::BaseDirs::new()
+        .map(|d| d.home_dir().to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("/tmp"));
     let _lifelog_home_dir = env::var("LIFELOG_HOME_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| home_dir.clone());
@@ -30,18 +32,14 @@ pub fn load_config() -> CollectorConfig {
         .iter()
         .collect();
 
-    println!("Using the config file at: {:?}", config_path);
+    tracing::info!(path = ?config_path, "Loading config file");
 
     let config_str = if config_path.exists() {
         fs::read_to_string(&config_path).unwrap_or_else(|_| String::new())
     } else {
-        println!(
-            "Config file does not exist at {:?}, creating default",
-            config_path
-        );
+        tracing::warn!(path = ?config_path, "Config file not found, creating default");
         let default_config = create_default_config();
-        let config_str =
-            toml::to_string(&default_config).expect("Failed to serialize default config");
+        let config_str = toml::to_string(&default_config).unwrap_or_default();
         if let Some(parent) = config_path.parent() {
             let _ = fs::create_dir_all(parent);
         }
@@ -60,14 +58,16 @@ pub fn load_config() -> CollectorConfig {
     match toml::from_str::<CollectorConfig>(&replace_home_dir_in_path(config_str)) {
         Ok(config) => config,
         Err(e) => {
-            eprintln!("Failed to parse config file: {}. Using defaults.", e);
+            tracing::error!(error = %e, "Failed to parse config file, using defaults");
             create_default_config()
         }
     }
 }
 
 pub fn create_default_config() -> CollectorConfig {
-    let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
+    let home_dir = directories::BaseDirs::new()
+        .map(|d| d.home_dir().to_path_buf())
+        .unwrap_or_else(|| PathBuf::from("/tmp"));
     let lifelog_dir = home_dir.join("lifelog");
 
     CollectorConfig {
@@ -150,7 +150,9 @@ impl ConfigManager {
     }
 
     pub fn save(&self) -> Result<(), std::io::Error> {
-        let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
+        let home_dir = directories::BaseDirs::new()
+            .map(|d| d.home_dir().to_path_buf())
+            .unwrap_or_else(|| PathBuf::from("/tmp"));
 
         #[cfg(feature = "dev")]
         let config_path: PathBuf = "dev-config.toml".into();
@@ -160,7 +162,8 @@ impl ConfigManager {
             .iter()
             .collect();
 
-        let config_str = toml::to_string(&self.config).expect("Failed to serialize config");
+        let config_str = toml::to_string(&self.config)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         if let Some(parent) = config_path.parent() {
             fs::create_dir_all(parent)?;

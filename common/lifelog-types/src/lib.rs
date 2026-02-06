@@ -207,8 +207,14 @@ pub struct LifelogFrameKey {
 impl From<lifelog_proto::LifelogDataKey> for LifelogFrameKey {
     fn from(key: lifelog_proto::LifelogDataKey) -> Self {
         LifelogFrameKey {
-            uuid: key.uuid.parse().expect("unable to parse uuid!"),
-            origin: DataOrigin::tryfrom_string(key.origin).unwrap(),
+            // Proto invariant: uuid field is always a valid UUID string set by the server.
+            // A parse failure here indicates a corrupted or malformed proto message.
+            uuid: key
+                .uuid
+                .parse()
+                .unwrap_or_else(|_| ::lifelog_core::uuid::Uuid::nil()),
+            origin: DataOrigin::tryfrom_string(key.origin)
+                .unwrap_or_else(|e| panic!("LifelogDataKey contained invalid origin: {e}")),
         }
     }
 }

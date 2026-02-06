@@ -12,7 +12,9 @@ pub fn default_server_config() -> ServerConfig {
 }
 
 pub fn default_cas_path() -> String {
-    let home_dir = dirs_next::home_dir().expect("Failed to get home directory");
+    let home_dir = directories::BaseDirs::new()
+        .map(|d| d.home_dir().to_path_buf())
+        .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
     home_dir
         .join("lifelog")
         .join("cas")
