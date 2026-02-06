@@ -1,8 +1,8 @@
 use lifelog_core::*;
 
-pub use lifelog_proto::OcrFrame;
+use lifelog_core::{DataOrigin, DataOriginType, LifelogImage, Transform, TransformError};
 use lifelog_proto::DataModality;
-use lifelog_core::{DataOrigin, DataOriginType, Transform, LifelogImage, TransformError};
+pub use lifelog_proto::OcrFrame;
 use rusty_tesseract::{Args, Image};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -101,6 +101,7 @@ impl Transform for OcrTransform {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used)]
 mod tests {
     use super::*;
 

@@ -110,8 +110,8 @@ impl DataSource for ScreenDataSource {
 
                     let captured = ScreenFrame {
                         uuid: Uuid::new_v4().to_string(), //use v6
-                        width: width,
-                        height: height,
+                        width,
+                        height,
                         image_bytes: image_data_bytes,
                         timestamp: to_pb_ts(ts),
                         mime_type: "image/png".to_string(),

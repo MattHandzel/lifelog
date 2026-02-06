@@ -28,9 +28,7 @@ pub fn load_config() -> CollectorConfig {
     let config_path: PathBuf = "dev-config.toml".into();
 
     #[cfg(not(feature = "dev"))]
-    let config_path: PathBuf = [home_dir.to_str().unwrap(), ".config/lifelog/config.toml"]
-        .iter()
-        .collect();
+    let config_path: PathBuf = home_dir.join(".config/lifelog/config.toml");
 
     tracing::info!(path = ?config_path, "Loading config file");
 
@@ -130,6 +128,12 @@ pub struct ConfigManager {
     config: CollectorConfig,
 }
 
+impl Default for ConfigManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ConfigManager {
     pub fn new() -> Self {
         Self {
@@ -158,9 +162,7 @@ impl ConfigManager {
         let config_path: PathBuf = "dev-config.toml".into();
 
         #[cfg(not(feature = "dev"))]
-        let config_path: PathBuf = [home_dir.to_str().unwrap(), ".config/lifelog/config.toml"]
-            .iter()
-            .collect();
+        let config_path: PathBuf = home_dir.join(".config/lifelog/config.toml");
 
         let config_str = toml::to_string(&self.config)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;

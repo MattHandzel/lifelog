@@ -5,10 +5,9 @@ use config::ServerPolicyConfig;
 use config::{CollectorConfig, ServerConfig, SystemConfig};
 use data_modalities::*;
 use lifelog_core::*;
-use lifelog_proto::*;
 use lifelog_proto::DataModality;
-use lifelog_proto::{SystemState, CollectorState};
-use serde::{Deserialize, Serialize};
+use lifelog_proto::*;
+use lifelog_proto::{CollectorState, SystemState};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time;
@@ -29,10 +28,8 @@ pub type ServerAction = lifelog_core::ServerAction<
     lifelog_proto::Uuid,
 >;
 
-pub type RegisteredCollector = lifelog_core::RegisteredCollector<
-    lifelog_proto::ServerCommand,
-    lifelog_proto::CollectorConfig,
->;
+pub type RegisteredCollector =
+    lifelog_core::RegisteredCollector<lifelog_proto::ServerCommand, lifelog_proto::CollectorConfig>;
 
 // Re-export for external consumers (main.rs, tests)
 pub use crate::grpc_service::GRPCServerLifelogServerService;
@@ -44,7 +41,7 @@ pub struct ServerHandle {
 
 impl ServerHandle {
     pub fn new(server: Arc<RwLock<Server>>) -> Self {
-        Self { server: server }
+        Self { server }
     }
 
     pub async fn get_state(&self) -> SystemState {
@@ -233,12 +230,16 @@ impl Server {
         Ok(())
     }
 
-    async fn get_data(&self, req: Vec<LifelogFrameKey>) -> Result<Vec<lifelog_proto::LifelogData>, LifelogError> {
+    async fn get_data(
+        &self,
+        req: Vec<LifelogFrameKey>,
+    ) -> Result<Vec<lifelog_proto::LifelogData>, LifelogError> {
         let mut datas: Vec<lifelog_proto::LifelogData> = vec![];
         for key in req.iter() {
-            let data: lifelog_proto::LifelogData = get_data_by_key(&self.db, key).await.map_err(|e| {
-                LifelogError::Database(format!("Unable to get data by key {}: {}", key, e))
-            })?;
+            let data: lifelog_proto::LifelogData =
+                get_data_by_key(&self.db, key).await.map_err(|e| {
+                    LifelogError::Database(format!("Unable to get data by key {}: {}", key, e))
+                })?;
 
             datas.push(data);
         }
@@ -278,8 +279,7 @@ impl Policy for ServerPolicy {
             })
             .unwrap_or_default();
 
-        let action = if (t_now - t_last).num_seconds() as f64
-            >= (self.config.collector_sync_interval as f64)
+        if (t_now - t_last).num_seconds() as f64 >= (self.config.collector_sync_interval as f64)
             && !ss
                 .pending_actions
                 .contains(&(ServerActionType::SyncData as i32))
@@ -292,9 +292,7 @@ impl Policy for ServerPolicy {
             ServerAction::TransformData(vec![])
         } else {
             ServerAction::Sleep(tokio::time::Duration::from_millis(100))
-        };
-
-        action
+        }
     }
 }
 
@@ -303,10 +301,10 @@ impl Policy for ServerPolicy {
 impl Server {
     /// This function will be run upon startup, it will handle the server's main loop of doing
     /// actions
-
+    ///
     // TODO: Refactor this so do_action (a blocking task) isn't running here, we don't wanna hold
     // onto the lock
-    pub async fn step(&self) -> () {
+    pub async fn step(&self) {
         let state = self.get_state().await;
         let action = self.policy.read().await.get_action(&state); // TODO: REFACTOR this so policy is
                                                                   // normal variable
@@ -323,7 +321,7 @@ impl Server {
 
     fn get_policy(&self) -> Arc<RwLock<ServerPolicy>> {
         // Get the policy from the config
-        return self.policy.clone();
+        self.policy.clone()
     }
 
     // NOTE: This function makes an assumption that each collector's name is unique. If the
@@ -340,6 +338,7 @@ impl Server {
         false
     }
 
+    #[allow(clippy::expect_used)]
     async fn get_state(&self) -> SystemState {
         let (cpu_usage, memory_usage) = {
             let mut sys = SYS
@@ -476,8 +475,8 @@ impl Server {
                     }
                 });
             }
+            #[allow(clippy::todo)]
             _ => todo!(),
         }
     }
 }
-

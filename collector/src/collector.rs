@@ -26,9 +26,7 @@ use tonic::Request;
 use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
 use lifelog_proto::to_pb_ts;
 
-use lifelog_proto::{
-    ControlMessage, RegisterCollectorRequest, ReportStateRequest,
-};
+use lifelog_proto::{ControlMessage, RegisterCollectorRequest, ReportStateRequest};
 
 struct RunningSource<C: Send + Sync + Debug + 'static> {
     instance: Arc<Mutex<Box<dyn DataSource<Config = C> + Send + Sync + 'static>>>,
@@ -201,11 +199,15 @@ impl Collector {
 
         let reg_msg = ControlMessage {
             collector_id: collector_id.clone(),
-            msg: Some(lifelog_proto::control_message::Msg::Register(RegisterCollectorRequest {
-                config: Some((*self.config).clone()),
-            })),
+            msg: Some(lifelog_proto::control_message::Msg::Register(
+                RegisterCollectorRequest {
+                    config: Some((*self.config).clone()),
+                },
+            )),
         };
-        tx.send(reg_msg).await.map_err(|_| CollectorError::Other("Failed to send registration".into()))?;
+        tx.send(reg_msg)
+            .await
+            .map_err(|_| CollectorError::Other("Failed to send registration".into()))?;
 
         let stream_req = Request::new(ReceiverStreamWrapper::new(rx));
         let response = client.control_stream(stream_req).await?;
@@ -357,7 +359,7 @@ impl Collector {
         CollectorState {
             name: dev_name,
             timestamp: to_pb_ts(chrono::Utc::now()),
-            source_states: source_states,
+            source_states,
             source_buffer_sizes: buffer_states,
             total_buffer_size: total as u32,
         }

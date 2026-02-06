@@ -30,7 +30,7 @@ impl BrowserHistorySource {
             Ok(mut file) => {
                 let mut contents = String::new();
                 file.read_to_string(&mut contents)
-                    .map_err(|e| DataSourceError::Io(e))?;
+                    .map_err(DataSourceError::Io)?;
                 contents
                     .parse::<i64>()
                     .map(|ts_micros| {

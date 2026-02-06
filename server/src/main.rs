@@ -7,7 +7,6 @@ use lifelog_server::server::ServerHandle as LifelogServerHandle;
 
 use lifelog_proto::FILE_DESCRIPTOR_SET;
 use lifelog_server::server::Server as LifelogServer;
-use tokio;
 use tonic::transport::Server as TonicServer;
 use tonic_reflection::server::Builder;
 

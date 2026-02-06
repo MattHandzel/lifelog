@@ -1,3 +1,4 @@
+use lifelog_core::*;
 use lifelog_proto::lifelog_server_service_server::LifelogServerService;
 use lifelog_proto::{
     Ack, Chunk, ControlMessage, GetDataRequest, GetDataResponse, GetStateRequest,
@@ -6,8 +7,6 @@ use lifelog_proto::{
     RegisterCollectorRequest, RegisterCollectorResponse, ReportStateRequest, ReportStateResponse,
     ServerCommand, SetSystemConfigRequest, SetSystemConfigResponse,
 };
-use lifelog_core::*;
-use std::time;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
@@ -16,7 +15,7 @@ use tonic::{Request, Response, Status, Streaming};
 use utils::ingest::ChunkIngester;
 
 use crate::ingest::{ChunkRecord, SurrealIngestBackend};
-use crate::server::{ServerHandle, RegisteredCollector};
+use crate::server::{RegisteredCollector, ServerHandle};
 
 pub struct GRPCServerLifelogServerService {
     pub server: ServerHandle,
@@ -121,7 +120,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 TonicStatus::internal(format!("Failed to get system config: {}", e))
             })?;
         Ok(TonicResponse::new(GetSystemConfigResponse {
-            config: Some(system_config.into()),
+            config: Some(system_config),
         }))
     }
 
@@ -149,9 +148,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             .server
             .process_query(query.clone())
             .await
-            .map_err(|e| {
-                tonic::Status::internal(format!("Failed to process query: {}", e.to_string()))
-            })?;
+            .map_err(|e| tonic::Status::internal(format!("Failed to process query: {}", e)))?;
         let proto_keys: Vec<lifelog_proto::LifelogDataKey> = keys
             .iter()
             .map(|key| lifelog_proto::LifelogDataKey {
@@ -177,17 +174,16 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         let data: Vec<lifelog_proto::LifelogData> = self
             .server
             .get_data(
-                keys.iter()
-                    .map(|k| k.clone().into())
-                    .collect(),
+                keys.into_iter()
+                    .map(|k| k.try_into())
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|e| Status::invalid_argument(format!("Invalid key: {e}")))?,
             )
             .await
             .map_err(|e| Status::internal(format!("Failed to get data: {}", e)))?
-            .iter()
-            .map(|v| lifelog_proto::LifelogData::from(v.clone()))
-            .collect();
+            .to_vec();
 
-        let response = GetDataResponse { data: data };
+        let response = GetDataResponse { data };
         tracing::info!(count = response.data.len(), "GetData response");
         Ok(Response::new(response))
     }
@@ -205,10 +201,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         // Ensure we got a state reported by a registered collector, if not then we ignore it
         match self.server.contains_collector(state.name.clone()).await {
             true => {
-                let _ = self
-                    .server
-                    .report_collector_state(state)
-                    .await;
+                let _ = self.server.report_collector_state(state).await;
                 Ok(TonicResponse::new(ReportStateResponse {
                     acknowledged: true,
                 }))
@@ -229,7 +222,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         //let proto_state = s
         Ok(TonicResponse::new(GetSystemStateResponse {
             state: Some(state), // TODO: Replace this with the system state
-                                       // instead of the server state (i need some work with the proto files)
+                                // instead of the server state (i need some work with the proto files)
         }))
     }
 

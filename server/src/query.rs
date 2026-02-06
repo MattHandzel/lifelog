@@ -46,7 +46,10 @@ pub(crate) async fn get_data_by_key(
     let id = key.uuid.to_string();
 
     let modality = DataModality::from_str_name(&key.origin.modality_name).ok_or_else(|| {
-        LifelogError::Database(format!("Invalid modality name: {}", key.origin.modality_name))
+        LifelogError::Database(format!(
+            "Invalid modality name: {}",
+            key.origin.modality_name
+        ))
     })?;
 
     match modality {
@@ -124,7 +127,9 @@ pub(crate) async fn get_data_by_key(
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
             frame.uuid = key.uuid.to_string();
             Ok(lifelog_proto::LifelogData {
-                payload: Some(lifelog_proto::lifelog_data::Payload::Shellhistoryframe(frame)),
+                payload: Some(lifelog_proto::lifelog_data::Payload::Shellhistoryframe(
+                    frame,
+                )),
             })
         }
         DataModality::WindowActivity => {
@@ -135,7 +140,9 @@ pub(crate) async fn get_data_by_key(
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
             frame.uuid = key.uuid.to_string();
             Ok(lifelog_proto::LifelogData {
-                payload: Some(lifelog_proto::lifelog_data::Payload::Windowactivityframe(frame)),
+                payload: Some(lifelog_proto::lifelog_data::Payload::Windowactivityframe(
+                    frame,
+                )),
             })
         }
     }

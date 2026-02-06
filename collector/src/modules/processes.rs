@@ -62,7 +62,7 @@ where
                 let _: Vec<Record> = db
                     .upsert("screen")
                     .content(ProcessLog {
-                        timestamp: timestamp,
+                        timestamp,
                         pid: process.pid,
                         ppid: process.ppid,
                         name: process.name,

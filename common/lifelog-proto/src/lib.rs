@@ -1,9 +1,12 @@
-#![allow(clippy::needless_lifetimes)]
+#![allow(clippy::needless_lifetimes, clippy::large_enum_variant)]
 
-use lifelog_core::{DataType, Modality, Uuid as CoreUuid, DateTime, Utc, NaiveDateTime, LifelogImage, LifelogError, Validate, LifelogFrameKey, DataOrigin};
+use image::ImageReader;
+use lifelog_core::{
+    DataOrigin, DataType, DateTime, LifelogError, LifelogFrameKey, LifelogImage, Modality,
+    NaiveDateTime, Utc, Uuid as CoreUuid, Validate,
+};
 use rand::distr::{Distribution, StandardUniform};
 use rand::Rng;
-use image::ImageReader;
 use std::io::Cursor;
 
 pub mod lifelog {
@@ -12,10 +15,10 @@ pub mod lifelog {
 }
 
 // Re-export lifelog members while avoiding name shadowing
-pub use crate::lifelog::*;
+pub use crate::lifelog::CollectorState;
 pub use crate::lifelog::DataModality;
 pub use crate::lifelog::SystemState;
-pub use crate::lifelog::CollectorState;
+pub use crate::lifelog::*;
 
 pub const FILE_DESCRIPTOR_SET: &[u8] = tonic::include_file_descriptor_set!("lifelog_descriptor");
 
@@ -27,9 +30,8 @@ fn parse_uuid(s: &str) -> CoreUuid {
 
 fn to_dt(ts: Option<::pbjson_types::Timestamp>) -> DateTime<Utc> {
     let ts = ts.unwrap_or_default();
-    DateTime::from_timestamp(ts.seconds, ts.nanos as u32).unwrap_or_else(|| {
-        DateTime::<Utc>::from_naive_utc_and_offset(NaiveDateTime::MIN, Utc)
-    })
+    DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
+        .unwrap_or_else(|| DateTime::<Utc>::from_naive_utc_and_offset(NaiveDateTime::MIN, Utc))
 }
 
 pub fn to_pb_ts(dt: DateTime<Utc>) -> Option<::pbjson_types::Timestamp> {
@@ -41,13 +43,19 @@ pub fn to_pb_ts(dt: DateTime<Utc>) -> Option<::pbjson_types::Timestamp> {
 
 // --- From implementations for Keys ---
 
-impl From<LifelogDataKey> for LifelogFrameKey {
-    fn from(key: LifelogDataKey) -> Self {
-        LifelogFrameKey {
+impl TryFrom<LifelogDataKey> for LifelogFrameKey {
+    type Error = LifelogError;
+
+    fn try_from(key: LifelogDataKey) -> Result<Self, Self::Error> {
+        Ok(LifelogFrameKey {
             uuid: parse_uuid(&key.uuid),
-            origin: DataOrigin::tryfrom_string(key.origin)
-                .unwrap_or_else(|e| panic!("LifelogDataKey contained invalid origin: {e}")),
-        }
+            origin: DataOrigin::tryfrom_string(key.origin).map_err(|e| {
+                LifelogError::Validation {
+                    field: "origin",
+                    reason: format!("LifelogDataKey contained invalid origin: {e}"),
+                }
+            })?,
+        })
     }
 }
 
@@ -124,11 +132,17 @@ impl Validate for CollectorConfig {
 
 // ScreenFrame
 impl DataType for ScreenFrame {
-    fn uuid(&self) -> CoreUuid { parse_uuid(&self.uuid) }
-    fn timestamp(&self) -> DateTime<Utc> { to_dt(self.timestamp.clone()) }
+    fn uuid(&self) -> CoreUuid {
+        parse_uuid(&self.uuid)
+    }
+    fn timestamp(&self) -> DateTime<Utc> {
+        to_dt(self.timestamp)
+    }
 }
 impl Modality for ScreenFrame {
-    fn get_table_name() -> &'static str { "screen" }
+    fn get_table_name() -> &'static str {
+        "screen"
+    }
     fn get_surrealdb_schema() -> &'static str {
         r#"
             DEFINE FIELD timestamp  ON `{table}` TYPE datetime;
@@ -194,11 +208,17 @@ impl Distribution<ScreenFrame> for StandardUniform {
 
 // BrowserFrame
 impl DataType for BrowserFrame {
-    fn uuid(&self) -> CoreUuid { parse_uuid(&self.uuid) }
-    fn timestamp(&self) -> DateTime<Utc> { to_dt(self.timestamp.clone()) }
+    fn uuid(&self) -> CoreUuid {
+        parse_uuid(&self.uuid)
+    }
+    fn timestamp(&self) -> DateTime<Utc> {
+        to_dt(self.timestamp)
+    }
 }
 impl Modality for BrowserFrame {
-    fn get_table_name() -> &'static str { "browser" }
+    fn get_table_name() -> &'static str {
+        "browser"
+    }
     fn get_surrealdb_schema() -> &'static str {
         r#"
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
@@ -211,11 +231,17 @@ impl Modality for BrowserFrame {
 
 // OcrFrame
 impl DataType for OcrFrame {
-    fn uuid(&self) -> CoreUuid { parse_uuid(&self.uuid) }
-    fn timestamp(&self) -> DateTime<Utc> { to_dt(self.timestamp.clone()) }
+    fn uuid(&self) -> CoreUuid {
+        parse_uuid(&self.uuid)
+    }
+    fn timestamp(&self) -> DateTime<Utc> {
+        to_dt(self.timestamp)
+    }
 }
 impl Modality for OcrFrame {
-    fn get_table_name() -> &'static str { "ocr" }
+    fn get_table_name() -> &'static str {
+        "ocr"
+    }
     fn get_surrealdb_schema() -> &'static str {
         r#"
             DEFINE FIELD timestamp ON `{table}` TYPE datetime;
@@ -226,11 +252,17 @@ impl Modality for OcrFrame {
 
 // AudioFrame
 impl DataType for AudioFrame {
-    fn uuid(&self) -> CoreUuid { parse_uuid(&self.uuid) }
-    fn timestamp(&self) -> DateTime<Utc> { to_dt(self.timestamp.clone()) }
+    fn uuid(&self) -> CoreUuid {
+        parse_uuid(&self.uuid)
+    }
+    fn timestamp(&self) -> DateTime<Utc> {
+        to_dt(self.timestamp)
+    }
 }
 impl Modality for AudioFrame {
-    fn get_table_name() -> &'static str { "audio" }
+    fn get_table_name() -> &'static str {
+        "audio"
+    }
     fn get_surrealdb_schema() -> &'static str {
         r#"
             DEFINE FIELD timestamp     ON `{table}` TYPE datetime;
@@ -245,11 +277,17 @@ impl Modality for AudioFrame {
 
 // KeystrokeFrame
 impl DataType for KeystrokeFrame {
-    fn uuid(&self) -> CoreUuid { parse_uuid(&self.uuid) }
-    fn timestamp(&self) -> DateTime<Utc> { to_dt(self.timestamp.clone()) }
+    fn uuid(&self) -> CoreUuid {
+        parse_uuid(&self.uuid)
+    }
+    fn timestamp(&self) -> DateTime<Utc> {
+        to_dt(self.timestamp)
+    }
 }
 impl Modality for KeystrokeFrame {
-    fn get_table_name() -> &'static str { "keystrokes" }
+    fn get_table_name() -> &'static str {
+        "keystrokes"
+    }
     fn get_surrealdb_schema() -> &'static str {
         r#"
             DEFINE FIELD timestamp    ON `{table}` TYPE datetime;
@@ -262,11 +300,17 @@ impl Modality for KeystrokeFrame {
 
 // ClipboardFrame
 impl DataType for ClipboardFrame {
-    fn uuid(&self) -> CoreUuid { parse_uuid(&self.uuid) }
-    fn timestamp(&self) -> DateTime<Utc> { to_dt(self.timestamp.clone()) }
+    fn uuid(&self) -> CoreUuid {
+        parse_uuid(&self.uuid)
+    }
+    fn timestamp(&self) -> DateTime<Utc> {
+        to_dt(self.timestamp)
+    }
 }
 impl Modality for ClipboardFrame {
-    fn get_table_name() -> &'static str { "clipboard" }
+    fn get_table_name() -> &'static str {
+        "clipboard"
+    }
     fn get_surrealdb_schema() -> &'static str {
         r#"
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
@@ -279,11 +323,17 @@ impl Modality for ClipboardFrame {
 
 // ShellHistoryFrame
 impl DataType for ShellHistoryFrame {
-    fn uuid(&self) -> CoreUuid { parse_uuid(&self.uuid) }
-    fn timestamp(&self) -> DateTime<Utc> { to_dt(self.timestamp.clone()) }
+    fn uuid(&self) -> CoreUuid {
+        parse_uuid(&self.uuid)
+    }
+    fn timestamp(&self) -> DateTime<Utc> {
+        to_dt(self.timestamp)
+    }
 }
 impl Modality for ShellHistoryFrame {
-    fn get_table_name() -> &'static str { "shell_history" }
+    fn get_table_name() -> &'static str {
+        "shell_history"
+    }
     fn get_surrealdb_schema() -> &'static str {
         r#"
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
@@ -296,11 +346,17 @@ impl Modality for ShellHistoryFrame {
 
 // WindowActivityFrame
 impl DataType for WindowActivityFrame {
-    fn uuid(&self) -> CoreUuid { parse_uuid(&self.uuid) }
-    fn timestamp(&self) -> DateTime<Utc> { to_dt(self.timestamp.clone()) }
+    fn uuid(&self) -> CoreUuid {
+        parse_uuid(&self.uuid)
+    }
+    fn timestamp(&self) -> DateTime<Utc> {
+        to_dt(self.timestamp)
+    }
 }
 impl Modality for WindowActivityFrame {
-    fn get_table_name() -> &'static str { "window_activity" }
+    fn get_table_name() -> &'static str {
+        "window_activity"
+    }
     fn get_surrealdb_schema() -> &'static str {
         r#"
             DEFINE FIELD timestamp     ON `{table}` TYPE datetime;

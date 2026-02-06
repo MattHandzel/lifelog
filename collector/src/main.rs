@@ -4,7 +4,6 @@ use lifelog_collector::collector::Collector;
 use lifelog_collector::collector::CollectorHandle;
 use lifelog_collector::setup;
 use std::sync::Arc;
-use tokio;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "LifeLog Logger Client", long_about = None)]
@@ -19,6 +18,7 @@ struct Cli {
 }
 
 #[tokio::main]
+#[allow(clippy::expect_used)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 

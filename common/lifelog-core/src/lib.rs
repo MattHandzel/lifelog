@@ -1,6 +1,6 @@
 pub use anyhow;
 pub use chrono;
-pub use chrono::{DateTime, Utc, NaiveDateTime};
+pub use chrono::{DateTime, NaiveDateTime, Utc};
 pub use pretty_assertions;
 pub use proptest;
 pub use serde_json;
@@ -15,9 +15,9 @@ pub use serde::Serialize;
 pub use tonic;
 
 pub mod correlation;
+pub mod error;
 pub mod replay;
 pub mod time_skew;
-pub mod error;
 pub mod validate;
 
 pub use error::{LifelogError, TransformError};
@@ -140,17 +140,11 @@ impl DataOrigin {
     pub fn get_table_name(&self) -> String {
         match &self.origin {
             DataOriginType::DeviceId(device_id) => {
-                format!(
-                    "{}:{}",
-                    device_id.replace(":", ""),
-                    self.modality_name
-                )
+                format!("{}:{}", device_id.replace(":", ""), self.modality_name)
             }
-            DataOriginType::DataOrigin(data_origin) => format!(
-                "{}:{}",
-                data_origin.get_table_name(),
-                self.modality_name
-            ),
+            DataOriginType::DataOrigin(data_origin) => {
+                format!("{}:{}", data_origin.get_table_name(), self.modality_name)
+            }
         }
     }
 }
