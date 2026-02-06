@@ -285,9 +285,7 @@ mod tests {
                 }
             }
 
-            async fn is_indexed(
-                &self, _: &str, _: &str, _: u64, _: u64,
-            ) -> bool {
+            async fn is_indexed(&self, _: &str, _: &str, _: u64, _: u64) -> bool {
                 false
             }
         }

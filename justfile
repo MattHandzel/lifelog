@@ -10,18 +10,18 @@ test:
 
 # Run the integration validation suite
 test-e2e:
-    nix develop --command cargo test -p lifelog-server --test validation_suite -- --nocapture
-    nix develop --command cargo test -p lifelog-server --test multi_device -- --nocapture
-    nix develop --command cargo test -p lifelog-server --test sync_scenarios -- --nocapture
+    nix develop --command cargo test -p lifelog-server --test validation_suite -- --include-ignored --nocapture
+    nix develop --command cargo test -p lifelog-server --test multi_device -- --include-ignored --nocapture
+    nix develop --command cargo test -p lifelog-server --test sync_scenarios -- --include-ignored --nocapture
 
 # Run only the sync scenario tests
 test-sync:
-    nix develop --command cargo test -p lifelog-server --test sync_scenarios -- --nocapture
+    nix develop --command cargo test -p lifelog-server --test sync_scenarios -- --include-ignored --nocapture
 
 # E2E tests with file lock (prevents concurrent SurrealDB conflicts)
 test-e2e-exclusive:
-    flock /tmp/lifelog-e2e.lock nix develop --command cargo test -p lifelog-server --test validation_suite -- --nocapture
-    flock /tmp/lifelog-e2e.lock nix develop --command cargo test -p lifelog-server --test multi_device -- --nocapture
+    flock /tmp/lifelog-e2e.lock nix develop --command cargo test -p lifelog-server --test validation_suite -- --include-ignored --nocapture
+    flock /tmp/lifelog-e2e.lock nix develop --command cargo test -p lifelog-server --test multi_device -- --include-ignored --nocapture
 
 # Full validation gate — run before reporting work done
 validate:

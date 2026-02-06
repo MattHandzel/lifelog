@@ -20,6 +20,7 @@ use utils::cas::FsCas;
 
 use device_client::DeviceClient;
 
+#[allow(dead_code)]
 pub struct TestContext {
     pub server_addr: String,
     pub db_addr: String,
@@ -34,6 +35,7 @@ pub struct TestContext {
 }
 
 impl TestContext {
+    #[allow(dead_code)]
     pub async fn new() -> Self {
         Self::new_with_faults(FaultController::new()).await
     }
@@ -120,6 +122,7 @@ impl TestContext {
     }
 
     /// Create N `DeviceClient` instances, each with a unique device_id.
+    #[allow(dead_code)]
     pub fn create_device_clients(&self, n: usize) -> Vec<DeviceClient> {
         (0..n)
             .map(|i| DeviceClient::new(format!("device-{i}"), self.client()))
@@ -127,6 +130,7 @@ impl TestContext {
     }
 
     /// Get a `FsCas` handle pointing to the server's CAS directory.
+    #[allow(dead_code)]
     pub fn cas(&self) -> FsCas {
         FsCas::new(&self.cas_path)
     }

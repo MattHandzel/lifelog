@@ -1,0 +1,88 @@
+## Tier 2: Container-based chaos testing for multi-device sync
+##
+## Usage: docker compose -f tests/docker/docker-compose.chaos.yml up --abort-on-container-exit
+##
+## Services:
+##   surrealdb    - In-memory database
+##   toxiproxy    - Network fault injection proxy
+##   server       - Lifelog gRPC server (connects to DB via toxiproxy)
+##   collector-1  - Simulated collector device (connects to server via toxiproxy)
+##   collector-2  - Second simulated collector device
+##   chaos        - Orchestrator that manipulates toxiproxy during the test
+
+services:
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    command: start --user root --pass root memory
+    healthcheck:
+      test: ["CMD", "surreal", "is-ready", "--conn", "http://localhost:8000"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+    networks:
+      - testnet
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:latest
+    ports:
+      - "8474:8474"     # Toxiproxy API
+    volumes:
+      - ./toxiproxy_config.json:/config/toxiproxy.json
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    depends_on:
+      surrealdb:
+        condition: service_healthy
+    networks:
+      - testnet
+
+  server:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.server
+    environment:
+      LIFELOG_DB_ENDPOINT: "toxiproxy:18000"
+      LIFELOG_HOST: "0.0.0.0"
+      LIFELOG_PORT: "50051"
+    depends_on:
+      - toxiproxy
+    networks:
+      - testnet
+
+  collector-1:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.collector
+    environment:
+      LIFELOG_SERVER_ADDR: "http://toxiproxy:25051"
+      COLLECTOR_ID: "container-collector-1"
+    depends_on:
+      - server
+    networks:
+      - testnet
+
+  collector-2:
+    build:
+      context: ../..
+      dockerfile: tests/docker/Dockerfile.collector
+    environment:
+      LIFELOG_SERVER_ADDR: "http://toxiproxy:25051"
+      COLLECTOR_ID: "container-collector-2"
+    depends_on:
+      - server
+    networks:
+      - testnet
+
+  chaos:
+    image: curlimages/curl:latest
+    volumes:
+      - ./chaos_orchestrator.sh:/chaos.sh:ro
+    entrypoint: ["/bin/sh", "/chaos.sh"]
+    depends_on:
+      - collector-1
+      - collector-2
+    networks:
+      - testnet
+
+networks:
+  testnet:
+    driver: bridge

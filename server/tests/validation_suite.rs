@@ -3,10 +3,18 @@
 //! This maps directly to `VALIDATION_SUITE.md` integration test IDs.
 //! Tests are `#[ignore]` until the underlying end-to-end plumbing exists.
 
+#![allow(
+    clippy::expect_used,
+    clippy::print_stdout,
+    clippy::panic,
+    clippy::unwrap_used
+)]
+
 mod harness;
 use harness::TestContext;
 
 #[tokio::test]
+#[ignore = "integration test: requires SurrealDB"]
 async fn test_harness_smoke() {
     let ctx = TestContext::new().await;
     println!("Server address: {}", ctx.server_addr);
@@ -26,6 +34,7 @@ fn it_060_canonical_time_across_devices() {}
 fn it_080_crash_restart_durability() {}
 
 #[tokio::test]
+#[ignore = "integration test: requires SurrealDB"]
 async fn it_090_resume_upload_with_byte_offsets() {
     let ctx = TestContext::new().await;
     let mut client = ctx.client();
@@ -96,6 +105,7 @@ async fn it_090_resume_upload_with_byte_offsets() {
 }
 
 #[tokio::test]
+#[ignore = "integration test: requires SurrealDB"]
 async fn it_081_ack_implies_queryable() {
     let ctx = TestContext::new().await;
     let mut client = ctx.client();
@@ -148,6 +158,7 @@ async fn it_081_ack_implies_queryable() {
     let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, 0);
 
     #[derive(serde::Deserialize)]
+    #[allow(dead_code)]
     struct ChunkRec {
         indexed: bool,
     }
