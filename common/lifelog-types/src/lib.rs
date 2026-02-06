@@ -1,17 +1,18 @@
+pub mod error;
+pub mod validate;
+
 use lifelog_core::*;
 use lifelog_proto::collector_service_client::CollectorServiceClient;
-use prost;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use thiserror::Error;
 use tokio;
-use toml;
+
+pub use error::{LifelogError, TransformError};
+pub use validate::Validate;
 
 // Re-export state and action types from lifelog_proto
-pub use lifelog_proto::{
-    CollectorState, ServerState, SystemState, ServerActionType,
-};
+pub use lifelog_proto::{CollectorState, ServerActionType, ServerState, SystemState};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Unit {
@@ -71,12 +72,6 @@ pub type ServerId = String;
 pub struct DataSource {
     mac: String,
     modality: DataModality,
-}
-
-#[derive(Debug, Error)]
-pub enum TransformError {
-    #[error("Unknown error occurred")]
-    Unknown,
 }
 
 pub trait Transform {
@@ -143,9 +138,10 @@ impl DataOrigin {
                     Err(e) => Err(e),
                     Ok(origin) => Ok(DataOrigin {
                         origin: DataOriginType::DataOrigin(Box::new(origin)),
-                        modality: DataModality::from_str_name(modality)
-                            .ok_or_else(|| LifelogError::InvalidDataModality(modality.to_string()))?,
-            }),
+                        modality: DataModality::from_str_name(modality).ok_or_else(|| {
+                            LifelogError::InvalidDataModality(modality.to_string())
+                        })?,
+                    }),
                 }
             }
         }
@@ -173,7 +169,12 @@ impl fmt::Display for DataOrigin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.origin {
             DataOriginType::DeviceId(device_id) => {
-                write!(f, "{}:{}", device_id.replace(":", ""), self.modality.as_str_name())
+                write!(
+                    f,
+                    "{}:{}",
+                    device_id.replace(":", ""),
+                    self.modality.as_str_name()
+                )
             }
             DataOriginType::DataOrigin(data_origin) => write!(
                 f,
@@ -233,41 +234,3 @@ impl fmt::Display for LifelogFrameKey {
 }
 
 pub type Result<T, E = LifelogError> = std::result::Result<T, E>;
-
-#[derive(Debug, Error)]
-pub enum LifelogError {
-    #[error("I/O error: {0}")]
-    Io(#[from] std::io::Error),
-    #[error("database: table '{table}' already exists")]
-    TableAlreadyExists { table: String },
-    #[error("configuration parse error: {0}")]
-    Config(#[from] toml::de::Error),
-    #[error("database: {0}")]
-    Database(String),
-    #[error("JSON (de)serialisation error: {0}")]
-    SerdeJson(#[from] serde_json::Error),
-    #[error("protobuf decode error: {0}")]
-    ProstDecode(#[from] prost::DecodeError),
-    #[error("gRPC transport error: {0}")]
-    GrpcTransport(#[from] tonic::transport::Error),
-    #[error("gRPC status: {0}")]
-    GrpcStatus(#[from] tonic::Status),
-    #[error("background task join error: {0}")]
-    Join(#[from] tokio::task::JoinError),
-    #[error("stream closed unexpectedly")]
-    StreamClosed,
-    #[error("unknown collector '{0}'")]
-    UnknownCollector(String),
-    #[error("transform '{name}' failed: {source}")]
-    Transform {
-        name: &'static str,
-        #[source]
-        source: anyhow::Error,
-    },
-    #[error("validation failed for field '{field}': {reason}")]
-    Validation { field: &'static str, reason: String },
-    #[error("tried to parse invalid data modality: '{0}'")]
-    InvalidDataModality(String),
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
-}
