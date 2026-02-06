@@ -11,6 +11,8 @@ use thiserror::Error;
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OcrFrame {
+    pub uuid: ::lifelog_core::uuid::Uuid,
+    pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>,
     pub text: String,
 }
 

@@ -14,6 +14,8 @@ use std::io::Cursor;
 #[lifelog_type(Data)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScreenFrame {
+    pub uuid: ::lifelog_core::uuid::Uuid,
+    pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>,
     pub width: u32,
     pub height: u32,
     pub image_bytes: Vec<u8>,

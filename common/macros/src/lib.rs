@@ -5,7 +5,7 @@ use quote::{quote, ToTokens};
 use serde_json::json;
 use std::{env, fs::OpenOptions, io::Write, path::PathBuf};
 use syn::{
-    parse::Parse, parse::ParseStream, parse_macro_input, parse_quote,
+    parse::Parse, parse::ParseStream, parse_macro_input,
     AngleBracketedGenericArguments, Fields, GenericArgument, Ident, Item, PathArguments, Result,
     Type,
 };
@@ -65,19 +65,7 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     // 3) inject uuid/timestamp into JSON metadata for `Data`
-    if let LifelogMacroMetaDataType::Data = options.datatype {
-        fields_meta.insert(
-            0,
-            (
-                "timestamp".to_string(),
-                "::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>".to_string(),
-            ),
-        );
-        fields_meta.insert(
-            0,
-            ("uuid".to_string(), "::lifelog_core::uuid::Uuid".to_string()),
-        );
-    }
+    // Removed to allow explicit field definition
 
     // 4) write .type.json
     let meta = json!({
@@ -112,24 +100,7 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
             };
 
             // inject Rust-side uuid+timestamp for Data
-            if let LifelogMacroMetaDataType::Data = options.datatype {
-                named.named.insert(
-                    0,
-                    parse_quote! {
-
-                        //#[serde(serialize_with = "lifelog_core::serialize_uuids", deserialize_with = "lifelog_core::deserialize_uuids")]
-                        pub uuid: ::lifelog_core::uuid::Uuid
-                    },
-                );
-                named.named.insert(
-                    1,
-                    parse_quote! {
-
-
-                        pub timestamp: ::lifelog_core::chrono::DateTime<::lifelog_core::chrono::Utc>
-                    },
-                );
-            }
+            // Removed to allow explicit field definition
 
             let ident = &s.ident;
 

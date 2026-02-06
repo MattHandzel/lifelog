@@ -1,11 +1,9 @@
 use lifelog_core::*;
-use lifelog_macros::lifelog_type;
 use lifelog_proto::collector_service_client::CollectorServiceClient;
 use prost;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::fmt;
-use strum_macros::EnumIter;
 use thiserror::Error;
 use tokio;
 use toml;
@@ -48,7 +46,8 @@ pub enum ServerAction {
     RegisterActor(ActorConfig),
 }
 
-include!(concat!(env!("OUT_DIR"), "/data_modalities.rs"));
+// DataModality is now sourced from lifelog-proto
+pub use lifelog_proto::DataModality;
 
 #[derive(Clone, Debug)]
 pub struct RegisteredCollector {
@@ -134,7 +133,8 @@ impl DataOrigin {
             [_x] => Err(LifelogError::InvalidDataModality(source)),
             [device_id, modality] => Ok(DataOrigin {
                 origin: DataOriginType::DeviceId(device_id.to_string()),
-                modality: DataModality::tryfrom_str(modality)?,
+                modality: DataModality::from_str_name(modality)
+                    .ok_or_else(|| LifelogError::InvalidDataModality(modality.to_string()))?,
             }),
             [.., modality] => {
                 let potential_origin =
@@ -143,8 +143,9 @@ impl DataOrigin {
                     Err(e) => Err(e),
                     Ok(origin) => Ok(DataOrigin {
                         origin: DataOriginType::DataOrigin(Box::new(origin)),
-                        modality: DataModality::tryfrom_str(modality)?,
-                    }),
+                        modality: DataModality::from_str_name(modality)
+                            .ok_or_else(|| LifelogError::InvalidDataModality(modality.to_string()))?,
+            }),
                 }
             }
         }
@@ -156,13 +157,13 @@ impl DataOrigin {
                 format!(
                     "{}:{}",
                     device_id.replace(":", ""),
-                    self.modality.to_string()
+                    self.modality.as_str_name()
                 )
             }
             DataOriginType::DataOrigin(data_origin) => format!(
                 "{}:{}",
                 data_origin.get_table_name(),
-                self.modality.to_string()
+                self.modality.as_str_name()
             ),
         }
     }
@@ -172,13 +173,13 @@ impl fmt::Display for DataOrigin {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match &self.origin {
             DataOriginType::DeviceId(device_id) => {
-                write!(f, "{}:{}", device_id.replace(":", ""), self.modality)
+                write!(f, "{}:{}", device_id.replace(":", ""), self.modality.as_str_name())
             }
             DataOriginType::DataOrigin(data_origin) => write!(
                 f,
                 "{}:{}",
                 data_origin.get_table_name(),
-                self.modality.to_string()
+                self.modality.as_str_name()
             ),
         }
     }
