@@ -1,9 +1,13 @@
+use lifelog_core::{DataOrigin, DataOriginType};
+use lifelog_proto::DataModality;
+use lifelog_proto::ScreenFrame;
+use prost::Message;
 use serde::{Deserialize, Serialize};
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 use utils::ingest::IngestBackend;
 
-use crate::schema::ensure_chunks_schema;
+use crate::schema::{ensure_chunks_schema, ensure_table_schema};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct ChunkRecord {
@@ -30,9 +34,37 @@ impl IngestBackend for SurrealIngestBackend {
         offset: u64,
         length: u64,
         hash: &str,
+        payload: &[u8],
     ) -> Result<(), String> {
         let db = self.db.clone();
         ensure_chunks_schema(&db).await.map_err(|e| e.to_string())?;
+
+        let mut indexed = false;
+
+        // Try to index the content
+        // TODO: Handle other modalities
+        if stream_id.eq_ignore_ascii_case("screen") {
+            if let Ok(frame) = ScreenFrame::decode(payload) {
+                let origin = DataOrigin::new(
+                    DataOriginType::DeviceId(collector_id.to_string()),
+                    DataModality::Screen.as_str_name().to_string(),
+                );
+
+                if let Ok(_) = ensure_table_schema(&db, &origin).await {
+                    let table = origin.get_table_name();
+                    // Insert into table. We use create with a UUID-based ID or let Surreal generate one?
+                    // ScreenFrame has uuid field.
+                    let id = &frame.uuid;
+                    if let Ok(_) = db
+                        .create::<Option<ScreenFrame>>((table, id))
+                        .content(frame)
+                        .await
+                    {
+                        indexed = true;
+                    }
+                }
+            }
+        }
 
         let record = ChunkRecord {
             collector_id: collector_id.to_string(),
@@ -41,31 +73,26 @@ impl IngestBackend for SurrealIngestBackend {
             offset,
             length,
             hash: hash.to_string(),
-            indexed: false,
+            indexed,
         };
 
         // Use a unique ID based on session and offset to ensure idempotency
         let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
-        tracing::debug!(id = %id, offset, length, "Persisting chunk metadata");
+        tracing::debug!(id = %id, offset, length, indexed, "Persisting chunk metadata");
 
-        // Use CREATE to avoid overwriting existing records (preserving 'indexed' state)
-        // If it exists, we assume it's the same chunk (idempotency)
+        // Use UPDATE/MERGE if it exists to update 'indexed' status?
+        // Or overwrite?
+        // If we processed it now and it was not indexed before, we want to update it.
+        // If it was already indexed, we don't want to unset it (though here we just re-derived it).
+
         let result = db
-            .create::<Option<ChunkRecord>>(("upload_chunks", &id))
+            .update::<Option<ChunkRecord>>(("upload_chunks", &id))
             .content(record)
             .await;
 
         match result {
             Ok(_) => Ok(()),
-            Err(surrealdb::Error::Db(surrealdb::error::Db::RecordExists { .. })) => Ok(()),
-            Err(e) => {
-                // Check if error string contains "already exists" as fallback for other error variants
-                if e.to_string().contains("already exists") {
-                    Ok(())
-                } else {
-                    Err(e.to_string())
-                }
-            }
+            Err(e) => Err(e.to_string()),
         }
     }
 

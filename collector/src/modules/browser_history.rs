@@ -112,6 +112,10 @@ impl DataSource for BrowserHistorySource {
         BrowserHistorySource::new(config)
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn start(&self) -> Result<DataSourceHandle, DataSourceError> {
         if RUNNING.load(Ordering::SeqCst) {
             tracing::warn!("BrowserHistorySource: Start called but task is already running.");
