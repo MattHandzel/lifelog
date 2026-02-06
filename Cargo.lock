@@ -3998,6 +3998,7 @@ dependencies = [
 name = "lifelog-server"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "async-trait",
  "chrono",
  "clap 4.5.37",
@@ -4033,6 +4034,7 @@ dependencies = [
 name = "lifelog-types"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
  "dashmap 6.1.0",
  "image 0.25.6",
@@ -4043,11 +4045,13 @@ dependencies = [
  "prost",
  "prost-types",
  "serde",
+ "serde_json",
  "strum 0.27.1",
  "strum_macros 0.27.1",
  "thiserror 2.0.12",
  "tokio",
  "toml 0.8.22",
+ "tonic",
  "tonic-build",
  "uuid",
 ]

@@ -17,6 +17,7 @@ lifelog-macros = { path = "../common/macros" }
 tokio = { version = "1.44.2", features = ["full", "macros", "rt-multi-thread"] }
 chrono = "0.4"
 thiserror = "2"
+anyhow = {workspace = true}
 serde_json = "1.0"
 clap = "4.5.37"
 # rust-bert = "0.23.0"

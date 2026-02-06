@@ -2,233 +2,26 @@ use crate::policy::*;
 use anyhow;
 use chrono::Utc;
 use config::ServerPolicyConfig;
-use config::{ServerConfig, SystemConfig};
-use lifelog_core::*;
+use config::{CollectorConfig, ServerConfig, SystemConfig};
+use data_modalities::*;
 use lifelog_types::*;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::time;
 use surrealdb::engine::remote::ws::{Client, Ws};
 use surrealdb::opt::auth::Root;
 use surrealdb::Surreal;
-use thiserror::Error;
 use tokio::sync::RwLock;
-use tonic::{Request, Response, Status, Streaming};
-use tonic::{Request as TonicRequest, Response as TonicResponse, Status as TonicStatus};
-
-use std::collections::HashMap;
-use std::time;
-
-use config::CollectorConfig;
-use lifelog_proto::lifelog_server_service_server::LifelogServerService;
-use lifelog_proto::{
-    GetDataRequest, GetDataResponse, GetStateRequest, GetSystemConfigRequest,
-    GetSystemConfigResponse, GetSystemStateResponse, QueryRequest, QueryResponse,
-    RegisterCollectorRequest, RegisterCollectorResponse, ReportStateRequest, ReportStateResponse,
-    SetSystemConfigRequest, SetSystemConfigResponse,
-    Chunk, Ack, GetUploadOffsetRequest, GetUploadOffsetResponse,
-};
-
-use lifelog_proto::collector_service_client::CollectorServiceClient;
-
-use data_modalities::*;
-use sysinfo::System;
-
-use tokio_stream::StreamExt;
-
-use dashmap::DashSet;
-use once_cell::sync::Lazy;
-use serde::{de::DeserializeOwned, Serialize};
-use surrealdb::Error;
-
-use utils::ingest::{IngestBackend, ChunkIngester};
 use utils::cas::FsCas;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct ChunkRecord {
-    collector_id: String,
-    stream_id: String,
-    session_id: u64,
-    offset: u64,
-    length: u64,
-    hash: String,
-    indexed: bool,
-}
+use crate::db::get_origins_from_db;
+use crate::query::{get_all_uuids_from_origin, get_data_by_key};
+use crate::sync::{get_keys_in_source_not_in_destination, sync_data_with_collectors};
+use crate::transform::{transform_data, LifelogTransform};
 
-async fn ensure_chunk_table(db: &Surreal<Client>) -> surrealdb::Result<()> {
-    if CREATED_TABLES.contains("upload_chunks") {
-        return Ok(());
-    }
-    db.query(r#"
-        DEFINE TABLE upload_chunks SCHEMALESS;
-    "#).await?.check()?;
-    CREATED_TABLES.insert("upload_chunks".to_string());
-    Ok(())
-}
-
-struct SurrealIngestBackend {
-    db: Surreal<Client>,
-}
-
-#[async_trait::async_trait]
-impl IngestBackend for SurrealIngestBackend {
-    async fn persist_metadata(
-        &self,
-        collector_id: &str,
-        stream_id: &str,
-        session_id: u64,
-        offset: u64,
-        length: u64,
-        hash: &str,
-    ) -> Result<(), String> {
-        let db = self.db.clone();
-        ensure_chunk_table(&db).await.map_err(|e| e.to_string())?;
-        
-        let record = ChunkRecord {
-            collector_id: collector_id.to_string(),
-            stream_id: stream_id.to_string(),
-            session_id,
-            offset,
-            length,
-            hash: hash.to_string(),
-            indexed: false,
-        };
-        
-        // Use a unique ID based on session and offset to ensure idempotency
-        let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
-        println!("[SERVER] Persisting chunk metadata: id={}, offset={}, length={}", id, offset, length);
-        
-        // Use CREATE to avoid overwriting existing records (preserving 'indexed' state)
-        // If it exists, we assume it's the same chunk (idempotency)
-        let result = db.create::<Option<ChunkRecord>>(( "upload_chunks", &id ))
-            .content(record)
-            .await;
-
-        match result {
-            Ok(_) => Ok(()),
-            Err(surrealdb::Error::Db(surrealdb::error::Db::RecordExists { .. })) => Ok(()),
-            Err(e) => {
-                // Check if error string contains "already exists" as fallback for other error variants
-                if e.to_string().contains("already exists") {
-                    Ok(())
-                } else {
-                    Err(e.to_string())
-                }
-            }
-        }
-    }
-
-    async fn is_indexed(
-        &self,
-        collector_id: &str,
-        stream_id: &str,
-        session_id: u64,
-        offset: u64,
-    ) -> bool {
-        let db = self.db.clone();
-        let _ = ensure_chunk_table(&db).await;
-
-        let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
-        let record: Option<ChunkRecord> = db.select(("upload_chunks", id))
-            .await
-            .unwrap_or(None);
-            
-        record.map(|r| r.indexed).unwrap_or(false)
-    }
-}
-
-static CREATED_TABLES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
-// const SYNC_INTERVAL: i64 = 5; // TODO: Refactor this into policy
-
-// TODO: Refactor the timestamp so it uses datetime instead of string, same with uuid, refactor it
-// so it doesn't use image_bytes but instead uses a file path to the image
-// Maybe have a custom struct for data retrievals and parse it to the actual representation?
-// So when we get a struct ScreenFrame from the client, we might want to store the file onto some
-// database, get that file path, create a new struct ScreenFrameSurreal that has the surrealdb
-// types?
-
-async fn ensure_table(db: &Surreal<Client>, data_origin: &DataOrigin) -> surrealdb::Result<()> {
-    let table = data_origin.get_table_name();
-    if CREATED_TABLES.contains(&table) {
-        return Ok(());
-    }
-    // TODO: Auto generate this or find a better way of representing
-    let schema_tpl = match data_origin.modality {
-        DataModality::Screen => ScreenFrame::get_surrealdb_schema(),
-        DataModality::Browser => BrowserFrame::get_surrealdb_schema(),
-        DataModality::Ocr => OcrFrame::get_surrealdb_schema(),
-    };
-    let ddl = schema_tpl.replace("{table}", &table);
-    //db.query(format!(
-    //    r#"
-    //    DEFINE TABLE {table} SCHEMAFULL;
-    //    {ddl}
-    //    DEFINE INDEX {table}_ts_idx ON {table} FIELDS timestamp;
-    //"#
-    //))
-    // TODO: we want to be able to define the index as well
-    let db_query = format!(
-        r#"
-        DEFINE TABLE `{table}` SCHEMAFULL;
-        {ddl}
-    "#
-    );
-    db.query(db_query.clone()).await?;
-    CREATED_TABLES.insert(table.to_owned());
-    println!("Ensuring table schema: {}", db_query);
-    println!("Ensuring table: {}", table);
-    Ok(())
-}
-
-//type Loader = fn(&Surreal<Client>, &[Uuid]) -> anyhow::Result<Vec<LifelogData>>;
-
-//static MODALITY_REGISTRY: Lazy<DashMap<DataModality, Loader>> =
-//    Lazy::new(|| DashMap::from([(DataModality::Screen, load::<ScreenFrame> as Loader)]));
-
-//async fn load<T: Modality>(
-//    db: &Surreal<Client>,
-//    uuids: &[Uuid],
-//) -> anyhow::Result<Vec<LifelogData>> {
-//    let rows: Vec<T> = db.select::<Vec<T>>(T::TABLE).await?; // filter by uuids
-//    Ok(rows
-//        .into_iter()
-//        .map(|r| LifelogData {
-//            payload: Some(r.into_payload()),
-//        })
-//        .collect())
-//}
-
-#[derive(Debug, Error)]
-pub enum ServerError {
-    #[error("Database error: {0}")]
-    DatabaseError(#[from] surrealdb::Error),
-    #[error("Config error: {0}")]
-    ConfigError(String),
-    #[error("IO error: {0}")]
-    IoError(#[from] std::io::Error),
-    #[error("Tonic transport error: {0}")]
-    TonicError(#[from] tonic::transport::Error),
-    #[error("Internal error: {0}")]
-    InternalError(String),
-}
-
-// Convert server commands to action
-
-//impl ServerCommand {
-//    pub fn to_actions(&self) -> Vec<ServerAction> {
-//        match self {
-//            ServerCommand::RegisterCollector(request) => {
-//                vec![]
-//            }
-//            ServerCommand::GetConfig(_) => {
-//                vec![]
-//            }
-//            ServerCommand::SetConfig(_) => vec![],
-//            ServerCommand::Query(request) => vec![ServerAction::Query(request.clone())],
-//            _ => {
-//                panic!("Command {:?} not implemented yet", self);
-//            }
-//        }
-//    }
-//}
+// Re-export for external consumers (main.rs, tests)
+pub use crate::grpc_service::GRPCServerLifelogServerService;
 
 #[derive(Clone)]
 pub struct ServerHandle {
@@ -317,38 +110,41 @@ impl ServerHandle {
 // TDOO: ADD A CHANNEL FOR COMMS
 #[derive(Debug, Clone)]
 pub struct Server {
-    db: Surreal<Client>,
+    pub(crate) db: Surreal<Client>,
     #[allow(dead_code)]
     host: String,
     #[allow(dead_code)]
     port: u16,
     state: Arc<RwLock<SystemState>>,
-    registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
+    pub(crate) registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
     #[allow(dead_code)]
     register_interfaces: Arc<RwLock<Vec<RegisteredInterface>>>,
     policy: Arc<RwLock<ServerPolicy>>,
     origins: Arc<RwLock<Vec<DataOrigin>>>,
     transforms: Arc<RwLock<Vec<LifelogTransform>>>, // TODO: These should be registered transforms
     config: ServerConfig,
-    cas: FsCas,
+    pub(crate) cas: FsCas,
 }
 
 static mut SYS: Option<sysinfo::System> = None;
 
-// const SERVER_COMMAND_CHANNEL_BUFFER_SIZE: usize = 100;
-
 impl Server {
-    pub async fn new(config: &ServerConfig) -> Result<Self, ServerError> {
+    pub async fn new(config: &ServerConfig) -> Result<Self, LifelogError> {
+        // Validate config before doing anything
+        config.validate()?;
+
         let db = Surreal::new::<Ws>(&config.database_endpoint).await.expect("Could not connect to the database, do you have it running? surreal start --user root --pass root --log debug rocksdb://~/lifelog/database --bind \"127.0.0.1:7183\"");
         db.signin(Root {
             username: "root",
             password: "root",
         })
-        .await?;
+        .await
+        .map_err(|e| LifelogError::Database(format!("{}", e)))?;
 
         db.use_ns("lifelog")
             .use_db(config.database_name.clone())
-            .await?;
+            .await
+            .map_err(|e| LifelogError::Database(format!("{}", e)))?;
 
         let state = SystemState {
             server_state: Some(ServerState {
@@ -363,7 +159,7 @@ impl Server {
             config: ServerPolicyConfig::default(),
         }));
         unsafe {
-            SYS = Some(System::new_all());
+            SYS = Some(sysinfo::System::new_all());
         }
 
         let ocr_transform = OcrTransform::new(
@@ -376,6 +172,11 @@ impl Server {
                 engine_path: None,
             },
         );
+
+        // Run startup schema migrations (ensures all tables + indexes exist)
+        crate::schema::run_startup_migrations(&db)
+            .await
+            .expect("Failed to run startup schema migrations");
 
         let origins_vec = get_origins_from_db(&db)
             .await
@@ -442,271 +243,6 @@ impl Server {
     }
 }
 
-pub struct GRPCServerLifelogServerService {
-    pub server: ServerHandle,
-}
-
-#[tonic::async_trait]
-impl LifelogServerService for GRPCServerLifelogServerService {
-    async fn register_collector(
-        &self,
-        request: TonicRequest<RegisterCollectorRequest>,
-    ) -> Result<TonicResponse<RegisterCollectorResponse>, TonicStatus> {
-        let inner = request.into_inner();
-        let collector_config: CollectorConfig = inner.config.unwrap().into();
-        let collector_ip = format!(
-            "http://{}:{}",
-            collector_config.host.clone(),
-            collector_config.port.clone()
-        );
-        println!(
-            "Received a register collector request from: {:?} for collector ID: {}",
-            collector_ip, collector_config.id
-        );
-
-        let endpoint = tonic::transport::Endpoint::from_shared(collector_ip.clone());
-        match endpoint {
-            Err(ref e) => {
-                println!("Endpoint: {:?}", endpoint);
-                Err(TonicStatus::internal(format!(
-                    "Failed to create endpoint: {}",
-                    e
-                )))
-            }
-            Ok(endpoint) => {
-                let endpoint = endpoint.connect_timeout(time::Duration::from_secs(10));
-
-                let channel = endpoint.connect().await.map_err(|e| {
-                    TonicStatus::internal(format!("Failed to connect to endpoint: {}", e))
-                })?;
-                let client = CollectorServiceClient::new(channel);
-
-                let actual_mac_id = collector_config.id.clone();
-
-                let collector = RegisteredCollector {
-                    id: actual_mac_id.clone(),
-                    mac: actual_mac_id.clone(),
-                    address: collector_ip.to_string(),
-                    grpc_client: client.clone(),
-                };
-
-                self.server.register_collector(collector.clone()).await;
-
-                println!("Registering collector: {:?}", collector);
-
-                Ok(TonicResponse::new(RegisterCollectorResponse {
-                    success: true,
-                    session_id: chrono::Utc::now().timestamp_subsec_nanos() as u64
-                        + chrono::Utc::now().timestamp() as u64,
-                }))
-            }
-        }
-    }
-
-    async fn get_config(
-        &self,
-        _request: tonic::Request<GetSystemConfigRequest>,
-    ) -> Result<TonicResponse<GetSystemConfigResponse>, TonicStatus> {
-        let system_config =
-            self.server.get_system_config().await.map_err(|e| {
-                TonicStatus::internal(format!("Failed to get system config: {}", e))
-            })?;
-        Ok(TonicResponse::new(GetSystemConfigResponse {
-            config: Some(system_config.into()),
-        }))
-    }
-
-    async fn set_config(
-        &self,
-        _request: tonic::Request<SetSystemConfigRequest>,
-    ) -> Result<TonicResponse<SetSystemConfigResponse>, TonicStatus> {
-        println!("Received a set config request!");
-        Ok(TonicResponse::new(SetSystemConfigResponse::default()))
-    }
-
-    async fn query(
-        &self,
-        request: Request<QueryRequest>,
-    ) -> Result<Response<QueryResponse>, Status> {
-        let query_message = request.into_inner().query;
-        println!("[QUERY] Received a query request: {:?}", query_message);
-        let _server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
-
-        let _uuids: Vec<LifelogFrameKey> = vec![];
-        // NOTE: Right now we just return all uuids for a query, in the future actually parse the
-        // query message and return the uuids that match
-        let query = String::from("");
-        let keys = self
-            .server
-            .process_query(query.clone())
-            .await
-            .map_err(|e| {
-                tonic::Status::internal(format!("Failed to process query: {}", e.to_string()))
-            })?;
-        let proto_keys: Vec<lifelog_proto::LifelogDataKey> = keys
-            .iter()
-            .map(|key| lifelog_proto::LifelogDataKey {
-                uuid: key.uuid.to_string(),
-                origin: key.origin.get_table_name(),
-            })
-            .collect();
-        let response = QueryResponse { keys: proto_keys };
-        println!(
-            "[SERVER QUERY] Responding to QueryRequest with {} keys",
-            response.keys.len()
-        );
-        Ok(Response::new(response))
-    }
-
-    async fn get_data(
-        &self,
-        request: Request<GetDataRequest>,
-    ) -> Result<Response<GetDataResponse>, Status> {
-        let inner_request = request.into_inner();
-        println!(
-            "[SERVER GET_DATA] Received GetDataRequest with {} keys",
-            inner_request.keys.len()
-        );
-
-        let _server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
-        let keys = inner_request.keys;
-
-        let data: Vec<lifelog_proto::LifelogData> = self
-            .server
-            .get_data(
-                keys.iter()
-                    .map(|k| LifelogFrameKey::from(k.clone()))
-                    .collect(),
-            )
-            .await
-            .map_err(|e| Status::internal(format!("Failed to get data: {}", e)))?
-            .iter()
-            .map(|v| lifelog_proto::LifelogData::from(v.clone()))
-            .collect();
-
-        let response = GetDataResponse { data: data };
-        println!(
-            "[SERVER GET_DATA] Responding to GetDataRequest with {} data items",
-            response.data.len()
-        );
-        Ok(Response::new(response))
-    }
-
-    // TODO: Refactor ALL functions to include this check to see if the thing doing the requesting
-    // has been registered or not. I want to refactor my server to only think about clients.
-    async fn report_state(
-        &self,
-        _request: tonic::Request<ReportStateRequest>,
-    ) -> Result<TonicResponse<ReportStateResponse>, TonicStatus> {
-        let state = _request.into_inner().state.unwrap();
-        println!(
-            "Received a report state request! {} {:?}",
-            state.name,
-            state.timestamp.unwrap()
-        );
-        // Ensure we got a state reported by a registered collector, if not then we ignore it
-        match self.server.contains_collector(state.name.clone()).await {
-            true => {
-                let _ = self.server
-                    .report_collector_state(state.clone().into())
-                    .await;
-                Ok(TonicResponse::new(ReportStateResponse {
-                    acknowledged: true,
-                }))
-            }
-            false => Err(TonicStatus::internal(format!(
-                "Collector {} is not registered",
-                state.name
-            ))),
-        }
-    }
-
-    async fn get_state(
-        &self,
-        _request: tonic::Request<GetStateRequest>,
-    ) -> Result<TonicResponse<GetSystemStateResponse>, TonicStatus> {
-        println!("Received a get state request!");
-        let state = self.server.get_state().await;
-        //let proto_state = s
-        Ok(TonicResponse::new(GetSystemStateResponse {
-            state: Some(state.into()), // TODO: Replace this with the system state
-                                       // instead of the server state (i need some work with the proto files)
-        }))
-    }
-
-    async fn upload_chunks(
-        &self,
-        request: Request<Streaming<Chunk>>,
-    ) -> Result<Response<Ack>, Status> {
-        let mut stream = request.into_inner();
-        let mut ingester: Option<ChunkIngester<SurrealIngestBackend>> = None;
-        let mut last_session_info = (String::new(), String::new(), 0u64);
-        let mut last_acked_offset = 0;
-
-        while let Some(chunk_result) = stream.next().await {
-            let chunk = chunk_result.map_err(|e| Status::internal(format!("Stream error: {}", e)))?;
-            
-            if ingester.is_none() {
-                last_session_info = (chunk.collector_id.clone(), chunk.stream_id.clone(), chunk.session_id);
-                let server = self.server.server.read().await;
-                let backend = SurrealIngestBackend { db: server.db.clone() };
-                let cas = server.cas.clone();
-                ingester = Some(ChunkIngester::new(
-                    backend,
-                    cas,
-                    chunk.collector_id.clone(),
-                    chunk.stream_id.clone(),
-                    chunk.session_id,
-                    chunk.offset,
-                ));
-            }
-            
-            if let Some(ref mut ing) = ingester {
-                let next_offset = ing.apply_chunk(chunk.offset, &chunk.data, &chunk.hash)
-                    .await
-                    .map_err(|e| Status::invalid_argument(format!("Ingest error: {}", e)))?;
-                
-                // REQ-014: ACK only if fully indexed (durable ACK gate)
-                if ing.is_chunk_indexed(chunk.offset).await {
-                    last_acked_offset = next_offset;
-                }
-            }
-        }
-
-        Ok(Response::new(Ack {
-            collector_id: last_session_info.0,
-            stream_id: last_session_info.1,
-            session_id: last_session_info.2,
-            acked_offset: last_acked_offset,
-        }))
-    }
-
-    async fn get_upload_offset(
-        &self,
-        request: Request<GetUploadOffsetRequest>,
-    ) -> Result<Response<GetUploadOffsetResponse>, Status> {
-        let _inner = request.into_inner();
-        let db = self.server.server.read().await.db.clone();
-        
-        // Find the highest offset for this session in the 'upload_chunks' table
-        let mut response = db.query("SELECT * FROM upload_chunks WHERE collector_id = $c AND stream_id = $s AND session_id = $sess ORDER BY offset DESC LIMIT 1")
-            .bind(("c", _inner.collector_id.clone()))
-            .bind(("s", _inner.stream_id.clone()))
-            .bind(("sess", _inner.session_id))
-            .await
-            .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
-            
-        let records: Vec<ChunkRecord> = response.take(0)
-            .map_err(|e| Status::internal(format!("Parse error: {}", e)))?;
-            
-        let offset = records.first().map(|r| r.offset + r.length).unwrap_or(0);
-            
-        Ok(Response::new(GetUploadOffsetResponse {
-            offset,
-        }))
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct ServerPolicy {
     config: ServerPolicyConfig,
@@ -718,21 +254,35 @@ impl Policy for ServerPolicy {
 
     fn get_action(&self, state: &Self::StateType) -> Self::ActionType {
         let ss = state.server_state.as_ref().expect("Server state missing");
-        
-        let t_now = ss.timestamp.as_ref().map(|t| {
-            chrono::DateTime::<Utc>::from_timestamp(t.seconds, t.nanos as u32).unwrap_or_default()
-        }).unwrap_or_default();
-        
-        let t_last = ss.timestamp_of_last_sync.as_ref().map(|t| {
-            chrono::DateTime::<Utc>::from_timestamp(t.seconds, t.nanos as u32).unwrap_or_default()
-        }).unwrap_or_default();
+
+        let t_now = ss
+            .timestamp
+            .as_ref()
+            .map(|t| {
+                chrono::DateTime::<Utc>::from_timestamp(t.seconds, t.nanos as u32)
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
+
+        let t_last = ss
+            .timestamp_of_last_sync
+            .as_ref()
+            .map(|t| {
+                chrono::DateTime::<Utc>::from_timestamp(t.seconds, t.nanos as u32)
+                    .unwrap_or_default()
+            })
+            .unwrap_or_default();
 
         let action = if (t_now - t_last).num_seconds() as f64
             >= (self.config.collector_sync_interval as f64)
-            && !ss.pending_actions.contains(&(ServerActionType::SyncData as i32))
+            && !ss
+                .pending_actions
+                .contains(&(ServerActionType::SyncData as i32))
         {
             ServerAction::SyncData("SELECT * FROM screen".to_string())
-        } else if !ss.pending_actions.contains(&(ServerActionType::TransformData as i32))
+        } else if !ss
+            .pending_actions
+            .contains(&(ServerActionType::TransformData as i32))
         {
             ServerAction::TransformData(vec![])
         } else {
@@ -807,22 +357,14 @@ impl Server {
 
             let _processes = sys.processes().len() as i32;
 
-            //let total_disk: u64 = sys.disks().iter().map(|d| d.total_space()).sum();
-            //let free_disk: u64 = sys.disks().iter().map(|d| d.available_space()).sum();
-            //let disk_usage = if total_disk > 0 {
-            //    (total_disk - free_disk) as f64 / total_disk as f64
-            //} else {
-            //    0.0
-            //};
-
             // Estimate the state in this function
             let mut state = self.state.write().await;
             let ss = state.server_state.as_mut().expect("Server state missing");
             ss.cpu_usage = cpu_usage; // TODO: Get the real CPU usage
             ss.timestamp = Some(Utc::now().into());
             ss.memory_usage = memory_usage; // TODO: Get the real memory usage
-                                                            // TODO: Get the real number of threads
-                                                            // TODO: There is a race condition here, someone can grab the lock before we can grab it
+                                            // TODO: Get the real number of threads
+                                            // TODO: There is a race condition here, someone can grab the lock before we can grab it
             state.clone()
         }
     }
@@ -833,7 +375,6 @@ impl Server {
             query
         );
         let mut keys: Vec<LifelogFrameKey> = vec![];
-        // println!("asdfadsfasdf"); // Original debug print, can be removed or kept
 
         println!("[SERVER PROCESS_QUERY] Attempting to get write lock on self.origins...");
         let mut origins = self.origins.write().await;
@@ -866,7 +407,7 @@ impl Server {
         );
         for origin in origins.iter() {
             println!("[SERVER PROCESS_QUERY]: Looking at origin {}", origin);
-            match get_all_uuids_from_origin(&self.db, &origin).await {
+            match get_all_uuids_from_origin(&self.db, origin).await {
                 Ok(uuids_from_origin) => {
                     keys.extend(uuids_from_origin.iter().map(|uuid| LifelogFrameKey {
                         uuid: *uuid,
@@ -878,12 +419,6 @@ impl Server {
                         "[SERVER PROCESS_QUERY] Failed to get uuids from origin {}: {}",
                         origin, e
                     );
-                    // Decide if we should continue or return an error for the whole query
-                    // For now, let's log and continue, accumulating partial results
-                    // return Err(LifelogError::Database(format!(
-                    //     "Failed to get uuids from origin: {}",
-                    //     e
-                    // )));
                 }
             }
         }
@@ -945,10 +480,6 @@ impl Server {
                         true
                     });
                 });
-
-                // For now, assume we want to sync all data modalities
-
-                // Ask the collectors to send data
             }
             ServerAction::TransformData(_untransformed_data_keys) => {
                 // TODO: Move this to policy
@@ -999,550 +530,6 @@ impl Server {
                 });
             }
             _ => todo!(),
-        }
-    }
-
-    //pub async fn get_tables(db: &Surreal<Client>) -> surrealdb::Result<Vec<String>> {
-    //    #[derive(serde::Deserialize)]
-    //    struct Info {
-    //        tables: std::collections::HashMap<String, serde_json::Value>,
-    //    }
-    //
-    //    let info: Info = db.query("INFO FOR DB").await?.take(0)?;
-    //    Ok(info.tables.keys().cloned().collect())
-    //}
-    //
-    //pub async fn fetch_latest<T>(
-    //    db: &Surreal<Client>,
-    //    table: &str,
-    //    limit: u32,
-    //) -> surrealdb::Result<Vec<T>>
-    //where
-    //    T: DeserializeOwned,
-    //{
-    //    db.query(format!(
-    //        "SELECT * FROM {table} ORDER BY timestamp DESC LIMIT {limit}"
-    //    ))
-    //    .await?
-    //    .take(0)
-    //}
-
-    //pub async fn fetch_by_id<T>(
-    //    db: &Surreal<Client>,
-    //    table: &str,
-    //    id: &str,
-    //) -> surrealdb::Result<Option<T>>
-    //where
-    //    T: DeserializeOwned,
-    //{
-    //    let rid = Thing::from((table, id));
-    //    db.select((table, id)).await
-    //}
-    //pub async fn count_table(db: &Surreal<Client>, table: &str) -> surrealdb::Result<u64> {
-    //    #[derive(serde::Deserialize)]
-    //    struct Cnt {
-    //        count: u64,
-    //    }
-    //    let cnt: Cnt = db
-    //        .query(format!("SELECT count() AS count FROM {table}"))
-    //        .await?
-    //        .take(0)?;
-    //    Ok(cnt.count)
-    //}
-    //pub async fn live_select(
-    //    db: &Surreal<Client>,
-    //    table: &str,
-    //) -> surrealdb::Result<impl Stream<Item = surrealdb::Result<serde_json::Value>>> {
-    //    db.select_live(format!("LIVE SELECT * FROM {table}")).await
-    //}
-}
-
-// TODO: Complete this for every data type, make this into a MACRO
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct ScreenFrameSurreal {
-    //pub uuid: String,
-    pub timestamp: surrealdb::sql::Datetime,
-    pub width: i32,
-    pub height: i32,
-    pub image_bytes: surrealdb::sql::Bytes,
-    pub mime_type: String,
-}
-
-// TDOO: Do this for every datatype
-impl From<ScreenFrame> for ScreenFrameSurreal {
-    fn from(frame: ScreenFrame) -> Self {
-        Self {
-            //uuid: frame.uuid.into(),
-            timestamp: frame.timestamp.into(),
-            width: frame.width as i32,
-            height: frame.height as i32,
-            image_bytes: frame.image_bytes.into(),
-            mime_type: frame.mime_type,
-        }
-    }
-}
-
-impl From<ScreenFrameSurreal> for ScreenFrame {
-    fn from(frame: ScreenFrameSurreal) -> Self {
-        Self {
-            uuid: uuid::Uuid::from_u128(0),
-            timestamp: frame.timestamp.into(),
-            width: frame.width as u32,
-            height: frame.height as u32,
-            image_bytes: frame.image_bytes.into(),
-            mime_type: frame.mime_type,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct BrowserFrameSurreal {
-    pub timestamp: surrealdb::sql::Datetime,
-    pub url: String,
-    pub title: String,
-    pub visit_count: i32,
-}
-
-impl From<BrowserFrame> for BrowserFrameSurreal {
-    fn from(frame: BrowserFrame) -> Self {
-        Self {
-            timestamp: frame.timestamp.into(),
-            url: frame.url,
-            title: frame.title,
-            visit_count: frame.visit_count as i32,
-        }
-    }
-}
-
-impl From<BrowserFrameSurreal> for BrowserFrame {
-    fn from(frame: BrowserFrameSurreal) -> Self {
-        Self {
-            uuid: uuid::Uuid::from_u128(0),
-            timestamp: frame.timestamp.into(),
-            url: frame.url,
-            title: frame.title,
-            visit_count: frame.visit_count as u32,
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct OcrFrameSurreal {
-    pub timestamp: surrealdb::sql::Datetime,
-    pub text: String,
-}
-
-impl From<OcrFrame> for OcrFrameSurreal {
-    fn from(frame: OcrFrame) -> Self {
-        Self {
-            timestamp: frame.timestamp.into(),
-            text: frame.text,
-        }
-    }
-}
-
-impl From<OcrFrameSurreal> for OcrFrame {
-    fn from(frame: OcrFrameSurreal) -> Self {
-        Self {
-            uuid: uuid::Uuid::from_u128(0),
-            timestamp: frame.timestamp.into(),
-            text: frame.text,
-        }
-    }
-}
-
-///// Convert `prost_types::Timestamp` → RFC-3339 string recognised by SurrealDB.
-//fn ts_to_rfc3339(ts: &prost_types::Timestamp) -> String {
-//    // Safety: prost Timestamp always contains valid seconds/nanos
-//    let dt: DateTime<Utc> = chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32).unwrap();
-//    dt.to_rfc3339()
-//}
-//
-//fn build_time_filter(ranges: &[Timerange]) -> (String, Vec<(&'static str, Value)>) {
-//    if ranges.is_empty() {
-//        return ("true".into(), Vec::new());
-//    }
-//
-//    let mut clauses = Vec::with_capacity(ranges.len());
-//    let mut binds = Vec::with_capacity(ranges.len() * 2);
-//
-//    for (i, tr) in ranges.iter().enumerate() {
-//        let start = ts_to_rfc3339(tr.start.as_ref().expect("missing start"));
-//        let end = ts_to_rfc3339(tr.end.as_ref().expect("missing end"));
-//
-//        // (timestamp >= $s0 AND timestamp <= $e0)
-//        clauses.push(format!("(timestamp >= $s{i} AND timestamp <= $e{i})"));
-//
-//        binds.push((Box::leak(format!("s{i}").into_boxed_str()), start.into()));
-//        binds.push((Box::leak(format!("e{i}").into_boxed_str()), end.into()));
-//    }
-//
-//    (clauses.join(" OR "), binds)
-//}
-//
-///// Main helper – run the query and get the matching UUIDs.
-/////
-///// * `db`           – an *already authorised* Surreal handle
-///// * `query`        – the incoming gRPC `Query`
-/////
-///// Returns a deduplicated vector of UUID strings.
-//pub async fn query_uuids(
-//    db: &Surreal<Client>,
-//    query: Query,
-//) -> Result<Vec<String>, surrealdb::Error> {
-//    // Decide which tables we need to hit:
-//    //   * search_sources drive the filtering
-//    //   * if return_sources is empty, fall back to search_sources
-//    let search_sources = if query.search_sources.is_empty() {
-//        &query.return_sources
-//    } else {
-//        &query.search_sources
-//    };
-//
-//    let return_sources = if query.return_sources.is_empty() {
-//        search_sources
-//    } else {
-//        &query.return_sources
-//    };
-//
-//    // Time filter ------------------------------------------------------------
-//    let (time_filter, mut bindings) = build_time_filter(&query.time_ranges);
-//
-//    let browser_filter = true;
-//    let browser_bind = None;
-//
-//    //// Optional browser-text filter ------------------------------------------
-//    //let (browser_filter, browser_bind) = if query.browser_text.is_empty() {
-//    //    ("true".into(), None)
-//    //} else {
-//    //    (
-//    //        "(title CONTAINS $btxt OR url CONTAINS $btxt)".into(),
-//    //        Some(("btxt", query.browser_text.clone().into())),
-//    //    )
-//    //};
-//
-//    if let Some(b) = browser_bind {
-//        bindings.push(b);
-//    }
-//
-//    // Collect UUIDs from all tables -----------------------------------------
-//    let mut uuids = HashSet::<String>::new();
-//
-//    for table_str in return_sources {
-//        // Our helper that parses "device:modality" → actual table name
-//        let table = DataOrigin::from_string(table_str.clone()).get_table_name();
-//
-//        let sql = format!(
-//            r#"
-//            SELECT VALUE record::id(id)
-//            FROM type::table($tbl)
-//            WHERE ({time_filter}) AND ({browser_filter});
-//            "#
-//        );
-//        println!("SQL: {}", sql);
-//        panic!("SQL: {}", sql);
-//
-//        //// Run the query in one round-trip
-//        //let mut resp = db
-//        //    .query(sql)
-//        //    .bind(("tbl", &table))
-//        //    //.bind_many(bindings.clone())
-//        //    .await?;
-//
-//        //let ids: Vec<String> = resp.take(0)?; // flat array because SELECT VALUE
-//        //uuids.extend(ids);
-//    }
-//
-//    Ok(uuids.into_iter().collect())
-//}
-//
-
-async fn sync_data_with_collectors(
-    _state: SystemState,
-    db: &Surreal<Client>,
-    _query: String,
-    collectors: &mut Vec<RegisteredCollector>,
-) -> Result<(), LifelogError> {
-    for collector in collectors.iter_mut() {
-        // TODO: Parallelize this
-        println!("Syncing data with collector: {:?}", collector);
-        // TODO: This code can fail here (notice the unwraps, I should handle it.
-        let mut stream = collector
-            .grpc_client
-            .get_data(GetDataRequest { keys: vec![] })
-            .await
-            .unwrap()
-            .into_inner();
-        println!("Defined the stream here...");
-        let mut data = vec![];
-
-        while let Some(chunk) = stream.next().await {
-            data.push(chunk.unwrap().payload);
-        }
-        println!("Done receiving data");
-        let mac = collector.mac.clone();
-
-        // TODO: REFACTOR THIS FUNCTION
-        for chunk in data {
-            // record id = random UUID
-            let chunk = chunk.unwrap();
-
-            // TODO: this can be automated with a macro
-            match chunk {
-                lifelog_proto::lifelog_data::Payload::Screenframe(c) => {
-                    let data_origin = DataOrigin::new(
-                        DataOriginType::DeviceId(mac.clone()),
-                        DataModality::Screen,
-                    );
-                    let _record = add_data_to_db::<ScreenFrame, ScreenFrameSurreal>(
-                        &db,
-                        c.into(),
-                        &data_origin,
-                    )
-                    .await;
-                }
-                lifelog_proto::lifelog_data::Payload::Browserframe(c) => {
-                    let data_origin = DataOrigin::new(
-                        DataOriginType::DeviceId(mac.clone()),
-                        DataModality::Browser,
-                    );
-
-                    let _record = add_data_to_db::<BrowserFrame, BrowserFrameSurreal>(
-                        &db,
-                        c.into(),
-                        &data_origin,
-                    )
-                    .await;
-                }
-                _ => unimplemented!(),
-            };
-
-            //db.create("audit_log")
-            //  .content(json!({
-            //      "ts": chrono::Utc::now(),
-            //      "actor": msg.source_mac,
-            //      "action": "ingest",
-            //      "detail": { "table": table }
-            //  }))
-            //  .await?;
-        }
-    }
-    Ok(())
-}
-
-async fn get_all_uuids_from_origin(
-    db: &Surreal<Client>,
-    data_origin: &DataOrigin,
-) -> Result<Vec<Uuid>, surrealdb::Error> {
-    let table = data_origin.get_table_name();
-    let sql = format!("SELECT VALUE record::id(id) as uuid FROM `{table}`"); //FIX: Sql injection 🤡
-    let uuids: Vec<String> = db
-        .query(sql)
-        .await
-        .expect("Couldn't do the query")
-        .take(0)
-        .expect("We should only ever have one query");
-    let uuids = uuids
-        .into_iter()
-        .map(|s| {
-            let uuid = s.parse::<Uuid>().expect("Unable to go from string to uuid");
-            uuid
-        })
-        .collect::<Vec<Uuid>>();
-    Ok(uuids)
-}
-
-async fn get_keys_in_source_not_in_destination(
-    db: &Surreal<Client>,
-    source: DataOrigin,
-    destination: DataOrigin,
-) -> Vec<LifelogFrameKey> {
-    // TODO: dude what are you doing? use surrealdb to do this query, don't manuall do the set
-    // difference.
-    // Get the record uuids from source
-    let uuids_from_source = get_all_uuids_from_origin(&db, &source)
-        .await
-        .expect(format!("Unable to get uuids from source: {}", source).as_str());
-
-    // Get the record uuids from destination
-    let uuids_from_destination = get_all_uuids_from_origin(&db, &destination)
-        .await
-        .expect(format!("Unable to get uuids from destination: {}", destination).as_str());
-
-    // Get the record uuids from source that are not in destination
-    let uuids_in_source_not_in_destination: Vec<LifelogFrameKey> = uuids_from_source
-        .iter()
-        .filter(|uuid| !uuids_from_destination.contains(uuid))
-        .cloned()
-        .map(|uuid| {
-            let key = LifelogFrameKey::new(uuid, source.clone());
-            key
-        })
-        .collect();
-
-    return uuids_in_source_not_in_destination;
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-enum LifelogTransform {
-    OcrTransform(OcrTransform),
-}
-
-impl LifelogTransform {
-    fn source(&self) -> DataOrigin {
-        match self {
-            LifelogTransform::OcrTransform(transform) => transform.source(),
-        }
-    }
-    fn destination(&self) -> DataOrigin {
-        match self {
-            LifelogTransform::OcrTransform(transform) => transform.destination(),
-        }
-    }
-}
-
-impl From<OcrTransform> for LifelogTransform {
-    fn from(transform: OcrTransform) -> Self {
-        Self::OcrTransform(transform)
-    }
-}
-
-async fn transform_data(
-    db: &Surreal<Client>,
-    untransformed_data_keys: Vec<LifelogFrameKey>,
-    transforms: Vec<LifelogTransform>,
-) {
-    for key in untransformed_data_keys.iter() {
-        let data_to_transform: LifelogData = get_data_by_key(db, key)
-            .await
-            .expect(format!("Unable to get data by key: {}", key).as_str());
-        println!(
-            "[TRANSFORM_DATA]: Transforming data: <{}>:<{}>",
-            key.origin.get_table_name(),
-            key.uuid
-        );
-        for transform in transforms.iter() {
-            // Check what transforms apply to these keys
-            let transformed_data: Option<LifelogData> = match transform {
-                LifelogTransform::OcrTransform(transform) => {
-                    if key.origin == transform.source() {
-                        let mut result = transform
-                                .apply(data_to_transform.clone().try_into().expect("Data source is not a lifelog image!"))
-                                .expect(format!("This should never error because the origins {} {} are the same", key.origin, transform.source()).as_str());
-
-                        result.uuid = key.uuid; // NOTE: THIS IS IMPORTANT. THIS NEEDS TO BE FIXED
-                                                // WITH A CODE REFACTOR
-                        Some(result.into())
-                    } else {
-                        None
-                    }
-                }
-            };
-            let transformed_data = match transformed_data {
-                Some(data) => data,
-                None => continue,
-            };
-            match transformed_data {
-                LifelogData::OcrFrame(ocr_frame) => {
-                    add_data_to_db::<OcrFrame, OcrFrameSurreal>(
-                        &db,
-                        ocr_frame,
-                        &transform.destination(),
-                    )
-                    .await
-                    .unwrap();
-                }
-                _ => unimplemented!(),
-            }
-        }
-    }
-}
-
-async fn get_data_by_key(
-    db: &Surreal<Client>,
-    key: &LifelogFrameKey,
-) -> Result<LifelogData, anyhow::Error> {
-    match key.origin.modality {
-        DataModality::Screen => {
-            let row: Option<ScreenFrameSurreal> = db
-                .select((key.origin.get_table_name(), key.uuid.to_string()))
-                .await?;
-            let mut screen_frame: ScreenFrame = row
-                .expect(
-                    format!(
-                        "Unabled to find record <{}>:<{}>",
-                        key.origin.get_table_name(),
-                        key.uuid
-                    )
-                    .as_str(),
-                )
-                .into();
-            screen_frame.uuid = key.uuid; //NOTE: This is important. This needs to be fixed with a code refactor
-            Ok(screen_frame.into())
-        }
-        DataModality::Ocr => {
-            let row: Option<OcrFrameSurreal> = db
-                .select((key.origin.get_table_name(), key.uuid.to_string()))
-                .await?;
-            let mut ocr_frame: OcrFrame = row
-                .expect(
-                    format!(
-                        "Unabled to find record <{}>:<{}>",
-                        key.origin.get_table_name(),
-                        key.uuid
-                    )
-                    .as_str(),
-                )
-                .into();
-            ocr_frame.uuid = key.uuid; //NOTE: This is important. This needs to be fixed with a code refactor
-            Ok(ocr_frame.into())
-        }
-        DataModality::Browser => {
-            let row: Option<BrowserFrameSurreal> = db
-                .select((key.origin.get_table_name(), key.uuid.to_string()))
-                .await?;
-            let mut browser_frame: BrowserFrame = row
-                .expect(
-                    format!(
-                        "Unabled to find record <{}>:<{}>",
-                        key.origin.get_table_name(),
-                        key.uuid
-                    )
-                    .as_str(),
-                )
-                .into();
-            browser_frame.uuid = key.uuid; //NOTE: This is important. This needs to be fixed with a code refactor
-            Ok(browser_frame.into())
-        }
-    }
-}
-
-async fn add_data_to_db<LifelogType, SurrealType>(
-    db: &Surreal<Client>,
-    data: LifelogType,
-    data_origin: &DataOrigin,
-) -> surrealdb::Result<SurrealType>
-where
-    LifelogType: Into<SurrealType> + DataType,
-    SurrealType: Serialize + DeserializeOwned + 'static,
-{
-    let uuid = data.uuid();
-    let table = format!("{}", data_origin.get_table_name());
-    ensure_table(&db, &data_origin).await.unwrap();
-    let data: SurrealType = data.into();
-    let record: Result<Option<SurrealType>, Error> = db
-        .create((table.clone(), uuid.to_string()))
-        .content(data)
-        .await;
-    println!("[SURREAL]: Created <{}:{}>", table, uuid);
-    match record {
-        Err(e) => {
-            eprintln!("{}", e);
-            Err(e)
-        }
-        Ok(record) => {
-            let record = record.expect(format!("Unable to create row in table {}", table).as_str());
-            Ok(record)
         }
     }
 }
@@ -1617,37 +604,4 @@ impl From<OcrFrame> for LifelogData {
     fn from(v: OcrFrame) -> Self {
         Self::OcrFrame(v)
     }
-}
-
-pub async fn get_tables(db: &Surreal<Client>) -> Result<Vec<String>, LifelogError> {
-    #[derive(serde::Deserialize)]
-    struct Info {
-        tables: std::collections::HashMap<String, serde_json::Value>,
-    }
-
-    let mut resp = db
-        .query("INFO FOR DB")
-        .await
-        .map_err(|e| LifelogError::Database(format!("{}", e)))?;
-
-    let info: Option<Info> = resp
-        .take(0)
-        .map_err(|e| LifelogError::Database(format!("{}", e)))?;
-    let info = info.ok_or_else(|| LifelogError::Database("INFO FOR DB failed!!!".to_string()))?;
-    Ok(info.tables.keys().cloned().collect())
-}
-
-async fn get_origins_from_db(db: &Surreal<Client>) -> Result<Vec<DataOrigin>, LifelogError> {
-    let tables = get_tables(&db).await?;
-    let origins = tables
-        .iter()
-        .map(|table| {
-            let origin = DataOrigin::tryfrom_string(table.clone());
-            origin
-        })
-        .filter(Result::is_ok)
-        .map(|origin| origin.expect("this should never happen"))
-        .collect::<Vec<DataOrigin>>();
-
-    Ok(origins)
 }
