@@ -204,9 +204,9 @@ impl ServerHandle {
         server.report_collector_state(state).await
     }
 
-    pub async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+    pub async fn process_query(&self, query: Query) -> Result<Vec<LifelogFrameKey>, LifelogError> {
         println!(
-            "[PROCESS_QUERY]: Requesting server lock for query {}",
+            "[PROCESS_QUERY]: Requesting server lock for query {:?}",
             query
         );
         self.server.read().await.process_query(query).await
@@ -437,19 +437,14 @@ impl LifelogServerService for GRPCServerLifelogServerService {
     ) -> Result<Response<QueryResponse>, Status> {
         let query_message = request.into_inner().query;
         println!("[QUERY] Received a query request: {:?}", query_message);
-        let server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
+        // let server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking // Unused
 
-        let mut uuids: Vec<LifelogFrameKey> = vec![];
-        // NOTE: Right now we just return all uuids for a query, in the future actually parse the
-        // query message and return the uuids that match
-        let query = String::from("");
-        let keys = self
-            .server
-            .process_query(query.clone())
-            .await
-            .map_err(|e| {
-                tonic::Status::internal(format!("Failed to process query: {}", e.to_string()))
-            })?;
+        let query =
+            query_message.ok_or_else(|| Status::invalid_argument("Query message is required"))?;
+
+        let keys = self.server.process_query(query).await.map_err(|e| {
+            tonic::Status::internal(format!("Failed to process query: {}", e.to_string()))
+        })?;
         let proto_keys: Vec<lifelog_proto::LifelogDataKey> = keys
             .iter()
             .map(|key| lifelog_proto::LifelogDataKey {
@@ -671,71 +666,41 @@ impl Server {
         }
     }
 
-    async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+    async fn process_query(&self, query: Query) -> Result<Vec<LifelogFrameKey>, LifelogError> {
         println!(
-            "[SERVER PROCESS_QUERY] Entered process_query for query: {}",
+            "[SERVER PROCESS_QUERY] Entered process_query for query: {:?}",
             query
         );
-        let mut keys: Vec<LifelogFrameKey> = vec![];
-        // println!("asdfadsfasdf"); // Original debug print, can be removed or kept
 
         println!("[SERVER PROCESS_QUERY] Attempting to get write lock on self.origins...");
-        let mut origins = self.origins.write().await;
-        println!("[SERVER PROCESS_QUERY] Acquired write lock on self.origins.");
+        let origins_list = {
+            let mut origins = self.origins.write().await;
+            println!("[SERVER PROCESS_QUERY] Acquired write lock on self.origins.");
 
-        println!("[SERVER PROCESS_QUERY] Calling get_origins_from_db...");
-        match get_origins_from_db(&self.db).await {
-            Ok(db_origins) => {
-                println!(
-                    "[SERVER PROCESS_QUERY] Successfully got origins from DB: {:?}",
-                    db_origins.len()
-                );
-                *origins = db_origins;
-            }
-            Err(e) => {
-                eprintln!(
-                    "[SERVER PROCESS_QUERY] Failed to get origins from DB: {}",
-                    e
-                );
-                return Err(LifelogError::Other(anyhow::anyhow!(
-                    "Failed to refresh origins from DB: {}",
-                    e
-                )));
-            }
-        }
-
-        println!(
-            "[SERVER PROCESS_QUERY] Iterating over {} origins.",
-            origins.len()
-        );
-        for origin in origins.iter() {
-            println!("[SERVER PROCESS_QUERY]: Looking at origin {}", origin);
-            match get_all_uuids_from_origin(&self.db, &origin).await {
-                Ok(uuids_from_origin) => {
-                    keys.extend(uuids_from_origin.iter().map(|uuid| LifelogFrameKey {
-                        uuid: *uuid,
-                        origin: origin.clone(),
-                    }));
+            println!("[SERVER PROCESS_QUERY] Calling get_origins_from_db...");
+            match get_origins_from_db(&self.db).await {
+                Ok(db_origins) => {
+                    println!(
+                        "[SERVER PROCESS_QUERY] Successfully got origins from DB: {:?}",
+                        db_origins.len()
+                    );
+                    *origins = db_origins;
                 }
                 Err(e) => {
                     eprintln!(
-                        "[SERVER PROCESS_QUERY] Failed to get uuids from origin {}: {}",
-                        origin, e
+                        "[SERVER PROCESS_QUERY] Failed to get origins from DB: {}",
+                        e
                     );
-                    // Decide if we should continue or return an error for the whole query
-                    // For now, let's log and continue, accumulating partial results
-                    // return Err(LifelogError::Database(format!(
-                    //     "Failed to get uuids from origin: {}",
-                    //     e
-                    // )));
+                    return Err(LifelogError::Other(anyhow::anyhow!(
+                        "Failed to refresh origins from DB: {}",
+                        e
+                    )));
                 }
             }
-        }
-        println!(
-            "[SERVER PROCESS_QUERY] Finished processing. Returning {} keys.",
-            keys.len()
-        );
-        Ok(keys)
+            origins.clone()
+        };
+
+        crate::query::execute_query(&self.db, &query, &origins_list).await
     }
 
     async fn add_audit_log(&self, action: &ServerAction) {

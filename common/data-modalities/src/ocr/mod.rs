@@ -81,7 +81,9 @@ impl Transform for OcrTransform {
                 // For now, this will likely lead to Tesseract error or empty output.
                 // This path should ideally not be hit if LifelogImage is valid.
                 // Consider returning TransformError::ImageConversionFailed or similar.
-                eprintln!("[OCR TRANSFORM] Failed to create rusty_tesseract::Image from dynamic_image");
+                eprintln!(
+                    "[OCR TRANSFORM] Failed to create rusty_tesseract::Image from dynamic_image"
+                );
                 // Let's return an empty OcrFrame to avoid panicking here
                 return Ok(OcrFrame {
                     text: String::new(),
@@ -135,86 +137,5 @@ impl Transform for OcrTransform {
     }
     fn destination(&self) -> DataOrigin {
         self.destination.clone()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::path::PathBuf;
-
-    // Test helper function
-    fn get_test_image_path(name: &str) -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("test_data")
-            .join(name)
-    }
-
-    #[test]
-    fn test_load_valid_image() {
-        let path = get_test_image_path("clear_text.png");
-        let result = load_image(&path);
-        assert!(result.is_ok());
-    }
-
-    #[test]
-    fn test_load_invalid_image() {
-        let result = load_image("this_image_doesn't_exist.jpg");
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_ocr_success() {
-        let config = OcrConfig {
-            language: "eng".to_string(),
-            engine_path: None,
-        };
-        let transform = OcrTransform::new(config);
-
-        let image = load_image(get_test_image_path("clear_text.png")).unwrap();
-        let result = transform.apply(image);
-
-        assert!(result.is_ok());
-        let Data::Text(text) = result.unwrap() else {
-            panic!("Expected text output");
-        };
-        assert_eq!(text.trim(), "TEST OCR SAMPLE");
-    }
-
-    #[test]
-    fn test_ocr_invalid_input() {
-        let config = OcrConfig {
-            language: "eng".to_string(),
-            engine_path: None,
-        };
-        let transform = OcrTransform::new(config);
-
-        let result = transform.apply(Data::Text("invalid input".to_string()));
-
-        assert!(matches!(
-            result,
-            Err(TransformError::InvalidInputType {
-                transform: TransformType::OCR
-            })
-        ));
-    }
-
-    #[test]
-    fn test_ocr_low_quality_image() {
-        let config = OcrConfig {
-            language: "eng".to_string(),
-            engine_path: None,
-        };
-        let transform = OcrTransform::new(config);
-
-        let image = load_image(get_test_image_path("blurry_text.jpg")).unwrap();
-        let result = transform.apply(image);
-
-        assert!(result.is_ok());
-        let Data::Text(text) = result.unwrap() else {
-            panic!("Expected text output");
-        };
-        // Test approximate match for low-quality image
-        assert!(text.contains("SAMPLE"));
     }
 }

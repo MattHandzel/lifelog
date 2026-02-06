@@ -11,19 +11,16 @@ use base64;
 use base64::{engine::general_purpose, Engine as _};
 
 use config::{MicrophoneConfig, ProcessesConfig, ScreenConfig, TextUploadConfig};
-use lifelog_interface_lib::{
-    api_client,
-    config_utils,
-};
+use lifelog_interface_lib::{api_client, config_utils};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::Arc;
 use std::sync::Mutex;
 use tauri::State;
-use serde_json::Value;
-use tonic::transport::Channel;
-use std::sync::Arc;
 use tokio::time::{timeout, Duration};
+use tonic::transport::Channel;
 
 pub mod google {
     pub mod protobuf {
@@ -201,8 +198,12 @@ async fn upload_text_file(
         .text("file_path", file_path.clone())
         .part(
             "file",
-            reqwest::multipart::Part::bytes(file_content)
-                .file_name(path.file_name().unwrap_or_default().to_string_lossy().into_owned()),
+            reqwest::multipart::Part::bytes(file_content).file_name(
+                path.file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
         );
 
     let url = format!("{}/api/loggers/text/upload", api_client::get_api_base_url());
@@ -234,19 +235,47 @@ async fn upload_text_file(
     let file_data = data.data.ok_or("No file data returned from server")?;
 
     Ok(TextFile {
-        filename: file_data.get("filename").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-        original_path: file_data.get("original_path").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-        file_type: file_data.get("file_type").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-        file_size: file_data.get("file_size").and_then(|v| v.as_u64()).unwrap_or_default(),
-        stored_path: file_data.get("stored_path").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
-        content_hash: file_data.get("content_hash").and_then(|v| v.as_str()).unwrap_or_default().to_string(),
+        filename: file_data
+            .get("filename")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        original_path: file_data
+            .get("original_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        file_type: file_data
+            .get("file_type")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        file_size: file_data
+            .get("file_size")
+            .and_then(|v| v.as_u64())
+            .unwrap_or_default(),
+        stored_path: file_data
+            .get("stored_path")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        content_hash: file_data
+            .get("content_hash")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
     })
 }
 
 // Process commands
 #[tauri::command]
-async fn get_current_processes(state: State<'_, AppState>) -> Result<Vec<serde_json::Value>, String> {
-    let url = format!("{}/api/loggers/processes/current", api_client::get_api_base_url());
+async fn get_current_processes(
+    state: State<'_, AppState>,
+) -> Result<Vec<serde_json::Value>, String> {
+    let url = format!(
+        "{}/api/loggers/processes/current",
+        api_client::get_api_base_url()
+    );
 
     let response = state
         .api_client
@@ -282,24 +311,27 @@ async fn get_process_history(
     process_name: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let mut url = format!("{}/api/loggers/processes/data?", api_client::get_api_base_url());
-    
+    let mut url = format!(
+        "{}/api/loggers/processes/data?",
+        api_client::get_api_base_url()
+    );
+
     if let Some(start) = start_time {
         url.push_str(&format!("start_time={}&", start));
     }
-    
+
     if let Some(end) = end_time {
         url.push_str(&format!("end_time={}&", end));
     }
-    
+
     if let Some(limit_val) = limit {
         url.push_str(&format!("limit={}&", limit_val));
     }
-    
+
     if let Some(name) = process_name {
         url.push_str(&format!("process_name={}&", name));
     }
-    
+
     if url.ends_with('&') {
         url.pop();
     }
@@ -374,7 +406,7 @@ async fn get_screenshots(
             let id = item.get("id")?.as_i64()? as i32;
             let timestamp = item.get("timestamp")?.as_f64()?;
             let path = item.get("path")?.as_str()?.to_string();
-            
+
             Some(Screenshot {
                 id,
                 timestamp,
@@ -457,7 +489,10 @@ async fn update_screenshot_settings(
     }
 
     // Update local config
-    let mut config = state.screen_config.lock().expect("Failed to lock screen_config for update");
+    let mut config = state
+        .screen_config
+        .lock()
+        .expect("Failed to lock screen_config for update");
     config.enabled = enabled;
     config.interval = interval;
 
@@ -465,7 +500,10 @@ async fn update_screenshot_settings(
 }
 
 #[tauri::command]
-async fn get_screenshot_data(filename: String, state: State<'_, AppState>) -> Result<String, String> {
+async fn get_screenshot_data(
+    filename: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
     let url = format!(
         "{}/api/files/screen/{}",
         api_client::get_api_base_url(),
@@ -499,7 +537,10 @@ async fn get_screenshot_data(filename: String, state: State<'_, AppState>) -> Re
 async fn stop_screen_capture(state: State<'_, AppState>) -> Result<(), String> {
     let response = state
         .api_client
-        .post(&format!("{}/api/loggers/screen/stop", api_client::get_api_base_url()))
+        .post(&format!(
+            "{}/api/loggers/screen/stop",
+            api_client::get_api_base_url()
+        ))
         .send()
         .await
         .map_err(|e| format!("Failed to send request: {}", e))?;
@@ -520,16 +561,19 @@ async fn start_screen_capture(
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let mut payload = serde_json::json!({});
-    
+
     if let Some(interval_val) = interval {
         payload = serde_json::json!({
             "interval": interval_val
         });
     }
-    
+
     let response = state
         .api_client
-        .post(&format!("{}/api/loggers/screen/start", api_client::get_api_base_url()))
+        .post(&format!(
+            "{}/api/loggers/screen/start",
+            api_client::get_api_base_url()
+        ))
         .json(&payload)
         .send()
         .await
@@ -633,7 +677,9 @@ async fn get_camera_settings(
     config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
 ) -> Result<serde_json::Value, String> {
     let camera_config = {
-        let config_manager = config_manager.lock().expect("Failed to lock config_manager for camera status poll");
+        let config_manager = config_manager
+            .lock()
+            .expect("Failed to lock config_manager for camera status poll");
         config_manager.get_camera_config()
     };
 
@@ -657,8 +703,11 @@ async fn update_camera_settings(
     config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let url = format!("{}/api/loggers/camera/config", api_client::get_api_base_url());
-    
+    let url = format!(
+        "{}/api/loggers/camera/config",
+        api_client::get_api_base_url()
+    );
+
     let payload = serde_json::json!({
         "enabled": enabled,
         "interval": interval,
@@ -681,7 +730,9 @@ async fn update_camera_settings(
     }
 
     {
-        let mut config_manager = config_manager.lock().expect("Failed to lock config_manager for camera status poll");
+        let mut config_manager = config_manager
+            .lock()
+            .expect("Failed to lock config_manager for camera status poll");
         let mut camera_config = config_manager.get_camera_config();
 
         camera_config.enabled = enabled;
@@ -736,7 +787,10 @@ async fn get_camera_frames(
 }
 
 #[tauri::command]
-async fn get_camera_frame_data(filename: String, state: State<'_, AppState>) -> Result<String, String> {
+async fn get_camera_frame_data(
+    filename: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
     let url = format!(
         "{}/api/files/camera/{}",
         api_client::get_api_base_url(),
@@ -764,7 +818,7 @@ async fn get_camera_frame_data(filename: String, state: State<'_, AppState>) -> 
         .map_err(|e| format!("Failed to get response bytes: {}", e))?;
 
     let base64_data = general_purpose::STANDARD.encode(&bytes);
-    
+
     let mime_type = "image/jpeg";
     Ok(format!("data:{};base64,{}", mime_type, base64_data))
 }
@@ -774,8 +828,11 @@ async fn trigger_camera_capture(
     _config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let url = format!("{}/api/loggers/camera/capture", api_client::get_api_base_url());
-    
+    let url = format!(
+        "{}/api/loggers/camera/capture",
+        api_client::get_api_base_url()
+    );
+
     let response = state
         .api_client
         .post(&url)
@@ -798,8 +855,11 @@ async fn restart_camera_logger(
     _config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let url = format!("{}/api/loggers/camera/restart", api_client::get_api_base_url());
-    
+    let url = format!(
+        "{}/api/loggers/camera/restart",
+        api_client::get_api_base_url()
+    );
+
     let response = state
         .api_client
         .post(&url)
@@ -827,7 +887,10 @@ async fn restart_camera_logger(
 
 #[tauri::command]
 async fn get_microphone_settings(state: State<'_, AppState>) -> Result<MicrophoneConfig, String> {
-    let url = format!("{}/api/loggers/microphone/config", api_client::get_api_base_url());
+    let url = format!(
+        "{}/api/loggers/microphone/config",
+        api_client::get_api_base_url()
+    );
 
     let response = state
         .api_client
@@ -863,8 +926,11 @@ async fn get_microphone_settings(state: State<'_, AppState>) -> Result<Microphon
 
 #[tauri::command]
 async fn start_microphone_recording(state: State<'_, AppState>) -> Result<(), String> {
-    let url = format!("{}/api/loggers/microphone/record/start", api_client::get_api_base_url());
-    
+    let url = format!(
+        "{}/api/loggers/microphone/record/start",
+        api_client::get_api_base_url()
+    );
+
     let response = state
         .api_client
         .post(&url)
@@ -884,8 +950,11 @@ async fn start_microphone_recording(state: State<'_, AppState>) -> Result<(), St
 
 #[tauri::command]
 async fn stop_microphone_recording(state: State<'_, AppState>) -> Result<(), String> {
-    let url = format!("{}/api/loggers/microphone/record/stop", api_client::get_api_base_url());
-    
+    let url = format!(
+        "{}/api/loggers/microphone/record/stop",
+        api_client::get_api_base_url()
+    );
+
     let response = state
         .api_client
         .post(&url)
@@ -905,8 +974,11 @@ async fn stop_microphone_recording(state: State<'_, AppState>) -> Result<(), Str
 
 #[tauri::command]
 async fn pause_microphone_recording(state: State<'_, AppState>) -> Result<(), String> {
-    let url = format!("{}/api/loggers/microphone/record/pause", api_client::get_api_base_url());
-    
+    let url = format!(
+        "{}/api/loggers/microphone/record/pause",
+        api_client::get_api_base_url()
+    );
+
     let response = state
         .api_client
         .post(&url)
@@ -926,8 +998,11 @@ async fn pause_microphone_recording(state: State<'_, AppState>) -> Result<(), St
 
 #[tauri::command]
 async fn resume_microphone_recording(state: State<'_, AppState>) -> Result<(), String> {
-    let url = format!("{}/api/loggers/microphone/record/resume", api_client::get_api_base_url());
-    
+    let url = format!(
+        "{}/api/loggers/microphone/record/resume",
+        api_client::get_api_base_url()
+    );
+
     let response = state
         .api_client
         .post(&url)
@@ -947,9 +1022,9 @@ async fn resume_microphone_recording(state: State<'_, AppState>) -> Result<(), S
 
 #[tauri::command]
 async fn get_audio_files(
-    page: usize, 
+    page: usize,
     page_size: usize,
-    state: State<'_, AppState>
+    state: State<'_, AppState>,
 ) -> Result<Vec<AudioFile>, String> {
     let url = format!(
         "{}/api/loggers/microphone/data?page={}&pageSize={}",
@@ -992,24 +1067,27 @@ async fn get_all_processes(
     process_name: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Vec<serde_json::Value>, String> {
-    let mut url = format!("{}/api/loggers/processes/history?", api_client::get_api_base_url());
-    
+    let mut url = format!(
+        "{}/api/loggers/processes/history?",
+        api_client::get_api_base_url()
+    );
+
     if let Some(start) = start_time {
         url.push_str(&format!("start_time={}&", start));
     }
-    
+
     if let Some(end) = end_time {
         url.push_str(&format!("end_time={}&", end));
     }
-    
+
     if let Some(limit_val) = limit {
         url.push_str(&format!("limit={}&", limit_val));
     }
-    
+
     if let Some(name) = process_name {
         url.push_str(&format!("process_name={}&", name));
     }
-    
+
     if url.ends_with('&') {
         url.pop();
     }
@@ -1047,13 +1125,16 @@ async fn update_microphone_settings(
     capture_interval_secs: Option<u64>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let url = format!("{}/api/loggers/microphone/config", api_client::get_api_base_url());
-    
+    let url = format!(
+        "{}/api/loggers/microphone/config",
+        api_client::get_api_base_url()
+    );
+
     let mut payload = serde_json::json!({
         "enabled": enabled,
         "chunk_duration_secs": chunk_duration_secs
     });
-    
+
     if let Some(interval) = capture_interval_secs {
         payload["capture_interval_secs"] = serde_json::json!(interval);
     }
@@ -1079,59 +1160,103 @@ async fn update_microphone_settings(
 const GRPC_SERVER_ADDRESS: &str = "http://localhost:7182";
 
 #[tauri::command]
-async fn get_component_config(collector_id: String, component_type: String) -> Result<Value, String> {
-    println!("Attempting to get config for collector '{}', component type '{}' via ServerService", collector_id, component_type);
-    println!("gRPC: get_component_config - connecting to {}", GRPC_SERVER_ADDRESS);
+async fn get_component_config(
+    collector_id: String,
+    component_type: String,
+) -> Result<Value, String> {
+    println!(
+        "Attempting to get config for collector '{}', component type '{}' via ServerService",
+        collector_id, component_type
+    );
+    println!(
+        "gRPC: get_component_config - connecting to {}",
+        GRPC_SERVER_ADDRESS
+    );
     let channel = Channel::from_static(GRPC_SERVER_ADDRESS)
         .connect()
         .await
         .map_err(|e| format!("Failed to connect to gRPC server: {}", e))?;
     println!("gRPC: get_component_config - connection established");
     let mut client = lifelog::LifelogServerServiceClient::new(channel);
-    
-    let request = tonic::Request::new(lifelog::GetSystemConfigRequest {});
-    println!("gRPC: get_component_config - sending GetSystemConfigRequest: {:?}", request);
 
-    match client.get_config(request).await { // Changed to get_config
+    let request = tonic::Request::new(lifelog::GetSystemConfigRequest {});
+    println!(
+        "gRPC: get_component_config - sending GetSystemConfigRequest: {:?}",
+        request
+    );
+
+    match client.get_config(request).await {
+        // Changed to get_config
         Ok(response) => {
             println!("gRPC: get_component_config - received GetSystemConfigResponse");
-            let system_config = response.into_inner().config.ok_or_else(|| {
-                "Server response did not contain SystemConfig data".to_string()
-            })?;
+            let system_config = response
+                .into_inner()
+                .config
+                .ok_or_else(|| "Server response did not contain SystemConfig data".to_string())?;
 
-            let target_collector_config = system_config.collectors.get(&collector_id).ok_or_else(|| {
-                format!("No collector found with ID '{}' in SystemConfig", collector_id)
-            })?;
+            let target_collector_config =
+                system_config.collectors.get(&collector_id).ok_or_else(|| {
+                    format!(
+                        "No collector found with ID '{}' in SystemConfig",
+                        collector_id
+                    )
+                })?;
 
-            println!("gRPC: get_component_config - using collector config for '{}': {:?}", collector_id, target_collector_config);
+            println!(
+                "gRPC: get_component_config - using collector config for '{}': {:?}",
+                collector_id, target_collector_config
+            );
 
             let component_value = match component_type.to_lowercase().as_str() {
                 "screen" => serde_json::to_value(target_collector_config.screen.as_ref())
                     .map_err(|e| format!("Failed to serialize screen config: {}", e))?,
                 "camera" => serde_json::to_value(target_collector_config.camera.as_ref())
                     .map_err(|e| format!("Failed to serialize camera config: {}", e))?,
-                "microphone" => serde_json::to_value(target_collector_config.microphone.as_ref())
-                    .map_err(|e| format!("Failed to serialize microphone config: {}", e))?,
+                "microphone" => {
+                    serde_json::to_value(target_collector_config.microphone.as_ref())
+                        .map_err(|e| format!("Failed to serialize microphone config: {}", e))?
+                }
                 "processes" => serde_json::to_value(target_collector_config.processes.as_ref())
                     .map_err(|e| format!("Failed to serialize processes config: {}", e))?,
                 "hyprland" => serde_json::to_value(target_collector_config.hyprland.as_ref())
                     .map_err(|e| format!("Failed to serialize hyprland config: {}", e))?,
-                _ => return Err(format!("Unknown component type '{}' for config lookup", component_type)),
+                _ => {
+                    return Err(format!(
+                        "Unknown component type '{}' for config lookup",
+                        component_type
+                    ))
+                }
             };
             println!("gRPC: get_component_config - returning component '{}' from collector '{}' value: {:?}", component_type, collector_id, component_value);
             Ok(component_value)
         }
         Err(e) => {
-            println!("gRPC: get_component_config: error from server (get_config call): {:?}", e);
-            Err(format!("ServerService GetSystemConfig gRPC request failed: {}", e))
+            println!(
+                "gRPC: get_component_config: error from server (get_config call): {:?}",
+                e
+            );
+            Err(format!(
+                "ServerService GetSystemConfig gRPC request failed: {}",
+                e
+            ))
         }
     }
 }
 
 #[tauri::command]
-async fn set_component_config(collector_id: String, component_type: String, config_value: Value) -> Result<(), String> {
-    println!("gRPC: set_component_config - connecting to {}", GRPC_SERVER_ADDRESS);
-    println!("Attempting to set config for collector '{}', component type '{}' with data: {:?}", collector_id, component_type, config_value);
+async fn set_component_config(
+    collector_id: String,
+    component_type: String,
+    config_value: Value,
+) -> Result<(), String> {
+    println!(
+        "gRPC: set_component_config - connecting to {}",
+        GRPC_SERVER_ADDRESS
+    );
+    println!(
+        "Attempting to set config for collector '{}', component type '{}' with data: {:?}",
+        collector_id, component_type, config_value
+    );
     let channel = Channel::from_static(GRPC_SERVER_ADDRESS)
         .connect()
         .await
@@ -1144,10 +1269,14 @@ async fn set_component_config(collector_id: String, component_type: String, conf
         .get_config(get_request)
         .await
         .map_err(|e| format!("Failed to get current SystemConfig: {}", e))?;
-    println!("gRPC: set_component_config - RPC get_config succeeded: {:?}", get_response);
-    let system_config = get_response.into_inner().config.ok_or_else(|| {
-        "Server response did not contain SystemConfig data".to_string()
-    })?;
+    println!(
+        "gRPC: set_component_config - RPC get_config succeeded: {:?}",
+        get_response
+    );
+    let system_config = get_response
+        .into_inner()
+        .config
+        .ok_or_else(|| "Server response did not contain SystemConfig data".to_string())?;
 
     let mut target_collector_config = system_config.collectors.get(&collector_id).cloned()
         .unwrap_or_else(|| {
@@ -1158,7 +1287,10 @@ async fn set_component_config(collector_id: String, component_type: String, conf
             }
         });
 
-    println!("gRPC: set_component_config - starting with CollectorConfig for ID '{}': {:?}", collector_id, target_collector_config);
+    println!(
+        "gRPC: set_component_config - starting with CollectorConfig for ID '{}': {:?}",
+        collector_id, target_collector_config
+    );
 
     match component_type.to_lowercase().as_str() {
         "screen" => {
@@ -1167,7 +1299,7 @@ async fn set_component_config(collector_id: String, component_type: String, conf
             target_collector_config.screen = Some(lifelog::ScreenConfig {
                 enabled: local_conf.enabled,
                 interval: local_conf.interval,
-                output_dir: local_conf.output_dir.to_string_lossy().into_owned(), 
+                output_dir: local_conf.output_dir.to_string_lossy().into_owned(),
                 program: local_conf.program,
                 timestamp_format: local_conf.timestamp_format,
             });
@@ -1223,19 +1355,27 @@ async fn set_component_config(collector_id: String, component_type: String, conf
                 log_devices: local_conf.log_devices,
             });
         }
-        _ => return Err(format!("Unknown component type '{}' for setting config", component_type)),
+        _ => {
+            return Err(format!(
+                "Unknown component type '{}' for setting config",
+                component_type
+            ))
+        }
     }
-    
+
     println!("gRPC: set_component_config - sending modified CollectorConfig (via SetSystemConfigRequest) for ID '{}': {:?}", collector_id, target_collector_config);
-    
+
     let set_request = tonic::Request::new(lifelog::SetSystemConfigRequest {
-        config: Some(target_collector_config.clone()), 
+        config: Some(target_collector_config.clone()),
     });
     let set_response = client
         .set_config(set_request)
         .await
         .map_err(|e| format!("ServerService SetConfig gRPC request failed: {}", e))?;
-    println!("gRPC: set_component_config - RPC set_config succeeded: {:?}", set_response);
+    println!(
+        "gRPC: set_component_config - RPC set_config succeeded: {:?}",
+        set_response
+    );
     let success_flag = set_response.into_inner().success;
     if !success_flag {
         return Err("Server failed to apply the new configuration.".to_string());
@@ -1266,11 +1406,10 @@ impl From<LifelogDataKeyWrapper> for lifelog::LifelogDataKey {
     }
 }
 
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct ScreenFrameWrapper {
     uuid: String,
-    timestamp: Option<i64>, 
+    timestamp: Option<i64>,
     width: u32,
     height: u32,
     dataUrl: String,
@@ -1281,7 +1420,10 @@ async fn query_screenshot_keys_async(
     grpc_client: &mut lifelog::LifelogServerServiceClient<Channel>,
     collector_id: Option<String>,
 ) -> Result<Vec<LifelogDataKeyWrapper>, String> {
-    println!("[TAURI] query_screenshot_keys_async: received collector_id: {:?}", collector_id);
+    println!(
+        "[TAURI] query_screenshot_keys_async: received collector_id: {:?}",
+        collector_id
+    );
 
     let mut query_message = lifelog::Query {
         search_origins: Vec::new(),
@@ -1294,7 +1436,8 @@ async fn query_screenshot_keys_async(
 
     if let Some(id_str) = collector_id.as_deref() {
         if !id_str.is_empty() && id_str != "undefined" && id_str != "null" {
-            let origin_string = format!("{}:{}", id_str, lifelog::DataModality::Screen.as_str_name());
+            let origin_string =
+                format!("{}:{}", id_str, lifelog::DataModality::Screen.as_str_name());
             query_message.search_origins = vec![origin_string.clone()];
             println!("[TAURI] query_screenshot_keys_async: constructed search_origins: {:?}, return_origins: [] (simplified)", query_message.search_origins);
         } else {
@@ -1307,20 +1450,37 @@ async fn query_screenshot_keys_async(
     let request = tonic::Request::new(lifelog::QueryRequest {
         query: Some(query_message),
     });
-    println!("[TAURI] query_screenshot_keys_async: sending Simplified QueryRequest: {:?}", request);
+    println!(
+        "[TAURI] query_screenshot_keys_async: sending Simplified QueryRequest: {:?}",
+        request
+    );
 
     const QUERY_TIMEOUT_SECONDS: u64 = 15;
 
-    println!("[TAURI] query_screenshot_keys_async: Entering timeout block ({}s)...", QUERY_TIMEOUT_SECONDS);
-    match timeout(Duration::from_secs(QUERY_TIMEOUT_SECONDS), grpc_client.query(request)).await {
+    println!(
+        "[TAURI] query_screenshot_keys_async: Entering timeout block ({}s)...",
+        QUERY_TIMEOUT_SECONDS
+    );
+    match timeout(
+        Duration::from_secs(QUERY_TIMEOUT_SECONDS),
+        grpc_client.query(request),
+    )
+    .await
+    {
         Ok(inner_result) => {
             println!("[TAURI] query_screenshot_keys_async: Exited gRPC call future (before inner match).");
             match inner_result {
                 Ok(response) => {
                     let keys = response.into_inner().keys;
-                    println!("[TAURI] query_screenshot_keys_async: received {} keys from server.", keys.len());
+                    println!(
+                        "[TAURI] query_screenshot_keys_async: received {} keys from server.",
+                        keys.len()
+                    );
                     if !keys.is_empty() {
-                        println!("[TAURI] query_screenshot_keys_async: first key: {:?}", keys.first());
+                        println!(
+                            "[TAURI] query_screenshot_keys_async: first key: {:?}",
+                            keys.first()
+                        );
                     }
                     let wrapped_keys = keys
                         .into_iter()
@@ -1338,8 +1498,14 @@ async fn query_screenshot_keys_async(
             }
         }
         Err(_elapsed_error) => {
-            println!("[TAURI] query_screenshot_keys_async: query timed out after {} seconds.", QUERY_TIMEOUT_SECONDS);
-            Err(format!("Query to server timed out after {} seconds", QUERY_TIMEOUT_SECONDS))
+            println!(
+                "[TAURI] query_screenshot_keys_async: query timed out after {} seconds.",
+                QUERY_TIMEOUT_SECONDS
+            );
+            Err(format!(
+                "Query to server timed out after {} seconds",
+                QUERY_TIMEOUT_SECONDS
+            ))
         }
     }
 }
@@ -1350,14 +1516,16 @@ async fn query_screenshot_keys(
     state: tauri::State<'_, GrpcClientState>,
     collector_id: Option<String>,
 ) -> Result<Vec<LifelogDataKeyWrapper>, String> {
-    println!("[TAURI] query_screenshot_keys: invoked with collector_id: {:?}", collector_id);
+    println!(
+        "[TAURI] query_screenshot_keys: invoked with collector_id: {:?}",
+        collector_id
+    );
     let mut client_guard = state.client.lock().await;
     if let Some(client_instance) = client_guard.as_mut() {
         query_screenshot_keys_async(client_instance, collector_id).await
     } else {
         println!("[TAURI] query_screenshot_keys: gRPC client not initialized trying to reconnect");
-        match Channel::from_static(GRPC_SERVER_ADDRESS)
-            .connect().await {
+        match Channel::from_static(GRPC_SERVER_ADDRESS).connect().await {
             Ok(channel) => {
                 let new_client = lifelog::LifelogServerServiceClient::new(channel);
                 *client_guard = Some(new_client);
@@ -1376,12 +1544,18 @@ async fn get_screenshots_data_async(
     grpc_client: &mut lifelog::LifelogServerServiceClient<Channel>,
     keys: Vec<LifelogDataKeyWrapper>,
 ) -> Result<Vec<ScreenFrameWrapper>, String> {
-    println!("[TAURI] ENTERED get_screenshots_data_async with {} keys", keys.len());
+    println!(
+        "[TAURI] ENTERED get_screenshots_data_async with {} keys",
+        keys.len()
+    );
     if keys.is_empty() {
         println!("[TAURI] get_screenshots_data_async: received empty keys, returning empty vec.");
         return Ok(Vec::new());
     }
-    println!("[TAURI] get_screenshots_data_async: received {} total keys to process in batches.", keys.len());
+    println!(
+        "[TAURI] get_screenshots_data_async: received {} total keys to process in batches.",
+        keys.len()
+    );
 
     let batch_size = 1;
     let mut all_screen_frames: Vec<ScreenFrameWrapper> = Vec::new();
@@ -1397,23 +1571,32 @@ async fn get_screenshots_data_async(
             .collect();
 
         if current_batch_keys.is_empty() {
-            continue;   
+            continue;
         }
 
-        println!("[TAURI] get_screenshots_data_async: sending GetDataRequest for a batch of {} keys.", current_batch_keys.len());
-        let request = tonic::Request::new(lifelog::GetDataRequest { keys: current_batch_keys });
+        println!(
+            "[TAURI] get_screenshots_data_async: sending GetDataRequest for a batch of {} keys.",
+            current_batch_keys.len()
+        );
+        let request = tonic::Request::new(lifelog::GetDataRequest {
+            keys: current_batch_keys,
+        });
 
         const GET_DATA_TIMEOUT_SECONDS: u64 = 15;
 
-        match timeout(Duration::from_secs(GET_DATA_TIMEOUT_SECONDS), grpc_client.get_data(request)).await {
-            Ok(inner_result) => { 
-                match inner_result {
-                    Ok(response) => { 
-                        println!("[TAURI] get_screenshots_data_async: successfully received response for batch.");
-                        let data_response = response.into_inner();
-                        println!("[TAURI] get_screenshots_data_async: received {} data items from server for current batch.", data_response.data.len());
+        match timeout(
+            Duration::from_secs(GET_DATA_TIMEOUT_SECONDS),
+            grpc_client.get_data(request),
+        )
+        .await
+        {
+            Ok(inner_result) => match inner_result {
+                Ok(response) => {
+                    println!("[TAURI] get_screenshots_data_async: successfully received response for batch.");
+                    let data_response = response.into_inner();
+                    println!("[TAURI] get_screenshots_data_async: received {} data items from server for current batch.", data_response.data.len());
 
-                        let screen_frames_batch: Vec<ScreenFrameWrapper> = data_response
+                    let screen_frames_batch: Vec<ScreenFrameWrapper> = data_response
                             .data
                             .into_iter()
                             .filter_map(|lifelog_data| {
@@ -1422,7 +1605,7 @@ async fn get_screenshots_data_async(
                                         lifelog::lifelog_data::Payload::Screenframe(proto_frame) => {
                                             println!("[TAURI] get_screenshots_data_async: processing Screenframe with uuid: {}", 
                                                 if proto_frame.uuid.is_empty() { "no_uuid_provided".to_string() } else { proto_frame.uuid.clone() });
-                                            
+
                                             let _timestamp_nanos = proto_frame.timestamp.as_ref().map_or(0, |ts| ts.nanos);
                                             let timestamp_secs = proto_frame.timestamp.as_ref().map_or(0, |ts| ts.seconds);
 
@@ -1458,17 +1641,19 @@ async fn get_screenshots_data_async(
                                 }
                             })
                             .collect();
-                        all_screen_frames.extend(screen_frames_batch);
-                    }
-                    Err(e) => { 
-                        println!("[TAURI] get_screenshots_data_async: received ERROR for batch (gRPC status): {:?}", e);
-                        return Err(format!("Failed to get data for a batch: {}", e)); 
-                    }
+                    all_screen_frames.extend(screen_frames_batch);
                 }
-            }
-            Err(_elapsed_error) => { 
+                Err(e) => {
+                    println!("[TAURI] get_screenshots_data_async: received ERROR for batch (gRPC status): {:?}", e);
+                    return Err(format!("Failed to get data for a batch: {}", e));
+                }
+            },
+            Err(_elapsed_error) => {
                 println!("[TAURI] get_screenshots_data_async: get_data for batch timed out after {} seconds.", GET_DATA_TIMEOUT_SECONDS);
-                return Err(format!("Fetching data timed out for a batch after {} seconds", GET_DATA_TIMEOUT_SECONDS));
+                return Err(format!(
+                    "Fetching data timed out for a batch after {} seconds",
+                    GET_DATA_TIMEOUT_SECONDS
+                ));
             }
         }
     }
@@ -1482,15 +1667,20 @@ async fn get_screenshots_data(
     state: tauri::State<'_, GrpcClientState>,
     keys: Vec<LifelogDataKeyWrapper>,
 ) -> Result<Vec<ScreenFrameWrapper>, String> {
-    println!("-----> [TAURI] ENTERED get_screenshots_data command function with {} keys.", keys.len());
-    println!("[TAURI] get_screenshots_data: invoked with {} keys.", keys.len());
+    println!(
+        "-----> [TAURI] ENTERED get_screenshots_data command function with {} keys.",
+        keys.len()
+    );
+    println!(
+        "[TAURI] get_screenshots_data: invoked with {} keys.",
+        keys.len()
+    );
     let mut client_guard = state.client.lock().await;
     if let Some(client_instance) = client_guard.as_mut() {
         get_screenshots_data_async(client_instance, keys).await
     } else {
         println!("[TAURI] get_screenshots_data: gRPC client not initialized trying to reconnect");
-        match Channel::from_static(GRPC_SERVER_ADDRESS)
-            .connect().await {
+        match Channel::from_static(GRPC_SERVER_ADDRESS).connect().await {
             Ok(channel) => {
                 let new_client = lifelog::LifelogServerServiceClient::new(channel);
                 *client_guard = Some(new_client);
@@ -1506,28 +1696,44 @@ async fn get_screenshots_data(
 }
 
 #[tauri::command]
-async fn get_collector_ids(state: tauri::State<'_, GrpcClientState>) -> Result<Vec<String>, String> {
+async fn get_collector_ids(
+    state: tauri::State<'_, GrpcClientState>,
+) -> Result<Vec<String>, String> {
     println!("[TAURI] get_collector_ids: invoked");
     let mut client_guard = state.client.lock().await;
     println!("[TAURI] get_collector_ids: client lock acquired");
 
     if let Some(client_instance) = client_guard.as_mut() {
-        println!("[TAURI] get_collector_ids: client instance obtained, preparing GetSystemConfigRequest");
+        println!(
+            "[TAURI] get_collector_ids: client instance obtained, preparing GetSystemConfigRequest"
+        );
         let request = tonic::Request::new(lifelog::GetSystemConfigRequest {});
         println!("[TAURI] get_collector_ids: sending GetSystemConfigRequest to server...");
         match client_instance.get_config(request).await {
             Ok(response) => {
-                println!("[TAURI] get_collector_ids: GetConfig response received from server: {:?}", response);
+                println!(
+                    "[TAURI] get_collector_ids: GetConfig response received from server: {:?}",
+                    response
+                );
                 let inner_response = response.into_inner();
-                println!("[TAURI] get_collector_ids: Inner response: {:?}", inner_response);
+                println!(
+                    "[TAURI] get_collector_ids: Inner response: {:?}",
+                    inner_response
+                );
                 let system_config = inner_response.config.ok_or_else(|| {
                     let err_msg = "[TAURI] get_collector_ids: Server response did not contain SystemConfig data".to_string();
                     println!("{}", err_msg);
                     err_msg
                 })?;
-                println!("[TAURI] get_collector_ids: SystemConfig extracted: {:?}", system_config);
+                println!(
+                    "[TAURI] get_collector_ids: SystemConfig extracted: {:?}",
+                    system_config
+                );
                 let collector_ids: Vec<String> = system_config.collectors.keys().cloned().collect();
-                println!("[TAURI] get_collector_ids: returning collector IDs: {:?}", collector_ids);
+                println!(
+                    "[TAURI] get_collector_ids: returning collector IDs: {:?}",
+                    collector_ids
+                );
                 Ok(collector_ids)
             }
             Err(e) => {
@@ -1557,8 +1763,11 @@ async fn setup_camera_status_poller(
     println!("Setting up camera status poller");
 
     // Initial check and potential trigger
-    let initial_config = { // Scope to release lock quickly
-        let config_guard = config_manager.lock().expect("Failed to lock config_manager for camera status poll");
+    let initial_config = {
+        // Scope to release lock quickly
+        let config_guard = config_manager
+            .lock()
+            .expect("Failed to lock config_manager for camera status poll");
         config_guard.get_camera_config().clone()
     };
     if initial_config.enabled {
@@ -1576,7 +1785,7 @@ async fn setup_camera_status_poller(
 #[tokio::main]
 async fn main() {
     let config_manager = Mutex::new(config_utils::ConfigManager::new());
-    
+
     let app_state = AppState {
         text_config: Mutex::new(lifelog_interface_lib::config_utils::load_text_upload_config()),
         processes_config: Mutex::new(lifelog_interface_lib::config_utils::load_processes_config()),
@@ -1590,8 +1799,7 @@ async fn main() {
 
     let client_arc_clone = grpc_client_state.client.clone();
     tokio::spawn(async move {
-        match Channel::from_static(GRPC_SERVER_ADDRESS)
-            .connect().await {
+        match Channel::from_static(GRPC_SERVER_ADDRESS).connect().await {
             Ok(channel) => {
                 let client = lifelog::LifelogServerServiceClient::new(channel);
                 let mut client_guard = client_arc_clone.lock().await;

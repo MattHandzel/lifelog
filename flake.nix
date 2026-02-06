@@ -116,6 +116,8 @@
             sqlite
             pkg-config
             cmake
+            mold
+            protobuf
           ]
           ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             linuxPackages.v4l2loopback
@@ -135,6 +137,8 @@
 
             leptonica
             tesseract
+            webkitgtk_4_1
+            libsoup_3
           ];
       };
 

@@ -2,8 +2,8 @@ use clap::{Arg, Command};
 use lifelog_interface_lib::setup;
 use rusqlite::*;
 
-use ::config::{HyprlandConfig, ScreenConfig, ProcessesConfig, MicrophoneConfig, load_config};
-use std::path::{PathBuf};
+use ::config::{load_config, HyprlandConfig, MicrophoneConfig, ProcessesConfig, ScreenConfig};
+use std::path::PathBuf;
 
 enum DataSourceKind {
     Hyprland {

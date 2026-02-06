@@ -37,25 +37,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     if let Some(matches) = matches.subcommand_matches("upload") {
         let file_path = matches.value_of("FILE").unwrap();
-        
+
         println!("File upload functionality now requires the server to be running.");
-        println!("Please use the lifelog-server-backend service with the appropriate API endpoints.");
+        println!(
+            "Please use the lifelog-server-backend service with the appropriate API endpoints."
+        );
         println!("Would have uploaded: {}", file_path);
-        
     } else if let Some(matches) = matches.subcommand_matches("search") {
         let pattern = matches.value_of("PATTERN").unwrap();
-        
+
         println!("Search functionality now requires the server to be running.");
-        println!("Please use the lifelog-server-backend service with the appropriate API endpoints.");
+        println!(
+            "Please use the lifelog-server-backend service with the appropriate API endpoints."
+        );
         println!("Would have searched for: {}", pattern);
-        
     } else if let Some(_) = matches.subcommand_matches("list") {
         println!("List functionality now requires the server to be running.");
-        println!("Please use the lifelog-server-backend service with the appropriate API endpoints.");
-        
+        println!(
+            "Please use the lifelog-server-backend service with the appropriate API endpoints."
+        );
     } else {
         println!("Please provide a valid command. Use --help for more information.");
     }
 
     Ok(())
-} 
+}
