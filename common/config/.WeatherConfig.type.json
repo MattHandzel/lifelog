@@ -1,1 +1,0 @@
-{"fields":[["enabled","bool"],["interval","f64"],["output_dir","PathBuf"],["api_key","String"],["latitude","f64"],["longitude","f64"]],"ident":"WeatherConfig","metadata_type":"Config","variants":[]}

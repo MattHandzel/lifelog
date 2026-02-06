@@ -11,6 +11,7 @@ use image::GenericImageView;
 use image::ImageReader;
 use lifelog_core::Utc;
 use lifelog_core::Uuid;
+use lifelog_proto::to_pb_ts;
 use std::io::Cursor;
 
 use std::sync::Arc;
@@ -108,11 +109,11 @@ impl DataSource for ScreenDataSource {
                     let (width, height) = img.dimensions();
 
                     let captured = ScreenFrame {
-                        uuid: Uuid::new_v4(), //use v6
+                        uuid: Uuid::new_v4().to_string(), //use v6
                         width: width,
                         height: height,
                         image_bytes: image_data_bytes,
-                        timestamp: ts,
+                        timestamp: to_pb_ts(ts),
                         mime_type: "image/png".to_string(),
                     };
 

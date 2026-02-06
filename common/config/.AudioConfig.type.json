@@ -1,1 +1,0 @@
-{"fields":[["enabled","bool"],["output_dir","PathBuf"],["sample_rate","u32"],["chunk_duration_secs","u64"]],"ident":"AudioConfig","metadata_type":"Config","variants":[]}

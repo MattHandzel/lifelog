@@ -94,4 +94,68 @@ mod tests {
         let p = dir.path().join(&h1[0..2]).join(&h1[2..]);
         assert!(p.exists());
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(256))]
+
+            #[test]
+            fn prop_cas_round_trip(data in prop::collection::vec(0u8..=255, 1..=4096)) {
+                let dir = tempfile::tempdir().unwrap();
+                let cas = FsCas::new(dir.path());
+                let hash = cas.put(&data).unwrap();
+                let retrieved = cas.get(&hash).unwrap();
+                prop_assert_eq!(&data, &retrieved);
+                prop_assert!(cas.contains(&hash).unwrap());
+            }
+
+            #[test]
+            fn prop_cas_dedup_any_content(
+                data in prop::collection::vec(0u8..=255, 1..=2048),
+                repeats in 2u32..=5,
+            ) {
+                let dir = tempfile::tempdir().unwrap();
+                let cas = FsCas::new(dir.path());
+                let mut hashes = Vec::new();
+                for _ in 0..repeats {
+                    hashes.push(cas.put(&data).unwrap());
+                }
+                // All puts return the same hash
+                let first = &hashes[0];
+                for h in &hashes {
+                    prop_assert_eq!(h, first);
+                }
+                // Only one file on disk
+                prop_assert_eq!(cas.get(first).unwrap(), data);
+            }
+        }
+    }
+
+    #[test]
+    fn test_cas_concurrent_puts() {
+        use std::sync::Arc;
+        use std::thread;
+
+        let dir = tempfile::tempdir().unwrap();
+        let cas = Arc::new(FsCas::new(dir.path()));
+        let data = b"concurrent-data".to_vec();
+
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let cas = Arc::clone(&cas);
+                let data = data.clone();
+                thread::spawn(move || cas.put(&data).unwrap())
+            })
+            .collect();
+
+        let hashes: Vec<String> = handles.into_iter().map(|h| h.join().unwrap()).collect();
+        // All threads produce the same hash
+        for h in &hashes {
+            assert_eq!(h, &hashes[0]);
+        }
+        assert_eq!(cas.get(&hashes[0]).unwrap(), data);
+    }
 }

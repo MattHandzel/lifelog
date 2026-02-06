@@ -7,6 +7,7 @@ use std::{fs, io::Read};
 
 use data_modalities::browser::BrowserFrame;
 use lifelog_core::Uuid;
+use lifelog_proto::to_pb_ts;
 use rusqlite::Connection;
 use tokio::time::{sleep, Duration};
 
@@ -74,7 +75,7 @@ impl BrowserHistorySource {
         let history_iter =
             stmt.query_map([last_query_chrome_micros, now_chrome_micros], |row| {
                 Ok(BrowserFrame {
-                    uuid: Uuid::new_v4(), //use v6
+                    uuid: Uuid::new_v4().to_string(), //use v6
                     url: row.get::<_, String>(0)?,
                     title: row.get::<_, String>(1)?,
                     timestamp: {
@@ -82,8 +83,9 @@ impl BrowserHistorySource {
                         let unix_micros = visit_time_chrome_micros - WINDOWS_EPOCH_MICROS;
                         let unix_secs = unix_micros / 1_000_000;
                         let unix_nanos = (unix_micros % 1_000_000) * 1_000;
-                        ::chrono::DateTime::from_timestamp(unix_secs, unix_nanos as u32)
-                            .unwrap_or_default()
+                        let ts = ::chrono::DateTime::from_timestamp(unix_secs, unix_nanos as u32)
+                            .unwrap_or_default();
+                        to_pb_ts(ts)
                     },
                     visit_count: row.get::<_, u32>(3)?,
                 })

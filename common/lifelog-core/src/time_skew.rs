@@ -129,4 +129,61 @@ mod tests {
         assert!(est.confidence < 0.95);
         assert_ne!(est.time_quality, TimeQuality::Good);
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(256))]
+
+            #[test]
+            fn prop_skew_constant_offset(
+                base_secs in 1_600_000_000i64..1_800_000_000,
+                offset_ms in -10_000i64..10_000,
+                n_samples in 3usize..=20,
+                spacing_secs in 1i64..=60,
+            ) {
+                let base = Utc.timestamp_opt(base_secs, 0).unwrap();
+                let offset = Duration::milliseconds(offset_ms);
+
+                let samples: Vec<_> = (0..n_samples as i64)
+                    .map(|i| {
+                        let device = base + Duration::seconds(i * spacing_secs);
+                        let backend = device + offset;
+                        (device, backend)
+                    })
+                    .collect();
+
+                let est = estimate_skew(&samples);
+                // With constant offset and no jitter, estimate should be exact
+                prop_assert_eq!(est.offset, offset, "offset mismatch");
+                prop_assert!(est.confidence >= 0.9, "confidence {} too low for constant offset", est.confidence);
+                prop_assert_eq!(est.time_quality, TimeQuality::Good);
+            }
+
+            #[test]
+            fn prop_skew_high_jitter_low_confidence(
+                base_secs in 1_600_000_000i64..1_800_000_000,
+                jitter_values in prop::collection::vec(-10_000i64..10_000, 5..=20),
+            ) {
+                let base = Utc.timestamp_opt(base_secs, 0).unwrap();
+
+                let samples: Vec<_> = jitter_values.iter().enumerate()
+                    .map(|(i, &jitter_ms)| {
+                        let device = base + Duration::seconds(i as i64 * 10);
+                        let backend = device + Duration::milliseconds(jitter_ms);
+                        (device, backend)
+                    })
+                    .collect();
+
+                let est = estimate_skew(&samples);
+                // With high jitter (±10s), confidence should NOT be high
+                // MAD will be large, so confidence < 0.95
+                prop_assert!(est.confidence < 0.95, "confidence {} too high for jittery data", est.confidence);
+                // It should still produce some result
+                prop_assert!(est.confidence > 0.0);
+            }
+        }
+    }
 }

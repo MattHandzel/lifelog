@@ -2,7 +2,7 @@ use super::data_source::{DataSource, DataSourceHandle};
 use crate::modules::browser_history::BrowserHistorySource;
 use crate::modules::screen::ScreenDataSource;
 use config;
-use data_modalities::{browser::BrowserFrame, screen::ScreenFrame};
+use data_modalities::screen::ScreenFrame;
 use mac_address::get_mac_address;
 use std::any::Any;
 use std::collections::HashMap;
@@ -14,19 +14,20 @@ use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
 use config::{BrowserHistoryConfig, ScreenConfig};
-use lifelog_types::CollectorState;
+use lifelog_core::*;
+use lifelog_proto::CollectorState;
+use tokio::sync::mpsc;
 use tokio::sync::RwLock;
-use tokio_stream::wrappers::ReceiverStream;
-use tonic::transport::{Channel, Endpoint};
+use tokio_stream::wrappers::ReceiverStream as ReceiverStreamWrapper;
+use tokio_stream::StreamExt;
+use tonic::transport::Endpoint;
 use tonic::Request;
 
-use lifelog_proto::collector_service_server::CollectorService;
 use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
+use lifelog_proto::to_pb_ts;
 
 use lifelog_proto::{
-    GetCollectorConfigRequest, GetCollectorConfigResponse, GetCollectorStateResponse,
-    GetDataRequest, GetStateRequest, LifelogData, RegisterCollectorRequest, ReportStateRequest,
-    SetCollectorConfigRequest, SetCollectorConfigResponse,
+    ControlMessage, RegisterCollectorRequest, ReportStateRequest,
 };
 
 struct RunningSource<C: Send + Sync + Debug + 'static> {
@@ -38,7 +39,6 @@ impl<C: Send + Sync + Debug + 'static> fmt::Debug for RunningSource<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RunningSource")
             .field("handle", &self.handle)
-            // We can't directly debug the trait object, so we'll indicate its type
             .field("instance_type", &format!("{:?}", self.instance.type_id()))
             .finish()
     }
@@ -94,16 +94,12 @@ impl From<tonic::Status> for CollectorError {
     }
 }
 
-pub struct GRPCServerCollectorService {
-    pub collector: CollectorHandle,
-}
-
 pub struct Collector {
     task: Option<AbortHandle>,
     config: Arc<config::CollectorConfig>,
     sources: HashMap<String, Box<dyn RunningSourceTrait>>,
 
-    grpc_client: Option<LifelogServerServiceClient<Channel>>,
+    control_tx: Option<mpsc::Sender<ControlMessage>>,
     server_address: String,
     client_id: String,
 }
@@ -111,9 +107,6 @@ pub struct Collector {
 trait RunningSourceTrait: Send + Sync + 'static + Debug + Any {}
 impl<C: Send + Sync + 'static + Debug + Any> RunningSourceTrait for RunningSource<C> {}
 
-/// The CollectorHandle is a struct that is used right now to abstract away how the collector
-/// works. Right now, it is using a read-write lock but in the future I might want to change this
-/// to the actor model.
 #[derive(Clone)]
 pub struct CollectorHandle {
     pub collector: Arc<RwLock<Collector>>,
@@ -132,27 +125,32 @@ impl CollectorHandle {
         collector.start().await
     }
 
-    // NOTE: It is required to have this method grab the write lock every time so we don't have to
-    // wait forever for the lock
-    // TODO: Refacotr this function, it is just a dummy function right now
     pub async fn r#loop(&self) {
-        let collector = self.collector.clone();
+        let collector_handle = self.clone();
         loop {
-            {
-                let mut collector = collector.write().await;
-                if let Err(e) = collector.report_state().await {
-                    tracing::error!(error = %e, "Failed to report state");
-                    // Try and handshake again
-                    if let Err(e) = collector.handshake().await {
-                        tracing::error!(error = %e, "Failed to re-establish connection");
-                    } else {
-                        tracing::info!("Re-established connection");
-                    }
-                }
-            } // TODO: Need to drop the lock  here (maybe refactor it so that functions call for
-              // lock)
+            let needs_handshake = {
+                let collector = collector_handle.collector.read().await;
+                collector.control_tx.is_none()
+            };
 
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            if needs_handshake {
+                let mut collector = collector_handle.collector.write().await;
+                if let Err(e) = collector.handshake(collector_handle.clone()).await {
+                    tracing::error!(error = %e, "Handshake failed, retrying in 5s");
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+            }
+
+            {
+                let mut collector = collector_handle.collector.write().await;
+                if let Err(e) = collector.report_state().await {
+                    tracing::error!(error = %e, "Failed to report state, closing stream");
+                    collector.control_tx = None;
+                }
+            }
+
+            tokio::time::sleep(Duration::from_secs(10)).await;
         }
     }
 
@@ -165,10 +163,6 @@ impl CollectorHandle {
     }
 }
 
-// TODO: There needs to be some serious refactoring going on here or some better thinking. Right
-// now I am just trying to gegt it to work but there the collector needs to be around a RWLock so
-// the server can do stuff like editing it's config so these methods need to be refactored
-// TODO: Implement pinging the server & re-trying upon disconnection
 impl Collector {
     pub fn new(
         config: Arc<config::CollectorConfig>,
@@ -179,16 +173,14 @@ impl Collector {
             task: None,
             config,
             sources: HashMap::new(),
-            grpc_client: None,
+            control_tx: None,
             server_address,
             client_id,
         }
     }
 
-    /// This function connects the collector to the main lifelog server, it initializes the
-    /// grpc_client object and can be called at anytime to reconnect to the server.
-    pub async fn handshake(&mut self) -> Result<(), CollectorError> {
-        tracing::info!(addr = %self.server_address, "Attempting gRPC connection");
+    pub async fn handshake(&mut self, handle: CollectorHandle) -> Result<(), CollectorError> {
+        tracing::info!(addr = %self.server_address, "Attempting gRPC ControlStream connection");
 
         let endpoint = Endpoint::from_shared(self.server_address.clone())
             .map_err(|e| CollectorError::Other(format!("Invalid server address: {}", e)))?
@@ -197,55 +189,54 @@ impl Collector {
         let channel = endpoint.connect().await?;
         let mut client = LifelogServerServiceClient::new(channel);
 
-        tracing::info!("Connected. Performing handshake");
+        let (tx, rx) = mpsc::channel::<ControlMessage>(128);
+        self.control_tx = Some(tx.clone());
 
-        // Get the actual MAC address
-        let mac_addr_string = match get_mac_address() {
-            Ok(Some(mac)) => mac.to_string().replace(":", ""), // Normalize to remove colons, like server expects
-            Ok(None) => {
-                let err_msg = "MAC address not found".to_string();
-                tracing::error!("{}", err_msg);
-                return Err(CollectorError::RegistrationFailed(err_msg));
-            }
-            Err(e) => {
-                let err_msg = format!("Error getting MAC address: {}", e);
-                tracing::error!("{}", err_msg);
-                return Err(CollectorError::RegistrationFailed(err_msg));
-            }
+        let mac_addr = get_mac_address()
+            .ok()
+            .flatten()
+            .map(|m| m.to_string().replace(":", ""))
+            .unwrap_or_else(|| self.client_id.clone());
+        let collector_id = mac_addr.clone();
+
+        let reg_msg = ControlMessage {
+            collector_id: collector_id.clone(),
+            msg: Some(lifelog_proto::control_message::Msg::Register(RegisterCollectorRequest {
+                config: Some((*self.config).clone()),
+            })),
         };
+        tx.send(reg_msg).await.map_err(|_| CollectorError::Other("Failed to send registration".into()))?;
 
-        // Clone the existing config and update its ID to the MAC address
-        let mut config_for_registration = (*self.config).clone();
-        config_for_registration.id = mac_addr_string.clone(); // Use the MAC address as the ID
+        let stream_req = Request::new(ReceiverStreamWrapper::new(rx));
+        let response = client.control_stream(stream_req).await?;
+        let mut server_commands = response.into_inner();
 
-        let request = Request::new(RegisterCollectorRequest {
-            config: Some(config_for_registration.into()), // Send the modified config
+        tokio::spawn(async move {
+            tracing::info!("ControlStream established, listening for commands");
+            while let Some(command_result) = server_commands.next().await {
+                match command_result {
+                    Ok(command) => {
+                        tracing::info!(command = ?command.r#type, "Received server command");
+                    }
+                    Err(e) => {
+                        tracing::error!("Server command stream error: {}", e);
+                        break;
+                    }
+                }
+            }
+            tracing::warn!("ControlStream closed by server");
+            let mut coll = handle.collector.write().await;
+            coll.control_tx = None;
         });
 
-        let response = client.register_collector(request).await?;
-        let handshake_response = response.into_inner();
-
-        if handshake_response.success {
-            tracing::info!(session_id = ?handshake_response.session_id, "Handshake successful");
-            self.grpc_client = Some(client);
-            Ok(())
-        } else {
-            let err_msg = format!("Server rejected handshake");
-            tracing::error!("{}", err_msg);
-            Err(CollectorError::RegistrationFailed(err_msg))
-        }
+        Ok(())
     }
 
     pub fn listen(&mut self) {}
 
     pub async fn start(&mut self) -> Result<(), CollectorError> {
-        //self.handshake().await?; // TODO: Refactor, this, we shouldn't require a handshake in order
-        //                         // to start logging, also, should we move control to the loop function>
-
         let config = Arc::clone(&self.config);
-
         self.sources.clear();
-
         let mut setup_errors: Vec<CollectorError> = Vec::new();
 
         if config.screen.as_ref().map(|s| s.enabled).unwrap_or(false) {
@@ -302,14 +293,10 @@ impl Collector {
             }
         }
 
-        // For now I've removed the other sources.
-        // But they should be added back here when they're reimplmemented!
-
         tracing::info!(active_sources = ?self.sources.keys(), "Sources started");
 
         if let Err(e) = self.report_state().await {
             tracing::error!(error = %e, "Failed to report initial status");
-            // Decide if this error should propagate or just be logged?
         }
 
         if !setup_errors.is_empty() {
@@ -353,7 +340,7 @@ impl Collector {
                     let fs = format!("Screen source buffer length: {}", screen_buf_size);
                     buffer_states.push(fs.to_string());
 
-                    total += screen_buf_size; //TODO: get actual buffer size rather than just vec length
+                    total += screen_buf_size;
 
                     let is_running = screen_ds.is_running();
                     let fs = format!("Screen souce running state: {}", is_running);
@@ -369,42 +356,43 @@ impl Collector {
 
         CollectorState {
             name: dev_name,
-            timestamp: Some(chrono::Utc::now().into()),
+            timestamp: to_pb_ts(chrono::Utc::now()),
             source_states: source_states,
             source_buffer_sizes: buffer_states,
             total_buffer_size: total as u32,
         }
     }
 
-    // Sends the current status to the gRPC server.
     pub async fn report_state(&mut self) -> Result<(), CollectorError> {
-        let current_state: lifelog_proto::CollectorState = self._get_state().await.into();
-        if let Some(client) = self.grpc_client.as_mut() {
+        let current_state = self._get_state().await;
+        let mac_addr = get_mac_address()
+            .ok()
+            .flatten()
+            .map(|m| m.to_string().replace(":", ""))
+            .unwrap_or_else(|| self.client_id.clone());
+
+        if let Some(tx) = self.control_tx.as_ref() {
             let active_sources: Vec<String> = self.sources.keys().cloned().collect();
-            tracing::info!(active_sources = ?active_sources, "Reporting status");
+            tracing::info!(active_sources = ?active_sources, "Reporting status via ControlStream");
 
-            let request = Request::new(ReportStateRequest {
-                state: Some(current_state),
-            });
+            let msg = ControlMessage {
+                collector_id: mac_addr,
+                msg: Some(lifelog_proto::control_message::Msg::State(
+                    ReportStateRequest {
+                        state: Some(current_state),
+                    },
+                )),
+            };
 
-            let response = client.report_state(request).await?;
-            let status_response = response.into_inner();
-
-            if status_response.acknowledged {
-                tracing::info!("Server acknowledged status report");
-                Ok(())
-            } else {
-                let err_msg = "Server did not acknowledge status report".to_string();
-                tracing::error!("{}", err_msg);
-                Err(CollectorError::Other(err_msg))
-            }
+            tx.send(msg)
+                .await
+                .map_err(|_| CollectorError::Other("Failed to send state report".into()))?;
+            Ok(())
         } else {
-            tracing::error!("Cannot report status: gRPC client not connected");
+            tracing::error!("Cannot report status: ControlStream not established");
             Err(CollectorError::NotConnected)
         }
     }
-
-    pub fn send_data(&mut self) {}
 
     pub fn stop(&mut self) {
         tracing::info!("Stopping Collector and sources");
@@ -416,11 +404,10 @@ impl Collector {
 
         for (name, _handle) in self.sources.drain() {
             tracing::info!(source = %name, "Stopping source");
-            // handle.stop(); // Assuming SourceHandle has a stop method
         }
         self.sources.clear();
 
-        self.grpc_client = None;
+        self.control_tx = None;
         tracing::info!("Collector stopped");
     }
 
@@ -429,218 +416,5 @@ impl Collector {
         self.stop();
         tokio::time::sleep(Duration::from_secs(1)).await;
         self.start().await
-    }
-}
-
-#[tonic::async_trait]
-impl CollectorService for GRPCServerCollectorService {
-    async fn get_state(
-        &self,
-        _request: tonic::Request<GetStateRequest>,
-    ) -> Result<tonic::Response<GetCollectorStateResponse>, tonic::Status> {
-        // we already have a helper that builds a CollectorState for us
-        //let state: lifelog_proto::CollectorState = self._get_state().into();
-        let state = self.collector.get_state().await.into();
-
-        Ok(tonic::Response::new(GetCollectorStateResponse {
-            state: Some(state),
-        }))
-    }
-
-    async fn get_config(
-        &self,
-        _request: tonic::Request<GetCollectorConfigRequest>,
-    ) -> Result<tonic::Response<GetCollectorConfigResponse>, tonic::Status> {
-        //  CollectorConfig ↦ proto type conversion already used in `handshake`
-        //  (so we can rely on the existing `Into` impl). :contentReference[oaicite:2]{index=2}:contentReference[oaicite:3]{index=3}
-
-        let cfg_proto = self.collector.get_config().await.as_ref().clone().into();
-
-        Ok(tonic::Response::new(GetCollectorConfigResponse {
-            config: Some(cfg_proto),
-        }))
-    }
-
-    async fn set_config(
-        &self,
-        _request: tonic::Request<SetCollectorConfigRequest>,
-    ) -> Result<tonic::Response<SetCollectorConfigResponse>, tonic::Status> {
-        // TODO: Implement Full hot‑reload; for now we just acknowledge receipt.
-
-        Ok(tonic::Response::new(SetCollectorConfigResponse {
-            success: true,
-        }))
-    }
-
-    // TODO: Refactor this so it's a stream?
-    type GetDataStream = ReceiverStream<Result<LifelogData, tonic::Status>>;
-
-    // NOTE: This utilizes a stream which, for large data sends (over 1MB) it is cheaper than doing
-    // a unary RPC. Maybe in future don't stream all data.
-    // TODO: Refactor this function so we can send data that is larger than 4MB (for example,
-    // screenshots can easily get above 4MB)
-    async fn get_data(
-        &self,
-        _request: tonic::Request<GetDataRequest>,
-    ) -> Result<tonic::Response<Self::GetDataStream>, tonic::Status> {
-        tracing::debug!("Starting data send");
-        const MAX_DATA_PER_CHANNEL: usize = 32;
-        let (tx, rx) = tokio::sync::mpsc::channel(MAX_DATA_PER_CHANNEL);
-        let collector_handle = self.collector.clone();
-
-        tokio::spawn(async move {
-            // TODO: Refactor this so that we never directly access the collector, the collector
-            // handle should be the interface to the collector, this should just be a function we
-            // call
-            let images: Vec<ScreenFrame> = {
-                let read_guard = collector_handle.collector.read().await;
-                let running_source = (*read_guard.sources.get("screen").unwrap()).as_ref();
-                let running: Option<&RunningSource<ScreenConfig>> =
-                    (running_source as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>();
-
-                tracing::debug!(running_source = ?running, "Screen source state");
-
-                if let Some(running_screen_src) = running {
-                    let instance_arc = &running_screen_src.instance;
-                    let mut guard = instance_arc.lock().await;
-                    let boxed_dyn_data_source: &mut Box<
-                        dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static,
-                    > = &mut *guard;
-                    let inner_dyn_data_source_ref: &mut (dyn DataSource<Config = ScreenConfig>
-                              + Send
-                              + Sync
-                              + 'static) = &mut **boxed_dyn_data_source;
-
-                    if let Some(screen_ds_mut) = (inner_dyn_data_source_ref as &mut dyn Any)
-                        .downcast_mut::<ScreenDataSource>()
-                    {
-                        match screen_ds_mut.get_data().await {
-                            Ok(images) => {
-                                tracing::debug!("Clearing image buffer");
-                                screen_ds_mut.clear_buffer().await.unwrap_or_else(
-                                    |e| tracing::error!(error = %e, "Error clearing buffer"),
-                                );
-                                images
-                            }
-                            Err(e) => {
-                                tracing::error!(error = %e, "Failed to get buffer from ScreenDataSource");
-                                Vec::new()
-                            }
-                        }
-                    } else {
-                        tracing::error!("Could not downcast to ScreenDataSource");
-                        Vec::new()
-                    }
-                } else {
-                    tracing::error!("'screen' source not found or wrong type");
-                    Vec::new()
-                }
-            };
-
-            if images.is_empty() {
-                tracing::debug!("No images to send");
-            } else {
-                tracing::debug!(count = images.len(), "Sending images");
-            }
-
-            for screen_frame in images {
-                match <data_modalities::screen::ScreenFrame as TryInto<
-                    lifelog_proto::ScreenFrame,
-                >>::try_into(screen_frame)
-                {
-                    Ok(proto_frame) => {
-                        let data_to_send = LifelogData {
-                            payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(
-                                proto_frame,
-                            )),
-                        };
-                        if tx.send(Ok(data_to_send)).await.is_err() {
-                            tracing::error!("Receiver dropped, stopping send");
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!(error = ?e, "Screen frame conversion error");
-                    }
-                }
-            }
-
-            tracing::debug!("Finished sending from ScreenDataSource");
-
-            let browser_entries: Vec<BrowserFrame> = {
-                let read_guard = collector_handle.collector.read().await;
-                let running_source = (*read_guard.sources.get("browser").unwrap()).as_ref();
-                let running: Option<&RunningSource<BrowserHistoryConfig>> = (running_source
-                    as &dyn Any)
-                    .downcast_ref::<RunningSource<BrowserHistoryConfig>>();
-
-                tracing::debug!(running_source = ?running, "Browser source state");
-
-                if let Some(running_browser_src) = running {
-                    let instance_arc = &running_browser_src.instance;
-                    let mut guard = instance_arc.lock().await;
-                    let boxed_dyn_data_source: &mut Box<
-                        dyn DataSource<Config = BrowserHistoryConfig> + Send + Sync + 'static,
-                    > = &mut *guard;
-                    let inner_dyn_data_source_ref: &mut (dyn DataSource<Config = BrowserHistoryConfig>
-                              + Send
-                              + Sync
-                              + 'static) = &mut **boxed_dyn_data_source;
-
-                    if let Some(browser_ds) = (inner_dyn_data_source_ref as &mut dyn Any)
-                        .downcast_mut::<BrowserHistorySource>()
-                    {
-                        match browser_ds.get_data() {
-                            Ok(history) => history,
-                            Err(e) => {
-                                tracing::error!(error = %e, "Failed to get buffer from BrowserHistorySource");
-                                Vec::new()
-                            }
-                        }
-                    } else {
-                        tracing::error!("Could not downcast to BrowserHistorySource");
-                        Vec::new()
-                    }
-                } else {
-                    tracing::error!("'browser' source not found or wrong type");
-                    Vec::new()
-                }
-            };
-
-            if browser_entries.is_empty() {
-                tracing::debug!("No browser history to send");
-            } else {
-                tracing::debug!(
-                    count = browser_entries.len(),
-                    "Sending browser history entries"
-                );
-            }
-
-            for browser_frame in browser_entries {
-                match <data_modalities::browser::BrowserFrame as TryInto<
-                    lifelog_proto::BrowserFrame,
-                >>::try_into(browser_frame)
-                {
-                    Ok(proto_frame) => {
-                        let data_to_send = LifelogData {
-                            payload: Some(lifelog_proto::lifelog_data::Payload::Browserframe(
-                                proto_frame,
-                            )),
-                        };
-                        if tx.send(Ok(data_to_send)).await.is_err() {
-                            tracing::error!("Receiver dropped, stopping send");
-                            break;
-                        }
-                    }
-                    Err(e) => {
-                        tracing::error!(error = ?e, "Browser frame conversion error");
-                    }
-                }
-            }
-
-            tracing::debug!("Finished sending from BrowserHistorySource");
-        });
-
-        Ok(tonic::Response::new(ReceiverStream::new(rx)))
     }
 }

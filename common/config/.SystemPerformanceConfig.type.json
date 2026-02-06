@@ -1,1 +1,0 @@
-{"fields":[["enabled","bool"],["interval","f64"],["output_dir","PathBuf"],["log_cpu","bool"],["log_memory","bool"],["log_disk","bool"]],"ident":"SystemPerformanceConfig","metadata_type":"Config","variants":[]}

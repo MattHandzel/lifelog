@@ -1,7 +1,14 @@
+pub mod assertions;
+pub mod device_client;
+pub mod event_gen;
+pub mod fault_layer;
+
 use config::ServerConfig;
+use fault_layer::{FaultController, FaultInjectionLayer};
 use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
 use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
-use lifelog_server::server::{GRPCServerLifelogServerService, Server};
+use lifelog_server::server::{GRPCServerLifelogServerService, Server, ServerHandle};
+use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Arc;
 use std::time::Duration;
@@ -9,6 +16,9 @@ use tempfile::TempDir;
 use tokio::sync::RwLock;
 use tokio::time::sleep;
 use tonic::transport::Channel;
+use utils::cas::FsCas;
+
+use device_client::DeviceClient;
 
 pub struct TestContext {
     pub server_addr: String,
@@ -17,16 +27,25 @@ pub struct TestContext {
     #[allow(dead_code)]
     pub temp_dir: TempDir,
     pub client: LifelogServerServiceClient<Channel>,
+    pub fault_controller: FaultController,
+    pub cas_path: PathBuf,
+    server_port: u16,
+    db_port: u16,
 }
 
 impl TestContext {
     pub async fn new() -> Self {
+        Self::new_with_faults(FaultController::new()).await
+    }
+
+    pub async fn new_with_faults(fault_controller: FaultController) -> Self {
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let db_port = portpicker::pick_unused_port().expect("No ports available");
         let server_port = portpicker::pick_unused_port().expect("No ports available");
 
         let db_addr = format!("127.0.0.1:{}", db_port);
         let server_addr = format!("http://127.0.0.1:{}", server_port);
+        let cas_path = temp_dir.path().join("cas");
 
         // Start SurrealDB
         let db_process = Command::new("surreal")
@@ -41,8 +60,8 @@ impl TestContext {
             .spawn()
             .expect("Failed to start SurrealDB");
 
-        // Wait for DB to be ready - increase to 1 second
-        sleep(Duration::from_secs(1)).await;
+        // Wait for DB to be ready
+        sleep(Duration::from_secs(5)).await;
 
         let config = ServerConfig {
             host: "127.0.0.1".to_string(),
@@ -50,20 +69,22 @@ impl TestContext {
             database_endpoint: db_addr.clone(),
             database_name: "test_db".to_string(),
             server_name: "TestServer".to_string(),
-            cas_path: temp_dir.path().join("cas").display().to_string(),
+            cas_path: cas_path.display().to_string(),
         };
 
         let server = Server::new(&config).await.expect("Failed to create server");
         let server_handle = Arc::new(RwLock::new(server));
         let grpc_service = GRPCServerLifelogServerService {
-            server: lifelog_server::server::ServerHandle::new(server_handle),
+            server: ServerHandle::new(server_handle),
         };
 
         let addr = format!("127.0.0.1:{}", server_port).parse().unwrap();
+        let fault_layer = FaultInjectionLayer::new(fault_controller.clone());
 
-        // Spawn the gRPC server in a background task
+        // Spawn the gRPC server with fault injection layer
         tokio::spawn(async move {
             tonic::transport::Server::builder()
+                .layer(fault_layer)
                 .add_service(LifelogServerServiceServer::new(grpc_service))
                 .serve(addr)
                 .await
@@ -71,7 +92,7 @@ impl TestContext {
         });
 
         // Wait for server to be ready
-        sleep(Duration::from_millis(200)).await;
+        sleep(Duration::from_secs(1)).await;
 
         let channel = Channel::from_shared(server_addr.clone())
             .unwrap()
@@ -86,11 +107,40 @@ impl TestContext {
             db_process,
             temp_dir,
             client,
+            fault_controller,
+            cas_path,
+            server_port,
+            db_port,
         }
     }
 
+    /// Get a clone of the primary gRPC client.
     pub fn client(&self) -> LifelogServerServiceClient<Channel> {
         self.client.clone()
+    }
+
+    /// Create N `DeviceClient` instances, each with a unique device_id.
+    pub fn create_device_clients(&self, n: usize) -> Vec<DeviceClient> {
+        (0..n)
+            .map(|i| DeviceClient::new(format!("device-{i}"), self.client()))
+            .collect()
+    }
+
+    /// Get a `FsCas` handle pointing to the server's CAS directory.
+    pub fn cas(&self) -> FsCas {
+        FsCas::new(&self.cas_path)
+    }
+
+    /// Get the server port (useful for reconnection scenarios).
+    #[allow(dead_code)]
+    pub fn server_port(&self) -> u16 {
+        self.server_port
+    }
+
+    /// Get the DB port (useful for direct DB assertions).
+    #[allow(dead_code)]
+    pub fn db_port(&self) -> u16 {
+        self.db_port
     }
 }
 

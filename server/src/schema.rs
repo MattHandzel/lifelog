@@ -1,4 +1,5 @@
-use lifelog_types::*;
+use lifelog_core::*;
+use lifelog_proto::DataModality;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 
@@ -54,6 +55,74 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE INDEX `{table}_text_idx` ON `{table}` FIELDS text SEARCH ANALYZER SIMPLE BM25;
         "#,
     },
+    TableSchema {
+        modality: DataModality::Audio,
+        fields_ddl: r#"
+            DEFINE FIELD timestamp     ON `{table}` TYPE datetime;
+            DEFINE FIELD audio_bytes  ON `{table}` TYPE bytes;
+            DEFINE FIELD codec         ON `{table}` TYPE string;
+            DEFINE FIELD sample_rate   ON `{table}` TYPE int;
+            DEFINE FIELD channels      ON `{table}` TYPE int;
+            DEFINE FIELD duration_secs ON `{table}` TYPE float;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+        "#,
+    },
+    TableSchema {
+        modality: DataModality::Keystrokes,
+        fields_ddl: r#"
+            DEFINE FIELD timestamp    ON `{table}` TYPE datetime;
+            DEFINE FIELD text         ON `{table}` TYPE string;
+            DEFINE FIELD application  ON `{table}` TYPE string;
+            DEFINE FIELD window_title ON `{table}` TYPE string;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_text_idx` ON `{table}` FIELDS text SEARCH ANALYZER SIMPLE BM25;
+        "#,
+    },
+    TableSchema {
+        modality: DataModality::Clipboard,
+        fields_ddl: r#"
+            DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
+            DEFINE FIELD text        ON `{table}` TYPE string;
+            DEFINE FIELD binary_data ON `{table}` TYPE bytes;
+            DEFINE FIELD mime_type   ON `{table}` TYPE string;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_text_idx` ON `{table}` FIELDS text SEARCH ANALYZER SIMPLE BM25;
+        "#,
+    },
+    TableSchema {
+        modality: DataModality::ShellHistory,
+        fields_ddl: r#"
+            DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
+            DEFINE FIELD command     ON `{table}` TYPE string;
+            DEFINE FIELD working_dir ON `{table}` TYPE string;
+            DEFINE FIELD exit_code   ON `{table}` TYPE int;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_cmd_idx` ON `{table}` FIELDS command SEARCH ANALYZER SIMPLE BM25;
+        "#,
+    },
+    TableSchema {
+        modality: DataModality::WindowActivity,
+        fields_ddl: r#"
+            DEFINE FIELD timestamp     ON `{table}` TYPE datetime;
+            DEFINE FIELD application   ON `{table}` TYPE string;
+            DEFINE FIELD window_title  ON `{table}` TYPE string;
+            DEFINE FIELD focused       ON `{table}` TYPE bool;
+            DEFINE FIELD duration_secs ON `{table}` TYPE float;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_app_idx` ON `{table}` FIELDS application SEARCH ANALYZER SIMPLE BM25;
+            DEFINE INDEX `{table}_win_idx` ON `{table}` FIELDS window_title SEARCH ANALYZER SIMPLE BM25;
+        "#,
+    },
 ];
 
 /// Upload chunks metadata table schema.
@@ -77,10 +146,17 @@ pub(crate) async fn ensure_table_schema(
         return Ok(());
     }
 
-    let schema = schema_for(data_origin.modality).ok_or_else(|| {
+    let modality = DataModality::from_str_name(&data_origin.modality_name).ok_or_else(|| {
+        surrealdb::Error::Api(surrealdb::error::Api::Query(format!(
+            "Invalid modality name: {}",
+            data_origin.modality_name
+        )))
+    })?;
+
+    let schema = schema_for(modality).ok_or_else(|| {
         surrealdb::Error::Api(surrealdb::error::Api::Query(format!(
             "No schema defined for modality {:?}",
-            data_origin.modality
+            modality
         )))
     })?;
 

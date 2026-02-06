@@ -107,6 +107,8 @@
           pkgs.lib.optionalString pkgs.stdenv.isLinux
           "${pkgs.alsa-lib}/lib/pkgconfig";
 
+        RUSTC_WRAPPER = "sccache";
+
         packages = with pkgs;
           [
             (rust-bin.stable.latest.default.override {
@@ -117,6 +119,7 @@
             pkg-config
             cmake
             mold
+            sccache
             cargo-nextest
             bacon
           ]

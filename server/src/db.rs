@@ -1,6 +1,6 @@
 use dashmap::DashSet;
 use lifelog_core::DataType;
-use lifelog_types::*;
+use lifelog_core::*;
 use once_cell::sync::Lazy;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
@@ -8,6 +8,13 @@ use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 
 pub(crate) static CREATED_TABLES: Lazy<DashSet<String>> = Lazy::new(DashSet::new);
+
+/// Reset the table cache — needed when restarting the server within the same process
+/// (e.g., in integration tests that simulate server restarts).
+#[cfg(test)]
+pub fn reset_table_cache() {
+    CREATED_TABLES.clear();
+}
 
 /// Ensure a table exists for the given data origin.
 /// Delegates to the centralized schema registry.

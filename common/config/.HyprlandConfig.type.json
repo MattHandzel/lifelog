@@ -1,1 +1,0 @@
-{"fields":[["enabled","bool"],["interval","f64"],["output_dir","PathBuf"],["log_clients","bool"],["log_activewindow","bool"],["log_workspace","bool"],["log_active_monitor","bool"],["log_devices","bool"]],"ident":"HyprlandConfig","metadata_type":"Config","variants":[]}

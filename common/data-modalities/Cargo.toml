@@ -8,12 +8,10 @@ workspace = true
 
 [dependencies]
 lifelog-core= { path = "../lifelog-core" }
-lifelog-macros = { path = "../macros" }
 lifelog-proto = { path = "../lifelog-proto" }
 serde = { version = "1.0", features = ["derive"] }
 rand = "0.9.1"
 rusty-tesseract = {workspace = true}
-lifelog-types = { path = "../lifelog-types" }
 utils = { path = "../utils" }
 image = {workspace = true}
 thiserror = {workspace=true}
@@ -22,13 +20,3 @@ tracing = {workspace = true}
 prost-types = { version = "0.13.5"}
 tonic = { version = "0.13.1"}
 pbjson-types = "0.7"
-
-# testing this real quick
-[build-dependencies]
-lifelog-core = { path = "../lifelog-core" }
-anyhow = "1.0"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-walkdir = "2.3"
-maplit = "1.0"
-tonic-build = { version = "0.13.1" }

@@ -10,9 +10,7 @@ workspace = true
 [dependencies]
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }
-lifelog-macros = { path = "../common/macros"}
 lifelog-core = {path="../common/lifelog-core"}
-lifelog-types = {path="../common/lifelog-types"}
 lifelog-proto = { path = "../common/lifelog-proto" }
 data-modalities = { path = "../common/data-modalities" } 
 

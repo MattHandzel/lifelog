@@ -8,8 +8,6 @@ edition = "2021"
 workspace = true
 
 [dependencies]
-lifelog-macros = { path = "../macros" }
-lifelog-types = {path = "../lifelog-types"}
 lifelog-core = { path = "../lifelog-core" }
 serde = { version = "1.0", features = ["derive"] }
 utils = { path = "../utils" }

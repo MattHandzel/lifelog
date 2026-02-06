@@ -148,17 +148,77 @@ message Embedding {
 }
 
 message Timerange {
+
   google.protobuf.Timestamp start = 1;
+
   google.protobuf.Timestamp end = 2;
+
 }
 
-// -----------------------------------------------------------------------------
-// Services
+
+
+enum CommandType {
+
+  BeginUploadSession = 0;
+
+  PauseCapture = 1;
+
+  ResumeCapture = 2;
+
+  UpdateConfig = 3;
+
+}
+
+
+
+message ServerCommand {
+
+  CommandType type = 1;
+
+  string payload = 2; // JSON or specialized message
+
+}
+
+
+
+message ControlMessage {
+
+  string collector_id = 1;
+
+  oneof msg {
+
+    RegisterCollectorRequest register = 2;
+
+    ReportStateRequest state = 3;
+
+    string heartbeat = 4;
+
+  }
+
+}
+
+
+
 // -----------------------------------------------------------------------------
 
+// Services
+
+// -----------------------------------------------------------------------------
+
+
+
 // This is a service that the lifelog server will implement
+
 service LifelogServerService {
-  // This is a service that the collectors call to be registered to the server. This is required because server is unaware of what collectors exist. Once a collector is added, the server can request data from the collector when it has a convenient time to do so
+
+  // Bidirectional control channel initiated by the collector
+
+  rpc ControlStream(stream ControlMessage) returns (stream ServerCommand);
+
+
+
+  // This is a service that the collectors call to be registered to the server.
+  // This is required because server is unaware of what collectors exist. Once a collector is added, the server can request data from the collector when it has a convenient time to do so
   rpc RegisterCollector(RegisterCollectorRequest) returns (RegisterCollectorResponse);
 
   // This simply returns the configuration of the WHOLE system. It will return the configuration of the server as well as all collectors. This can be used to see how the system is configured

@@ -79,6 +79,11 @@ enum DataModality {
   Browser = 0;
   Ocr = 1;
   Screen = 2;
+  Audio = 3;
+  Keystrokes = 4;
+  Clipboard = 5;
+  ShellHistory = 6;
+  WindowActivity = 7;
 }
 
 message GeoConfig {
@@ -171,6 +176,49 @@ message ScreenFrame {
   string mime_type = 6;
 }
 
+message AudioFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  bytes audio_bytes = 3;
+  string codec = 4;
+  uint32 sample_rate = 5;
+  uint32 channels = 6;
+  float duration_secs = 7;
+}
+
+message KeystrokeFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string text = 3;
+  string application = 4;
+  string window_title = 5;
+}
+
+message ClipboardFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string text = 3;
+  bytes binary_data = 4;
+  string mime_type = 5;
+}
+
+message ShellHistoryFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string command = 3;
+  string working_dir = 4;
+  int32 exit_code = 5;
+}
+
+message WindowActivityFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string application = 3;
+  string window_title = 4;
+  bool focused = 5;
+  float duration_secs = 6;
+}
+
 enum ServerActionType {
   Querying = 0;
   GetData = 1;
@@ -248,5 +296,10 @@ message LifelogData {
     BrowserFrame browserframe = 1;
     OcrFrame ocrframe = 2;
     ScreenFrame screenframe = 3;
+    AudioFrame audioframe = 4;
+    KeystrokeFrame keystrokeframe = 5;
+    ClipboardFrame clipboardframe = 6;
+    ShellHistoryFrame shellhistoryframe = 7;
+    WindowActivityFrame windowactivityframe = 8;
   }
 }

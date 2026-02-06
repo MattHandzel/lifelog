@@ -8,6 +8,13 @@ pub(crate) mod grpc_service;
 pub(crate) mod ingest;
 pub(crate) mod query;
 pub(crate) mod schema;
-pub(crate) mod surreal_types;
 pub(crate) mod sync;
 pub(crate) mod transform;
+
+/// Test-only utilities exposed for integration tests.
+#[cfg(test)]
+pub mod test_support {
+    pub fn reset_table_cache() {
+        crate::db::reset_table_cache();
+    }
+}

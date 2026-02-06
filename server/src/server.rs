@@ -4,7 +4,10 @@ use chrono::Utc;
 use config::ServerPolicyConfig;
 use config::{CollectorConfig, ServerConfig, SystemConfig};
 use data_modalities::*;
-use lifelog_types::*;
+use lifelog_core::*;
+use lifelog_proto::*;
+use lifelog_proto::DataModality;
+use lifelog_proto::{SystemState, CollectorState};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -19,6 +22,17 @@ use crate::db::get_origins_from_db;
 use crate::query::{get_all_uuids_from_origin, get_data_by_key};
 use crate::sync::{get_keys_in_source_not_in_destination, sync_data_with_collectors};
 use crate::transform::{transform_data, LifelogTransform};
+
+pub type ServerAction = lifelog_core::ServerAction<
+    lifelog_proto::QueryRequest,
+    lifelog_proto::GetDataRequest,
+    lifelog_proto::Uuid,
+>;
+
+pub type RegisteredCollector = lifelog_core::RegisteredCollector<
+    lifelog_proto::ServerCommand,
+    lifelog_proto::CollectorConfig,
+>;
 
 // Re-export for external consumers (main.rs, tests)
 pub use crate::grpc_service::GRPCServerLifelogServerService;
@@ -75,6 +89,13 @@ impl ServerHandle {
         }
     }
 
+    pub async fn remove_collector(&self, collector_id: &str) {
+        let server_lock = self.server.read().await;
+        let mut collectors_vec = server_lock.registered_collectors.write().await;
+        collectors_vec.retain(|c| c.id != collector_id);
+        tracing::info!(id = %collector_id, "Collector removed");
+    }
+
     pub async fn contains_collector(&self, collector_name: String) -> bool {
         let server = self.server.read().await;
         server.contains_collector(collector_name).await
@@ -98,7 +119,7 @@ impl ServerHandle {
     pub async fn get_data(
         &self,
         keys: Vec<LifelogFrameKey>,
-    ) -> Result<Vec<LifelogData>, LifelogError> {
+    ) -> Result<Vec<lifelog_proto::LifelogData>, LifelogError> {
         let server = self.server.read().await;
         server.get_data(keys).await
     }
@@ -162,7 +183,7 @@ impl Server {
         let ocr_transform = OcrTransform::new(
             DataOrigin::new(
                 DataOriginType::DeviceId("FF:FF:FF:FF:FF:FF".to_string()),
-                DataModality::Screen,
+                DataModality::Screen.as_str_name().to_string(),
             ),
             OcrConfig {
                 language: "eng".to_string(),
@@ -189,24 +210,13 @@ impl Server {
         Ok(s)
     }
     async fn get_system_config(&self) -> Result<SystemConfig, LifelogError> {
-        // Get the config of all the collectors
-        let mut collectors = self.registered_collectors.write().await;
+        // Get the config of all the collectors from the cached state
+        let collectors = self.registered_collectors.read().await;
         let mut collector_configs: HashMap<String, CollectorConfig> = HashMap::new();
-        for collector in collectors.iter_mut() {
-            let config: CollectorConfig = collector
-                .grpc_client
-                .get_config(lifelog_proto::GetCollectorConfigRequest {})
-                .await?
-                .into_inner()
-                .config
-                .ok_or_else(|| {
-                    LifelogError::Other(anyhow::anyhow!(
-                        "Collector {} returned no config",
-                        collector.id
-                    ))
-                })?
-                .into();
-            collector_configs.insert(collector.id.clone(), config);
+        for collector in collectors.iter() {
+            if let Some(config) = &collector.latest_config {
+                collector_configs.insert(collector.id.clone(), config.clone());
+            }
         }
         let config = SystemConfig {
             server: Some(self.config.clone()),
@@ -223,10 +233,10 @@ impl Server {
         Ok(())
     }
 
-    async fn get_data(&self, req: Vec<LifelogFrameKey>) -> Result<Vec<LifelogData>, LifelogError> {
-        let mut datas: Vec<LifelogData> = vec![];
+    async fn get_data(&self, req: Vec<LifelogFrameKey>) -> Result<Vec<lifelog_proto::LifelogData>, LifelogError> {
+        let mut datas: Vec<lifelog_proto::LifelogData> = vec![];
         for key in req.iter() {
-            let data: LifelogData = get_data_by_key(&self.db, key).await.map_err(|e| {
+            let data: lifelog_proto::LifelogData = get_data_by_key(&self.db, key).await.map_err(|e| {
                 LifelogError::Database(format!("Unable to get data by key {}: {}", key, e))
             })?;
 
@@ -471,74 +481,3 @@ impl Server {
     }
 }
 
-// TODO: This should be automated
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum LifelogData {
-    ScreenFrame(ScreenFrame),
-    BrowserFrame(BrowserFrame),
-    OcrFrame(OcrFrame),
-}
-
-impl From<LifelogData> for lifelog_proto::LifelogData {
-    fn from(data: LifelogData) -> Self {
-        match data {
-            LifelogData::ScreenFrame(frame) => lifelog_proto::LifelogData {
-                payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(
-                    frame.into(),
-                )),
-            },
-            LifelogData::BrowserFrame(frame) => lifelog_proto::LifelogData {
-                payload: Some(lifelog_proto::lifelog_data::Payload::Browserframe(
-                    frame.into(),
-                )),
-            },
-            LifelogData::OcrFrame(frame) => lifelog_proto::LifelogData {
-                payload: Some(lifelog_proto::lifelog_data::Payload::Ocrframe(frame.into())),
-            },
-        }
-    }
-}
-
-impl From<lifelog_proto::LifelogData> for LifelogData {
-    fn from(data: lifelog_proto::LifelogData) -> Self {
-        match data.payload {
-            Some(lifelog_proto::lifelog_data::Payload::Screenframe(frame)) => {
-                LifelogData::ScreenFrame(frame.into())
-            }
-            Some(lifelog_proto::lifelog_data::Payload::Browserframe(frame)) => {
-                LifelogData::BrowserFrame(frame.into())
-            }
-            Some(lifelog_proto::lifelog_data::Payload::Ocrframe(frame)) => {
-                LifelogData::OcrFrame(frame.into())
-            }
-            _ => unimplemented!(),
-        }
-    }
-}
-
-impl TryFrom<LifelogData> for LifelogImage {
-    type Error = anyhow::Error;
-    fn try_from(v: LifelogData) -> Result<Self, Self::Error> {
-        match v {
-            LifelogData::ScreenFrame(frame) => Ok(frame.into()),
-            _ => Err(anyhow::anyhow!("Cannot convert to LifelogImage")),
-        }
-    }
-}
-
-impl From<ScreenFrame> for LifelogData {
-    fn from(v: ScreenFrame) -> Self {
-        Self::ScreenFrame(v)
-    }
-}
-impl From<BrowserFrame> for LifelogData {
-    fn from(v: BrowserFrame) -> Self {
-        Self::BrowserFrame(v)
-    }
-}
-
-impl From<OcrFrame> for LifelogData {
-    fn from(v: OcrFrame) -> Self {
-        Self::OcrFrame(v)
-    }
-}

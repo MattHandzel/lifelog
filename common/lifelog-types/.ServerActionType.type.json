@@ -1,1 +1,0 @@
-{"fields":[],"ident":"ServerActionType","metadata_type":"None","variants":["Querying","GetData","SyncData","TransformData","CompressData","RegisterActor"]}

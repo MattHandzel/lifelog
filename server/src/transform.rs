@@ -1,13 +1,13 @@
-use crate::server::LifelogData;
 use data_modalities::*;
-use lifelog_types::*;
+use lifelog_core::*;
+use lifelog_proto::*;
+use lifelog_proto::DataModality;
 use serde::{Deserialize, Serialize};
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 
 use crate::db::add_data_to_db;
 use crate::query::get_data_by_key;
-use crate::surreal_types::OcrFrameSurreal;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) enum LifelogTransform {
@@ -39,47 +39,34 @@ pub(crate) async fn transform_data(
     transforms: Vec<LifelogTransform>,
 ) {
     for key in untransformed_data_keys.iter() {
-        let data_to_transform: LifelogData = match get_data_by_key(db, key).await {
+        let data_to_transform: lifelog_proto::LifelogData = match get_data_by_key(db, key).await {
             Ok(data) => data,
             Err(_) => continue,
         };
 
         for transform in transforms.iter() {
-            let transformed_data: Option<LifelogData> = match transform {
+            match transform {
                 LifelogTransform::OcrTransform(transform) => {
                     if key.origin == transform.source() {
-                        let image: LifelogImage = match data_to_transform.clone().try_into() {
-                            Ok(img) => img,
-                            Err(_) => continue,
-                        };
-                        match transform.apply(image) {
-                            Ok(mut result) => {
-                                result.uuid = key.uuid;
-                                Some(result.into())
+                        let payload = data_to_transform.payload.as_ref();
+                        if let Some(lifelog_proto::lifelog_data::Payload::Screenframe(screen_frame)) = payload {
+                            let image: LifelogImage = screen_frame.clone().into();
+                            match transform.apply(image) {
+                                Ok(mut result) => {
+                                    result.uuid = key.uuid.to_string();
+                                    let _ = add_data_to_db::<OcrFrame, OcrFrame>(
+                                        db,
+                                        result,
+                                        &transform.destination(),
+                                    )
+                                    .await;
+                                }
+                                Err(_) => {}
                             }
-                            Err(_) => None,
                         }
-                    } else {
-                        None
                     }
                 }
             };
-
-            let Some(transformed_data) = transformed_data else {
-                continue;
-            };
-
-            match transformed_data {
-                LifelogData::OcrFrame(ocr_frame) => {
-                    let _ = add_data_to_db::<OcrFrame, OcrFrameSurreal>(
-                        db,
-                        ocr_frame,
-                        &transform.destination(),
-                    )
-                    .await;
-                }
-                _ => {}
-            }
         }
     }
 }

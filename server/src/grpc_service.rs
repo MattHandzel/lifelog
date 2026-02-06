@@ -1,22 +1,22 @@
-use config::CollectorConfig;
-use lifelog_proto::collector_service_client::CollectorServiceClient;
 use lifelog_proto::lifelog_server_service_server::LifelogServerService;
 use lifelog_proto::{
-    Ack, Chunk, GetDataRequest, GetDataResponse, GetStateRequest, GetSystemConfigRequest,
-    GetSystemConfigResponse, GetSystemStateResponse, GetUploadOffsetRequest,
-    GetUploadOffsetResponse, QueryRequest, QueryResponse, RegisterCollectorRequest,
-    RegisterCollectorResponse, ReportStateRequest, ReportStateResponse, SetSystemConfigRequest,
-    SetSystemConfigResponse,
+    Ack, Chunk, ControlMessage, GetDataRequest, GetDataResponse, GetStateRequest,
+    GetSystemConfigRequest, GetSystemConfigResponse, GetSystemStateResponse,
+    GetUploadOffsetRequest, GetUploadOffsetResponse, QueryRequest, QueryResponse,
+    RegisterCollectorRequest, RegisterCollectorResponse, ReportStateRequest, ReportStateResponse,
+    ServerCommand, SetSystemConfigRequest, SetSystemConfigResponse,
 };
-use lifelog_types::*;
+use lifelog_core::*;
 use std::time;
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::{Request as TonicRequest, Response as TonicResponse, Status as TonicStatus};
 use tonic::{Request, Response, Status, Streaming};
 use utils::ingest::ChunkIngester;
 
 use crate::ingest::{ChunkRecord, SurrealIngestBackend};
-use crate::server::ServerHandle;
+use crate::server::{ServerHandle, RegisteredCollector};
 
 pub struct GRPCServerLifelogServerService {
     pub server: ServerHandle,
@@ -24,59 +24,92 @@ pub struct GRPCServerLifelogServerService {
 
 #[tonic::async_trait]
 impl LifelogServerService for GRPCServerLifelogServerService {
+    type ControlStreamStream = ReceiverStream<Result<ServerCommand, Status>>;
+
+    async fn control_stream(
+        &self,
+        request: Request<Streaming<ControlMessage>>,
+    ) -> Result<Response<Self::ControlStreamStream>, Status> {
+        let mut in_stream = request.into_inner();
+        let (tx, rx) = mpsc::channel::<Result<ServerCommand, Status>>(128);
+        let server_handle = self.server.clone();
+
+        tokio::spawn(async move {
+            let mut collector_id: Option<String> = None;
+
+            while let Some(result) = in_stream.next().await {
+                match result {
+                    Ok(msg) => {
+                        collector_id = Some(msg.collector_id.clone());
+                        if let Some(payload) = msg.msg {
+                            match payload {
+                                lifelog_proto::control_message::Msg::Register(reg) => {
+                                    if let Some(config) = reg.config {
+                                        let registered = RegisteredCollector {
+                                            id: config.id.clone(),
+                                            mac: config.id.clone(),
+                                            address: String::new(), // Address no longer needed for dial-back
+                                            command_tx: tx.clone(),
+                                            latest_config: Some(config),
+                                        };
+                                        server_handle.register_collector(registered).await;
+                                        tracing::info!(id = %msg.collector_id, "Collector registered via ControlStream");
+                                    }
+                                }
+                                lifelog_proto::control_message::Msg::State(state_req) => {
+                                    if let Some(state) = state_req.state {
+                                        let _ = server_handle.report_collector_state(state).await;
+                                    }
+                                }
+                                lifelog_proto::control_message::Msg::Heartbeat(_) => {
+                                    tracing::debug!(id = ?collector_id, "Heartbeat received");
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("ControlStream error: {}", e);
+                        break;
+                    }
+                }
+            }
+
+            if let Some(id) = collector_id {
+                server_handle.remove_collector(&id).await;
+                tracing::info!(id = %id, "Collector ControlStream closed");
+            }
+        });
+
+        Ok(Response::new(ReceiverStream::new(rx)))
+    }
+
     async fn register_collector(
         &self,
         request: TonicRequest<RegisterCollectorRequest>,
     ) -> Result<TonicResponse<RegisterCollectorResponse>, TonicStatus> {
+        // Legacy unary registration — kept for backward compatibility but discouraged
         let inner = request.into_inner();
-        let collector_config: CollectorConfig = inner
+        let config = inner
             .config
-            .ok_or_else(|| TonicStatus::invalid_argument("missing config"))?
-            .into();
-        let collector_ip = format!(
-            "http://{}:{}",
-            collector_config.host.clone(),
-            collector_config.port.clone()
-        );
-        tracing::info!(ip = %collector_ip, id = %collector_config.id, "Register collector request");
+            .ok_or_else(|| TonicStatus::invalid_argument("missing config"))?;
 
-        let endpoint = tonic::transport::Endpoint::from_shared(collector_ip.clone());
-        match endpoint {
-            Err(ref e) => {
-                tracing::error!(?endpoint, "Invalid endpoint");
-                Err(TonicStatus::internal(format!(
-                    "Failed to create endpoint: {}",
-                    e
-                )))
-            }
-            Ok(endpoint) => {
-                let endpoint = endpoint.connect_timeout(time::Duration::from_secs(10));
+        tracing::warn!(id = %config.id, "Legacy RegisterCollector called, use ControlStream instead");
 
-                let channel = endpoint.connect().await.map_err(|e| {
-                    TonicStatus::internal(format!("Failed to connect to endpoint: {}", e))
-                })?;
-                let client = CollectorServiceClient::new(channel);
+        let (tx, _rx) = mpsc::channel(1); // Dummy channel for legacy
+        let collector = RegisteredCollector {
+            id: config.id.clone(),
+            mac: config.id.clone(),
+            address: String::new(),
+            command_tx: tx,
+            latest_config: Some(config),
+        };
 
-                let actual_mac_id = collector_config.id.clone();
+        self.server.register_collector(collector).await;
 
-                let collector = RegisteredCollector {
-                    id: actual_mac_id.clone(),
-                    mac: actual_mac_id.clone(),
-                    address: collector_ip.to_string(),
-                    grpc_client: client.clone(),
-                };
-
-                self.server.register_collector(collector.clone()).await;
-
-                tracing::info!(id = %actual_mac_id, "Collector registered");
-
-                Ok(TonicResponse::new(RegisterCollectorResponse {
-                    success: true,
-                    session_id: chrono::Utc::now().timestamp_subsec_nanos() as u64
-                        + chrono::Utc::now().timestamp() as u64,
-                }))
-            }
-        }
+        Ok(TonicResponse::new(RegisterCollectorResponse {
+            success: true,
+            session_id: chrono::Utc::now().timestamp() as u64,
+        }))
     }
 
     async fn get_config(
@@ -145,7 +178,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             .server
             .get_data(
                 keys.iter()
-                    .map(|k| LifelogFrameKey::from(k.clone()))
+                    .map(|k| k.clone().into())
                     .collect(),
             )
             .await
@@ -174,7 +207,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             true => {
                 let _ = self
                     .server
-                    .report_collector_state(state.clone().into())
+                    .report_collector_state(state)
                     .await;
                 Ok(TonicResponse::new(ReportStateResponse {
                     acknowledged: true,
@@ -195,7 +228,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         let state = self.server.get_state().await;
         //let proto_state = s
         Ok(TonicResponse::new(GetSystemStateResponse {
-            state: Some(state.into()), // TODO: Replace this with the system state
+            state: Some(state), // TODO: Replace this with the system state
                                        // instead of the server state (i need some work with the proto files)
         }))
     }

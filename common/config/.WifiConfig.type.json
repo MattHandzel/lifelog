@@ -1,1 +1,0 @@
-{"fields":[["enabled","bool"],["interval","f64"],["output_dir","PathBuf"],["scan_command","String"]],"ident":"WifiConfig","metadata_type":"Config","variants":[]}

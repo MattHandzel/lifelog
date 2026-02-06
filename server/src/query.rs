@@ -1,10 +1,8 @@
-use crate::server::LifelogData;
 use lifelog_core::uuid::Uuid;
-use lifelog_types::*;
+use lifelog_core::*;
+use lifelog_proto::DataModality;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
-
-use crate::surreal_types::*;
 
 /// Validates a table name contains only safe characters (alphanumeric,
 /// underscore, colon, hyphen). Prevents SQL injection via table names.
@@ -43,43 +41,102 @@ pub(crate) async fn get_all_uuids_from_origin(
 pub(crate) async fn get_data_by_key(
     db: &Surreal<Client>,
     key: &LifelogFrameKey,
-) -> Result<LifelogData, LifelogError> {
+) -> Result<lifelog_proto::LifelogData, LifelogError> {
     let table = key.origin.get_table_name();
     let id = key.uuid.to_string();
 
-    match key.origin.modality {
+    let modality = DataModality::from_str_name(&key.origin.modality_name).ok_or_else(|| {
+        LifelogError::Database(format!("Invalid modality name: {}", key.origin.modality_name))
+    })?;
+
+    match modality {
         DataModality::Screen => {
-            let row: Option<ScreenFrameSurreal> = db
+            let mut frame: lifelog_proto::ScreenFrame = db
                 .select((&table, &*id))
                 .await
-                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?;
-            let mut frame: data_modalities::ScreenFrame = row
-                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?
-                .into();
-            frame.uuid = key.uuid;
-            Ok(frame.into())
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Screenframe(frame)),
+            })
         }
         DataModality::Ocr => {
-            let row: Option<OcrFrameSurreal> = db
+            let mut frame: lifelog_proto::OcrFrame = db
                 .select((&table, &*id))
                 .await
-                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?;
-            let mut frame: data_modalities::OcrFrame = row
-                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?
-                .into();
-            frame.uuid = key.uuid;
-            Ok(frame.into())
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Ocrframe(frame)),
+            })
         }
         DataModality::Browser => {
-            let row: Option<BrowserFrameSurreal> = db
+            let mut frame: lifelog_proto::BrowserFrame = db
                 .select((&table, &*id))
                 .await
-                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?;
-            let mut frame: data_modalities::BrowserFrame = row
-                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?
-                .into();
-            frame.uuid = key.uuid;
-            Ok(frame.into())
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Browserframe(frame)),
+            })
+        }
+        DataModality::Audio => {
+            let mut frame: lifelog_proto::AudioFrame = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Audioframe(frame)),
+            })
+        }
+        DataModality::Keystrokes => {
+            let mut frame: lifelog_proto::KeystrokeFrame = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Keystrokeframe(frame)),
+            })
+        }
+        DataModality::Clipboard => {
+            let mut frame: lifelog_proto::ClipboardFrame = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Clipboardframe(frame)),
+            })
+        }
+        DataModality::ShellHistory => {
+            let mut frame: lifelog_proto::ShellHistoryFrame = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Shellhistoryframe(frame)),
+            })
+        }
+        DataModality::WindowActivity => {
+            let mut frame: lifelog_proto::WindowActivityFrame = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Windowactivityframe(frame)),
+            })
         }
     }
 }

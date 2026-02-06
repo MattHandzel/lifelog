@@ -1,9 +1,8 @@
 pub use anyhow;
 pub use chrono;
-pub use chrono::{DateTime, Utc};
+pub use chrono::{DateTime, Utc, NaiveDateTime};
 pub use pretty_assertions;
 pub use proptest;
-//pub use serde;
 pub use serde_json;
 pub use thiserror;
 pub use tracing;
@@ -18,113 +17,192 @@ pub use tonic;
 pub mod correlation;
 pub mod replay;
 pub mod time_skew;
+pub mod error;
+pub mod validate;
 
-//pub use serde::de::Deserialize;
-//pub use serde::ser::Serialize;
-//use surrealdb::sql::serde; // TODO: Refactor this please
-//
-//use serde::{Deserializer, Serializer};
-//
-///// Serialize a `Uuid` as a plain string (`"550e8400-e29b-41d4-a716-446655440000"`)
-//pub fn serialize_uuids<S>(id: &Uuid, serializer: S) -> Result<S::Ok, S::Error>
-//where
-//    S: Serializer,
-//{
-//    // `to_hyphenated()` gives the canonical form with dashes
-//    serializer.serialize_str(&id.hyphenated().to_string())
-//}
-//
-//use serde::de::{Error as DeError, Unexpected};
-//
-//pub fn deserialize_uuids<'de, D>(deserializer: D) -> Result<Uuid, D::Error>
-//where
-//    D: Deserializer<'de>,
-//{
-//    let s = String::deserialize(deserializer)?;
-//    Uuid::parse_str(&s).map_err(|e| {
-//        DeError::invalid_value(
-//            Unexpected::Str(&s),
-//            &format!("a valid UUID: {}", e).as_str(),
-//        )
-//    })
-//}
+pub use error::{LifelogError, TransformError};
+pub use validate::Validate;
 
-// TODO: Refactor this trait so it no longer has the `uuid` field. The uuid is the key so it should
-// not be stored with the data. This requies a refactor of much more of this project.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum Unit {
+    GB,
+    Count,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum UsageType {
+    Percentage(f32),
+    RealValue(u64, Unit),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InterfaceState {}
+
+type Query = String;
+
+#[derive(Debug, Clone)]
+pub struct ActorConfig;
+
+#[derive(Debug, Clone)]
+pub enum ServerAction<Q, G, U> {
+    Sleep(tokio::time::Duration),
+    Query(Q),
+    GetData(G),
+    TransformData(Vec<LifelogFrameKey>),
+    SyncData(Query),
+    HealthCheck,
+    ReceiveData(Vec<U>),
+    CompressData(Vec<U>),
+    RegisterActor(ActorConfig),
+}
+
+pub type CollectorId = String;
+pub type InterfaceId = String;
+pub type ServerId = String;
+
+#[derive(Clone, Debug)]
+pub struct RegisteredCollector<CMD, CFG> {
+    pub id: CollectorId,
+    pub address: String,
+    pub mac: String,
+    pub command_tx: tokio::sync::mpsc::Sender<Result<CMD, tonic::Status>>,
+    pub latest_config: Option<CFG>,
+}
+
+#[derive(Clone, Debug)]
+pub struct RegisteredInterface {
+    pub id: InterfaceId,
+    pub address: String,
+}
+
 pub trait DataType {
     fn uuid(&self) -> Uuid;
     fn timestamp(&self) -> DateTime<Utc>;
-
-    // TODO:
-    // fn schema
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub enum LifelogMacroMetaDataType {
-    Config,
-    Data,
-    None,
+/// Core trait for any data modality that can be stored in SurrealDB.
+pub trait Modality: Sized + Send + Sync + 'static + serde::de::DeserializeOwned + DataType {
+    fn get_table_name() -> &'static str;
+    fn get_surrealdb_schema() -> &'static str;
+    fn get_timestamp(&self) -> DateTime<Utc> {
+        self.timestamp()
+    }
+    fn get_uuid(&self) -> Uuid {
+        self.uuid()
+    }
 }
 
-// use core::{slice, str};
-/*
-const fn folder_name(path: &str) -> &str {
-    let bytes = path.as_bytes();
-    let mut last_slash = 0;
-    let mut second_last_slash = 0;
+pub type DeviceId = String;
 
-    // Same loop logic to find slashes as before
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'/' || bytes[i] == b'\\' {
-            second_last_slash = last_slash;
-            last_slash = i;
+#[derive(Debug, Clone, Hash, Deserialize, Serialize, PartialEq)]
+pub enum DataOriginType {
+    DeviceId(DeviceId),
+    DataOrigin(Box<DataOrigin>),
+}
+
+#[derive(Debug, Clone, Hash, Deserialize, Serialize, PartialEq)]
+pub struct DataOrigin {
+    pub origin: DataOriginType,
+    pub modality_name: String, // Stringified modality name to avoid proto dependency
+}
+
+impl DataOrigin {
+    pub fn new(source: DataOriginType, modality_name: String) -> Self {
+        DataOrigin {
+            origin: source,
+            modality_name,
         }
-        i += 1;
     }
 
-    // Calculate slice bounds using pointer arithmetic
-    let start = second_last_slash + 1;
-    let len = last_slash - start;
+    pub fn tryfrom_string(source: String) -> Result<Self, LifelogError> {
+        let parts = source.split(':').collect::<Vec<_>>();
+        match parts[..] {
+            [] => Err(LifelogError::InvalidDataModality(source)),
+            [_x] => Err(LifelogError::InvalidDataModality(source)),
+            [device_id, modality] => Ok(DataOrigin {
+                origin: DataOriginType::DeviceId(device_id.to_string()),
+                modality_name: modality.to_string(),
+            }),
+            [.., modality] => {
+                let potential_origin =
+                    DataOrigin::tryfrom_string(parts[0..parts.len() - 1].join(":"));
+                match potential_origin {
+                    Err(e) => Err(e),
+                    Ok(origin) => Ok(DataOrigin {
+                        origin: DataOriginType::DataOrigin(Box::new(origin)),
+                        modality_name: modality.to_string(),
+                    }),
+                }
+            }
+        }
+    }
 
-    // SAFETY: Original path is valid UTF-8, and we're slicing between valid slash positions
-    unsafe {
-        let ptr = bytes.as_ptr().add(start);
-        let byte_slice = slice::from_raw_parts(ptr, len);
-        str::from_utf8_unchecked(byte_slice)
+    pub fn get_table_name(&self) -> String {
+        match &self.origin {
+            DataOriginType::DeviceId(device_id) => {
+                format!(
+                    "{}:{}",
+                    device_id.replace(":", ""),
+                    self.modality_name
+                )
+            }
+            DataOriginType::DataOrigin(data_origin) => format!(
+                "{}:{}",
+                data_origin.get_table_name(),
+                self.modality_name
+            ),
+        }
     }
 }
-*/
 
-//use system_state::*;
+impl std::fmt::Display for DataOrigin {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.get_table_name())
+    }
+}
 
-//use target_lexicon::Triple as ComputerTargetTriple;
-//
-//enum PhoneType {
-//    Android(AndroidOperatingSystem),
-//    IPhone(IPhoneOperatingSystem),
-//}
-//
-//enum ComputerType {
-//    Desktop(ComputerTargetTriple),
-//    Laptop(ComputerTargetTriple),
-//}
-//
-//enum DeviceType {
-//    Phone(PhoneType),
-//    Computer(ComputerType),
-//}
-//
-//struct Collector {
-//    name: String,                                      // name of the collector
-//    device: DeviceType,                                // type of device (phone, computer, etc)
-//    location: URI, // location of the collector (ip address, bluetooth address, etc)
-//    config: CollectorConfig, // configuration of the collector
-//    state: CollectorState, // state of the collector (state of the collector and all data sources, loggers)
-//    data_sources: DashMap<DataSourceType, DataSource>, // data sources available on the device
-//    grpc_client: GrpcClient, // gRPC client to communicate with the server
-//    security_context: SecurityContext, // security context to ensure the data being sent is not tampered with
-//    command_tx: mpsc::Sender<CollectorCommand>, // commands to send between threads
-//    command_rx: mpsc::Receiver<CollectorCommand>, // commands to send between threads
-//}
-//
+pub struct LifelogImage {
+    pub uuid: Uuid,
+    pub timestamp: DateTime<Utc>,
+    pub image: image::DynamicImage,
+}
+
+pub struct LifelogText {
+    pub text: String,
+    pub uuid: Uuid,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Hash, Deserialize, Serialize)]
+pub struct LifelogFrameKey {
+    pub uuid: Uuid,
+    pub origin: DataOrigin,
+}
+
+impl LifelogFrameKey {
+    pub fn new(uuid: Uuid, origin: DataOrigin) -> Self {
+        LifelogFrameKey { uuid, origin }
+    }
+}
+
+impl std::fmt::Display for LifelogFrameKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<{}>:<{}>", self.origin.get_table_name(), self.uuid)
+    }
+}
+
+pub trait Transform {
+    type Input;
+    type Output;
+    type Config;
+
+    fn apply(&self, input: Self::Input) -> Result<Self::Output, TransformError>;
+    fn source(&self) -> DataOrigin;
+    fn destination(&self) -> DataOrigin;
+    fn config(&self) -> Self::Config;
+    fn new(source: DataOrigin, config: Self::Config) -> Self;
+
+    fn priority(&self) -> u8;
+}
+
+pub type Result<T, E = LifelogError> = std::result::Result<T, E>;

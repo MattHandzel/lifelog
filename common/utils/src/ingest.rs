@@ -218,4 +218,90 @@ mod tests {
             .insert(("c1".into(), "s1".into(), 123, 0));
         assert_eq!(ingester.is_chunk_indexed(0).await, true);
     }
+
+    mod proptests {
+        use super::*;
+        use proptest::prelude::*;
+
+        proptest! {
+            #![proptest_config(ProptestConfig::with_cases(64))]
+
+            #[test]
+            fn prop_ingester_offset_tracking(
+                chunks in prop::collection::vec(prop::collection::vec(1u8..=255, 1..=256), 1..=10),
+            ) {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .unwrap();
+                rt.block_on(async {
+                    let dir = tempfile::tempdir().unwrap();
+                    let cas = FsCas::new(dir.path());
+                    let backend = MockBackend::new();
+                    let mut ingester = ChunkIngester::new(
+                        &backend, cas, "prop-c".into(), "prop-s".into(), 42, 0,
+                    );
+
+                    let mut expected_offset = 0u64;
+                    for chunk in &chunks {
+                        let hash = sha256_hex(chunk);
+                        let next = ingester.apply_chunk(expected_offset, chunk, &hash).await.unwrap();
+                        expected_offset += chunk.len() as u64;
+                        prop_assert_eq!(next, expected_offset);
+                    }
+
+                    // All chunks should be persisted
+                    let persisted = backend.persisted.lock().unwrap();
+                    prop_assert_eq!(persisted.len(), chunks.len());
+                    Ok(())
+                })?;
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_ingester_backend_error_propagated() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        struct FailBackend {
+            should_fail: AtomicBool,
+        }
+
+        #[async_trait]
+        impl IngestBackend for &FailBackend {
+            async fn persist_metadata(
+                &self,
+                _collector_id: &str,
+                _stream_id: &str,
+                _session_id: u64,
+                _offset: u64,
+                _length: u64,
+                _hash: &str,
+            ) -> Result<(), String> {
+                if self.should_fail.load(Ordering::Relaxed) {
+                    Err("simulated backend failure".into())
+                } else {
+                    Ok(())
+                }
+            }
+
+            async fn is_indexed(
+                &self, _: &str, _: &str, _: u64, _: u64,
+            ) -> bool {
+                false
+            }
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let cas = FsCas::new(dir.path());
+        let backend = FailBackend {
+            should_fail: AtomicBool::new(true),
+        };
+        let mut ingester = ChunkIngester::new(&backend, cas, "c".into(), "s".into(), 1, 0);
+
+        let data = b"test-data";
+        let hash = sha256_hex(data);
+        let err = ingester.apply_chunk(0, data, &hash).await.unwrap_err();
+        assert!(matches!(err, IngestError::Backend(_)));
+    }
 }

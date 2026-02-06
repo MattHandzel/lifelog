@@ -13,6 +13,10 @@ prost-types = { workspace = true }
 serde = { workspace = true }
 pbjson = "0.7"
 pbjson-types = "0.7"
+lifelog-core = { path = "../lifelog-core" }
+tracing = { workspace = true }
+rand = "0.9.1"
+image = { workspace = true }
 
 [build-dependencies]
 tonic-build = { version = "0.13.1" }
