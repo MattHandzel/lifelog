@@ -20,6 +20,7 @@ pub trait IngestBackend {
         stream_id: &str,
         session_id: u64,
         offset: u64,
+        length: u64,
         hash: &str,
     ) -> Result<(), String>;
 
@@ -86,6 +87,7 @@ impl<B: IngestBackend> ChunkIngester<B> {
             &self.stream_id,
             self.session_id,
             offset,
+            bytes.len() as u64,
             hash,
         ).await.map_err(IngestError::Backend)?;
 
@@ -140,6 +142,7 @@ mod tests {
             stream_id: &str,
             session_id: u64,
             offset: u64,
+            _length: u64,
             _hash: &str,
         ) -> Result<(), String> {
             let mut p = self.persisted.lock().unwrap();

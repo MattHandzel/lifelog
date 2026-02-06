@@ -48,25 +48,19 @@ struct ChunkRecord {
     stream_id: String,
     session_id: u64,
     offset: u64,
+    length: u64,
     hash: String,
     indexed: bool,
 }
 
 async fn ensure_chunk_table(db: &Surreal<Client>) -> surrealdb::Result<()> {
-    if CREATED_TABLES.contains("chunk") {
+    if CREATED_TABLES.contains("upload_chunks") {
         return Ok(());
     }
     db.query(r#"
-        DEFINE TABLE chunk SCHEMAFULL;
-        DEFINE FIELD collector_id ON TABLE chunk TYPE string;
-        DEFINE FIELD stream_id ON TABLE chunk TYPE string;
-        DEFINE FIELD session_id ON TABLE chunk TYPE int;
-        DEFINE FIELD offset ON TABLE chunk TYPE int;
-        DEFINE FIELD hash ON TABLE chunk TYPE string;
-        DEFINE FIELD indexed ON TABLE chunk TYPE bool;
-        DEFINE INDEX chunk_session_offset ON TABLE chunk FIELDS collector_id, stream_id, session_id, offset UNIQUE;
+        DEFINE TABLE upload_chunks SCHEMALESS;
     "#).await?.check()?;
-    CREATED_TABLES.insert("chunk".to_string());
+    CREATED_TABLES.insert("upload_chunks".to_string());
     Ok(())
 }
 
@@ -82,6 +76,7 @@ impl IngestBackend for SurrealIngestBackend {
         stream_id: &str,
         session_id: u64,
         offset: u64,
+        length: u64,
         hash: &str,
     ) -> Result<(), String> {
         let db = self.db.clone();
@@ -92,14 +87,16 @@ impl IngestBackend for SurrealIngestBackend {
             stream_id: stream_id.to_string(),
             session_id,
             offset,
+            length,
             hash: hash.to_string(),
             indexed: false,
         };
         
         // Use a unique ID based on session and offset to ensure idempotency
         let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
+        println!("[SERVER] Persisting chunk metadata: id={}, offset={}, length={}", id, offset, length);
         
-        let _ : Vec<ChunkRecord> = db.query("UPSERT chunk:$id CONTENT $record")
+        let _ : Vec<ChunkRecord> = db.query("UPSERT type::thing('upload_chunks', $id) CONTENT $record")
             .bind(("id", id))
             .bind(("record", record))
             .await
@@ -121,7 +118,7 @@ impl IngestBackend for SurrealIngestBackend {
         let _ = ensure_chunk_table(&db).await;
 
         let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
-        let record: Option<ChunkRecord> = db.select(("chunk", id))
+        let record: Option<ChunkRecord> = db.select(("upload_chunks", id))
             .await
             .unwrap_or(None);
             
@@ -680,19 +677,21 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         let _inner = request.into_inner();
         let db = self.server.server.read().await.db.clone();
         
-        // Find the highest offset for this session in the 'chunk' table
-        let mut response = db.query("SELECT offset FROM chunk WHERE collector_id = $c AND stream_id = $s AND session_id = $sess ORDER BY offset DESC LIMIT 1")
-            .bind(("c", _inner.collector_id))
-            .bind(("s", _inner.stream_id))
+        // Find the highest offset for this session in the 'upload_chunks' table
+        let mut response = db.query("SELECT * FROM upload_chunks WHERE collector_id = $c AND stream_id = $s AND session_id = $sess ORDER BY offset DESC LIMIT 1")
+            .bind(("c", _inner.collector_id.clone()))
+            .bind(("s", _inner.stream_id.clone()))
             .bind(("sess", _inner.session_id))
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
             
-        let offsets: Vec<u64> = response.take(0)
+        let records: Vec<ChunkRecord> = response.take(0)
             .map_err(|e| Status::internal(format!("Parse error: {}", e)))?;
             
+        let offset = records.first().map(|r| r.offset + r.length).unwrap_or(0);
+            
         Ok(Response::new(GetUploadOffsetResponse {
-            offset: offsets.first().cloned().unwrap_or(0),
+            offset,
         }))
     }
 }

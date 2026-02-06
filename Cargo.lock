@@ -4010,6 +4010,7 @@ dependencies = [
  "lifelog-proto",
  "lifelog-types",
  "once_cell",
+ "portpicker",
  "prost",
  "prost-types",
  "serde",
@@ -4017,6 +4018,7 @@ dependencies = [
  "strum 0.27.1",
  "surrealdb",
  "sysinfo 0.35.0",
+ "tempfile",
  "thiserror 2.0.12",
  "tokio",
  "tokio-stream",
@@ -5464,6 +5466,15 @@ name = "portable-atomic"
 version = "1.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "350e9b48cbc6b0e028b0473b114454c6316e57336ee184ceab6e53f72c178b3e"
+
+[[package]]
+name = "portpicker"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be97d76faf1bfab666e1375477b23fde79eccf0276e9b63b92a39d676a889ba9"
+dependencies = [
+ "rand 0.8.5",
+]
 
 [[package]]
 name = "potential_utf"
