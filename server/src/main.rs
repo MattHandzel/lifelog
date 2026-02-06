@@ -26,6 +26,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_v1alpha()?; // This should be build_v1alpha otherwise the reflection gRPC service
                            // won't work with clients such as grpcui, it could be changed in the future
 
+    let (health_reporter, health_service) = tonic_health::server::health_reporter();
+    health_reporter
+        .set_service_status("", tonic_health::ServingStatus::Serving)
+        .await;
+
     let _time: DateTime<Utc> = Utc::now();
     let _uuid = Uuid::new_v4();
 
@@ -39,6 +44,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     TonicServer::builder()
         .add_service(reflection_service)
+        .add_service(health_service)
         .add_service(LifelogServerServiceServer::new(
             GRPCServerLifelogServerService {
                 server: server_handle2,

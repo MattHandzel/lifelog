@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::expect_used)]
 // src/lib.rs
 use lifelog_core::LifelogMacroMetaDataType;
 use proc_macro::TokenStream;
@@ -34,7 +35,7 @@ pub fn lifelog_type(attr: TokenStream, item: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(item as Item);
 
     // 2) extract ident, fields, variants
-    let (ident_str, mut fields_meta, variants_meta) = match &ast {
+    let (ident_str, fields_meta, variants_meta) = match &ast {
         Item::Struct(s) => {
             let f = if let Fields::Named(named) = &s.fields {
                 named

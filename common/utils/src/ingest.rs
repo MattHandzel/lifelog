@@ -110,6 +110,11 @@ impl<B: IngestBackend> ChunkIngester<B> {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::bool_assert_comparison
+)]
 mod tests {
     use super::*;
     use crate::cas::sha256_hex;

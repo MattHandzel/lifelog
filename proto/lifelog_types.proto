@@ -197,6 +197,7 @@ message ServerState {
   float threads = 5;
   google.protobuf.Timestamp timestamp_of_last_sync = 6;
   repeated ServerActionType pending_actions = 7;
+  string version = 8;
 }
 
 message SystemConfig {

@@ -147,6 +147,7 @@ impl Server {
         let state = SystemState {
             server_state: Some(ServerState {
                 name: config.server_name.clone(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
                 ..Default::default()
             }),
             ..Default::default()

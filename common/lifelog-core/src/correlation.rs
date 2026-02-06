@@ -41,6 +41,7 @@ pub fn within_interval(t: DateTime<Utc>, interval: TimeInterval, delta: Duration
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
     use crate::chrono::TimeZone;

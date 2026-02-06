@@ -1,6 +1,5 @@
 use chrono::{DateTime, Local};
 use directories::UserDirs;
-use image;
 
 pub mod cas;
 pub mod chunk;
@@ -10,7 +9,7 @@ pub fn replace_home_dir_in_path(path: String) -> String {
     let home_dir = UserDirs::new()
         .map(|d| d.home_dir().to_path_buf())
         .unwrap_or_else(|| std::path::PathBuf::from("/tmp"));
-    path.replace("~/", &format!("{}/", home_dir.to_str().unwrap()))
+    path.replace("~/", &format!("{}/", home_dir.to_str().unwrap_or("/tmp")))
 }
 
 pub fn timestamp_to_epoch(timestamp: &str) -> Result<i64, &'static str> {

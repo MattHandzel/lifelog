@@ -53,35 +53,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
-    // TODO: add windows support
-    //if !setup::n_processes_already_running("surreal", 1) {
-    //    let home = env::var("HOME").expect("Unable to read home directory");
-    //    let db_path = format!("rocksdb:{}/lifelog/data/db", home);
-    //
-    //    #[cfg(target_os = "macos")]
-    //    {
-    //        Command::new("surreal")
-    //            .arg("start")
-    //            .arg("--user")
-    //            .arg("root")
-    //            .arg("--pass")
-    //            .arg("root")
-    //            .arg("--log")
-    //            .arg("none")
-    //            .arg("--no-banner")
-    //            .arg(&db_path)
-    //            .spawn()
-    //            .expect("Failed to execute start surrealdb command");
-    //    }
-    //}
-
-    // let db spin up
-    //thread::sleep(time::Duration::from_millis(1000));
-    //
-    //if !setup::n_processes_already_running("surreal", 1) {
-    //    panic!("Surreal db auto-launch failed. Please try again.");
-    //}
-
     setup::initialize_project(&config).expect("Failed to initialize project");
 
     let reflection_service = Builder::configure()

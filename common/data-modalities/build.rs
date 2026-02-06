@@ -1,3 +1,4 @@
+#![allow(clippy::panic)]
 use anyhow::{Context, Result};
 use lifelog_core::LifelogMacroMetaDataType;
 use maplit::hashmap;

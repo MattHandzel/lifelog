@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         env::set_var("PROTOC", protoc);
     }
 
-    let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+    let out_dir = PathBuf::from(env::var("OUT_DIR")?);
     let descriptor_set = out_dir.join("lifelog_descriptor.bin");
     tonic_build::configure()
         .build_server(true)
@@ -23,8 +23,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                 "../../proto/lifelog_types.proto",
             ],
             &["../../proto"],
-        )
-        .expect("Failed to compile proto files. IF THIS IS HAPPENING TO YOU BECUASE SOME MESSAGES ARE NOT DEFINED, THEN IT MEANS THE MESSAGES AREN'T BEING AUTOMATICALLY CREATED, TO FIX THIS, COMMENT OUT THIS BUILD SCRIPT (from the tonic_build:configure() to this line) AND BUILD");
+        )?;
 
     let descriptor_bytes = std::fs::read(&descriptor_set)?;
     pbjson_build::Builder::new()
