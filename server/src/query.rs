@@ -145,5 +145,16 @@ pub(crate) async fn get_data_by_key(
                 )),
             })
         }
+        DataModality::Mouse => {
+            let mut frame: lifelog_proto::MouseFrame = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_proto::LifelogData {
+                payload: Some(lifelog_proto::lifelog_data::Payload::Mouseframe(frame)),
+            })
+        }
     }
 }

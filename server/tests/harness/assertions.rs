@@ -19,9 +19,11 @@ pub async fn assert_final_offset(
 ) {
     let resp = client
         .get_upload_offset(GetUploadOffsetRequest {
-            collector_id: collector_id.to_string(),
-            stream_id: stream_id.to_string(),
-            session_id,
+            stream: Some(lifelog_proto::StreamIdentity {
+                collector_id: collector_id.to_string(),
+                stream_id: stream_id.to_string(),
+                session_id,
+            }),
         })
         .await
         .expect("get_upload_offset failed")
@@ -60,9 +62,11 @@ pub async fn assert_no_cross_contamination(
             // Query device A's collector_id with device B's session_id
             let resp = client
                 .get_upload_offset(GetUploadOffsetRequest {
-                    collector_id: cid_a.clone(),
-                    stream_id: sid_a.clone(),
-                    session_id: *sess_b,
+                    stream: Some(lifelog_proto::StreamIdentity {
+                        collector_id: cid_a.clone(),
+                        stream_id: sid_a.clone(),
+                        session_id: *sess_b,
+                    }),
                 })
                 .await
                 .expect("get_upload_offset failed")

@@ -103,9 +103,11 @@ impl DeviceClient {
         let resp = self
             .client
             .get_upload_offset(GetUploadOffsetRequest {
-                collector_id: self.device_id.clone(),
-                stream_id: stream_id.to_string(),
-                session_id,
+                stream: Some(lifelog_proto::StreamIdentity {
+                    collector_id: self.device_id.clone(),
+                    stream_id: stream_id.to_string(),
+                    session_id,
+                }),
             })
             .await?;
         Ok(resp.into_inner().offset)

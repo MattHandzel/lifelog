@@ -49,7 +49,7 @@ pub enum LifelogError {
     },
 
     #[error("validation failed for field '{field}': {reason}")]
-    Validation { field: &'static str, reason: String },
+    Validation { field: String, reason: String },
 
     #[error("tried to parse invalid data modality: '{0}'")]
     InvalidDataModality(String),

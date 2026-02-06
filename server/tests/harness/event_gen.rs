@@ -31,9 +31,11 @@ pub fn generate_chunk_sequence(
         let hash = sha256_hex(&data);
 
         chunks.push(Chunk {
-            collector_id: collector_id.to_string(),
-            stream_id: stream_id.to_string(),
-            session_id,
+            stream: Some(lifelog_proto::StreamIdentity {
+                collector_id: collector_id.to_string(),
+                stream_id: stream_id.to_string(),
+                session_id,
+            }),
             offset,
             data,
             hash,

@@ -3,15 +3,14 @@ use lifelog_proto::lifelog_server_service_server::LifelogServerService;
 use lifelog_proto::{
     Ack, Chunk, ControlMessage, GetDataRequest, GetDataResponse, GetStateRequest,
     GetSystemConfigRequest, GetSystemConfigResponse, GetSystemStateResponse,
-    GetUploadOffsetRequest, GetUploadOffsetResponse, QueryRequest, QueryResponse,
-    RegisterCollectorRequest, RegisterCollectorResponse, ReportStateRequest, ReportStateResponse,
-    ServerCommand, SetSystemConfigRequest, SetSystemConfigResponse,
+    GetUploadOffsetRequest, GetUploadOffsetResponse, QueryRequest, QueryResponse, ServerCommand,
+    SetSystemConfigRequest, SetSystemConfigResponse,
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
-use tonic::{Request as TonicRequest, Response as TonicResponse, Status as TonicStatus};
 use tonic::{Request, Response, Status, Streaming};
+use tonic::{Response as TonicResponse, Status as TonicStatus};
 use utils::ingest::ChunkIngester;
 
 use crate::ingest::{ChunkRecord, SurrealIngestBackend};
@@ -63,6 +62,9 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                                 lifelog_proto::control_message::Msg::Heartbeat(_) => {
                                     tracing::debug!(id = ?collector_id, "Heartbeat received");
                                 }
+                                lifelog_proto::control_message::Msg::SuggestUpload(suggest) => {
+                                    tracing::info!(id = %msg.collector_id, ?suggest, "SuggestUpload received");
+                                }
                             }
                         }
                     }
@@ -80,35 +82,6 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         });
 
         Ok(Response::new(ReceiverStream::new(rx)))
-    }
-
-    async fn register_collector(
-        &self,
-        request: TonicRequest<RegisterCollectorRequest>,
-    ) -> Result<TonicResponse<RegisterCollectorResponse>, TonicStatus> {
-        // Legacy unary registration — kept for backward compatibility but discouraged
-        let inner = request.into_inner();
-        let config = inner
-            .config
-            .ok_or_else(|| TonicStatus::invalid_argument("missing config"))?;
-
-        tracing::warn!(id = %config.id, "Legacy RegisterCollector called, use ControlStream instead");
-
-        let (tx, _rx) = mpsc::channel(1); // Dummy channel for legacy
-        let collector = RegisteredCollector {
-            id: config.id.clone(),
-            mac: config.id.clone(),
-            address: String::new(),
-            command_tx: tx,
-            latest_config: Some(config),
-        };
-
-        self.server.register_collector(collector).await;
-
-        Ok(TonicResponse::new(RegisterCollectorResponse {
-            success: true,
-            session_id: chrono::Utc::now().timestamp() as u64,
-        }))
     }
 
     async fn get_config(
@@ -188,31 +161,6 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         Ok(Response::new(response))
     }
 
-    // TODO: Refactor ALL functions to include this check to see if the thing doing the requesting
-    // has been registered or not. I want to refactor my server to only think about clients.
-    async fn report_state(
-        &self,
-        _request: tonic::Request<ReportStateRequest>,
-    ) -> Result<TonicResponse<ReportStateResponse>, TonicStatus> {
-        let state = _request
-            .into_inner()
-            .state
-            .ok_or_else(|| TonicStatus::invalid_argument("missing state"))?;
-        // Ensure we got a state reported by a registered collector, if not then we ignore it
-        match self.server.contains_collector(state.name.clone()).await {
-            true => {
-                let _ = self.server.report_collector_state(state).await;
-                Ok(TonicResponse::new(ReportStateResponse {
-                    acknowledged: true,
-                }))
-            }
-            false => Err(TonicStatus::internal(format!(
-                "Collector {} is not registered",
-                state.name
-            ))),
-        }
-    }
-
     async fn get_state(
         &self,
         _request: tonic::Request<GetStateRequest>,
@@ -232,7 +180,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
     ) -> Result<Response<Ack>, Status> {
         let mut stream = request.into_inner();
         let mut ingester: Option<ChunkIngester<SurrealIngestBackend>> = None;
-        let mut last_session_info = (String::new(), String::new(), 0u64);
+        let mut last_stream: Option<lifelog_proto::StreamIdentity> = None;
         let mut last_acked_offset = 0;
 
         while let Some(chunk_result) = stream.next().await {
@@ -240,11 +188,12 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 chunk_result.map_err(|e| Status::internal(format!("Stream error: {}", e)))?;
 
             if ingester.is_none() {
-                last_session_info = (
-                    chunk.collector_id.clone(),
-                    chunk.stream_id.clone(),
-                    chunk.session_id,
-                );
+                let stream_id = chunk
+                    .stream
+                    .as_ref()
+                    .ok_or_else(|| Status::invalid_argument("missing stream identity"))?;
+                last_stream = Some(stream_id.clone());
+
                 let server = self.server.server.read().await;
                 let backend = SurrealIngestBackend {
                     db: server.db.clone(),
@@ -253,9 +202,9 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 ingester = Some(ChunkIngester::new(
                     backend,
                     cas,
-                    chunk.collector_id.clone(),
-                    chunk.stream_id.clone(),
-                    chunk.session_id,
+                    stream_id.collector_id.clone(),
+                    stream_id.stream_id.clone(),
+                    stream_id.session_id,
                     chunk.offset,
                 ));
             }
@@ -274,9 +223,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         }
 
         Ok(Response::new(Ack {
-            collector_id: last_session_info.0,
-            stream_id: last_session_info.1,
-            session_id: last_session_info.2,
+            stream: last_stream,
             acked_offset: last_acked_offset,
         }))
     }
@@ -286,13 +233,17 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         request: Request<GetUploadOffsetRequest>,
     ) -> Result<Response<GetUploadOffsetResponse>, Status> {
         let _inner = request.into_inner();
+        let stream_id = _inner
+            .stream
+            .as_ref()
+            .ok_or_else(|| Status::invalid_argument("missing stream identity"))?;
         let db = self.server.server.read().await.db.clone();
 
         // Find the highest offset for this session in the 'upload_chunks' table
         let mut response = db.query("SELECT * FROM upload_chunks WHERE collector_id = $c AND stream_id = $s AND session_id = $sess ORDER BY offset DESC LIMIT 1")
-            .bind(("c", _inner.collector_id.clone()))
-            .bind(("s", _inner.stream_id.clone()))
-            .bind(("sess", _inner.session_id))
+            .bind(("c", stream_id.collector_id.clone()))
+            .bind(("s", stream_id.stream_id.clone()))
+            .bind(("sess", stream_id.session_id))
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
 
