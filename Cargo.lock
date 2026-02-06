@@ -8798,10 +8798,12 @@ name = "utils"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bincode",
  "chrono",
  "directories",
  "image 0.25.6",
  "proptest",
+ "serde",
  "sha2",
  "tempfile",
  "thiserror 2.0.12",

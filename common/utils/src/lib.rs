@@ -1,6 +1,7 @@
 use chrono::{DateTime, Local};
 use directories::UserDirs;
 
+pub mod buffer;
 pub mod cas;
 pub mod chunk;
 pub mod ingest;

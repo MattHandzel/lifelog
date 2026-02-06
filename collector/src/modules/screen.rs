@@ -15,9 +15,9 @@ use lifelog_proto::to_pb_ts;
 use std::io::Cursor;
 
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 use crate::data_source::{DataSource, DataSourceError, DataSourceHandle};
+use utils::buffer::DiskBuffer;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -25,29 +25,57 @@ static RUNNING: AtomicBool = AtomicBool::new(false);
 pub struct ScreenDataSource {
     config: ScreenConfig,
     logger: ScreenLogger,
-    pub buffer: Arc<Mutex<Vec<ScreenFrame>>>,
+    pub buffer: Arc<DiskBuffer<ScreenFrame>>,
 }
 
 impl ScreenDataSource {
     pub fn new(config: ScreenConfig) -> Result<Self, DataSourceError> {
-        let logger = ScreenLogger::new(config.clone()); // handle error?
+        let logger = ScreenLogger::new(config.clone());
+        let buffer_path = std::path::Path::new(&config.output_dir).join("buffer");
+        let buffer = DiskBuffer::new(&buffer_path).map_err(|e| {
+            DataSourceError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+
         Ok(ScreenDataSource {
             config,
             logger: logger?,
-            buffer: Arc::new(Mutex::new(Vec::new())),
+            buffer: Arc::new(buffer),
         })
     }
 
     pub async fn get_data(&mut self) -> Result<Vec<ScreenFrame>, DataSourceError> {
-        let buffer_guard = self.buffer.lock().await;
-
-        Ok(buffer_guard.clone())
+        let (_, items) = self.buffer.peek_chunk(100).await.map_err(|e| {
+            DataSourceError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+        Ok(items)
     }
 
     pub async fn clear_buffer(&self) -> Result<(), DataSourceError> {
-        let mut buffer_guard = self.buffer.lock().await;
-
-        buffer_guard.clear();
+        // Mark all current data as committed
+        let start = self.buffer.get_committed_offset().await.map_err(|e| {
+            DataSourceError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+        let size = self.buffer.get_uncommitted_size().await.map_err(|e| {
+            DataSourceError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+        self.buffer.commit_offset(start + size).await.map_err(|e| {
+            DataSourceError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
         Ok(())
     }
 }
@@ -60,24 +88,28 @@ impl DataSource for ScreenDataSource {
         ScreenDataSource::new(config)
     }
 
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
     fn start(&self) -> Result<DataSourceHandle, DataSourceError> {
         if RUNNING.load(Ordering::SeqCst) {
             tracing::warn!("ScreenDataSource: Start called but task is already running.");
             return Err(DataSourceError::AlreadyRunning);
         }
 
-        tracing::info!("ScreenDataSource: Starting data source task to store in memory");
+        tracing::info!("ScreenDataSource: Starting data source task to store in WAL");
         RUNNING.store(true, Ordering::SeqCst);
 
         let source_clone = self.clone();
 
         let _join_handle = tokio::spawn(async move {
             let task_result = source_clone.run().await;
-            tracing::info!(result = ?task_result, "ScreenDataSource (in-memory) background task finished");
+            tracing::info!(result = ?task_result, "ScreenDataSource (WAL) background task finished");
             task_result
         });
 
-        tracing::info!("ScreenDataSource: Data source task (in-memory) started successfully");
+        tracing::info!("ScreenDataSource: Data source task (WAL) started successfully");
         let new_join_handle = tokio::spawn(async { Ok(()) });
         Ok(DataSourceHandle {
             join: new_join_handle,
@@ -117,21 +149,22 @@ impl DataSource for ScreenDataSource {
                         mime_type: "image/png".to_string(),
                     };
 
-                    let mut store_guard = self.buffer.lock().await;
-                    store_guard.push(captured);
+                    self.buffer.append(&captured).await.map_err(|e| {
+                        DataSourceError::Io(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            e.to_string(),
+                        ))
+                    })?;
 
-                    tracing::debug!(
-                        total_images = store_guard.len(),
-                        "ScreenDataSource: Stored screen capture in memory"
-                    );
+                    tracing::debug!("ScreenDataSource: Stored screen capture in WAL");
                 }
                 Err(e) => {
-                    tracing::error!(error = %e, "ScreenDataSource: Failed to capture screen data for in-memory store");
+                    tracing::error!(error = %e, "ScreenDataSource: Failed to capture screen data for WAL store");
                 }
             }
             sleep(Duration::from_secs_f64(self.config.interval)).await;
         }
-        tracing::info!("ScreenDataSource: In-memory run loop finished");
+        tracing::info!("ScreenDataSource: WAL run loop finished");
         Ok(())
     }
 

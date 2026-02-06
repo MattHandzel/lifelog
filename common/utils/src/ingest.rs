@@ -22,6 +22,7 @@ pub trait IngestBackend {
         offset: u64,
         length: u64,
         hash: &str,
+        payload: &[u8],
     ) -> Result<(), String>;
 
     /// Check if the chunk at the given offset is fully indexed and queryable.
@@ -94,6 +95,7 @@ impl<B: IngestBackend> ChunkIngester<B> {
                 offset,
                 bytes.len() as u64,
                 hash,
+                bytes,
             )
             .await
             .map_err(IngestError::Backend)?;
@@ -145,6 +147,7 @@ mod tests {
             offset: u64,
             _length: u64,
             _hash: &str,
+            _payload: &[u8],
         ) -> Result<(), String> {
             let mut p = self.persisted.lock().unwrap();
             p.insert((
@@ -277,6 +280,7 @@ mod tests {
                 _offset: u64,
                 _length: u64,
                 _hash: &str,
+                _payload: &[u8],
             ) -> Result<(), String> {
                 if self.should_fail.load(Ordering::Relaxed) {
                     Err("simulated backend failure".into())

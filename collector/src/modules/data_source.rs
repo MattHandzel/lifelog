@@ -41,12 +41,7 @@ pub enum DataSourceError {
 pub trait DataSource: Any {
     type Config: Clone + Debug + Send + Sync + 'static;
 
-    fn as_any(&self) -> &(dyn Any + '_)
-    where
-        Self: Sized,
-    {
-        self
-    }
+    fn as_any(&self) -> &dyn Any;
 
     fn start(&self) -> Result<DataSourceHandle, DataSourceError>;
 

@@ -2,7 +2,6 @@ use super::data_source::{DataSource, DataSourceHandle};
 use crate::modules::browser_history::BrowserHistorySource;
 use crate::modules::screen::ScreenDataSource;
 use config;
-use data_modalities::screen::ScreenFrame;
 use mac_address::get_mac_address;
 use std::any::Any;
 use std::collections::HashMap;
@@ -326,18 +325,15 @@ impl Collector {
             if let Some(running_screen_src) =
                 (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>()
             {
-                let source_dyn_box_ref: &Arc<
-                    Mutex<Box<dyn DataSource<Config = ScreenConfig> + Send + Sync + 'static>>,
-                > = &running_screen_src.instance;
-                let source_dyn_ref = &**source_dyn_box_ref;
-
-                if let Some(screen_ds) =
-                    (source_dyn_ref as &dyn Any).downcast_ref::<ScreenDataSource>()
-                {
-                    let buf_guard = screen_ds.buffer.lock().await;
-                    let images = buf_guard.clone();
-
-                    let screen_buf_size = images.capacity() * std::mem::size_of::<ScreenFrame>();
+                let guard = running_screen_src.instance.lock().await;
+                if let Some(screen_ds) = guard.as_any().downcast_ref::<ScreenDataSource>() {
+                    let screen_buf_size = match screen_ds.buffer.get_uncommitted_size().await {
+                        Ok(s) => s as usize,
+                        Err(e) => {
+                            tracing::error!("Failed to get buffer size: {}", e);
+                            0
+                        }
+                    };
 
                     let fs = format!("Screen source buffer length: {}", screen_buf_size);
                     buffer_states.push(fs.to_string());
