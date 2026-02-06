@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 description = "A project to log, process, and interact with various sources of data for your lifelog"
 
+[lints]
+workspace = true
+
 [dependencies]
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }

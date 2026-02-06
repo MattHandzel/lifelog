@@ -3,6 +3,9 @@ name="lifelog-proto"
 edition="2021"
 version="0.1.0"
 
+[lints]
+workspace = true
+
 [dependencies]
 tonic = { version = "0.13.1" }
 prost = { version = "0.13.5"}

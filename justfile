@@ -31,6 +31,14 @@ run-server:
 run-collector:
     nix develop --command cargo run -p lifelog-collector --bin lifelog-collector
 
+# Run tests with nextest (parallel, per-process isolation)
+test-fast:
+    nix develop --command cargo nextest run --all-targets
+
+# Continuous check-on-save (requires bacon in nix shell)
+watch:
+    nix develop --command bacon
+
 # Clean temporary test data
 clean-tests:
     rm -rf /tmp/lifelog-test-*

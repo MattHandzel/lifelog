@@ -6,6 +6,9 @@ authors = ["you"]
 edition = "2021"
 default-run = "lifelog-server-frontend"
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "lifelog-server-frontend"
 path = "src/main.rs"

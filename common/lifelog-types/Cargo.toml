@@ -3,6 +3,9 @@ name="lifelog-types"
 edition="2021"
 version="0.1.0"
 
+[lints]
+workspace = true
+
 [dependencies]
 uuid = { version = "1.16", features = ["v6"] }
 chrono = { version = "0.4", features = ["serde"] }

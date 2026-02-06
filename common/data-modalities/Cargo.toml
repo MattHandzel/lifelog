@@ -3,6 +3,9 @@ name="data-modalities"
 edition="2021"
 version="0.1.0"
 
+[lints]
+workspace = true
+
 [dependencies]
 lifelog-core= { path = "../lifelog-core" }
 lifelog-macros = { path = "../macros" }
