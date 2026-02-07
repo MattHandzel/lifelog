@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 
+use crate::data_retrieval::get_data_by_key;
 use crate::db::add_data_to_db;
-use crate::query::get_data_by_key;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) enum LifelogTransform {

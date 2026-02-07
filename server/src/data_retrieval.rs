@@ -158,3 +158,28 @@ pub(crate) async fn get_data_by_key(
         }
     }
 }
+
+pub(crate) async fn get_keys_after_timestamp(
+    db: &Surreal<Client>,
+    origin: &DataOrigin,
+    after: DateTime<Utc>,
+    limit: usize,
+) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+    let table = validate_table_name(origin.get_table_name())?;
+    let after_str = after.to_rfc3339();
+    let sql = format!("SELECT VALUE record::id(id) as uuid FROM `{table}` WHERE timestamp > '{after_str}' ORDER BY timestamp ASC LIMIT {limit}");
+
+    let uuids: Vec<String> = db
+        .query(sql)
+        .await
+        .map_err(|e| LifelogError::Database(format!("query failed: {}", e)))?
+        .take(0)
+        .map_err(|e| LifelogError::Database(format!("take(0) failed: {}", e)))?;
+
+    let uuids = uuids
+        .into_iter()
+        .filter_map(|s| s.parse::<Uuid>().ok())
+        .map(|uuid| LifelogFrameKey::new(uuid, origin.clone()))
+        .collect();
+    Ok(uuids)
+}
