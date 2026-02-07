@@ -123,6 +123,17 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE INDEX `{table}_win_idx` ON `{table}` FIELDS window_title SEARCH ANALYZER SIMPLE BM25;
         "#,
     },
+    TableSchema {
+        modality: DataModality::Mouse,
+        fields_ddl: r#"
+            DEFINE FIELD timestamp      ON `{table}` TYPE datetime;
+            DEFINE FIELD activity_level ON `{table}` TYPE int;
+            DEFINE FIELD button_mask    ON `{table}` TYPE int;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+        "#,
+    },
 ];
 
 /// Upload chunks metadata table schema.

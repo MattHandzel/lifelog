@@ -3,7 +3,7 @@ use lifelog_proto::SystemState;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 
-use crate::query::get_all_uuids_from_origin;
+use crate::data_retrieval::get_all_uuids_from_origin;
 use crate::server::RegisteredCollector;
 
 pub(crate) async fn sync_data_with_collectors(

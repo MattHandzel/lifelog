@@ -3,6 +3,7 @@ pub mod policy;
 pub mod server;
 
 // Internal modules (accessible to server.rs and each other within the crate)
+pub(crate) mod data_retrieval;
 pub(crate) mod db;
 pub(crate) mod grpc_service;
 pub(crate) mod ingest;

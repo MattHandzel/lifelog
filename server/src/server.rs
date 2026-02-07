@@ -17,8 +17,8 @@ use surrealdb::Surreal;
 use tokio::sync::RwLock;
 use utils::cas::FsCas;
 
+use crate::data_retrieval::{get_all_uuids_from_origin, get_data_by_key};
 use crate::db::get_origins_from_db;
-use crate::query::{get_all_uuids_from_origin, get_data_by_key};
 use crate::sync::{get_keys_in_source_not_in_destination, sync_data_with_collectors};
 use crate::transform::{transform_data, LifelogTransform};
 
@@ -103,8 +103,11 @@ impl ServerHandle {
         server.report_collector_state(state).await
     }
 
-    pub async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
-        tracing::debug!(query = %query, "Requesting server lock for process_query");
+    pub async fn process_query(
+        &self,
+        query: lifelog_proto::Query,
+    ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+        tracing::debug!(?query, "Requesting server lock for process_query");
         self.server.read().await.process_query(query).await
     }
 
@@ -363,40 +366,109 @@ impl Server {
         state.clone()
     }
 
-    async fn process_query(&self, query: String) -> Result<Vec<LifelogFrameKey>, LifelogError> {
-        tracing::debug!(query = %query, "Entered process_query");
+    async fn process_query(
+        &self,
+        query_msg: lifelog_proto::Query,
+    ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+        tracing::debug!(?query_msg, "Entered process_query");
         let mut keys: Vec<LifelogFrameKey> = vec![];
 
-        let mut origins = self.origins.write().await;
-
-        match get_origins_from_db(&self.db).await {
-            Ok(db_origins) => {
-                tracing::debug!(count = db_origins.len(), "Refreshed origins from DB");
-                *origins = db_origins;
-            }
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to get origins from DB");
-                return Err(LifelogError::Other(anyhow::anyhow!(
-                    "Failed to refresh origins from DB: {}",
-                    e
-                )));
-            }
-        }
-
-        for origin in origins.iter() {
-            tracing::trace!(origin = %origin, "Querying UUIDs for origin");
-            match get_all_uuids_from_origin(&self.db, origin).await {
-                Ok(uuids_from_origin) => {
-                    keys.extend(uuids_from_origin.iter().map(|uuid| LifelogFrameKey {
-                        uuid: *uuid,
-                        origin: origin.clone(),
-                    }));
-                }
+        // Determine targets (modalities)
+        let targets: Vec<String> = if query_msg.search_origins.is_empty() {
+            // Fallback: search all known origins from DB
+            // We need to fetch them to know available modalities
+            match get_origins_from_db(&self.db).await {
+                Ok(db_origins) => db_origins.into_iter().map(|o| o.modality_name).collect(),
                 Err(e) => {
-                    tracing::warn!(origin = %origin, error = %e, "Failed to get UUIDs from origin");
+                    tracing::error!("Failed to fetch origins for query: {}", e);
+                    return Err(LifelogError::Database(e.to_string()));
                 }
             }
+        } else {
+            query_msg.search_origins
+        };
+
+        // De-duplicate targets
+        let mut targets = targets;
+        targets.sort();
+        targets.dedup();
+
+        for modality in targets {
+            // Build filter
+            // 1. Time ranges (OR)
+            let mut time_expr = None;
+            for tr in &query_msg.time_ranges {
+                let start = tr
+                    .start
+                    .as_ref()
+                    .map(|t| {
+                        chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32)
+                            .unwrap_or_default()
+                    })
+                    .unwrap_or(chrono::DateTime::<Utc>::MIN_UTC);
+                let end = tr
+                    .end
+                    .as_ref()
+                    .map(|t| {
+                        chrono::DateTime::from_timestamp(t.seconds, t.nanos as u32)
+                            .unwrap_or_default()
+                    })
+                    .unwrap_or(chrono::DateTime::<Utc>::MAX_UTC);
+                let range = crate::query::ast::Expression::TimeRange(start, end);
+                time_expr = match time_expr {
+                    Some(e) => Some(crate::query::ast::Expression::Or(
+                        Box::new(e),
+                        Box::new(range),
+                    )),
+                    None => Some(range),
+                };
+            }
+
+            // 2. Text (OR)
+            let mut text_expr = None;
+            for text in &query_msg.text {
+                let field = match modality.as_str() {
+                    "Browser" => "title",
+                    "ShellHistory" => "command",
+                    "WindowActivity" => "window_title",
+                    _ => "text",
+                };
+                let contains =
+                    crate::query::ast::Expression::Contains(field.to_string(), text.clone());
+                text_expr = match text_expr {
+                    Some(e) => Some(crate::query::ast::Expression::Or(
+                        Box::new(e),
+                        Box::new(contains),
+                    )),
+                    None => Some(contains),
+                };
+            }
+
+            // Combine Time AND Text
+            let filter = match (time_expr, text_expr) {
+                (Some(t), Some(txt)) => {
+                    crate::query::ast::Expression::And(Box::new(t), Box::new(txt))
+                }
+                (Some(t), None) => t,
+                (None, Some(txt)) => txt,
+                (None, None) => crate::query::ast::Expression::TimeRange(
+                    chrono::DateTime::<Utc>::MIN_UTC,
+                    chrono::DateTime::<Utc>::MAX_UTC,
+                ),
+            };
+
+            let query_ast = crate::query::ast::Query {
+                target: crate::query::ast::StreamSelector::Modality(modality.clone()),
+                filter,
+            };
+
+            let plan = crate::query::planner::Planner::plan(&query_ast);
+            match crate::query::executor::execute(&self.db, plan).await {
+                Ok(res) => keys.extend(res),
+                Err(e) => tracing::error!("Query execution failed for {}: {}", modality, e),
+            }
         }
+
         tracing::debug!(count = keys.len(), "Process query complete");
         Ok(keys)
     }
