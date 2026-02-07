@@ -34,6 +34,10 @@ validate:
 run-server:
     nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend
 
+# Start the server with TLS (requires cert/key files)
+run-server-tls cert_path key_path:
+    LIFELOG_TLS_CERT_PATH={{cert_path}} LIFELOG_TLS_KEY_PATH={{key_path}} nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend
+
 # Start the collector
 run-collector:
     nix develop --command cargo run -p lifelog-collector --bin lifelog-collector

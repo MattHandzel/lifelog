@@ -1159,6 +1159,17 @@ async fn update_microphone_settings(
 
 const GRPC_SERVER_ADDRESS: &str = "http://localhost:7182";
 
+/// Create a gRPC channel, enabling TLS when the address uses https://.
+async fn create_grpc_channel(addr: &'static str) -> Result<Channel, tonic::transport::Error> {
+    let endpoint = Channel::from_static(addr);
+    if addr.starts_with("https://") {
+        let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
+        endpoint.tls_config(tls)?.connect().await
+    } else {
+        endpoint.connect().await
+    }
+}
+
 #[tauri::command]
 async fn get_component_config(
     collector_id: String,
@@ -1172,8 +1183,7 @@ async fn get_component_config(
         "gRPC: get_component_config - connecting to {}",
         GRPC_SERVER_ADDRESS
     );
-    let channel = Channel::from_static(GRPC_SERVER_ADDRESS)
-        .connect()
+    let channel = create_grpc_channel(GRPC_SERVER_ADDRESS)
         .await
         .map_err(|e| format!("Failed to connect to gRPC server: {}", e))?;
     println!("gRPC: get_component_config - connection established");
@@ -1257,8 +1267,7 @@ async fn set_component_config(
         "Attempting to set config for collector '{}', component type '{}' with data: {:?}",
         collector_id, component_type, config_value
     );
-    let channel = Channel::from_static(GRPC_SERVER_ADDRESS)
-        .connect()
+    let channel = create_grpc_channel(GRPC_SERVER_ADDRESS)
         .await
         .map_err(|e| format!("Failed to connect to gRPC server: {}", e))?;
     println!("gRPC: set_component_config - connection established");
@@ -1525,7 +1534,7 @@ async fn query_screenshot_keys(
         query_screenshot_keys_async(client_instance, collector_id).await
     } else {
         println!("[TAURI] query_screenshot_keys: gRPC client not initialized trying to reconnect");
-        match Channel::from_static(GRPC_SERVER_ADDRESS).connect().await {
+        match create_grpc_channel(GRPC_SERVER_ADDRESS).await {
             Ok(channel) => {
                 let new_client = lifelog::LifelogServerServiceClient::new(channel);
                 *client_guard = Some(new_client);
@@ -1680,7 +1689,7 @@ async fn get_screenshots_data(
         get_screenshots_data_async(client_instance, keys).await
     } else {
         println!("[TAURI] get_screenshots_data: gRPC client not initialized trying to reconnect");
-        match Channel::from_static(GRPC_SERVER_ADDRESS).connect().await {
+        match create_grpc_channel(GRPC_SERVER_ADDRESS).await {
             Ok(channel) => {
                 let new_client = lifelog::LifelogServerServiceClient::new(channel);
                 *client_guard = Some(new_client);
@@ -1799,7 +1808,7 @@ async fn main() {
 
     let client_arc_clone = grpc_client_state.client.clone();
     tokio::spawn(async move {
-        match Channel::from_static(GRPC_SERVER_ADDRESS).connect().await {
+        match create_grpc_channel(GRPC_SERVER_ADDRESS).await {
             Ok(channel) => {
                 let client = lifelog::LifelogServerServiceClient::new(channel);
                 let mut client_guard = client_arc_clone.lock().await;

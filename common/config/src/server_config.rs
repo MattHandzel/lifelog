@@ -1,5 +1,29 @@
 pub use lifelog_proto::ServerConfig;
 
+/// TLS configuration for the server. Loaded from environment variables.
+/// This is Rust-only config (not proto) since cert paths are local deployment details.
+#[derive(Debug, Clone, Default)]
+pub struct TlsConfig {
+    pub cert_path: Option<String>,
+    pub key_path: Option<String>,
+}
+
+impl TlsConfig {
+    /// Load TLS config from environment variables.
+    /// Returns a config with TLS enabled only if both cert and key paths are set.
+    pub fn from_env() -> Self {
+        Self {
+            cert_path: std::env::var("LIFELOG_TLS_CERT_PATH").ok(),
+            key_path: std::env::var("LIFELOG_TLS_KEY_PATH").ok(),
+        }
+    }
+
+    /// Returns true if both cert and key paths are configured.
+    pub fn is_enabled(&self) -> bool {
+        self.cert_path.is_some() && self.key_path.is_some()
+    }
+}
+
 pub fn default_server_config() -> ServerConfig {
     ServerConfig {
         host: default_server_ip(),
