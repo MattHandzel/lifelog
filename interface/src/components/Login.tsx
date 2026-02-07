@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../lib/api';
 import { invoke } from '@tauri-apps/api/core';
 
 export function Login() {

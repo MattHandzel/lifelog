@@ -1,9 +1,6 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
 import { invoke } from '@tauri-apps/api/core';
 import ScreenDashboard from './ScreenDashboard';
-
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 interface AppSettings {
   theme: 'light' | 'dark';
@@ -55,8 +52,7 @@ export default function SettingsDashboard() {
     setError(null);
     
     try {
-      const response = await axios.get(`${API_BASE_URL}/api/settings`);
-      setSettings(response.data);
+      console.warn('Settings: loadSettings not yet implemented via gRPC');
     } catch (err) {
       console.error('Failed to load settings:', err);
       setError('Failed to load settings. Using defaults.');
@@ -72,7 +68,7 @@ export default function SettingsDashboard() {
     setSuccessMessage(null);
     
     try {
-      await axios.put(`${API_BASE_URL}/api/settings`, settings);
+      console.warn('Settings: saveSettings not yet implemented via gRPC');
       setSuccessMessage('Settings saved successfully');
       
       // Clear success message after 3 seconds

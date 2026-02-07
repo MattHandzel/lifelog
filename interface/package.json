@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "gen:proto": "bash scripts/gen-proto-types.sh"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.3",
@@ -27,7 +28,6 @@
     "@tauri-apps/plugin-fs": "^2.2.1",
     "@tauri-apps/plugin-opener": "^2",
     "@tauri-apps/plugin-shell": "^2.2.1",
-    "axios": "^1.8.4",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
@@ -46,8 +46,10 @@
     "@types/react-router-dom": "^5.3.3",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.17",
+    "grpc-tools": "^1.13.1",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
+    "ts-proto": "^2.11.2",
     "typescript": "~5.6.2",
     "vite": "^6.2.4"
   }

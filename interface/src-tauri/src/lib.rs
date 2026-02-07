@@ -56,32 +56,3 @@ pub mod config_utils {
         config.microphone.clone()
     }
 }
-
-// New API client module for communicating with the server
-pub mod api_client {
-    use reqwest::Client;
-    use serde::{Deserialize, Serialize};
-    use std::env;
-    use std::time::Duration;
-
-    // API base URL - defaults to localhost:8080 if not set
-    pub fn get_api_base_url() -> String {
-        env::var("VITE_API_BASE_URL").unwrap_or_else(|_| "http://localhost:8080".to_string())
-    }
-
-    // Create a new API client with reasonable defaults
-    pub fn create_client() -> Client {
-        Client::builder()
-            .timeout(Duration::from_secs(30))
-            .build()
-            .expect("Failed to create HTTP client")
-    }
-
-    // Generic API response structure
-    #[derive(Debug, Serialize, Deserialize)]
-    pub struct ApiResponse<T> {
-        pub success: bool,
-        pub data: Option<T>,
-        pub error: Option<String>,
-    }
-}

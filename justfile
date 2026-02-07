@@ -34,6 +34,10 @@ validate:
 run-server:
     nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend
 
+# Start the server with TLS (requires cert/key files)
+run-server-tls cert_path key_path:
+    LIFELOG_TLS_CERT_PATH={{cert_path}} LIFELOG_TLS_KEY_PATH={{key_path}} nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend
+
 # Start the collector
 run-collector:
     nix develop --command cargo run -p lifelog-collector --bin lifelog-collector
@@ -77,6 +81,32 @@ merge-agent name:
     git merge --no-ff agent/{{name}}
     just check
     just test
+
+# --- Deployment ---
+
+# Build release binaries and copy to /usr/local/bin
+install:
+    nix develop --command cargo build --release -p lifelog-server -p lifelog-collector
+    sudo cp target/release/lifelog-server-backend /usr/local/bin/
+    sudo cp target/release/lifelog-collector /usr/local/bin/
+    @echo "Binaries installed to /usr/local/bin/"
+
+# Install systemd service files and reload daemon
+install-services:
+    sudo cp deploy/lifelog-server.service /etc/systemd/system/
+    sudo cp deploy/lifelog-collector.service /etc/systemd/system/
+    sudo cp deploy/surrealdb.service /etc/systemd/system/
+    sudo systemctl daemon-reload
+    @echo "Service files installed. Use 'sudo systemctl start lifelog-server' to start."
+
+# Remove systemd service files
+uninstall-services:
+    sudo systemctl stop lifelog-server lifelog-collector surrealdb 2>/dev/null || true
+    sudo rm -f /etc/systemd/system/lifelog-server.service
+    sudo rm -f /etc/systemd/system/lifelog-collector.service
+    sudo rm -f /etc/systemd/system/surrealdb.service
+    sudo systemctl daemon-reload
+    @echo "Service files removed."
 
 # --- Hooks ---
 

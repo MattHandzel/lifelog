@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use config::TlsConfig;
 use lifelog_core::uuid::Uuid;
 use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
 use lifelog_server::server::GRPCServerLifelogServerService;
@@ -55,7 +56,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         server_handle.r#loop().await;
     });
 
-    TonicServer::builder()
+    let tls_config = TlsConfig::from_env();
+    let mut builder = TonicServer::builder()
+        .accept_http1(true)
+        .layer(tonic_web::GrpcWebLayer::new());
+
+    if let (Some(cert_path), Some(key_path)) = (&tls_config.cert_path, &tls_config.key_path) {
+        let cert = std::fs::read_to_string(cert_path)?;
+        let key = std::fs::read_to_string(key_path)?;
+        let identity = tonic::transport::Identity::from_pem(cert, key);
+        let tls = tonic::transport::ServerTlsConfig::new().identity(identity);
+        builder = builder.tls_config(tls)?;
+        tracing::info!("TLS enabled");
+    }
+
+    builder
         .add_service(reflection_service)
         .add_service(health_service)
         .add_service(LifelogServerServiceServer::new(

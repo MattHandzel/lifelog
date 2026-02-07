@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Search, Filter, ArrowUpDown, Image, FileAudio, File, Loader, Calendar } from 'lucide-react';
-import axios from 'axios';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,9 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface SearchResult {
   id: string;
@@ -41,43 +38,25 @@ export default function SearchDashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [fileTypeFilter, setFileTypeFilter] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [page] = useState(1);
+  const [totalPages] = useState(1);
   const [sourceFilter, setSourceFilter] = useState<string>('all');
 
-  const pageSize = 12;
-
-  const performSearch = async (resetPage = true) => {
-    if (resetPage) {
-      setPage(1);
-    }
-
+  const performSearch = async (_resetPage = true) => {
+    if (!searchQuery.trim()) return;
     setIsLoading(true);
     try {
-      const params: Record<string, any> = {
-        query: searchQuery,
-        page: resetPage ? 1 : page,
-        page_size: pageSize,
-        sort_order: sortOrder
-      };
-
-      if (fileTypeFilter !== 'all') {
-        params.type = fileTypeFilter;
-      }
-
-      if (sourceFilter !== 'all') {
-        params.source = sourceFilter;
-      }
-
-      const response = await axios.get(`${API_BASE_URL}/api/search`, { params });
-      
-      if (response.data && response.data.results) {
-        setResults(response.data.results);
-        setTotalPages(response.data.total_pages || 1);
-      } else {
-        setResults([]);
-        setTotalPages(1);
-      }
+      const entries = await invoke<Array<{uuid: string; origin: string; modality: string; timestamp: number | null}>>('query_timeline', {
+        textQuery: [searchQuery],
+      });
+      setResults(entries.map(e => ({
+        id: e.uuid,
+        type: (e.modality === 'Screen' ? 'image' : e.modality === 'Audio' ? 'audio' : 'file') as 'image' | 'audio' | 'file',
+        name: e.uuid.substring(0, 8),
+        path: e.origin,
+        timestamp: e.timestamp || 0,
+        source: e.origin,
+      })));
     } catch (error) {
       console.error('Search failed:', error);
       setResults([]);
@@ -87,38 +66,8 @@ export default function SearchDashboard() {
   };
 
   const loadMoreResults = async () => {
-    if (page < totalPages) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      
-      setIsLoading(true);
-      try {
-        const params: Record<string, any> = {
-          query: searchQuery,
-          page: nextPage,
-          page_size: pageSize,
-          sort_order: sortOrder
-        };
-
-        if (fileTypeFilter !== 'all') {
-          params.type = fileTypeFilter;
-        }
-
-        if (sourceFilter !== 'all') {
-          params.source = sourceFilter;
-        }
-
-        const response = await axios.get(`${API_BASE_URL}/api/search`, { params });
-        
-        if (response.data && response.data.results) {
-          setResults([...results, ...response.data.results]);
-        }
-      } catch (error) {
-        console.error('Failed to load more results:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
+    // Pagination comes later
+    console.log('Load more: pagination not yet implemented');
   };
 
   useEffect(() => {

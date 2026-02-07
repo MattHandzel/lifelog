@@ -179,9 +179,17 @@ impl Collector {
     pub async fn handshake(&mut self, handle: CollectorHandle) -> Result<(), CollectorError> {
         tracing::info!(addr = %self.server_address, "Attempting gRPC ControlStream connection");
 
-        let endpoint = Endpoint::from_shared(self.server_address.clone())
+        let mut endpoint = Endpoint::from_shared(self.server_address.clone())
             .map_err(|e| CollectorError::Other(format!("Invalid server address: {}", e)))?
             .connect_timeout(Duration::from_secs(10));
+
+        if self.server_address.starts_with("https://") {
+            let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
+            endpoint = endpoint
+                .tls_config(tls)
+                .map_err(|e| CollectorError::Other(format!("TLS config error: {}", e)))?;
+            tracing::info!("TLS enabled for server connection");
+        }
 
         let channel = endpoint.connect().await?;
         let mut client = LifelogServerServiceClient::new(channel);
@@ -358,6 +366,9 @@ impl Collector {
             source_states,
             source_buffer_sizes: buffer_states,
             total_buffer_size: total as u32,
+            last_seen: None,
+            upload_lag_bytes: 0,
+            last_upload_time: None,
         }
     }
 
