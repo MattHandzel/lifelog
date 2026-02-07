@@ -746,6 +746,88 @@ async fn get_collector_ids(
     }
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct TimelineEntry {
+    uuid: String,
+    origin: String,
+    modality: String,
+    timestamp: Option<i64>,
+}
+
+#[tauri::command]
+async fn query_timeline(
+    state: tauri::State<'_, GrpcClientState>,
+    collector_id: Option<String>,
+    text_query: Option<Vec<String>>,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
+) -> Result<Vec<TimelineEntry>, String> {
+    let mut client_guard = state.client.lock().await;
+    let client = match client_guard.as_mut() {
+        Some(c) => c,
+        None => match create_grpc_channel(GRPC_SERVER_ADDRESS).await {
+            Ok(channel) => {
+                *client_guard = Some(lifelog::LifelogServerServiceClient::new(channel));
+                client_guard.as_mut().unwrap()
+            }
+            Err(e) => return Err(format!("gRPC connection failed: {}", e)),
+        },
+    };
+
+    let mut time_ranges = Vec::new();
+    if let (Some(start), Some(end)) = (start_time, end_time) {
+        time_ranges.push(lifelog::Timerange {
+            start: Some(prost_types::Timestamp {
+                seconds: start,
+                nanos: 0,
+            }),
+            end: Some(prost_types::Timestamp {
+                seconds: end,
+                nanos: 0,
+            }),
+        });
+    }
+
+    let mut search_origins = Vec::new();
+    if let Some(ref id) = collector_id {
+        if !id.is_empty() {
+            search_origins.push(id.clone());
+        }
+    }
+
+    let query = lifelog::Query {
+        search_origins,
+        return_origins: Vec::new(),
+        time_ranges,
+        image_embedding: None,
+        text_embedding: None,
+        text: text_query.unwrap_or_default(),
+    };
+
+    let request = tonic::Request::new(lifelog::QueryRequest { query: Some(query) });
+
+    match timeout(Duration::from_secs(15), client.query(request)).await {
+        Ok(Ok(response)) => {
+            let keys = response.into_inner().keys;
+            let entries: Vec<TimelineEntry> = keys
+                .into_iter()
+                .map(|k| {
+                    let modality = k.origin.split(':').nth(1).unwrap_or("unknown").to_string();
+                    TimelineEntry {
+                        uuid: k.uuid,
+                        origin: k.origin,
+                        modality,
+                        timestamp: None,
+                    }
+                })
+                .collect();
+            Ok(entries)
+        }
+        Ok(Err(e)) => Err(format!("Query failed: {}", e)),
+        Err(_) => Err("Query timed out after 15 seconds".to_string()),
+    }
+}
+
 #[tauri::command]
 async fn select_file_dialog(
     _app_handle: tauri::AppHandle,
@@ -800,7 +882,8 @@ async fn main() {
             set_component_config,
             query_screenshot_keys,
             get_screenshots_data,
-            get_collector_ids
+            get_collector_ids,
+            query_timeline
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

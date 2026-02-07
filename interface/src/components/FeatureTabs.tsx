@@ -1,15 +1,15 @@
 import { useState } from "react";
 import { cn } from "../lib/utils";
-import { 
-  FileTextIcon, 
-  CameraIcon, 
-  ActivityIcon, 
-  MicIcon, 
-  EyeIcon, 
+import {
+  FileTextIcon,
+  CameraIcon,
+  ActivityIcon,
+  MicIcon,
+  EyeIcon,
   MousePointerIcon,
-  KeyboardIcon, 
-  CloudIcon, 
-  ThermometerIcon, 
+  KeyboardIcon,
+  CloudIcon,
+  ThermometerIcon,
   WifiIcon,
   LayoutGridIcon,
   MonitorIcon,
@@ -23,25 +23,28 @@ import {
   Network as NetworkIcon,
   Disc3 as DiskIcon,
   Power as PowerIcon,
-  ScreenShare
+  ScreenShare,
+  Clock
 } from "lucide-react";
 import TextUploadDashboard from "./TextUploadDashboard";
 import ProcessesDashboard from "./ProcessesDashboard";
 import ScreenDashboard from "./ScreenDashboard";
 import CameraDashboard from "./CameraDashboard";
 import MicrophoneDashboard from "./MicrophoneDashboard";
+import TimelineDashboard from "./TimelineDashboard";
 import PlaceholderDashboard from "./PlaceholderDashboard";
 
-type ModuleType = 
-  | "text_upload" 
-  | "processes" 
-  | "screen" 
-  | "camera" 
-  | "microphone" 
-  | "keyboard" 
-  | "mouse" 
-  | "evdev_input" 
-  | "weather" 
+type ModuleType =
+  | "timeline"
+  | "text_upload"
+  | "processes"
+  | "screen"
+  | "camera"
+  | "microphone"
+  | "keyboard"
+  | "mouse"
+  | "evdev_input"
+  | "weather"
   | "hyprland";
 
 // Define tab categories
@@ -65,7 +68,7 @@ interface CategoryDefinition {
 }
 
 export default function FeatureTabs() {
-  const [activeTab, setActiveTab] = useState<ModuleType>("text_upload");
+  const [activeTab, setActiveTab] = useState<ModuleType>("timeline");
   const [expandedCategory, setExpandedCategory] = useState<CategoryType>("data");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -99,6 +102,15 @@ export default function FeatureTabs() {
 
   // Define all available tabs
   const tabs: TabDefinition[] = [
+    {
+      id: "timeline",
+      label: "Timeline",
+      icon: Clock,
+      component: <TimelineDashboard collectorId={null} />,
+      implemented: true,
+      description: "Browse your lifelog events by time",
+      category: "data"
+    },
     {
       id: "screen",
       label: "Screenshots",

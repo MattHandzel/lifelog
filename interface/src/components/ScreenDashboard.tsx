@@ -33,7 +33,7 @@ interface LifelogDataKeyWrapper {
   origin: string;
 }
 
-export default function ScreenDashboard({ collectorId: propCollectorId }: ScreenDashboardProps) {
+export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
   const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -49,46 +49,66 @@ export default function ScreenDashboard({ collectorId: propCollectorId }: Screen
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [autoRefresh, setAutoRefresh] = useState(false);
   const refreshIntervalRef = useRef<number>();
+  const [activeCollectorId, setActiveCollectorId] = useState<string | null>(collectorId);
   const pageSize = 9;
-  const isLoadingRef = useRef(false); 
+  const isLoadingRef = useRef(false);
   const [fetchError, setFetchError] = useState<string | null>(null); // For displaying fetch errors
 
-  const internalCollectorId = '02:42:CE:25:6A:36'; // Hardcoded Collector ID
+  useEffect(() => {
+    const initializeCollectorId = async () => {
+      let resolvedCollectorId = collectorId;
+
+      if (!collectorId) {
+        try {
+          const collectorIds = await invoke<string[]>('get_collector_ids');
+          resolvedCollectorId = collectorIds.length > 0 ? collectorIds[0] : null;
+        } catch (error) {
+          console.error('[ScreenDashboard] Failed to fetch collector IDs:', error);
+          resolvedCollectorId = null;
+        }
+      }
+
+      setActiveCollectorId(resolvedCollectorId);
+
+      if (resolvedCollectorId) {
+        console.log(`[ScreenDashboard] Initializing with collectorId: ${resolvedCollectorId}`);
+        setIsLoading(true);
+        setIsLoadingSettings(true);
+        loadSettings(resolvedCollectorId);
+        loadScreenshots(resolvedCollectorId);
+      }
+
+      const savedAutoRefresh = localStorage.getItem('screenshots_auto_refresh');
+      if (savedAutoRefresh !== null) {
+        setAutoRefresh(savedAutoRefresh === 'true');
+      }
+    };
+
+    initializeCollectorId();
+  }, [collectorId]);
 
   useEffect(() => {
-    console.log(`[ScreenDashboard] Initializing with hardcoded collectorId: ${internalCollectorId}`);
-    setIsLoading(true); // Indicate loading early
-    setIsLoadingSettings(true);
-    loadSettings(internalCollectorId);
-    loadScreenshots(internalCollectorId);
-
-    const savedAutoRefresh = localStorage.getItem('screenshots_auto_refresh');
-    if (savedAutoRefresh !== null) {
-      setAutoRefresh(savedAutoRefresh === 'true');
+    if (activeCollectorId) {
+      loadScreenshots(activeCollectorId);
     }
-
-  }, []);
-
-  useEffect(() => {
-    loadScreenshots(internalCollectorId);
-  }, [currentPage, sortOrder]);
+  }, [currentPage, sortOrder, activeCollectorId]);
 
   useEffect(() => {
     if (refreshIntervalRef.current) {
       clearInterval(refreshIntervalRef.current);
       refreshIntervalRef.current = undefined;
     }
-    if (autoRefresh && settings && settings.enabled && settings.interval > 0) {
+    if (autoRefresh && settings && settings.enabled && settings.interval > 0 && activeCollectorId) {
        refreshIntervalRef.current = window.setInterval(() => {
          if (currentPage === 1 && sortOrder === 'desc') {
            console.log('[ScreenDashboard] Auto-refresh triggered...');
-           loadScreenshots(internalCollectorId);
+           loadScreenshots(activeCollectorId);
          }
        }, settings.interval * 1000);
     }
     localStorage.setItem('screenshots_auto_refresh', autoRefresh.toString());
     return () => { if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current); };
-  }, [autoRefresh, settings, currentPage, sortOrder]);
+  }, [autoRefresh, settings, currentPage, sortOrder, activeCollectorId]);
 
   async function loadScreenshots(collectorIdToLoad: string | null) {
     if (isLoadingRef.current) {
@@ -232,7 +252,9 @@ export default function ScreenDashboard({ collectorId: propCollectorId }: Screen
       if (retries > 0 && error.message && error.message.includes("No collector found")) {
         console.log(`[ScreenDashboard] Collector not found, retrying loadSettings in ${delay / 1000}s... (${retries} retries left)`);
         await new Promise(resolve => setTimeout(resolve, delay));
-        await loadSettings(internalCollectorId, retries - 1, delay * 2);
+        if (currentCollectorIdToLoad) {
+          await loadSettings(currentCollectorIdToLoad, retries - 1, delay * 2);
+        }
         return;
       }
        alert(`Failed to load settings for ${currentCollectorIdToLoad} after multiple attempts: ${error.message || error}`);
@@ -249,8 +271,8 @@ export default function ScreenDashboard({ collectorId: propCollectorId }: Screen
   }
 
   async function saveSettings() {
-    if (!settings) {
-        alert("Cannot save settings: Current settings not loaded.");
+    if (!settings || !activeCollectorId) {
+        alert("Cannot save settings: Current settings not loaded or collector ID unknown.");
         return;
     };
     const wasAutoRefreshEnabled = autoRefresh;
@@ -268,18 +290,18 @@ export default function ScreenDashboard({ collectorId: propCollectorId }: Screen
           program: settings.program || "",
           timestamp_format: settings.timestamp_format || ""
         };
-        console.log(`[ScreenDashboard] Saving screen config for collector ${internalCollectorId} via Tauri:`, updatedConfig);
+        console.log(`[ScreenDashboard] Saving screen config for collector ${activeCollectorId} via Tauri:`, updatedConfig);
         await invoke("set_component_config", {
-            collectorId: internalCollectorId, 
+            collectorId: activeCollectorId,
             componentType: "screen",
-            configValue: updatedConfig 
+            configValue: updatedConfig
         });
-        console.log(`[ScreenDashboard] Screen settings for collector ${internalCollectorId} saved successfully.`);
+        console.log(`[ScreenDashboard] Screen settings for collector ${activeCollectorId} saved successfully.`);
         setSettings(updatedConfig);
         setShowSettings(false);
     } catch (error) {
-        console.error(`[ScreenDashboard] Failed to save settings for collector ${internalCollectorId} via Tauri:`, error);
-        alert(`Failed to save settings for ${internalCollectorId}: ${error}`);
+        console.error(`[ScreenDashboard] Failed to save settings for collector ${activeCollectorId} via Tauri:`, error);
+        alert(`Failed to save settings for ${activeCollectorId}: ${error}`);
     } finally {
         setIsSavingSettings(false);
         if (wasAutoRefreshEnabled) {
@@ -321,7 +343,7 @@ export default function ScreenDashboard({ collectorId: propCollectorId }: Screen
   }
 
   function toggleSettings() {
-    console.log('[ScreenDashboard] Toggling settings panel. Current internalCollectorId:', internalCollectorId);
+    console.log('[ScreenDashboard] Toggling settings panel. Current activeCollectorId:', activeCollectorId);
     setShowSettings(!showSettings);
     if (!showSettings && settings) {
       setTempInterval(settings.interval);
@@ -470,9 +492,11 @@ export default function ScreenDashboard({ collectorId: propCollectorId }: Screen
           <div className="flex flex-col sm:flex-row justify-between gap-4 mb-8">
              <div className="flex items-center gap-2 flex-wrap">
                  <Button onClick={() => {
-                     loadScreenshots(internalCollectorId);
-                 }} 
-                     disabled={isLoading}
+                     if (activeCollectorId) {
+                       loadScreenshots(activeCollectorId);
+                     }
+                 }}
+                     disabled={isLoading || !activeCollectorId}
                  >
                      <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
                      Refresh

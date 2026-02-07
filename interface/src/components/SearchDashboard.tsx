@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Search, Filter, ArrowUpDown, Image, FileAudio, File, Loader, Calendar } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -42,14 +43,31 @@ export default function SearchDashboard() {
   const [sourceFilter, setSourceFilter] = useState<string>('all');
 
   const performSearch = async (_resetPage = true) => {
-    console.warn('Search: not yet implemented via gRPC');
-    setResults([]);
-    setIsLoading(false);
+    if (!searchQuery.trim()) return;
+    setIsLoading(true);
+    try {
+      const entries = await invoke<Array<{uuid: string; origin: string; modality: string; timestamp: number | null}>>('query_timeline', {
+        textQuery: [searchQuery],
+      });
+      setResults(entries.map(e => ({
+        id: e.uuid,
+        type: (e.modality === 'Screen' ? 'image' : e.modality === 'Audio' ? 'audio' : 'file') as 'image' | 'audio' | 'file',
+        name: e.uuid.substring(0, 8),
+        path: e.origin,
+        timestamp: e.timestamp || 0,
+        source: e.origin,
+      })));
+    } catch (error) {
+      console.error('Search failed:', error);
+      setResults([]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const loadMoreResults = async () => {
-    console.warn('Search load more: not yet implemented via gRPC');
-    setIsLoading(false);
+    // Pagination comes later
+    console.log('Load more: pagination not yet implemented');
   };
 
   useEffect(() => {
