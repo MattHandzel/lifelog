@@ -88,6 +88,9 @@ message CollectorState {
   repeated string source_states = 3;
   repeated string source_buffer_sizes = 4;
   uint32 total_buffer_size = 5;
+  google.protobuf.Timestamp last_seen = 6;
+  uint64 upload_lag_bytes = 7;
+  google.protobuf.Timestamp last_upload_time = 8;
 }
 
 enum DataModality {
@@ -277,6 +280,9 @@ message ServerState {
   google.protobuf.Timestamp timestamp_of_last_sync = 6;
   repeated ServerActionType pending_actions = 7;
   string version = 8;
+  uint64 total_frames_stored = 9;
+  uint64 disk_usage_bytes = 10;
+  google.protobuf.Timestamp uptime_since = 11;
 }
 
 message SystemConfig {

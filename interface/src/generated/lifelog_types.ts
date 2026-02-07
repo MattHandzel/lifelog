@@ -113,6 +113,9 @@ export interface CollectorState {
   sourceStates: string[];
   sourceBufferSizes: string[];
   totalBufferSize: number;
+  lastSeen?: Date | undefined;
+  uploadLagBytes: number;
+  lastUploadTime?: Date | undefined;
 }
 
 export interface GeoConfig {
@@ -283,6 +286,9 @@ export interface ServerState {
   timestampOfLastSync?: Date | undefined;
   pendingActions: ServerActionType[];
   version: string;
+  totalFramesStored: number;
+  diskUsageBytes: number;
+  uptimeSince?: Date | undefined;
 }
 
 export interface SystemConfig {

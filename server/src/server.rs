@@ -136,6 +136,7 @@ pub struct Server {
     transforms: Arc<RwLock<Vec<LifelogTransform>>>, // TODO: These should be registered transforms
     config: ServerConfig,
     pub(crate) cas: FsCas,
+    started_at: chrono::DateTime<Utc>,
 }
 
 static SYS: OnceLock<Mutex<sysinfo::System>> = OnceLock::new();
@@ -205,6 +206,7 @@ impl Server {
             origins: Arc::new(RwLock::new(origins_vec)),
             config: config.clone(),
             cas: FsCas::new(config.cas_path.clone()),
+            started_at: Utc::now(),
         };
 
         Ok(s)
@@ -225,7 +227,8 @@ impl Server {
 
         Ok(config)
     }
-    async fn report_collector_state(&self, state: CollectorState) -> Result<(), LifelogError> {
+    async fn report_collector_state(&self, mut state: CollectorState) -> Result<(), LifelogError> {
+        state.last_seen = Some(Utc::now().into());
         let mut system_state = self.state.write().await;
         system_state
             .collector_states
@@ -362,6 +365,7 @@ impl Server {
             ss.cpu_usage = cpu_usage;
             ss.timestamp = Some(Utc::now().into());
             ss.memory_usage = memory_usage;
+            ss.uptime_since = Some(self.started_at.into());
         }
         state.clone()
     }

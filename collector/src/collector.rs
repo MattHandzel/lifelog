@@ -366,6 +366,9 @@ impl Collector {
             source_states,
             source_buffer_sizes: buffer_states,
             total_buffer_size: total as u32,
+            last_seen: None,
+            upload_lag_bytes: 0,
+            last_upload_time: None,
         }
     }
 
