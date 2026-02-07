@@ -55,6 +55,15 @@ test-chaos:
     docker compose -f tests/docker/docker-compose.chaos.yml up --build --abort-on-container-exit
     docker compose -f tests/docker/docker-compose.chaos.yml down -v
 
+# Run frontend unit tests (Vitest)
+test-ui:
+    cd interface && npx vitest run
+
+# Full validation including frontend
+validate-all:
+    just validate
+    just test-ui
+
 # Clean temporary test data
 clean-tests:
     rm -rf /tmp/lifelog-test-*

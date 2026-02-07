@@ -8,7 +8,9 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "tauri": "tauri",
-    "gen:proto": "bash scripts/gen-proto-types.sh"
+    "gen:proto": "bash scripts/gen-proto-types.sh",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.1.3",
@@ -40,6 +42,8 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.5.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@types/node": "^22.14.0",
     "@types/react": "^18.3.1",
     "@types/react-dom": "^18.3.1",
@@ -47,10 +51,12 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.17",
     "grpc-tools": "^1.13.1",
+    "jsdom": "^28.0.0",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "ts-proto": "^2.11.2",
     "typescript": "~5.6.2",
-    "vite": "^6.2.4"
+    "vite": "^6.2.4",
+    "vitest": "^4.0.18"
   }
 }
