@@ -1,0 +1,12 @@
+[Unit]
+Description=SurrealDB for Lifelog
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/surreal start --bind 127.0.0.1:7183 file:/var/lib/lifelog/surreal.db
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

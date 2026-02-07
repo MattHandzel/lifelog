@@ -1,0 +1,13 @@
+[Unit]
+Description=Lifelog Collector
+After=network.target lifelog-server.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/lifelog-collector
+Restart=on-failure
+RestartSec=5
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

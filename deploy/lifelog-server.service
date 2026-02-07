@@ -1,0 +1,14 @@
+[Unit]
+Description=Lifelog Server
+After=network.target surrealdb.service
+Wants=surrealdb.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/lifelog-server-backend
+Restart=on-failure
+RestartSec=5
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target
