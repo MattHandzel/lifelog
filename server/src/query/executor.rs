@@ -1,6 +1,6 @@
 use super::planner::ExecutionPlan;
 use lifelog_core::uuid::Uuid;
-use lifelog_core::{DataOrigin, DataOriginType, LifelogFrameKey};
+use lifelog_core::LifelogFrameKey;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 

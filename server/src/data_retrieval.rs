@@ -159,6 +159,7 @@ pub(crate) async fn get_data_by_key(
     }
 }
 
+#[allow(dead_code)]
 pub(crate) async fn get_keys_after_timestamp(
     db: &Surreal<Client>,
     origin: &DataOrigin,

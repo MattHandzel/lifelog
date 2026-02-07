@@ -50,11 +50,13 @@ impl IngestBackend for SurrealIngestBackend {
                     DataModality::Screen.as_str_name().to_string(),
                 );
 
+                #[allow(clippy::redundant_pattern_matching)]
                 if let Ok(_) = ensure_table_schema(&db, &origin).await {
                     let table = origin.get_table_name();
                     // Insert into table. We use create with a UUID-based ID or let Surreal generate one?
                     // ScreenFrame has uuid field.
                     let id = &frame.uuid;
+                    #[allow(clippy::redundant_pattern_matching)]
                     if let Ok(_) = db
                         .create::<Option<ScreenFrame>>((table, id))
                         .content(frame)

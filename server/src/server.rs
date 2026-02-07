@@ -1,5 +1,4 @@
 use crate::policy::*;
-use anyhow;
 use chrono::Utc;
 use config::ServerPolicyConfig;
 use config::{CollectorConfig, ServerConfig, SystemConfig};
@@ -17,7 +16,7 @@ use surrealdb::Surreal;
 use tokio::sync::RwLock;
 use utils::cas::FsCas;
 
-use crate::data_retrieval::{get_all_uuids_from_origin, get_data_by_key};
+use crate::data_retrieval::get_data_by_key;
 use crate::db::get_origins_from_db;
 use crate::sync::{get_keys_in_source_not_in_destination, sync_data_with_collectors};
 use crate::transform::{transform_data, LifelogTransform};
@@ -132,6 +131,7 @@ pub struct Server {
     state: Arc<RwLock<SystemState>>,
     pub(crate) registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
     policy: Arc<RwLock<ServerPolicy>>,
+    #[allow(dead_code)]
     origins: Arc<RwLock<Vec<DataOrigin>>>,
     transforms: Arc<RwLock<Vec<LifelogTransform>>>, // TODO: These should be registered transforms
     config: ServerConfig,

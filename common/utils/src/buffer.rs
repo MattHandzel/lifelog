@@ -192,6 +192,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::unwrap_used)]
     async fn test_disk_buffer() {
         let dir = tempdir().unwrap();
         let buffer = DiskBuffer::<TestItem>::new(dir.path()).unwrap();

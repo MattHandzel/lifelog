@@ -14,6 +14,7 @@ pub enum IngestError {
 #[async_trait]
 pub trait IngestBackend {
     /// Persist chunk metadata. Should be idempotent based on (collector, stream, session, offset).
+    #[allow(clippy::too_many_arguments)]
     async fn persist_metadata(
         &self,
         collector_id: &str,
