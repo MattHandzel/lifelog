@@ -4,15 +4,6 @@ import { Button } from './ui/button';
 import { Settings, Power, Clock, X, RefreshCcw, Camera } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
-import axios from 'axios';
-import { Card, CardContent } from './ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
-import { Trash, ArrowUpDown } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Input } from './ui/input';
-
-// Server API endpoint from environment variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface CameraFrame {
   timestamp: number;
@@ -47,10 +38,8 @@ export default function CameraDashboard() {
   const [tempFps, setTempFps] = useState(30);
   const [isSupported, setIsSupported] = useState<boolean | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [config, setConfig] = useState<CameraConfig | null>(null);
   const [status, setStatus] = useState<string>("idle");
   const [error, setError] = useState<string | null>(null);
-  const [availableCameras, setAvailableCameras] = useState<string[]>([]);
   
   const pageSize = 9;
 
@@ -80,186 +69,28 @@ export default function CameraDashboard() {
   }
 
   async function loadFrames() {
-    setIsLoading(true);
-    try {
-      // Use server API to get frames
-      const response = await axios.get(`${API_BASE_URL}/api/logger/camera/data`, {
-        params: {
-          page: currentPage,
-          page_size: pageSize,
-          limit: pageSize,
-          // For newest first
-          ...(sortOrder === 'desc' && { filter: "ORDER BY timestamp DESC" }),
-          ...(sortOrder === 'asc' && { filter: "ORDER BY timestamp ASC" })
-        }
-      });
-      
-      console.log("Camera frames loaded:", response.data);
-      
-      // Load image data for each frame
-      const framesWithData = await Promise.all(
-        response.data.map(async (frame: any) => {
-          try {
-            // For images stored as files, we need a separate API to get the image data
-            const imageResponse = await axios.get(`${API_BASE_URL}/api/logger/camera/files/${frame.path}`, {
-              responseType: 'blob'
-            });
-            
-            const dataUrl = URL.createObjectURL(imageResponse.data);
-            return { 
-              timestamp: frame.timestamp,
-              path: frame.path,
-              width: frame.width || 0,
-              height: frame.height || 0,
-              dataUrl 
-            };
-          } catch (error) {
-            console.error(`Failed to load data for frame ${frame.path}:`, error);
-            return {
-              timestamp: frame.timestamp,
-              path: frame.path,
-              width: frame.width || 0,
-              height: frame.height || 0
-            };
-          }
-        })
-      );
-      
-      setFrames(framesWithData);
-      
-      // Calculate total pages based on header or data size
-      const totalCount = response.headers['x-total-count'] 
-        ? parseInt(response.headers['x-total-count']) 
-        : response.data.length === pageSize ? (currentPage + 1) * pageSize : currentPage * pageSize;
-        
-      setTotalPages(Math.ceil(totalCount / pageSize));
-    } catch (error) {
-      console.error('Failed to load camera frames:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    console.warn('Camera frames: not yet implemented via gRPC');
+    setFrames([]);
+    setIsLoading(false);
   }
 
   async function loadSettings() {
-    setIsLoadingSettings(true);
-    try {
-      // Use server API to get camera configuration
-      const response = await axios.get(`${API_BASE_URL}/api/logger/camera/config`);
-      const apiSettings = response.data;
-      
-      // Map server config to our settings format
-      const settings: CameraSettings = {
-        enabled: apiSettings.enabled,
-        interval: apiSettings.interval,
-        fps: apiSettings.fps,
-        device: apiSettings.device || '',
-        output_dir: apiSettings.output_dir || '',
-        resolution: apiSettings.resolution || [640, 480],
-        timestamp_format: apiSettings.timestamp_format || '%Y-%m-%d_%H-%M-%S'
-      };
-      
-      setSettings(settings);
-      setTempInterval(settings.interval);
-      setTempEnabled(settings.enabled);
-      setTempFps(settings.fps);
-    } catch (error) {
-      console.error('Failed to load camera settings:', error);
-    } finally {
-      setIsLoadingSettings(false);
-    }
+    console.warn('Camera settings: not yet implemented via gRPC');
   }
 
   async function saveSettings() {
-    if (!settings) return;
-    
-    setIsSavingSettings(true);
-    try {
-      console.log('Updating camera settings...');
-      // Use server API to update camera configuration
-      await axios.put(`${API_BASE_URL}/api/logger/camera/config`, {
-        enabled: tempEnabled,
-        interval: tempInterval,
-        fps: tempFps
-      });
-      
-      setSettings({
-        ...settings,
-        enabled: tempEnabled,
-        interval: tempInterval,
-        fps: tempFps
-      });
-      
-      console.log(`Camera settings updated: enabled=${tempEnabled}, interval=${tempInterval}s, fps=${tempFps}`);
-      
-      // If enabled, restart the camera logger via server API
-      if (tempEnabled) {
-        try {
-          console.log('Restarting camera logger...');
-          await axios.post(`${API_BASE_URL}/api/logger/camera/start`);
-          console.log('Camera logger restarted');
-          
-          // After a short delay, refresh the frames to show the newly captured ones
-          setTimeout(() => {
-            loadFrames();
-          }, 2000);
-        } catch (restartError) {
-          console.error('Failed to restart camera logger:', restartError);
-        }
-      } else {
-        // Stop the logger if disabled
-        try {
-          await axios.post(`${API_BASE_URL}/api/logger/camera/stop`);
-        } catch (stopError) {
-          console.error('Failed to stop camera logger:', stopError);
-        }
-      }
-      
-      setShowSettings(false);
-    } catch (error) {
-      console.error('Failed to save settings:', error);
-      alert('Failed to save settings: ' + error);
-    } finally {
-      setIsSavingSettings(false);
-    }
+    console.warn('Camera settings save: not yet implemented via gRPC');
+    setIsSavingSettings(false);
   }
 
   async function captureFrame() {
-    try {
-      setIsLoading(true);
-      console.log('Triggering camera capture...');
-      
-      // Use server API to trigger a one-off camera capture
-      await axios.post(`${API_BASE_URL}/api/logger/camera/capture`);
-      
-      console.log('Frame captured, reloading frames...');
-      await loadFrames();
-    } catch (error) {
-      console.error('Failed to capture frame:', error);
-      alert('Failed to capture frame: ' + error);
-    } finally {
-      setIsLoading(false);
-    }
+    console.warn('Camera capture: not yet implemented via gRPC');
+    setIsLoading(false);
   }
 
   async function restartCameraLogger() {
-    try {
-      setIsLoading(true);
-      console.log('Restarting camera logger...');
-      
-      // Stop the logger first
-      await axios.post(`${API_BASE_URL}/api/logger/camera/stop`);
-      
-      // Then start it again
-      await axios.post(`${API_BASE_URL}/api/logger/camera/start`);
-      
-      console.log('Camera logger restarted, refreshing frames...');
-      await loadFrames();
-    } catch (error) {
-      console.error('Failed to restart camera logger:', error);
-      alert('Failed to restart camera logger: ' + error);
-    } finally {
-      setIsLoading(false);
-    }
+    console.warn('Camera restart: not yet implemented via gRPC');
+    setIsLoading(false);
   }
 
   function formatTimestamp(timestamp: number): string {

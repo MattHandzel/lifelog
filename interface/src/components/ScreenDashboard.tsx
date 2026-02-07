@@ -5,7 +5,6 @@ import { Camera, X, Settings, Power, Clock, ArrowUpDown, RefreshCw } from 'lucid
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface Screenshot {
   uuid: string;

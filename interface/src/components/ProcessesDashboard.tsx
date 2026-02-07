@@ -1,13 +1,8 @@
 import { useState, useEffect } from 'react';
-import axios from 'axios';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
 import { Button } from './ui/button';
 import { Activity, History, RefreshCw, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
-
-// Server API endpoint from environment variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface Process {
   pid: number;
@@ -51,32 +46,15 @@ export default function ProcessesDashboard() {
   }, [autoRefresh, activeTab]);
 
   async function loadProcesses() {
-    setIsLoading(true);
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/logger/processes/data`);
-      setProcesses(response.data);
-    } catch (error) {
-      console.error('Failed to load processes:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    console.warn('Processes: not yet implemented via gRPC');
+    setProcesses([]);
+    setIsLoading(false);
   }
 
   async function loadProcessHistory() {
-    setIsHistoryLoading(true);
-    try {
-      const response = await axios.get(`${API_BASE_URL}/api/logger/processes/data`, {
-        params: {
-          filter: historyFilterName ? `name LIKE '%${historyFilterName}%'` : undefined,
-          limit: historyLimit,
-        }
-      });
-      setProcessHistory(response.data);
-    } catch (error) {
-      console.error('Failed to load process history:', error);
-    } finally {
-      setIsHistoryLoading(false);
-    }
+    console.warn('Process history: not yet implemented via gRPC');
+    setProcessHistory([]);
+    setIsHistoryLoading(false);
   }
 
   function toggleSort(field: keyof Process) {

@@ -5,10 +5,6 @@ import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
 import { Mic, Clock, Square, Settings, Play, Pause, ExternalLink } from 'lucide-react';
 import { cn } from '../lib/utils';
-import axios from 'axios';
-
-// Server API endpoint from environment variable
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface MicrophoneSettings {
   enabled: boolean; // Auto-recording enabled
@@ -44,7 +40,7 @@ const MicrophoneDashboard: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // Settings state from the backend
-  const [settings, setSettings] = useState<MicrophoneSettings>({
+  const [settings, _setSettings] = useState<MicrophoneSettings>({
     enabled: false,
     chunk_duration_secs: 60,
     output_dir: '',
@@ -73,11 +69,7 @@ const MicrophoneDashboard: React.FC = () => {
   useEffect(() => {
     loadSettings();
     fetchRecordings();
-    checkRecordingStatus();
-    
-    // Start periodic status check
-    statusCheckInterval.current = window.setInterval(checkRecordingStatus, 2000);
-    
+
     return () => {
       if (statusCheckInterval.current) {
         clearInterval(statusCheckInterval.current);
@@ -94,159 +86,34 @@ const MicrophoneDashboard: React.FC = () => {
   }, [tempSettings.captureInterval]);
 
   const loadSettings = async () => {
-    try {
-      setErrorMessage(null);
-      // Use server API to get microphone configuration
-      const response = await axios.get(`${API_BASE_URL}/api/logger/microphone/config`);
-      const apiSettings = response.data;
-      
-      // Map API response to our settings format
-      const config: MicrophoneSettings = {
-        enabled: apiSettings.enabled,
-        chunk_duration_secs: apiSettings.chunk_duration_secs,
-        capture_interval_secs: apiSettings.capture_interval_secs || 300,
-        output_dir: apiSettings.output_dir || '',
-        channels: apiSettings.channels || 1,
-        sample_rate: apiSettings.sample_rate || 44100,
-        bits_per_sample: apiSettings.bits_per_sample || 16,
-        timestamp_format: apiSettings.timestamp_format || '%Y-%m-%d_%H-%M-%S',
-      };
-      
-      console.log('Loaded microphone config:', config);
-      setSettings(config);
-      setTempSettings({
-        autoCapture: config.enabled,
-        recordingDuration: config.chunk_duration_secs,
-        captureInterval: config.capture_interval_secs || 300,
-      });
-    } catch (error) {
-      console.error('Failed to load microphone settings:', error);
-      setErrorMessage(`Failed to load settings: ${error}`);
-    }
+    console.warn('Microphone settings: not yet implemented via gRPC');
+    setErrorMessage(null);
   };
 
   const saveSettings = async () => {
-    try {
-      setIsSavingSettings(true);
-      setErrorMessage(null);
-      
-      // Use server API to update microphone configuration
-      await axios.put(`${API_BASE_URL}/api/logger/microphone/config`, {
-        enabled: tempSettings.autoCapture,
-        chunk_duration_secs: tempSettings.recordingDuration,
-        capture_interval_secs: tempSettings.captureInterval
-      });
-      
-      // Update local settings state
-      const updatedSettings = {
-        ...settings,
-        enabled: tempSettings.autoCapture,
-        chunk_duration_secs: tempSettings.recordingDuration,
-        capture_interval_secs: tempSettings.captureInterval,
-      };
-      setSettings(updatedSettings);
-      
-      // Restart or stop the logger based on enabled state
-      if (tempSettings.autoCapture) {
-        try {
-          await axios.post(`${API_BASE_URL}/api/logger/microphone/start`);
-        } catch (error) {
-          console.error('Failed to start microphone logger:', error);
-        }
-      } else {
-        try {
-          await axios.post(`${API_BASE_URL}/api/logger/microphone/stop`);
-        } catch (error) {
-          console.error('Failed to stop microphone logger:', error);
-        }
-      }
-      
-      setShowSettings(false);
-    } catch (error) {
-      console.error('Failed to save microphone settings:', error);
-      setErrorMessage(`Failed to save settings: ${error}`);
-    } finally {
-      setIsSavingSettings(false);
-    }
+    console.warn('Microphone settings save: not yet implemented via gRPC');
+    setIsSavingSettings(false);
   };
 
   const fetchRecordings = async () => {
-    try {
-      setIsLoading(true);
-      setErrorMessage(null);
-      console.log('Fetching audio recordings...');
-      
-      // Use server API to get recordings data
-      const response = await axios.get(`${API_BASE_URL}/api/logger/microphone/data`, {
-        params: {
-          page: 1,
-          page_size: 20,
-          filter: "ORDER BY created_at DESC"
-        }
-      });
-      
-      // Map API response to our AudioFile format
-      const files = response.data.map((item: any) => ({
-        path: item.path || '',
-        filename: item.filename || '',
-        duration: item.duration || 0,
-        created_at: item.created_at || '',
-        size: item.size || 0
-      }));
-      
-      console.log('Retrieved audio files:', files);
-      setRecordings(Array.isArray(files) ? files : []);
-    } catch (error) {
-      console.error('Failed to fetch recordings:', error);
-      setErrorMessage(`Failed to fetch recordings: ${error}`);
-    } finally {
-      setIsLoading(false);
-    }
+    console.warn('Microphone recordings: not yet implemented via gRPC');
+    setRecordings([]);
+    setIsLoading(false);
   };
 
   const handleStartRecording = async () => {
-    try {
-      setErrorMessage(null);
-      // Use server API to start recording
-      await axios.post(`${API_BASE_URL}/api/logger/microphone/record/start`);
-      setIsRecording(true);
-      setIsPaused(false);
-    } catch (error) {
-      console.error('Failed to start recording:', error);
-      setErrorMessage(`Failed to start recording: ${error}`);
-    }
+    console.warn('Microphone start recording: not yet implemented via gRPC');
+    setErrorMessage(null);
   };
 
   const handlePauseRecording = async () => {
-    try {
-      setErrorMessage(null);
-      if (isPaused) {
-        // Use server API to resume recording
-        await axios.post(`${API_BASE_URL}/api/logger/microphone/record/resume`);
-        setIsPaused(false);
-      } else {
-        // Use server API to pause recording
-        await axios.post(`${API_BASE_URL}/api/logger/microphone/record/pause`);
-        setIsPaused(true);
-      }
-    } catch (error) {
-      console.error('Failed to pause/resume recording:', error);
-      setErrorMessage(`Failed to pause/resume recording: ${error}`);
-    }
+    console.warn('Microphone pause/resume recording: not yet implemented via gRPC');
+    setErrorMessage(null);
   };
 
   const handleStopRecording = async () => {
-    try {
-      setErrorMessage(null);
-      // Use server API to stop recording
-      await axios.post(`${API_BASE_URL}/api/logger/microphone/record/stop`);
-      setIsRecording(false);
-      setIsPaused(false);
-      fetchRecordings();
-    } catch (error) {
-      console.error('Failed to stop recording:', error);
-      setErrorMessage(`Failed to stop recording: ${error}`);
-    }
+    console.warn('Microphone stop recording: not yet implemented via gRPC');
+    setErrorMessage(null);
   };
 
   const handleOpenTerminalForRecording = async () => {
@@ -262,30 +129,8 @@ const MicrophoneDashboard: React.FC = () => {
     }
   };
 
-  const checkRecordingStatus = async () => {
-    try {
-      // Use server API to get current recording status
-      const response = await axios.get(`${API_BASE_URL}/api/logger/microphone/status`);
-      const status = response.data;
-      
-      setIsRecording(status.is_recording || false);
-      setIsPaused(status.is_paused || false);
-      
-      // Also update our knowledge of whether auto-recording is enabled
-      if (settings.enabled !== status.auto_recording_enabled) {
-        setSettings({
-          ...settings,
-          enabled: status.auto_recording_enabled,
-        });
-        setTempSettings({
-          ...tempSettings,
-          autoCapture: status.auto_recording_enabled,
-        });
-      }
-    } catch (error) {
-      console.error('Failed to check recording status:', error);
-      // Don't show this error to the user as it might spam the UI during polling
-    }
+  const _checkRecordingStatus = async () => {
+    console.warn('Microphone status check: not yet implemented via gRPC');
   };
 
   const formatTimeForDisplay = (seconds: number): string => {
@@ -306,21 +151,8 @@ const MicrophoneDashboard: React.FC = () => {
 
   const getMaxRecordingDuration = () => Math.floor(tempSettings.captureInterval * 0.8);
 
-  const handlePlayRecording = async (audioFile: AudioFile) => {
-    try {
-      // Use server API to stream the audio file
-      const audioUrl = `${API_BASE_URL}/api/logger/microphone/files/${audioFile.path}`;
-      
-      // We can use the browser's audio capabilities to play it
-      const audio = new Audio(audioUrl);
-      audio.play().catch(e => {
-        console.error('Failed to play audio:', e);
-        setErrorMessage(`Failed to play audio: ${e}`);
-      });
-    } catch (error) {
-      console.error('Failed to play recording:', error);
-      setErrorMessage(`Failed to play recording: ${error}`);
-    }
+  const handlePlayRecording = async (_audioFile: AudioFile) => {
+    console.warn('Microphone play recording: not yet implemented via gRPC');
   };
 
   const formatFileSize = (bytes: number): string => {

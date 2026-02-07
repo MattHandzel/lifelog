@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Search, Filter, ArrowUpDown, Image, FileAudio, File, Loader, Calendar } from 'lucide-react';
-import axios from 'axios';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent } from './ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,9 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from './ui/select';
-
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 interface SearchResult {
   id: string;
@@ -41,84 +37,19 @@ export default function SearchDashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [fileTypeFilter, setFileTypeFilter] = useState<string>('all');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [page] = useState(1);
+  const [totalPages] = useState(1);
   const [sourceFilter, setSourceFilter] = useState<string>('all');
 
-  const pageSize = 12;
-
-  const performSearch = async (resetPage = true) => {
-    if (resetPage) {
-      setPage(1);
-    }
-
-    setIsLoading(true);
-    try {
-      const params: Record<string, any> = {
-        query: searchQuery,
-        page: resetPage ? 1 : page,
-        page_size: pageSize,
-        sort_order: sortOrder
-      };
-
-      if (fileTypeFilter !== 'all') {
-        params.type = fileTypeFilter;
-      }
-
-      if (sourceFilter !== 'all') {
-        params.source = sourceFilter;
-      }
-
-      const response = await axios.get(`${API_BASE_URL}/api/search`, { params });
-      
-      if (response.data && response.data.results) {
-        setResults(response.data.results);
-        setTotalPages(response.data.total_pages || 1);
-      } else {
-        setResults([]);
-        setTotalPages(1);
-      }
-    } catch (error) {
-      console.error('Search failed:', error);
-      setResults([]);
-    } finally {
-      setIsLoading(false);
-    }
+  const performSearch = async (_resetPage = true) => {
+    console.warn('Search: not yet implemented via gRPC');
+    setResults([]);
+    setIsLoading(false);
   };
 
   const loadMoreResults = async () => {
-    if (page < totalPages) {
-      const nextPage = page + 1;
-      setPage(nextPage);
-      
-      setIsLoading(true);
-      try {
-        const params: Record<string, any> = {
-          query: searchQuery,
-          page: nextPage,
-          page_size: pageSize,
-          sort_order: sortOrder
-        };
-
-        if (fileTypeFilter !== 'all') {
-          params.type = fileTypeFilter;
-        }
-
-        if (sourceFilter !== 'all') {
-          params.source = sourceFilter;
-        }
-
-        const response = await axios.get(`${API_BASE_URL}/api/search`, { params });
-        
-        if (response.data && response.data.results) {
-          setResults([...results, ...response.data.results]);
-        }
-      } catch (error) {
-        console.error('Failed to load more results:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
+    console.warn('Search load more: not yet implemented via gRPC');
+    setIsLoading(false);
   };
 
   useEffect(() => {
