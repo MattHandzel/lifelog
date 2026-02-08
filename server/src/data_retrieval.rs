@@ -160,6 +160,28 @@ pub(crate) async fn get_data_by_key(
                 payload: Some(lifelog_types::lifelog_data::Payload::Mouseframe(frame)),
             })
         }
+        DataModality::Processes => {
+            let mut frame: lifelog_types::ProcessFrame = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_types::LifelogData {
+                payload: Some(lifelog_types::lifelog_data::Payload::Processframe(frame)),
+            })
+        }
+        DataModality::Camera => {
+            let mut frame: lifelog_types::CameraFrame = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_types::LifelogData {
+                payload: Some(lifelog_types::lifelog_data::Payload::Cameraframe(frame)),
+            })
+        }
     }
 }
 

@@ -1,5 +1,7 @@
 use super::data_source::{BufferedSource, DataSource, DataSourceHandle};
 use crate::modules::browser_history::BrowserHistorySource;
+use crate::modules::camera::CameraDataSource;
+use crate::modules::processes::ProcessDataSource;
 use crate::modules::screen::ScreenDataSource;
 use async_trait::async_trait;
 use config;
@@ -13,7 +15,7 @@ use tokio::sync::Mutex;
 use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
-use config::{BrowserHistoryConfig, ScreenConfig};
+use config::{BrowserHistoryConfig, CameraConfig, ProcessesConfig, ScreenConfig};
 use lifelog_core::*;
 use lifelog_types::CollectorState;
 use tokio::sync::mpsc;
@@ -270,6 +272,63 @@ impl Collector {
             }
         }
 
+        if config
+            .processes
+            .as_ref()
+            .map(|p| p.enabled)
+            .unwrap_or(false)
+        {
+            let config_clone = Arc::clone(&self.config);
+            match ProcessDataSource::new(config_clone.processes.clone().unwrap()) {
+                Ok(process_source) => match process_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<ProcessesConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(process_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("processes".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err = LifelogError::SourceSetup("processes".to_string(), e.to_string());
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = LifelogError::SourceSetup("processes".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
+        if config.camera.as_ref().map(|c| c.enabled).unwrap_or(false) {
+            let config_clone = Arc::clone(&self.config);
+            match CameraDataSource::new(config_clone.camera.clone().unwrap()) {
+                Ok(camera_source) => match camera_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<CameraConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(camera_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("camera".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err = LifelogError::SourceSetup("camera".to_string(), e.to_string());
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = LifelogError::SourceSetup("camera".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
         tracing::info!(active_sources = ?self.sources.keys(), "Sources started");
 
         if let Err(e) = self.report_state().await {
@@ -332,6 +391,56 @@ impl Collector {
 
                     let is_running = screen_ds.is_running();
                     let fs = format!("Screen souce running state: {}", is_running);
+                    source_states.push(fs.to_string());
+                }
+            }
+        }
+
+        if let Some(running_src_trait) = self.sources.get("processes") {
+            if let Some(running_proc_src) =
+                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ProcessesConfig>>()
+            {
+                let guard = running_proc_src.instance.lock().await;
+                if let Some(proc_ds) = guard.as_any().downcast_ref::<ProcessDataSource>() {
+                    let buf_size = match proc_ds.buffer.get_uncommitted_size().await {
+                        Ok(s) => s as usize,
+                        Err(e) => {
+                            tracing::error!("Failed to get buffer size: {}", e);
+                            0
+                        }
+                    };
+
+                    let fs = format!("Processes source buffer length: {}", buf_size);
+                    buffer_states.push(fs.to_string());
+                    total += buf_size;
+
+                    let is_running = proc_ds.is_running();
+                    let fs = format!("Processes source running state: {}", is_running);
+                    source_states.push(fs.to_string());
+                }
+            }
+        }
+
+        if let Some(running_src_trait) = self.sources.get("camera") {
+            if let Some(running_cam_src) =
+                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<CameraConfig>>()
+            {
+                let guard = running_cam_src.instance.lock().await;
+                if let Some(cam_ds) = guard.as_any().downcast_ref::<CameraDataSource>() {
+                    let buf_size = match cam_ds.buffer.get_uncommitted_size().await {
+                        Ok(s) => s as usize,
+                        Err(e) => {
+                            tracing::error!("Failed to get buffer size: {}", e);
+                            0
+                        }
+                    };
+
+                    let fs = format!("Camera source buffer length: {}", buf_size);
+                    buffer_states.push(fs.to_string());
+                    total += buf_size;
+
+                    let is_running = cam_ds.is_running();
+                    let fs = format!("Camera source running state: {}", is_running);
                     source_states.push(fs.to_string());
                 }
             }

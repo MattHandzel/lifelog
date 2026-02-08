@@ -1,6 +1,5 @@
 use lifelog_core::{DataOrigin, DataOriginType};
 use lifelog_types::DataModality;
-use lifelog_types::ScreenFrame;
 use lifelog_types::ToRecord;
 use prost::Message;
 use serde::{Deserialize, Serialize};
@@ -41,75 +40,90 @@ impl IngestBackend for SurrealIngestBackend {
         ensure_chunks_schema(&db).await.map_err(|e| e.to_string())?;
 
         let mut indexed = false;
+        let lower_stream_id = stream_id.to_lowercase();
 
-        // Try to index the content
-        if stream_id.eq_ignore_ascii_case("screen") {
-            if let Ok(frame) = ScreenFrame::decode(payload) {
-                let origin = DataOrigin::new(
-                    DataOriginType::DeviceId(collector_id.to_string()),
-                    DataModality::Screen.as_str_name().to_string(),
-                );
+        // Helper macro to handle ingestion boilerplate
+        macro_rules! ingest_frame {
+            ($frame_type:ty, $record_type:ty, $modality:expr) => {{
+                if let Ok(frame) = <$frame_type>::decode(payload) {
+                    let origin = DataOrigin::new(
+                        DataOriginType::DeviceId(collector_id.to_string()),
+                        $modality.as_str_name().to_string(),
+                    );
 
-                if ensure_table_schema(&db, &origin).await.is_ok() {
-                    let table = origin.get_table_name();
-                    let id = frame.uuid.clone();
-                    let record = frame.to_record();
+                    if ensure_table_schema(&db, &origin).await.is_ok() {
+                        let table = origin.get_table_name();
+                        let id = frame.uuid.clone();
+                        let record = frame.to_record();
 
-                    // Use native upsert to handle bytes and complex types correctly
-                    match db
-                        .upsert::<Option<lifelog_types::ScreenRecord>>((&table, &id))
-                        .content(record)
-                        .await
-                    {
-                        Ok(result) => {
-                            if result.is_some() {
-                                indexed = true;
-                            } else {
-                                tracing::warn!(
-                                    "Frame ingestion returned no results for {} in table {}",
-                                    id,
+                        match db
+                            .upsert::<Option<$record_type>>((&table, &id))
+                            .content(record)
+                            .await
+                        {
+                            Ok(result) => {
+                                if result.is_some() {
+                                    indexed = true;
+                                } else {
+                                    tracing::warn!(
+                                        "Frame ingestion returned no results for {} in table {}",
+                                        id,
+                                        table
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    id = %id,
+                                    error = %e,
+                                    "Frame ingestion failed for table {}",
                                     table
                                 );
                             }
                         }
-                        Err(e) => {
-                            tracing::error!(
-                                id = %id,
-                                error = %e,
-                                "Frame ingestion failed for table {}",
-                                table
-                            );
-                        }
                     }
                 }
-            }
-        } else if stream_id.eq_ignore_ascii_case("browser") {
-            if let Ok(frame) = lifelog_types::BrowserFrame::decode(payload) {
-                let origin = DataOrigin::new(
-                    DataOriginType::DeviceId(collector_id.to_string()),
-                    DataModality::Browser.as_str_name().to_string(),
+            }};
+        }
+
+        match lower_stream_id.as_str() {
+            "screen" => {
+                ingest_frame!(
+                    lifelog_types::ScreenFrame,
+                    lifelog_types::ScreenRecord,
+                    DataModality::Screen
                 );
-
-                if ensure_table_schema(&db, &origin).await.is_ok() {
-                    let table = origin.get_table_name();
-                    let id = frame.uuid.clone();
-                    let record = frame.to_record();
-
-                    match db
-                        .upsert::<Option<lifelog_types::BrowserRecord>>((&table, &id))
-                        .content(record)
-                        .await
-                    {
-                        Ok(result) => {
-                            if result.is_some() {
-                                indexed = true;
-                            }
-                        }
-                        Err(e) => {
-                            tracing::error!(id = %id, error = %e, "Browser frame ingestion failed");
-                        }
-                    }
-                }
+            }
+            "browser" => {
+                ingest_frame!(
+                    lifelog_types::BrowserFrame,
+                    lifelog_types::BrowserRecord,
+                    DataModality::Browser
+                );
+            }
+            "processes" => {
+                ingest_frame!(
+                    lifelog_types::ProcessFrame,
+                    lifelog_types::ProcessRecord,
+                    DataModality::Processes
+                );
+            }
+            "camera" => {
+                ingest_frame!(
+                    lifelog_types::CameraFrame,
+                    lifelog_types::CameraRecord,
+                    DataModality::Camera
+                );
+            }
+            "audio" => {
+                ingest_frame!(
+                    lifelog_types::AudioFrame,
+                    lifelog_types::AudioRecord,
+                    DataModality::Audio
+                );
+            }
+            _ => {
+                tracing::debug!("No specific ingestion logic for stream_id: {}", stream_id);
             }
         }
 

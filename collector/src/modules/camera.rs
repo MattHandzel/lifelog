@@ -1,407 +1,250 @@
-use chrono::Local;
+use crate::data_source::{BufferedSource, DataSource, DataSourceHandle};
+use async_trait::async_trait;
 use config::CameraConfig;
+use lifelog_core::{LifelogError, Utc, Uuid};
+use lifelog_types::{to_pb_ts, CameraFrame};
+use prost::Message;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use tokio::time::{sleep, Duration};
+use utils::buffer::DiskBuffer;
+
 #[cfg(target_os = "linux")]
-use rscam::{Camera, Config, Frame};
+use rscam::{Camera, Config};
+
+#[cfg(target_os = "macos")]
 use std::fs;
 #[cfg(target_os = "macos")]
-use std::io::ErrorKind;
-use std::io::Result;
-use std::path::Path;
-#[cfg(target_os = "macos")]
 use std::process::Command;
-use std::time::{SystemTime, UNIX_EPOCH};
 #[cfg(target_os = "macos")]
 use tempfile::NamedTempFile;
-use tokio::time::{sleep, Duration};
 
-pub struct CameraFrame {
-    pub timestamp: f64,
-    pub data: Vec<u8>,
-    pub width: u32,
-    pub height: u32,
+static RUNNING: AtomicBool = AtomicBool::new(false);
+
+#[derive(Debug, Clone)]
+pub struct CameraDataSource {
+    config: CameraConfig,
+    pub buffer: Arc<DiskBuffer>,
 }
 
-pub async fn capture_frame(_config: &CameraConfig) -> Result<CameraFrame> {
-    #[cfg(target_os = "linux")]
-    {
-        let mut camera = Camera::new("/dev/video0")?;
-        camera
-            .start(&Config {
-                interval: (1, 30), // 30 fps
-                resolution: (640, 480),
-                format: b"MJPG",
-                ..Default::default()
-            })
-            .unwrap();
+impl CameraDataSource {
+    pub fn new(config: CameraConfig) -> Result<Self, LifelogError> {
+        let buffer_path = std::path::Path::new(&config.output_dir).join("buffer");
+        let buffer = DiskBuffer::new(&buffer_path).map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
 
-        let frame = camera.capture()?;
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs_f64();
+        Ok(CameraDataSource {
+            config,
+            buffer: Arc::new(buffer),
+        })
+    }
+}
 
-        Ok(CameraFrame {
-            timestamp,
-            data: frame.to_vec(),
-            width: 640,
-            height: 480,
+#[async_trait]
+impl DataSource for CameraDataSource {
+    type Config = CameraConfig;
+
+    fn new(config: CameraConfig) -> Result<Self, LifelogError> {
+        CameraDataSource::new(config)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>> {
+        Some(Arc::new(CameraBufferedSource {
+            stream_id: "camera".to_string(),
+            buffer: self.buffer.clone(),
+        }))
+    }
+
+    fn start(&self) -> Result<DataSourceHandle, LifelogError> {
+        if RUNNING.load(Ordering::SeqCst) {
+            return Err(LifelogError::AlreadyRunning);
+        }
+
+        tracing::info!("CameraDataSource: Starting data source task");
+        RUNNING.store(true, Ordering::SeqCst);
+
+        let source_clone = self.clone();
+
+        let _join_handle = tokio::spawn(async move {
+            let task_result = source_clone.run().await;
+            tracing::info!(result = ?task_result, "CameraDataSource background task finished");
+            task_result
+        });
+
+        let new_join_handle = tokio::spawn(async { Ok(()) });
+        Ok(DataSourceHandle {
+            join: new_join_handle,
         })
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        tracing::debug!("Attempting to capture frame with imagesnap");
-
-        // First check if imagesnap is installed
-        let check = Command::new("which").arg("imagesnap").output();
-
-        if let Err(e) = check {
-            return Err(std::io::Error::new(
-                ErrorKind::NotFound,
-                format!(
-                    "Failed to check for imagesnap: {}. Make sure it's installed.",
-                    e
-                ),
-            ));
-        } else if !check.unwrap().status.success() {
-            return Err(std::io::Error::new(
-                ErrorKind::NotFound,
-                "imagesnap utility not found. Install with 'brew install imagesnap'",
-            ));
-        }
-
-        // Check if cameras are available
-        let devices = Command::new("imagesnap").arg("-l").output();
-
-        match devices {
-            Ok(output) => {
-                let devices_str = String::from_utf8_lossy(&output.stdout);
-                if !devices_str.contains("Video Devices:") || devices_str.lines().count() <= 1 {
-                    return Err(std::io::Error::new(
-                        ErrorKind::NotFound,
-                        "No cameras were detected by imagesnap. Check camera connections and permissions."
-                    ));
-                }
-                tracing::debug!(devices = %devices_str.trim(), "Available cameras");
-            }
-            Err(e) => {
-                return Err(std::io::Error::new(
-                    ErrorKind::Other,
-                    format!("Failed to list cameras: {}", e),
-                ));
-            }
-        }
-
-        // Get the timestamp
-        let timestamp = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_secs_f64();
-
-        // Create a temporary file to store the captured image
-        let temp_file = NamedTempFile::new()?;
-        let temp_path = temp_file.path().to_string_lossy().to_string();
-
-        tracing::debug!(path = %temp_path, "Capturing image to temp file");
-
-        // Use imagesnap to capture a frame from the default camera
-        let output = Command::new("imagesnap")
-            .arg("-w") // Warm-up period of 0.5s for better exposure
-            .arg("0.5")
-            .arg(&temp_path)
-            .output();
-
-        match output {
-            Ok(output) => {
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-
-                    // Check for common permission errors
-                    if stderr.contains("permission")
-                        || stderr.contains("denied")
-                        || stdout.contains("permission")
-                        || stdout.contains("denied")
-                    {
-                        return Err(std::io::Error::new(
-                            ErrorKind::PermissionDenied,
-                            "Camera access permission denied. Please grant camera access in System Settings > Privacy & Security > Camera."
-                        ));
-                    }
-
-                    return Err(std::io::Error::new(
-                        ErrorKind::Other,
-                        format!("Failed to capture image: {}. Output: {}", stderr, stdout),
-                    ));
-                }
-
-                // Check if the file was created with content
-                let metadata = fs::metadata(&temp_path)?;
-                if metadata.len() == 0 {
-                    return Err(std::io::Error::new(
-                        ErrorKind::Other,
-                        "Captured image file is empty. Camera may not be working properly.",
-                    ));
-                }
-
-                tracing::info!(bytes = metadata.len(), "Successfully captured image");
-
-                // Read the captured image
-                let image_data = fs::read(&temp_path)?;
-
-                // TODO: Get actual dimensions from image
-                // For now, use standard HD resolution
-                Ok(CameraFrame {
-                    timestamp,
-                    data: image_data,
-                    width: 1280,
-                    height: 720,
-                })
-            }
-            Err(e) => {
-                if e.kind() == ErrorKind::NotFound {
-                    Err(std::io::Error::new(
-                        ErrorKind::NotFound,
-                        "imagesnap utility not found. Install with 'brew install imagesnap'",
-                    ))
-                } else {
-                    Err(std::io::Error::new(
-                        e.kind(),
-                        format!("Failed to execute imagesnap: {}", e),
-                    ))
-                }
-            }
-        }
+    async fn stop(&mut self) -> Result<(), LifelogError> {
+        RUNNING.store(false, Ordering::SeqCst);
+        Ok(())
     }
 
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
-        // Other platforms - return a dummy error
-        use std::io::{Error, ErrorKind};
-        Err(Error::new(
-            ErrorKind::Unsupported,
-            "Camera capture is only supported on Linux and macOS",
-        ))
-    }
-}
+    async fn run(&self) -> Result<(), LifelogError> {
+        #[cfg(target_os = "linux")]
+        {
+            let mut camera = Camera::new(&self.config.device).map_err(|e| {
+                LifelogError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
-pub async fn start_camera_logger(config: &CameraConfig) -> Result<()> {
-    if !config.enabled {
-        tracing::info!("Camera logger not started because it's disabled in config");
-        return Ok(());
-    }
+            let camera_config = Config {
+                interval: (1, self.config.fps),
+                format: b"MJPG",
+                resolution: (self.config.resolution_x, self.config.resolution_y),
+                ..Default::default()
+            };
 
-    #[cfg(target_os = "linux")]
-    {
-        // Linux-specific implementation
-        tracing::info!("Starting camera logger (Linux)");
+            camera.start(&camera_config).map_err(|e| {
+                LifelogError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))
+            })?;
 
-        // Clone the config and spawn the Linux-specific logger
-        let config_clone = config.clone();
-        tokio::spawn(async move {
-            start_logger(&config_clone).await;
-        });
-    }
+            while RUNNING.load(Ordering::SeqCst) {
+                match camera.capture() {
+                    Ok(frame) => {
+                        let pb_frame = CameraFrame {
+                            uuid: Uuid::new_v4().to_string(),
+                            timestamp: to_pb_ts(Utc::now()),
+                            width: frame.resolution.0,
+                            height: frame.resolution.1,
+                            image_bytes: frame.to_vec(),
+                            mime_type: "image/jpeg".to_string(),
+                            device: self.config.device.clone(),
+                        };
 
-    #[cfg(target_os = "macos")]
-    {
-        // MacOS implementation
-        tracing::info!("Starting camera logger (macOS)");
-
-        // Create output directory if it doesn't exist
-        fs::create_dir_all(&config.output_dir)?;
-
-        // Clone the config and spawn a background task for macOS logger
-        let config_clone = config.clone();
-        tokio::spawn(async move {
-            start_logger(&config_clone).await;
-        });
-    }
-
-    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-    {
-        tracing::info!("Camera logging is not supported on this platform");
-    }
-
-    Ok(())
-}
-
-#[cfg(target_os = "linux")]
-pub async fn start_logger(config: &CameraConfig) {
-    // Create output directory if it doesn't exist
-    fs::create_dir_all(&config.output_dir).expect("Failed to create camera output directory");
-
-    // Initialize camera
-    let mut camera = Camera::new(&config.device).expect("Failed to open camera device");
-
-    let camera_config = Config {
-        interval: (1, config.fps), // Frame interval
-        format: b"MJPG",           // Motion-JPEG format
-        resolution: (config.resolution.width, config.resolution.height),
-        ..Default::default()
-    };
-
-    camera
-        .start(&camera_config)
-        .expect("Failed to start camera");
-
-    loop {
-        let frame = camera.capture().expect("Failed to capture frame");
-        let timestamp = Local::now().format(&config.timestamp_format.as_str());
-        let output_path = Path::new(&config.output_dir).join(format!("{}.jpg", timestamp));
-
-        save_frame(&frame, &output_path).expect("Failed to save frame");
-
-        sleep(Duration::from_secs_f64(config.interval)).await;
-    }
-}
-
-#[cfg(target_os = "macos")]
-pub async fn start_logger(config: &CameraConfig) {
-    tracing::info!("Starting camera logger on macOS using imagesnap");
-
-    // Verify imagesnap is available
-    let check_result = Command::new("which").arg("imagesnap").output();
-
-    match check_result {
-        Err(_) => {
-            tracing::error!("imagesnap not found. Please install it with: brew install imagesnap");
-            tracing::error!("Camera logger cannot start without imagesnap. Exiting.");
-            return;
-        }
-        Ok(output) if !output.status.success() => {
-            tracing::error!("imagesnap not found. Please install it with: brew install imagesnap");
-            tracing::error!("Camera logger cannot start without imagesnap. Exiting.");
-            return;
-        }
-        _ => {
-            // Check if we have available cameras
-            let devices_result = Command::new("imagesnap").arg("-l").output();
-
-            match devices_result {
-                Ok(output) => {
-                    let output_str = String::from_utf8_lossy(&output.stdout);
-                    tracing::debug!(cameras = %output_str, "Available cameras");
-
-                    if !output_str.contains("Video Devices:") {
-                        tracing::error!("No cameras found by imagesnap");
-                        tracing::error!("Make sure your camera is connected and permissions are granted");
-                        return;
-                    }
-                }
-                Err(e) => {
-                    tracing::error!(error = %e, "Error checking camera devices");
-                }
-            }
-        }
-    }
-
-    // Ensure output directory exists
-    if let Err(e) = fs::create_dir_all(&config.output_dir) {
-        tracing::error!(error = %e, "Failed to create output directory");
-        return;
-    }
-
-    tracing::info!(
-        interval_secs = config.interval,
-        "Camera checks passed, starting capture loop"
-    );
-
-    // Main capture loop
-    loop {
-        let timestamp = Local::now().format(&config.timestamp_format).to_string();
-        let output_path = Path::new(&config.output_dir).join(format!("{}.jpg", timestamp));
-
-        let output_path_str = output_path.to_string_lossy().to_string();
-
-        // Capture with better error handling and output
-        let capture_start = std::time::Instant::now();
-        tracing::debug!(path = %output_path_str, "Capturing frame");
-
-        // Use imagesnap to capture a frame
-        let result = Command::new("imagesnap")
-            .arg("-w") // Warm-up period for better exposure
-            .arg("0.5")
-            .arg(&output_path_str)
-            .output(); // Using output() instead of status() to capture stderr
-
-        match result {
-            Ok(output) => {
-                if output.status.success() {
-                    let duration = capture_start.elapsed();
-                    tracing::info!(duration = ?duration, "Camera capture successful");
-
-                    // Check if the file was actually created with content
-                    match fs::metadata(&output_path) {
-                        Ok(meta) if meta.len() > 0 => {
-                            tracing::debug!(
-                                path = %output_path_str,
-                                bytes = meta.len(),
-                                "Saved image"
-                            );
-                        }
-                        Ok(_) => {
-                            tracing::warn!("Saved image file is empty");
-                        }
-                        Err(e) => {
-                            tracing::warn!(error = %e, "Failed to verify saved image");
+                        let mut buf = Vec::new();
+                        if let Err(e) = pb_frame.encode(&mut buf) {
+                            tracing::error!("Failed to encode CameraFrame: {}", e);
+                        } else if let Err(e) = self.buffer.append(&buf).await {
+                            tracing::error!("Failed to append CameraFrame to buffer: {}", e);
+                        } else {
+                            tracing::debug!("Stored camera frame in WAL");
                         }
                     }
-                } else {
-                    tracing::error!(status = %output.status, "Failed to capture camera frame");
-                    if !output.stderr.is_empty() {
-                        tracing::error!(
-                            stderr = %String::from_utf8_lossy(&output.stderr),
-                            "Capture error output"
-                        );
+                    Err(e) => {
+                        tracing::error!("Failed to capture frame: {}", e);
                     }
                 }
+                sleep(Duration::from_secs_f64(self.config.interval)).await;
             }
-            Err(e) => {
-                if e.kind() == ErrorKind::NotFound {
-                    tracing::error!("imagesnap utility not found. Install with 'brew install imagesnap'");
-                    // Only print the error once, then exit the loop
-                    break;
-                } else {
-                    tracing::error!(error = %e, "Failed to execute imagesnap");
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            while RUNNING.load(Ordering::SeqCst) {
+                // macOS implementation using imagesnap
+                if let Ok(temp_file) = NamedTempFile::new() {
+                    let temp_path = temp_file.path().to_string_lossy().to_string();
+
+                    let output = Command::new("imagesnap")
+                        .arg("-w")
+                        .arg("0.5")
+                        .arg(&temp_path)
+                        .output();
+
+                    match output {
+                        Ok(out) if out.status.success() => {
+                            if let Ok(data) = fs::read(&temp_path) {
+                                if !data.is_empty() {
+                                    let pb_frame = CameraFrame {
+                                        uuid: Uuid::new_v4().to_string(),
+                                        timestamp: to_pb_ts(Utc::now()),
+                                        width: 0, // Unknown without decoding
+                                        height: 0,
+                                        image_bytes: data,
+                                        mime_type: "image/jpeg".to_string(),
+                                        device: "imagesnap".to_string(),
+                                    };
+
+                                    let mut buf = Vec::new();
+                                    if let Err(e) = pb_frame.encode(&mut buf) {
+                                        tracing::error!("Failed to encode CameraFrame: {}", e);
+                                    } else if let Err(e) = self.buffer.append(&buf).await {
+                                        tracing::error!(
+                                            "Failed to append CameraFrame to buffer: {}",
+                                            e
+                                        );
+                                    } else {
+                                        tracing::debug!("Stored camera frame in WAL");
+                                    }
+                                }
+                            }
+                        }
+                        _ => {
+                            tracing::error!("Failed to run imagesnap");
+                        }
+                    }
                 }
+
+                sleep(Duration::from_secs_f64(self.config.interval)).await;
             }
         }
 
-        // Check if logging is still enabled
-        if !config.enabled {
-            tracing::info!("Camera logging disabled in config, stopping logger");
-            break;
+        #[cfg(not(any(target_os = "linux", target_os = "macos")))]
+        {
+            tracing::warn!("Camera capture not supported on this OS");
+            sleep(Duration::from_secs(10)).await;
         }
 
-        // Wait for the configured interval before next capture
-        tracing::debug!(interval_secs = config.interval, "Waiting until next capture");
-        sleep(Duration::from_secs_f64(config.interval)).await;
+        Ok(())
     }
 
-    tracing::info!("Camera logger stopped");
+    fn is_running(&self) -> bool {
+        RUNNING.load(Ordering::SeqCst)
+    }
+
+    fn get_config(&self) -> Self::Config {
+        self.config.clone()
+    }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-pub async fn start_logger(_config: &CameraConfig) {
-    tracing::info!("Camera logging is not supported on this platform");
+pub struct CameraBufferedSource {
+    stream_id: String,
+    buffer: Arc<DiskBuffer>,
 }
 
-//fn save_frame(frame: &Frame, path: &Path) -> std::io::Result<()> {
-//    println!("Save frame not implemented for linux");
-//    Ok(())
-//}
+#[async_trait]
+impl BufferedSource for CameraBufferedSource {
+    fn stream_id(&self) -> String {
+        self.stream_id.clone()
+    }
 
-#[cfg(target_os = "linux")]
-fn save_frame(frame: &Frame, path: &Path) -> std::io::Result<()> {
-    match std::fs::write(path, &frame[..]) {
-        Ok(_) => {
-            tracing::debug!(path = %path.display(), "Frame saved");
-            Ok(())
-        }
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to save frame");
-            Err(e)
-        }
+    async fn peek_upload_batch(
+        &self,
+        max_items: usize,
+    ) -> Result<(u64, Vec<Vec<u8>>), LifelogError> {
+        let (next_offset, raws) = self.buffer.peek_chunk(max_items).await.map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+
+        Ok((next_offset, raws))
+    }
+
+    async fn commit_upload(&self, offset: u64) -> Result<(), LifelogError> {
+        self.buffer.commit_offset(offset).await.map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+        Ok(())
     }
 }

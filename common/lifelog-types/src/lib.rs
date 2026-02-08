@@ -105,6 +105,38 @@ mod helpers {
     }
 
     #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct ProcessRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub processes: Vec<ProcessInfo>,
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct CameraRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub width: u32,
+        pub height: u32,
+        pub image_bytes: surrealdb::sql::Bytes,
+        pub mime_type: String,
+        pub device: String,
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct AudioRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub audio_bytes: surrealdb::sql::Bytes,
+        pub codec: String,
+        pub sample_rate: u32,
+        pub channels: u32,
+        pub duration_secs: f32,
+    }
+
+    #[cfg(feature = "surrealdb")]
     impl ToRecord for ScreenFrame {
         type Record = ScreenRecord;
         fn to_record(&self) -> Self::Record {
@@ -141,6 +173,50 @@ mod helpers {
                 uuid: self.uuid.clone(),
                 timestamp: to_dt(self.timestamp).into(),
                 text: self.text.clone(),
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for ProcessFrame {
+        type Record = ProcessRecord;
+        fn to_record(&self) -> Self::Record {
+            ProcessRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                processes: self.processes.clone(),
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for CameraFrame {
+        type Record = CameraRecord;
+        fn to_record(&self) -> Self::Record {
+            CameraRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                width: self.width,
+                height: self.height,
+                image_bytes: self.image_bytes.clone().into(),
+                mime_type: self.mime_type.clone(),
+                device: self.device.clone(),
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for AudioFrame {
+        type Record = AudioRecord;
+        fn to_record(&self) -> Self::Record {
+            AudioRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                audio_bytes: self.audio_bytes.clone().into(),
+                codec: self.codec.clone(),
+                sample_rate: self.sample_rate,
+                channels: self.channels,
+                duration_secs: self.duration_secs,
             }
         }
     }
@@ -428,6 +504,36 @@ mod helpers {
     impl Modality for MouseFrame {
         fn get_table_name() -> &'static str {
             "mouse"
+        }
+    }
+
+    // ProcessFrame
+    impl DataType for ProcessFrame {
+        fn uuid(&self) -> CoreUuid {
+            parse_uuid(&self.uuid)
+        }
+        fn timestamp(&self) -> DateTime<Utc> {
+            to_dt(self.timestamp)
+        }
+    }
+    impl Modality for ProcessFrame {
+        fn get_table_name() -> &'static str {
+            "processes"
+        }
+    }
+
+    // CameraFrame
+    impl DataType for CameraFrame {
+        fn uuid(&self) -> CoreUuid {
+            parse_uuid(&self.uuid)
+        }
+        fn timestamp(&self) -> DateTime<Utc> {
+            to_dt(self.timestamp)
+        }
+    }
+    impl Modality for CameraFrame {
+        fn get_table_name() -> &'static str {
+            "camera"
         }
     }
 }

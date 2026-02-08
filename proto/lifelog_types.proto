@@ -103,6 +103,8 @@ enum DataModality {
   ShellHistory = 6;
   WindowActivity = 7;
   Mouse = 8;
+  Processes = 9;
+  Camera = 10;
 }
 
 message GeoConfig {
@@ -178,6 +180,26 @@ message ProcessesConfig {
   string output_dir = 3;
 }
 
+message ProcessInfo {
+  int32 pid = 1;
+  int32 ppid = 2;
+  string name = 3;
+  string exe = 4;
+  string cmdline = 5;
+  string status = 6;
+  double cpu_usage = 7;
+  int64 memory_usage = 8;
+  int32 threads = 9;
+  string user = 10;
+  double start_time = 11;
+}
+
+message ProcessFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  repeated ProcessInfo processes = 3;
+}
+
 message ScreenConfig {
   bool enabled = 1;
   double interval = 2;
@@ -193,6 +215,16 @@ message ScreenFrame {
   uint32 height = 4;
   bytes image_bytes = 5;
   string mime_type = 6;
+}
+
+message CameraFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+  bytes image_bytes = 5;
+  string mime_type = 6;
+  string device = 7;
 }
 
 message AudioFrame {
@@ -339,5 +371,7 @@ message LifelogData {
     ShellHistoryFrame shellhistoryframe = 7;
     WindowActivityFrame windowactivityframe = 8;
     MouseFrame mouseframe = 9;
+    ProcessFrame processframe = 10;
+    CameraFrame cameraframe = 11;
   }
 }
