@@ -232,12 +232,10 @@ impl DataSource for ProcessDataSource {
                         let mut buf = Vec::new();
                         if let Err(e) = frame.encode(&mut buf) {
                             tracing::error!("Failed to encode ProcessFrame: {}", e);
+                        } else if let Err(e) = self.buffer.append(&buf).await {
+                            tracing::error!("Failed to append ProcessFrame to buffer: {}", e);
                         } else {
-                            if let Err(e) = self.buffer.append(&buf).await {
-                                tracing::error!("Failed to append ProcessFrame to buffer: {}", e);
-                            } else {
-                                tracing::debug!("Stored process frame in WAL");
-                            }
+                            tracing::debug!("Stored process frame in WAL");
                         }
                     }
                 }

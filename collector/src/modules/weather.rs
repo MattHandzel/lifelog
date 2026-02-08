@@ -112,7 +112,7 @@ impl DataSource for WeatherDataSource {
                         if let (Some(main), Some(weather_arr)) =
                             (json["main"].as_object(), json["weather"].as_array())
                         {
-                            if let Some(weather) = weather_arr.get(0).and_then(|w| w.as_object()) {
+                            if let Some(weather) = weather_arr.first().and_then(|w| w.as_object()) {
                                 let frame = WeatherFrame {
                                     uuid: Uuid::new_v4().to_string(),
                                     timestamp: to_pb_ts(Utc::now()),

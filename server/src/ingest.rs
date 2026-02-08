@@ -1,8 +1,10 @@
+use chrono::Utc;
 use lifelog_core::{DataOrigin, DataOriginType};
 use lifelog_types::DataModality;
 use lifelog_types::ToRecord;
 use prost::Message;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 use utils::ingest::IngestBackend;
@@ -22,6 +24,12 @@ pub(crate) struct ChunkRecord {
 
 pub(crate) struct SurrealIngestBackend {
     pub db: Surreal<Client>,
+    pub cas: utils::cas::FsCas,
+    pub skew_estimates: Arc<
+        tokio::sync::RwLock<
+            std::collections::HashMap<String, lifelog_core::time_skew::SkewEstimate>,
+        >,
+    >,
 }
 
 #[async_trait::async_trait]
@@ -54,7 +62,22 @@ impl IngestBackend for SurrealIngestBackend {
                     if ensure_table_schema(&db, &origin).await.is_ok() {
                         let table = origin.get_table_name();
                         let id = frame.uuid.clone();
-                        let record = frame.to_record();
+                        let mut record = frame.to_record();
+                        let now: surrealdb::sql::Datetime = Utc::now().into();
+
+                        // Get skew estimate for this collector
+                        let skew_est = self.skew_estimates.read().await.get(collector_id).copied();
+
+                        // Apply skew estimate to t_canonical
+                        let t_device_dt: chrono::DateTime<chrono::Utc> = record.timestamp.0;
+                        let (t_canonical_dt, quality_str) = match skew_est {
+                            Some(est) => (est.apply(t_device_dt), est.time_quality.as_str().to_string()),
+                            None => (t_device_dt, "unknown".to_string()),
+                        };
+
+                        record.t_ingest = Some(now.clone());
+                        record.t_canonical = Some(t_canonical_dt.into());
+                        record.time_quality = Some(quality_str);
 
                         match db
                             .upsert::<Option<$record_type>>((&table, &id))
@@ -88,11 +111,67 @@ impl IngestBackend for SurrealIngestBackend {
 
         match lower_stream_id.as_str() {
             "screen" => {
-                ingest_frame!(
-                    lifelog_types::ScreenFrame,
-                    lifelog_types::ScreenRecord,
-                    DataModality::Screen
-                );
+                if let Ok(frame) = lifelog_types::ScreenFrame::decode(payload) {
+                    if frame.image_bytes.is_empty() {
+                        return Err("screen frame has empty image_bytes".to_string());
+                    }
+                    let blob_hash = match self.cas.put(&frame.image_bytes) {
+                        Ok(h) => h,
+                        Err(e) => {
+                            tracing::error!("CAS put failed for screen blob: {}", e);
+                            return Err(e.to_string());
+                        }
+                    };
+
+                    let origin = DataOrigin::new(
+                        DataOriginType::DeviceId(collector_id.to_string()),
+                        DataModality::Screen.as_str_name().to_string(),
+                    );
+                    if ensure_table_schema(&db, &origin).await.is_ok() {
+                        let table = origin.get_table_name();
+                        let id = frame.uuid.clone();
+                        let mut record = frame.to_record();
+                        record.blob_hash = blob_hash;
+                        record.blob_size = frame.image_bytes.len() as u64;
+                        let now: surrealdb::sql::Datetime = Utc::now().into();
+
+                        // Get skew estimate for this collector
+                        let skew_est = self.skew_estimates.read().await.get(collector_id).copied();
+
+                        // Apply skew estimate to t_canonical
+                        let t_device_dt: chrono::DateTime<chrono::Utc> = record.timestamp.0;
+                        let (t_canonical_dt, quality_str) = match skew_est {
+                            Some(est) => (
+                                est.apply(t_device_dt),
+                                est.time_quality.as_str().to_string(),
+                            ),
+                            None => (t_device_dt, "unknown".to_string()),
+                        };
+
+                        record.t_ingest = Some(now.clone());
+                        record.t_canonical = Some(t_canonical_dt.into());
+                        record.time_quality = Some(quality_str);
+
+                        match db
+                            .upsert::<Option<lifelog_types::ScreenRecord>>((&table, &id))
+                            .content(record)
+                            .await
+                        {
+                            Ok(result) => {
+                                if result.is_some() {
+                                    indexed = true;
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    id = %id,
+                                    error = %e,
+                                    "Screen frame ingestion failed"
+                                );
+                            }
+                        }
+                    }
+                }
             }
             "browser" => {
                 ingest_frame!(
@@ -109,18 +188,130 @@ impl IngestBackend for SurrealIngestBackend {
                 );
             }
             "camera" => {
-                ingest_frame!(
-                    lifelog_types::CameraFrame,
-                    lifelog_types::CameraRecord,
-                    DataModality::Camera
-                );
+                if let Ok(frame) = lifelog_types::CameraFrame::decode(payload) {
+                    if frame.image_bytes.is_empty() {
+                        return Err("camera frame has empty image_bytes".to_string());
+                    }
+                    let blob_hash = match self.cas.put(&frame.image_bytes) {
+                        Ok(h) => h,
+                        Err(e) => {
+                            tracing::error!("CAS put failed for camera blob: {}", e);
+                            return Err(e.to_string());
+                        }
+                    };
+
+                    let origin = DataOrigin::new(
+                        DataOriginType::DeviceId(collector_id.to_string()),
+                        DataModality::Camera.as_str_name().to_string(),
+                    );
+                    if ensure_table_schema(&db, &origin).await.is_ok() {
+                        let table = origin.get_table_name();
+                        let id = frame.uuid.clone();
+                        let mut record = frame.to_record();
+                        record.blob_hash = blob_hash;
+                        record.blob_size = frame.image_bytes.len() as u64;
+                        let now: surrealdb::sql::Datetime = Utc::now().into();
+
+                        // Get skew estimate for this collector
+                        let skew_est = self.skew_estimates.read().await.get(collector_id).copied();
+
+                        // Apply skew estimate to t_canonical
+                        let t_device_dt: chrono::DateTime<chrono::Utc> = record.timestamp.0;
+                        let (t_canonical_dt, quality_str) = match skew_est {
+                            Some(est) => (
+                                est.apply(t_device_dt),
+                                est.time_quality.as_str().to_string(),
+                            ),
+                            None => (t_device_dt, "unknown".to_string()),
+                        };
+
+                        record.t_ingest = Some(now.clone());
+                        record.t_canonical = Some(t_canonical_dt.into());
+                        record.time_quality = Some(quality_str);
+
+                        match db
+                            .upsert::<Option<lifelog_types::CameraRecord>>((&table, &id))
+                            .content(record)
+                            .await
+                        {
+                            Ok(result) => {
+                                if result.is_some() {
+                                    indexed = true;
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    id = %id,
+                                    error = %e,
+                                    "Camera frame ingestion failed"
+                                );
+                            }
+                        }
+                    }
+                }
             }
             "audio" => {
-                ingest_frame!(
-                    lifelog_types::AudioFrame,
-                    lifelog_types::AudioRecord,
-                    DataModality::Audio
-                );
+                if let Ok(frame) = lifelog_types::AudioFrame::decode(payload) {
+                    if frame.audio_bytes.is_empty() {
+                        return Err("audio frame has empty audio_bytes".to_string());
+                    }
+                    let blob_hash = match self.cas.put(&frame.audio_bytes) {
+                        Ok(h) => h,
+                        Err(e) => {
+                            tracing::error!("CAS put failed for audio blob: {}", e);
+                            return Err(e.to_string());
+                        }
+                    };
+
+                    let origin = DataOrigin::new(
+                        DataOriginType::DeviceId(collector_id.to_string()),
+                        DataModality::Audio.as_str_name().to_string(),
+                    );
+                    if ensure_table_schema(&db, &origin).await.is_ok() {
+                        let table = origin.get_table_name();
+                        let id = frame.uuid.clone();
+                        let mut record = frame.to_record();
+                        record.blob_hash = blob_hash;
+                        record.blob_size = frame.audio_bytes.len() as u64;
+                        let now: surrealdb::sql::Datetime = Utc::now().into();
+
+                        // Get skew estimate for this collector
+                        let skew_est = self.skew_estimates.read().await.get(collector_id).copied();
+
+                        // Apply skew estimate to t_canonical
+                        let t_device_dt: chrono::DateTime<chrono::Utc> = record.timestamp.0;
+                        let (t_canonical_dt, quality_str) = match skew_est {
+                            Some(est) => (
+                                est.apply(t_device_dt),
+                                est.time_quality.as_str().to_string(),
+                            ),
+                            None => (t_device_dt, "unknown".to_string()),
+                        };
+
+                        record.t_ingest = Some(now.clone());
+                        record.t_canonical = Some(t_canonical_dt.into());
+                        record.time_quality = Some(quality_str);
+
+                        match db
+                            .upsert::<Option<lifelog_types::AudioRecord>>((&table, &id))
+                            .content(record)
+                            .await
+                        {
+                            Ok(result) => {
+                                if result.is_some() {
+                                    indexed = true;
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    id = %id,
+                                    error = %e,
+                                    "Audio frame ingestion failed"
+                                );
+                            }
+                        }
+                    }
+                }
             }
             "weather" => {
                 ingest_frame!(
@@ -139,6 +330,21 @@ impl IngestBackend for SurrealIngestBackend {
             _ => {
                 tracing::debug!("No specific ingestion logic for stream_id: {}", stream_id);
             }
+        }
+
+        // Spec §6.2.1: ACK implies "fully queryable". If we decoded a frame
+        // but failed to persist it (indexed=false), the collector must retry.
+        // Only skip indexing check when the stream type has no ingestion logic
+        // (unknown stream_id) — those are stored as raw chunks only.
+        let known_stream = matches!(
+            lower_stream_id.as_str(),
+            "screen" | "browser" | "processes" | "camera" | "audio" | "weather" | "hyprland"
+        );
+        if known_stream && !indexed {
+            return Err(format!(
+                "frame ingestion failed for stream '{}': metadata not persisted, ACK withheld",
+                stream_id
+            ));
         }
 
         // Use a unique ID based on session and offset to ensure idempotency

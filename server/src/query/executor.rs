@@ -8,11 +8,8 @@ pub async fn execute(
     plan: ExecutionPlan,
 ) -> Result<Vec<LifelogFrameKey>, anyhow::Error> {
     match plan {
-        ExecutionPlan::SimpleQuery(sql) => {
-            tracing::debug!(sql = %sql, "Executing query");
-
-            // Extract table from SQL query string before moving sql
-            let table = sql.split('`').nth(1).unwrap_or("unknown").to_string();
+        ExecutionPlan::TableQuery { table, origin, sql } => {
+            tracing::debug!(sql = %sql, table = %table, "Executing table query");
 
             let mut response = db.query(sql).await?;
 
@@ -29,12 +26,21 @@ pub async fn execute(
                 let id_str = res.uuid;
 
                 if let Ok(uuid) = id_str.parse::<lifelog_core::uuid::Uuid>() {
-                    if let Ok(origin) = lifelog_core::DataOrigin::tryfrom_string(table.clone()) {
-                        keys.push(LifelogFrameKey { uuid, origin });
-                    }
+                    keys.push(LifelogFrameKey {
+                        uuid,
+                        origin: origin.clone(),
+                    });
                 }
             }
             Ok(keys)
+        }
+        ExecutionPlan::MultiQuery(plans) => {
+            let mut all_keys = Vec::new();
+            for subplan in plans {
+                let keys = Box::pin(execute(db, subplan)).await?;
+                all_keys.extend(keys);
+            }
+            Ok(all_keys)
         }
         ExecutionPlan::Unsupported(msg) => Err(anyhow::anyhow!("Unsupported query plan: {}", msg)),
     }

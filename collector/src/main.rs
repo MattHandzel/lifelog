@@ -8,13 +8,8 @@ use std::sync::Arc;
 #[derive(Parser, Debug)]
 #[command(author, version, about = "LifeLog Logger Client", long_about = None)]
 struct Cli {
-    #[arg(
-        short = 's',
-        long = "server-address",
-        value_name = "URL",
-        default_value = "http://127.0.0.1:7182"
-    )]
-    server_address: String,
+    #[arg(short = 's', long = "server-address", value_name = "URL")]
+    server_address: Option<String>,
 }
 
 #[tokio::main]
@@ -53,7 +48,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let cli = Cli::parse();
 
-    let server_addr = cli.server_address;
+    let server_addr = cli
+        .server_address
+        .unwrap_or_else(config::default_server_url);
     let client_id = config.id.clone();
 
     let (upload_mgr, upload_trigger) =

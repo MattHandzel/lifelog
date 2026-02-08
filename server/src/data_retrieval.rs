@@ -3,6 +3,7 @@ use lifelog_core::*;
 use lifelog_types::DataModality;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
+use utils::cas::FsCas;
 
 /// Validates a table name contains only safe characters (alphanumeric,
 /// underscore, colon, hyphen). Prevents SQL injection via table names.
@@ -21,6 +22,7 @@ fn validate_table_name(name: String) -> Result<String, LifelogError> {
 
 pub(crate) async fn get_data_by_key(
     db: &Surreal<Client>,
+    cas: &FsCas,
     key: &LifelogFrameKey,
 ) -> Result<lifelog_types::LifelogData, LifelogError> {
     let table = key.origin.get_table_name();
@@ -41,12 +43,16 @@ pub(crate) async fn get_data_by_key(
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
 
+            let image_bytes = cas.get(&frame_record.blob_hash).map_err(|e| {
+                LifelogError::Database(format!("CAS read for {}: {}", frame_record.blob_hash, e))
+            })?;
+
             let frame = lifelog_types::ScreenFrame {
                 uuid: frame_record.uuid,
                 timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
                 width: frame_record.width,
                 height: frame_record.height,
-                image_bytes: frame_record.image_bytes.into(),
+                image_bytes,
                 mime_type: frame_record.mime_type,
             };
 
@@ -91,12 +97,25 @@ pub(crate) async fn get_data_by_key(
             })
         }
         DataModality::Audio => {
-            let mut frame: lifelog_types::AudioFrame = db
+            let frame_record: lifelog_types::AudioRecord = db
                 .select((&table, &*id))
                 .await
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
-            frame.uuid = key.uuid.to_string();
+
+            let audio_bytes = cas.get(&frame_record.blob_hash).map_err(|e| {
+                LifelogError::Database(format!("CAS read for {}: {}", frame_record.blob_hash, e))
+            })?;
+
+            let frame = lifelog_types::AudioFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                audio_bytes,
+                codec: frame_record.codec,
+                sample_rate: frame_record.sample_rate,
+                channels: frame_record.channels,
+                duration_secs: frame_record.duration_secs,
+            };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Audioframe(frame)),
             })
@@ -172,12 +191,25 @@ pub(crate) async fn get_data_by_key(
             })
         }
         DataModality::Camera => {
-            let mut frame: lifelog_types::CameraFrame = db
+            let frame_record: lifelog_types::CameraRecord = db
                 .select((&table, &*id))
                 .await
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
-            frame.uuid = key.uuid.to_string();
+
+            let image_bytes = cas.get(&frame_record.blob_hash).map_err(|e| {
+                LifelogError::Database(format!("CAS read for {}: {}", frame_record.blob_hash, e))
+            })?;
+
+            let frame = lifelog_types::CameraFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                width: frame_record.width,
+                height: frame_record.height,
+                image_bytes,
+                mime_type: frame_record.mime_type,
+                device: frame_record.device,
+            };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Cameraframe(frame)),
             })

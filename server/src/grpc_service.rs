@@ -56,6 +56,18 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                                     server_handle.report_collector_state(state).await;
                                 }
                             }
+                            Some(lifelog_types::control_message::Msg::ClockSample(sample)) => {
+                                if let Some(ts) = sample.device_now {
+                                    if let Some(device_now) = chrono::DateTime::from_timestamp(
+                                        ts.seconds,
+                                        ts.nanos as u32,
+                                    ) {
+                                        server_handle
+                                            .handle_clock_sample(&collector_id, device_now)
+                                            .await;
+                                    }
+                                }
+                            }
                             _ => {}
                         }
                     }
@@ -166,11 +178,12 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 let server = self.server.server.read().await;
                 let backend = SurrealIngestBackend {
                     db: server.db.clone(),
+                    cas: server.cas.clone(),
+                    skew_estimates: server.skew_estimates.clone(),
                 };
-                let cas = server.cas.clone();
                 ingester = Some(ChunkIngester::new(
                     backend,
-                    cas,
+                    server.cas.clone(),
                     stream_id.collector_id.clone(),
                     stream_id.stream_id.clone(),
                     stream_id.session_id,

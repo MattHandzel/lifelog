@@ -29,6 +29,9 @@ pub type ServerAction = lifelog_core::ServerAction<
 pub type RegisteredCollector =
     lifelog_core::RegisteredCollector<lifelog_types::ServerCommand, lifelog_types::CollectorConfig>;
 
+/// (device_time, server_time) pairs for clock skew estimation.
+type SkewSamples = HashMap<String, Vec<(chrono::DateTime<Utc>, chrono::DateTime<Utc>)>>;
+
 #[derive(Debug, Clone)]
 pub struct Server {
     pub(crate) db: Surreal<Client>,
@@ -38,6 +41,8 @@ pub struct Server {
     pub(crate) registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
     pub(crate) policy: Arc<RwLock<ServerPolicy>>,
     transforms: Arc<RwLock<Vec<LifelogTransform>>>,
+    pub(crate) skew_estimates: Arc<RwLock<HashMap<String, lifelog_core::time_skew::SkewEstimate>>>,
+    pub(crate) skew_samples: Arc<RwLock<SkewSamples>>,
 }
 
 #[derive(Clone)]
@@ -91,7 +96,7 @@ impl ServerHandle {
                     )
                 }),
             );
-            if let Ok(d) = get_data_by_key(&server.db, &core_key).await {
+            if let Ok(d) = get_data_by_key(&server.db, &server.cas, &core_key).await {
                 data.push(d);
             }
         }
@@ -129,6 +134,29 @@ impl ServerHandle {
             .await
             .retain(|c| c.id != id);
     }
+
+    pub async fn handle_clock_sample(&self, collector_id: &str, device_now: chrono::DateTime<Utc>) {
+        let server = self.server.read().await;
+        let backend_now = Utc::now();
+
+        const MAX_SKEW_SAMPLES: usize = 20;
+
+        let estimate = {
+            let mut samples = server.skew_samples.write().await;
+            let entry = samples.entry(collector_id.to_string()).or_default();
+            entry.push((device_now, backend_now));
+            if entry.len() > MAX_SKEW_SAMPLES {
+                entry.drain(..entry.len() - MAX_SKEW_SAMPLES);
+            }
+            lifelog_core::time_skew::estimate_skew(entry)
+        }; // skew_samples write guard dropped before acquiring skew_estimates
+
+        server
+            .skew_estimates
+            .write()
+            .await
+            .insert(collector_id.to_string(), estimate);
+    }
 }
 
 impl Server {
@@ -152,7 +180,7 @@ impl Server {
 
         crate::schema::run_startup_migrations(&db).await?;
 
-        let cas = FsCas::new("cas");
+        let cas = FsCas::new(&config.cas_path);
 
         let system_state = SystemState {
             collector_states: HashMap::new(),
@@ -200,6 +228,8 @@ impl Server {
             registered_collectors: Arc::new(RwLock::new(vec![])),
             policy: Arc::new(RwLock::new(ServerPolicy::new(policy_config))),
             transforms: Arc::new(RwLock::new(vec![ocr_transform.into()])),
+            skew_estimates: Arc::new(RwLock::new(HashMap::new())),
+            skew_samples: Arc::new(RwLock::new(HashMap::new())),
         })
     }
 
@@ -244,20 +274,42 @@ impl Server {
         }
     }
 
+    pub async fn get_skew_estimate(
+        &self,
+        collector_id: &str,
+    ) -> Option<lifelog_core::time_skew::SkewEstimate> {
+        self.skew_estimates.read().await.get(collector_id).copied()
+    }
+
     async fn process_query(
         &self,
         query_msg: lifelog_types::Query,
     ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
         let mut keys: Vec<LifelogFrameKey> = vec![];
 
+        let available_origins = get_origins_from_db(&self.db).await?;
         let target_origins: Vec<DataOrigin> = if query_msg.search_origins.is_empty() {
-            get_origins_from_db(&self.db).await?
+            available_origins
         } else {
-            query_msg
-                .search_origins
-                .into_iter()
-                .filter_map(|s| DataOrigin::tryfrom_string(s).ok())
-                .collect()
+            let mut resolved = Vec::new();
+            for s in &query_msg.search_origins {
+                if let Some(o) = available_origins
+                    .iter()
+                    .find(|o| o.get_table_name() == *s || o.to_string() == *s)
+                {
+                    resolved.push(o.clone());
+                } else if let Ok(o) = DataOrigin::tryfrom_string(s.clone()) {
+                    resolved.push(o);
+                } else {
+                    // Try to match as modality name
+                    for o in &available_origins {
+                        if o.modality_name == *s {
+                            resolved.push(o.clone());
+                        }
+                    }
+                }
+            }
+            resolved
         };
 
         for origin in target_origins {
@@ -326,10 +378,12 @@ impl Server {
                 ),
             };
 
-            let where_clause = crate::query::planner::Planner::compile_expression(&filter);
-            let sql = format!("SELECT uuid FROM `{}` WHERE {};", table, where_clause);
+            let query = crate::query::ast::Query {
+                target: crate::query::ast::StreamSelector::StreamId(table.clone()),
+                filter,
+            };
 
-            let plan = crate::query::planner::ExecutionPlan::SimpleQuery(sql);
+            let plan = crate::query::planner::Planner::plan(&query, &[origin.clone()]);
             match crate::query::executor::execute(&self.db, plan).await {
                 Ok(res) => keys.extend(res),
                 Err(e) => tracing::error!("Query execution failed for {}: {}", table, e),
@@ -385,6 +439,7 @@ impl Server {
                 }
                 let state_clone = self.state.clone();
                 let db_connection = self.db.clone();
+                let cas_clone = self.cas.clone();
                 let transforms = self.transforms.clone().read().await.to_vec();
                 tokio::spawn(async move {
                     for transform in transforms {
@@ -418,6 +473,7 @@ impl Server {
 
                         if let Some(last_ts) = crate::transform::transform_data_single(
                             &db_connection,
+                            &cas_clone,
                             &keys,
                             &transform,
                         )

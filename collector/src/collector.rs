@@ -583,7 +583,7 @@ impl Collector {
             tracing::info!(active_sources = ?active_sources, "Reporting status via ControlStream");
 
             let msg = ControlMessage {
-                collector_id: mac_addr,
+                collector_id: mac_addr.clone(),
                 msg: Some(lifelog_types::control_message::Msg::State(
                     ReportStateRequest {
                         state: Some(current_state),
@@ -594,6 +594,19 @@ impl Collector {
             tx.send(msg)
                 .await
                 .map_err(|_| LifelogError::Database("Failed to send state report".to_string()))?;
+
+            // Also send a clock sample for skew estimation
+            let clock_msg = ControlMessage {
+                collector_id: mac_addr,
+                msg: Some(lifelog_types::control_message::Msg::ClockSample(
+                    lifelog_types::ClockSample {
+                        device_now: lifelog_types::to_pb_ts(chrono::Utc::now()),
+                    },
+                )),
+            };
+            // Best-effort: don't fail the state report if clock sample fails
+            let _ = tx.send(clock_msg).await;
+
             Ok(())
         } else {
             tracing::error!("Cannot report status: ControlStream not established");

@@ -34,17 +34,25 @@ impl FsCas {
             fs::create_dir_all(parent)?;
         }
 
-        // Best-effort atomic write: write temp file then rename.
-        let tmp_path = final_path.with_extension("tmp");
-        fs::write(&tmp_path, bytes)?;
-        match fs::rename(&tmp_path, &final_path) {
-            Ok(()) => Ok(hash),
+        // Use a unique temporary file in the same directory to avoid collisions between concurrent writers.
+        let parent = final_path.parent().ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "No parent directory for CAS path")
+        })?;
+
+        let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
+        io::Write::write_all(&mut tmp, bytes)?;
+
+        // Best-effort atomic write: rename unique temp file to final path.
+        // On POSIX, rename is atomic and overwrites the destination if it exists.
+        // On Windows, it might fail if the destination exists, which we handle.
+        match tmp.persist(&final_path) {
+            Ok(_) => Ok(hash),
             Err(_e) if final_path.exists() => {
-                // Another writer won the race; clean up temp.
-                let _ = fs::remove_file(&tmp_path);
+                // Another writer won the race and successfully persisted the file.
+                // Since this is content-addressed, we can safely ignore the error.
                 Ok(hash)
             }
-            Err(e) => Err(CasError::Io(e)),
+            Err(e) => Err(CasError::Io(e.error)),
         }
     }
 

@@ -82,8 +82,15 @@ mod helpers {
         pub timestamp: surrealdb::sql::Datetime,
         pub width: u32,
         pub height: u32,
-        pub image_bytes: surrealdb::sql::Bytes,
+        pub blob_hash: String,
+        pub blob_size: u64,
         pub mime_type: String,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
     }
 
     #[cfg(feature = "surrealdb")]
@@ -94,6 +101,12 @@ mod helpers {
         pub url: String,
         pub title: String,
         pub visit_count: u32,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
     }
 
     #[cfg(feature = "surrealdb")]
@@ -102,6 +115,12 @@ mod helpers {
         pub uuid: String,
         pub timestamp: surrealdb::sql::Datetime,
         pub text: String,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
     }
 
     #[cfg(feature = "surrealdb")]
@@ -110,6 +129,12 @@ mod helpers {
         pub uuid: String,
         pub timestamp: surrealdb::sql::Datetime,
         pub processes: Vec<ProcessInfo>,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
     }
 
     #[cfg(feature = "surrealdb")]
@@ -119,9 +144,16 @@ mod helpers {
         pub timestamp: surrealdb::sql::Datetime,
         pub width: u32,
         pub height: u32,
-        pub image_bytes: surrealdb::sql::Bytes,
+        pub blob_hash: String,
+        pub blob_size: u64,
         pub mime_type: String,
         pub device: String,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
     }
 
     #[cfg(feature = "surrealdb")]
@@ -129,11 +161,18 @@ mod helpers {
     pub struct AudioRecord {
         pub uuid: String,
         pub timestamp: surrealdb::sql::Datetime,
-        pub audio_bytes: surrealdb::sql::Bytes,
+        pub blob_hash: String,
+        pub blob_size: u64,
         pub codec: String,
         pub sample_rate: u32,
         pub channels: u32,
         pub duration_secs: f32,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
     }
 
     #[cfg(feature = "surrealdb")]
@@ -145,6 +184,12 @@ mod helpers {
         pub humidity: f64,
         pub pressure: f64,
         pub conditions: String,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
     }
 
     #[cfg(feature = "surrealdb")]
@@ -158,6 +203,12 @@ mod helpers {
         pub clients: Vec<HyprClient>,
         pub devices: Vec<HyprDevice>,
         pub cursor: Option<HyprCursor>,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
     }
 
     #[cfg(feature = "surrealdb")]
@@ -169,8 +220,12 @@ mod helpers {
                 timestamp: to_dt(self.timestamp).into(),
                 width: self.width,
                 height: self.height,
-                image_bytes: self.image_bytes.clone().into(),
+                blob_hash: String::new(),
+                blob_size: self.image_bytes.len() as u64,
                 mime_type: self.mime_type.clone(),
+                t_ingest: None,
+                t_canonical: None,
+                time_quality: None,
             }
         }
     }
@@ -185,6 +240,9 @@ mod helpers {
                 url: self.url.clone(),
                 title: self.title.clone(),
                 visit_count: self.visit_count,
+                t_ingest: None,
+                t_canonical: None,
+                time_quality: None,
             }
         }
     }
@@ -197,6 +255,9 @@ mod helpers {
                 uuid: self.uuid.clone(),
                 timestamp: to_dt(self.timestamp).into(),
                 text: self.text.clone(),
+                t_ingest: None,
+                t_canonical: None,
+                time_quality: None,
             }
         }
     }
@@ -209,6 +270,9 @@ mod helpers {
                 uuid: self.uuid.clone(),
                 timestamp: to_dt(self.timestamp).into(),
                 processes: self.processes.clone(),
+                t_ingest: None,
+                t_canonical: None,
+                time_quality: None,
             }
         }
     }
@@ -222,9 +286,13 @@ mod helpers {
                 timestamp: to_dt(self.timestamp).into(),
                 width: self.width,
                 height: self.height,
-                image_bytes: self.image_bytes.clone().into(),
+                blob_hash: String::new(),
+                blob_size: self.image_bytes.len() as u64,
                 mime_type: self.mime_type.clone(),
                 device: self.device.clone(),
+                t_ingest: None,
+                t_canonical: None,
+                time_quality: None,
             }
         }
     }
@@ -236,11 +304,15 @@ mod helpers {
             AudioRecord {
                 uuid: self.uuid.clone(),
                 timestamp: to_dt(self.timestamp).into(),
-                audio_bytes: self.audio_bytes.clone().into(),
+                blob_hash: String::new(),
+                blob_size: self.audio_bytes.len() as u64,
                 codec: self.codec.clone(),
                 sample_rate: self.sample_rate,
                 channels: self.channels,
                 duration_secs: self.duration_secs,
+                t_ingest: None,
+                t_canonical: None,
+                time_quality: None,
             }
         }
     }
@@ -256,6 +328,9 @@ mod helpers {
                 humidity: self.humidity,
                 pressure: self.pressure,
                 conditions: self.conditions.clone(),
+                t_ingest: None,
+                t_canonical: None,
+                time_quality: None,
             }
         }
     }
@@ -272,7 +347,10 @@ mod helpers {
                 active_workspace: self.active_workspace.clone(),
                 clients: self.clients.clone(),
                 devices: self.devices.clone(),
-                cursor: self.cursor.clone(),
+                cursor: self.cursor,
+                t_ingest: None,
+                t_canonical: None,
+                time_quality: None,
             }
         }
     }
@@ -657,8 +735,8 @@ mod tests {
         let record = frame.to_record();
         assert_eq!(record.uuid, frame.uuid);
         assert_eq!(record.width, 1920);
-        let bytes: Vec<u8> = record.image_bytes.into();
-        assert_eq!(bytes, vec![1, 2, 3]);
+        assert_eq!(record.blob_hash, ""); // Placeholder
+        assert_eq!(record.blob_size, 3); // vec![1, 2, 3].len()
     }
 
     #[cfg(feature = "surrealdb")]

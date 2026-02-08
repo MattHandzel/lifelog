@@ -16,6 +16,11 @@ pub(crate) struct TableSchema {
 }
 
 /// Central schema registry for all data modalities.
+/// Text analyzer for full-text search indexes
+static TEXT_ANALYZER_DDL: &str = r#"
+    DEFINE ANALYZER IF NOT EXISTS lifelog_text TOKENIZERS blank, class FILTERS lowercase, ascii, snowball(english);
+"#;
+
 static SCHEMAS: &[TableSchema] = &[
     TableSchema {
         modality: DataModality::Screen,
@@ -24,11 +29,16 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
             DEFINE FIELD width       ON `{table}` TYPE int;
             DEFINE FIELD height      ON `{table}` TYPE int;
-            DEFINE FIELD image_bytes ON `{table}` TYPE bytes;
+            DEFINE FIELD blob_hash   ON `{table}` TYPE string;
+            DEFINE FIELD blob_size   ON `{table}` TYPE int;
             DEFINE FIELD mime_type   ON `{table}` TYPE string;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
         "#,
     },
     TableSchema {
@@ -39,9 +49,15 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD url         ON `{table}` TYPE string;
             DEFINE FIELD title       ON `{table}` TYPE string;
             DEFINE FIELD visit_count ON `{table}` TYPE int;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_url_search` ON `{table}` FIELDS url SEARCH ANALYZER lifelog_text BM25;
+            DEFINE INDEX `{table}_title_search` ON `{table}` FIELDS title SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
     TableSchema {
@@ -50,9 +66,14 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD uuid      ON `{table}` TYPE string;
             DEFINE FIELD timestamp ON `{table}` TYPE datetime;
             DEFINE FIELD text      ON `{table}` TYPE string;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_text_search` ON `{table}` FIELDS text SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
     TableSchema {
@@ -60,14 +81,19 @@ static SCHEMAS: &[TableSchema] = &[
         fields_ddl: r#"
             DEFINE FIELD uuid          ON `{table}` TYPE string;
             DEFINE FIELD timestamp     ON `{table}` TYPE datetime;
-            DEFINE FIELD audio_bytes   ON `{table}` TYPE bytes;
+            DEFINE FIELD blob_hash     ON `{table}` TYPE string;
+            DEFINE FIELD blob_size     ON `{table}` TYPE int;
             DEFINE FIELD codec         ON `{table}` TYPE string;
             DEFINE FIELD sample_rate   ON `{table}` TYPE int;
             DEFINE FIELD channels      ON `{table}` TYPE int;
             DEFINE FIELD duration_secs ON `{table}` TYPE float;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
         "#,
     },
     TableSchema {
@@ -78,9 +104,14 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD text         ON `{table}` TYPE string;
             DEFINE FIELD application  ON `{table}` TYPE string;
             DEFINE FIELD window_title ON `{table}` TYPE string;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_text_search` ON `{table}` FIELDS text SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
     TableSchema {
@@ -91,9 +122,14 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD text        ON `{table}` TYPE string;
             DEFINE FIELD binary_data ON `{table}` TYPE bytes;
             DEFINE FIELD mime_type   ON `{table}` TYPE string;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_text_search` ON `{table}` FIELDS text SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
     TableSchema {
@@ -104,9 +140,14 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD command     ON `{table}` TYPE string;
             DEFINE FIELD working_dir ON `{table}` TYPE string;
             DEFINE FIELD exit_code   ON `{table}` TYPE int;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_command_search` ON `{table}` FIELDS command SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
     TableSchema {
@@ -118,9 +159,14 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD window_title  ON `{table}` TYPE string;
             DEFINE FIELD focused       ON `{table}` TYPE bool;
             DEFINE FIELD duration_secs ON `{table}` TYPE float;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_title_search` ON `{table}` FIELDS window_title SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
     TableSchema {
@@ -130,9 +176,86 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD timestamp      ON `{table}` TYPE datetime;
             DEFINE FIELD activity_level ON `{table}` TYPE int;
             DEFINE FIELD button_mask    ON `{table}` TYPE int;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+        "#,
+    },
+    TableSchema {
+        modality: DataModality::Processes,
+        fields_ddl: r#"
+            DEFINE FIELD uuid        ON `{table}` TYPE string;
+            DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
+            DEFINE FIELD processes   ON `{table}` TYPE array;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+        "#,
+    },
+    TableSchema {
+        modality: DataModality::Camera,
+        fields_ddl: r#"
+            DEFINE FIELD uuid        ON `{table}` TYPE string;
+            DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
+            DEFINE FIELD width       ON `{table}` TYPE int;
+            DEFINE FIELD height      ON `{table}` TYPE int;
+            DEFINE FIELD blob_hash   ON `{table}` TYPE string;
+            DEFINE FIELD blob_size   ON `{table}` TYPE int;
+            DEFINE FIELD mime_type   ON `{table}` TYPE string;
+            DEFINE FIELD device      ON `{table}` TYPE string;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+        "#,
+    },
+    TableSchema {
+        modality: DataModality::Weather,
+        fields_ddl: r#"
+            DEFINE FIELD uuid        ON `{table}` TYPE string;
+            DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
+            DEFINE FIELD temperature ON `{table}` TYPE float;
+            DEFINE FIELD humidity    ON `{table}` TYPE float;
+            DEFINE FIELD pressure    ON `{table}` TYPE float;
+            DEFINE FIELD conditions  ON `{table}` TYPE string;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+        "#,
+    },
+    TableSchema {
+        modality: DataModality::Hyprland,
+        fields_ddl: r#"
+            DEFINE FIELD uuid              ON `{table}` TYPE string;
+            DEFINE FIELD timestamp         ON `{table}` TYPE datetime;
+            DEFINE FIELD monitors          ON `{table}` TYPE array;
+            DEFINE FIELD workspaces        ON `{table}` TYPE array;
+            DEFINE FIELD active_workspace  ON `{table}` TYPE option<object>;
+            DEFINE FIELD clients           ON `{table}` TYPE array;
+            DEFINE FIELD devices           ON `{table}` TYPE array;
+            DEFINE FIELD cursor            ON `{table}` TYPE option<object>;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
         "#,
     },
 ];
@@ -249,6 +372,11 @@ pub(crate) async fn ensure_catalog_schema(db: &Surreal<Client>) -> surrealdb::Re
 /// Creates tables for every known origin already in the database
 /// and ensures the chunks metadata table exists.
 pub(crate) async fn run_startup_migrations(db: &Surreal<Client>) -> Result<(), LifelogError> {
+    // Create text analyzer first (must exist before table search indexes)
+    db.query(TEXT_ANALYZER_DDL)
+        .await
+        .map_err(|e| LifelogError::Database(format!("text analyzer: {}", e)))?;
+
     // Ensure upload_chunks table
     ensure_chunks_schema(db)
         .await

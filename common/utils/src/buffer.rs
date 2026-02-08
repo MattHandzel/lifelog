@@ -1,3 +1,4 @@
+use sha2::{Digest, Sha256};
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
 use tokio::fs::{File, OpenOptions};
@@ -11,11 +12,15 @@ pub enum BufferError {
     CorruptData(String),
 }
 
+const MAGIC: u32 = 0x4C4C4F47; // "LLOG" in ASCII
+const HEADER_SIZE: u64 = 8; // MAGIC (4) + LEN (4)
+const CHECKSUM_SIZE: u64 = 32; // SHA256
+
 /// A disk-backed byte-oriented buffer (Write-Ahead Log) that supports appending raw bytes,
 /// peeking at chunks of items, and committing the read offset.
 ///
 /// Layout:
-/// - `wal.log`: Sequence of [len: u32][data: bytes]
+/// - `wal.log`: Sequence of [magic: u32][len: u32][data: bytes][checksum: 32 bytes]
 /// - `wal.cursor`: [offset: u64] (The byte offset in wal.log where the next read should start)
 #[derive(Debug)]
 pub struct DiskBuffer {
@@ -41,14 +46,22 @@ impl DiskBuffer {
     pub async fn append(&self, data: &[u8]) -> Result<(), BufferError> {
         let len = data.len() as u32;
 
+        let mut hasher = Sha256::new();
+        hasher.update(MAGIC.to_le_bytes());
+        hasher.update(len.to_le_bytes());
+        hasher.update(data);
+        let checksum = hasher.finalize();
+
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(self.log_path())
             .await?;
 
+        file.write_u32_le(MAGIC).await?;
         file.write_u32_le(len).await?;
         file.write_all(data).await?;
+        file.write_all(&checksum).await?;
         file.flush().await?;
 
         Ok(())
@@ -118,16 +131,40 @@ impl DiskBuffer {
         file.seek(SeekFrom::Start(start_offset)).await?;
 
         for _ in 0..max_items {
-            if current_offset >= file_len {
+            if current_offset + HEADER_SIZE > file_len {
                 break;
+            }
+
+            // Read MAGIC
+            let magic = match file.read_u32_le().await {
+                Ok(m) => m,
+                Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                Err(e) => return Err(e.into()),
+            };
+
+            if magic != MAGIC {
+                return Err(BufferError::CorruptData(format!(
+                    "Invalid magic at offset {}: expected {:08X}, got {:08X}",
+                    current_offset, MAGIC, magic
+                )));
             }
 
             // Read length (u32)
             let len = match file.read_u32_le().await {
                 Ok(l) => l as u64,
-                Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
+                Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    return Err(BufferError::CorruptData(format!(
+                        "Truncated header at offset {}",
+                        current_offset
+                    )));
+                }
                 Err(e) => return Err(e.into()),
             };
+
+            if current_offset + HEADER_SIZE + len + CHECKSUM_SIZE > file_len {
+                // Potential torn write at the end of file
+                break;
+            }
 
             // Read data
             let mut data_buf = vec![0u8; len as usize];
@@ -139,10 +176,34 @@ impl DiskBuffer {
                 Err(e) => return Err(e.into()),
             }
 
+            // Read checksum
+            let mut stored_checksum = [0u8; 32];
+            match file.read_exact(&mut stored_checksum).await {
+                Ok(_) => {}
+                Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                    break;
+                }
+                Err(e) => return Err(e.into()),
+            }
+
+            // Verify checksum
+            let mut hasher = Sha256::new();
+            hasher.update(MAGIC.to_le_bytes());
+            hasher.update((len as u32).to_le_bytes());
+            hasher.update(&data_buf);
+            let calculated_checksum = hasher.finalize();
+
+            if calculated_checksum.as_slice() != stored_checksum {
+                return Err(BufferError::CorruptData(format!(
+                    "Checksum mismatch at offset {}",
+                    current_offset
+                )));
+            }
+
             items.push(data_buf);
 
-            // 4 bytes for len + data len
-            current_offset += 4 + len;
+            // MAGIC (4) + len (4) + data len + checksum (32)
+            current_offset += HEADER_SIZE + len + CHECKSUM_SIZE;
         }
 
         Ok((current_offset, items))
@@ -185,29 +246,55 @@ mod tests {
         buffer.append(b"hello").await.unwrap();
         buffer.append(b"world").await.unwrap();
 
-        assert_eq!(buffer.get_uncommitted_size().await.unwrap(), 18); // (4+5) + (4+5)
+        assert_eq!(buffer.get_uncommitted_size().await.unwrap(), 90); // (4+4+5+32) + (4+4+5+32)
 
         // Peek
         let (next, items) = buffer.peek_chunk(1).await.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0], b"hello");
-        assert_eq!(next, 9);
+        assert_eq!(next, 45);
 
         let (next, items) = buffer.peek_chunk(10).await.unwrap();
         assert_eq!(items.len(), 2);
         assert_eq!(items[0], b"hello");
         assert_eq!(items[1], b"world");
-        assert_eq!(next, 18);
+        assert_eq!(next, 90);
 
         // Commit first item
-        buffer.commit_offset(9).await.unwrap();
-        assert_eq!(buffer.get_committed_offset().await.unwrap(), 9);
-        assert_eq!(buffer.get_uncommitted_size().await.unwrap(), 9);
+        buffer.commit_offset(45).await.unwrap();
+        assert_eq!(buffer.get_committed_offset().await.unwrap(), 45);
+        assert_eq!(buffer.get_uncommitted_size().await.unwrap(), 45);
 
         // Peek again
         let (next, items) = buffer.peek_chunk(10).await.unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0], b"world");
-        assert_eq!(next, 18);
+        assert_eq!(next, 90);
+    }
+
+    #[tokio::test]
+    async fn test_disk_buffer_corruption() {
+        let tmp = tempdir().unwrap();
+        let buffer = DiskBuffer::new(tmp.path()).unwrap();
+
+        buffer.append(b"valid_data").await.unwrap();
+
+        // Corrupt the file
+        let path = buffer.log_path();
+        let mut file = OpenOptions::new().write(true).open(&path).await.unwrap();
+
+        // Header size (8) + data len (10) + checksum (32) = 50 bytes total
+        // Offset 10 is inside the data. Let's flip a bit in the data.
+        file.seek(SeekFrom::Start(10)).await.unwrap();
+        file.write_all(b"X").await.unwrap();
+        file.flush().await.unwrap();
+
+        // Attempt to peek
+        let result = buffer.peek_chunk(1).await;
+        assert!(
+            matches!(result, Err(BufferError::CorruptData(ref msg)) if msg.contains("Checksum mismatch")),
+            "Expected CorruptData error with Checksum mismatch, got {:?}",
+            result
+        );
     }
 }

@@ -56,9 +56,9 @@ impl HyprlandDataSource {
                         width: m.width as i32,
                         height: m.height as i32,
                         refresh_rate: m.refresh_rate,
-                        x: m.x as i32,
-                        y: m.y as i32,
-                        workspace_id: m.active_workspace.id as i32,
+                        x: m.x,
+                        y: m.y,
+                        workspace_id: m.active_workspace.id,
                         workspace_name: m.active_workspace.name,
                         scale: m.scale,
                         focused: m.focused,
@@ -72,7 +72,7 @@ impl HyprlandDataSource {
                 frame.workspaces = workspaces
                     .into_iter()
                     .map(|w| HyprWorkspace {
-                        id: w.id as i32,
+                        id: w.id,
                         name: w.name,
                         monitor: w.monitor,
                         monitor_id: w.monitor_id as i32,
@@ -85,7 +85,7 @@ impl HyprlandDataSource {
             }
             if let Ok(aw) = Workspace::get_active() {
                 frame.active_workspace = Some(HyprWorkspace {
-                    id: aw.id as i32,
+                    id: aw.id,
                     name: aw.name,
                     monitor: aw.monitor,
                     monitor_id: aw.monitor_id as i32,
@@ -107,14 +107,14 @@ impl HyprlandDataSource {
                         y: c.at.1 as i32,
                         width: c.size.0 as i32,
                         height: c.size.1 as i32,
-                        workspace_id: c.workspace.id as i32,
+                        workspace_id: c.workspace.id,
                         workspace_name: c.workspace.name,
                         floating: c.floating,
                         fullscreen: format!("{:?}", c.fullscreen),
                         monitor: c.monitor as i32,
                         title: c.title,
                         class: c.class,
-                        pid: c.pid as i32,
+                        pid: c.pid,
                         pinned: c.pinned,
                         mapped: c.mapped,
                     })

@@ -7,6 +7,16 @@ pub enum TimeQuality {
     Degraded,
 }
 
+impl TimeQuality {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            TimeQuality::Unknown => "unknown",
+            TimeQuality::Good => "good",
+            TimeQuality::Degraded => "degraded",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SkewEstimate {
     /// Estimated offset such that `t_canonical = t_device + offset`.

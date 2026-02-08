@@ -182,7 +182,9 @@ message SuggestUploadRequest {
 
 }
 
-
+message ClockSample {
+  google.protobuf.Timestamp device_now = 1;
+}
 
 
 
@@ -213,6 +215,8 @@ message ControlMessage {
 
 
     SuggestUploadRequest suggest_upload = 5;
+
+    ClockSample clock_sample = 6;
 
 
 

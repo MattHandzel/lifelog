@@ -3,6 +3,7 @@ use lifelog_core::{DataOrigin, DateTime, LifelogFrameKey, LifelogImage, Transfor
 use lifelog_types::ToRecord;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
+use utils::cas::FsCas;
 
 use crate::data_retrieval::get_data_by_key;
 
@@ -40,19 +41,21 @@ impl From<OcrTransform> for LifelogTransform {
 
 pub(crate) async fn transform_data_single(
     db: &Surreal<Client>,
+    cas: &FsCas,
     keys: &[LifelogFrameKey],
     transform: &LifelogTransform,
 ) -> Option<DateTime<Utc>> {
     let mut last_ts = None;
 
     for key in keys {
-        let data_to_transform: lifelog_types::LifelogData = match get_data_by_key(db, key).await {
-            Ok(data) => data,
-            Err(e) => {
-                tracing::error!(uuid = %key.uuid, error = %e, "Failed to get data by key");
-                continue;
-            }
-        };
+        let data_to_transform: lifelog_types::LifelogData =
+            match get_data_by_key(db, cas, key).await {
+                Ok(data) => data,
+                Err(e) => {
+                    tracing::error!(uuid = %key.uuid, error = %e, "Failed to get data by key");
+                    continue;
+                }
+            };
 
         match transform {
             LifelogTransform::OcrTransform(t) => {
@@ -67,7 +70,11 @@ pub(crate) async fn transform_data_single(
                             let destination = t.destination();
                             let table = destination.get_table_name();
                             let id = result.uuid.clone();
-                            let record = result.to_record();
+                            let mut record = result.to_record();
+                            let now: surrealdb::sql::Datetime = chrono::Utc::now().into();
+                            record.t_ingest = Some(now);
+                            record.t_canonical = Some(record.timestamp.clone());
+                            record.time_quality = Some("derived".to_string());
 
                             // Ensure destination table exists
                             let _ = crate::schema::ensure_table_schema(db, &destination).await;
