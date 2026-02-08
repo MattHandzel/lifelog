@@ -122,6 +122,20 @@ impl IngestBackend for SurrealIngestBackend {
                     DataModality::Audio
                 );
             }
+            "weather" => {
+                ingest_frame!(
+                    lifelog_types::WeatherFrame,
+                    lifelog_types::WeatherRecord,
+                    DataModality::Weather
+                );
+            }
+            "hyprland" => {
+                ingest_frame!(
+                    lifelog_types::HyprlandFrame,
+                    lifelog_types::HyprlandRecord,
+                    DataModality::Hyprland
+                );
+            }
             _ => {
                 tracing::debug!("No specific ingestion logic for stream_id: {}", stream_id);
             }

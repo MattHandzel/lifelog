@@ -3,7 +3,7 @@ pub mod browser_history;
 pub mod camera;
 pub mod data_source;
 pub mod evdev_input_logger;
-// pub mod hyprland; // needs to be updated
+pub mod hyprland;
 pub mod input_logger;
 pub mod logger;
 // pub mod microphone; // needs to be updated

@@ -182,6 +182,28 @@ pub(crate) async fn get_data_by_key(
                 payload: Some(lifelog_types::lifelog_data::Payload::Cameraframe(frame)),
             })
         }
+        DataModality::Weather => {
+            let mut frame: lifelog_types::WeatherFrame = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_types::LifelogData {
+                payload: Some(lifelog_types::lifelog_data::Payload::Weatherframe(frame)),
+            })
+        }
+        DataModality::Hyprland => {
+            let mut frame: lifelog_types::HyprlandFrame = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+            frame.uuid = key.uuid.to_string();
+            Ok(lifelog_types::LifelogData {
+                payload: Some(lifelog_types::lifelog_data::Payload::Hyprlandframe(frame)),
+            })
+        }
     }
 }
 

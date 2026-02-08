@@ -137,6 +137,30 @@ mod helpers {
     }
 
     #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct WeatherRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub temperature: f64,
+        pub humidity: f64,
+        pub pressure: f64,
+        pub conditions: String,
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct HyprlandRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub monitors: Vec<HyprMonitor>,
+        pub workspaces: Vec<HyprWorkspace>,
+        pub active_workspace: Option<HyprWorkspace>,
+        pub clients: Vec<HyprClient>,
+        pub devices: Vec<HyprDevice>,
+        pub cursor: Option<HyprCursor>,
+    }
+
+    #[cfg(feature = "surrealdb")]
     impl ToRecord for ScreenFrame {
         type Record = ScreenRecord;
         fn to_record(&self) -> Self::Record {
@@ -217,6 +241,38 @@ mod helpers {
                 sample_rate: self.sample_rate,
                 channels: self.channels,
                 duration_secs: self.duration_secs,
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for WeatherFrame {
+        type Record = WeatherRecord;
+        fn to_record(&self) -> Self::Record {
+            WeatherRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                temperature: self.temperature,
+                humidity: self.humidity,
+                pressure: self.pressure,
+                conditions: self.conditions.clone(),
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for HyprlandFrame {
+        type Record = HyprlandRecord;
+        fn to_record(&self) -> Self::Record {
+            HyprlandRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                monitors: self.monitors.clone(),
+                workspaces: self.workspaces.clone(),
+                active_workspace: self.active_workspace.clone(),
+                clients: self.clients.clone(),
+                devices: self.devices.clone(),
+                cursor: self.cursor.clone(),
             }
         }
     }
@@ -534,6 +590,36 @@ mod helpers {
     impl Modality for CameraFrame {
         fn get_table_name() -> &'static str {
             "camera"
+        }
+    }
+
+    // WeatherFrame
+    impl DataType for WeatherFrame {
+        fn uuid(&self) -> CoreUuid {
+            parse_uuid(&self.uuid)
+        }
+        fn timestamp(&self) -> DateTime<Utc> {
+            to_dt(self.timestamp)
+        }
+    }
+    impl Modality for WeatherFrame {
+        fn get_table_name() -> &'static str {
+            "weather"
+        }
+    }
+
+    // HyprlandFrame
+    impl DataType for HyprlandFrame {
+        fn uuid(&self) -> CoreUuid {
+            parse_uuid(&self.uuid)
+        }
+        fn timestamp(&self) -> DateTime<Utc> {
+            to_dt(self.timestamp)
+        }
+    }
+    impl Modality for HyprlandFrame {
+        fn get_table_name() -> &'static str {
+            "hyprland"
         }
     }
 }

@@ -121,6 +121,20 @@ pub fn create_default_config() -> CollectorConfig {
             log_active_monitor: true,
             log_devices: true,
         }),
+        weather: Some(WeatherConfig {
+            enabled: false,
+            interval: 1800.0,
+            output_dir: lifelog_dir.join("weather").display().to_string(),
+            api_key: "".to_string(),
+            latitude: 0.0,
+            longitude: 0.0,
+        }),
+        wifi: Some(WifiConfig {
+            enabled: false,
+            interval: 300.0,
+            output_dir: lifelog_dir.join("wifi").display().to_string(),
+            scan_command: "nmcli -t -f SSID,SIGNAL,BSSID device wifi list".to_string(),
+        }),
     }
 }
 

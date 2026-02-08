@@ -1,8 +1,10 @@
 use super::data_source::{BufferedSource, DataSource, DataSourceHandle};
 use crate::modules::browser_history::BrowserHistorySource;
 use crate::modules::camera::CameraDataSource;
+use crate::modules::hyprland::HyprlandDataSource;
 use crate::modules::processes::ProcessDataSource;
 use crate::modules::screen::ScreenDataSource;
+use crate::modules::weather::WeatherDataSource;
 use async_trait::async_trait;
 use config;
 use mac_address::get_mac_address;
@@ -15,7 +17,10 @@ use tokio::sync::Mutex;
 use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
-use config::{BrowserHistoryConfig, CameraConfig, ProcessesConfig, ScreenConfig};
+use config::{
+    BrowserHistoryConfig, CameraConfig, HyprlandConfig, ProcessesConfig, ScreenConfig,
+    WeatherConfig,
+};
 use lifelog_core::*;
 use lifelog_types::CollectorState;
 use tokio::sync::mpsc;
@@ -329,6 +334,58 @@ impl Collector {
             }
         }
 
+        if config.weather.as_ref().map(|w| w.enabled).unwrap_or(false) {
+            let config_clone = Arc::clone(&self.config);
+            match WeatherDataSource::new(config_clone.weather.clone().unwrap()) {
+                Ok(weather_source) => match weather_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<WeatherConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(weather_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("weather".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err = LifelogError::SourceSetup("weather".to_string(), e.to_string());
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = LifelogError::SourceSetup("weather".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
+        if config.hyprland.as_ref().map(|h| h.enabled).unwrap_or(false) {
+            let config_clone = Arc::clone(&self.config);
+            match HyprlandDataSource::new(config_clone.hyprland.clone().unwrap()) {
+                Ok(hyprland_source) => match hyprland_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<HyprlandConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(hyprland_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("hyprland".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err = LifelogError::SourceSetup("hyprland".to_string(), e.to_string());
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = LifelogError::SourceSetup("hyprland".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
         tracing::info!(active_sources = ?self.sources.keys(), "Sources started");
 
         if let Err(e) = self.report_state().await {
@@ -441,6 +498,56 @@ impl Collector {
 
                     let is_running = cam_ds.is_running();
                     let fs = format!("Camera source running state: {}", is_running);
+                    source_states.push(fs.to_string());
+                }
+            }
+        }
+
+        if let Some(running_src_trait) = self.sources.get("weather") {
+            if let Some(running_weather_src) =
+                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<WeatherConfig>>()
+            {
+                let guard = running_weather_src.instance.lock().await;
+                if let Some(weather_ds) = guard.as_any().downcast_ref::<WeatherDataSource>() {
+                    let buf_size = match weather_ds.buffer.get_uncommitted_size().await {
+                        Ok(s) => s as usize,
+                        Err(e) => {
+                            tracing::error!("Failed to get buffer size: {}", e);
+                            0
+                        }
+                    };
+
+                    let fs = format!("Weather source buffer length: {}", buf_size);
+                    buffer_states.push(fs.to_string());
+                    total += buf_size;
+
+                    let is_running = weather_ds.is_running();
+                    let fs = format!("Weather source running state: {}", is_running);
+                    source_states.push(fs.to_string());
+                }
+            }
+        }
+
+        if let Some(running_src_trait) = self.sources.get("hyprland") {
+            if let Some(running_hypr_src) =
+                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<HyprlandConfig>>()
+            {
+                let guard = running_hypr_src.instance.lock().await;
+                if let Some(hypr_ds) = guard.as_any().downcast_ref::<HyprlandDataSource>() {
+                    let buf_size = match hypr_ds.buffer.get_uncommitted_size().await {
+                        Ok(s) => s as usize,
+                        Err(e) => {
+                            tracing::error!("Failed to get buffer size: {}", e);
+                            0
+                        }
+                    };
+
+                    let fs = format!("Hyprland source buffer length: {}", buf_size);
+                    buffer_states.push(fs.to_string());
+                    total += buf_size;
+
+                    let is_running = hypr_ds.is_running();
+                    let fs = format!("Hyprland source running state: {}", is_running);
                     source_states.push(fs.to_string());
                 }
             }

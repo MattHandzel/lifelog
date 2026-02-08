@@ -80,6 +80,8 @@ message CollectorConfig {
   MicrophoneConfig microphone = 8;
   ProcessesConfig processes = 9;
   HyprlandConfig hyprland = 10;
+  WeatherConfig weather = 11;
+  WifiConfig wifi = 12;
 }
 
 message CollectorState {
@@ -105,6 +107,8 @@ enum DataModality {
   Mouse = 8;
   Processes = 9;
   Camera = 10;
+  Weather = 11;
+  Hyprland = 12;
 }
 
 message GeoConfig {
@@ -123,6 +127,72 @@ message HyprlandConfig {
   bool log_workspace = 6;
   bool log_active_monitor = 7;
   bool log_devices = 8;
+}
+
+message HyprMonitor {
+  int32 id = 1;
+  string name = 2;
+  string description = 3;
+  int32 width = 4;
+  int32 height = 5;
+  float refresh_rate = 6;
+  int32 x = 7;
+  int32 y = 8;
+  int32 workspace_id = 9;
+  string workspace_name = 10;
+  float scale = 11;
+  bool focused = 12;
+}
+
+message HyprWorkspace {
+  int32 id = 1;
+  string name = 2;
+  string monitor = 3;
+  int32 monitor_id = 4;
+  int32 windows = 5;
+  bool fullscreen = 6;
+  string last_window = 7;
+  string last_window_title = 8;
+}
+
+message HyprClient {
+  string address = 1;
+  int32 x = 2;
+  int32 y = 3;
+  int32 width = 4;
+  int32 height = 5;
+  int32 workspace_id = 6;
+  string workspace_name = 7;
+  bool floating = 8;
+  string fullscreen = 9;
+  int32 monitor = 10;
+  string title = 11;
+  string class = 12;
+  int32 pid = 13;
+  bool pinned = 14;
+  bool mapped = 15;
+}
+
+message HyprDevice {
+  string type = 1;
+  string name = 2;
+  string address = 3;
+}
+
+message HyprCursor {
+  double x = 1;
+  double y = 2;
+}
+
+message HyprlandFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  repeated HyprMonitor monitors = 3;
+  repeated HyprWorkspace workspaces = 4;
+  HyprWorkspace active_workspace = 5;
+  repeated HyprClient clients = 6;
+  repeated HyprDevice devices = 7;
+  HyprCursor cursor = 8;
 }
 
 message InputLoggerConfig {
@@ -225,6 +295,15 @@ message CameraFrame {
   bytes image_bytes = 5;
   string mime_type = 6;
   string device = 7;
+}
+
+message WeatherFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  double temperature = 3;
+  double humidity = 4;
+  double pressure = 5;
+  string conditions = 6;
 }
 
 message AudioFrame {
@@ -373,5 +452,7 @@ message LifelogData {
     MouseFrame mouseframe = 9;
     ProcessFrame processframe = 10;
     CameraFrame cameraframe = 11;
+    WeatherFrame weatherframe = 12;
+    HyprlandFrame hyprlandframe = 13;
   }
 }

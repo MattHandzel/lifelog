@@ -1,242 +1,275 @@
-use crate::logger::*;
-use crate::setup;
+use crate::data_source::{BufferedSource, DataSource, DataSourceHandle};
 use async_trait::async_trait;
 use config::HyprlandConfig;
-use rusqlite::{params, Connection};
-use std::path::Path;
+use hyprland::data::{Clients, CursorPosition, Devices, Monitors, Workspace, Workspaces};
+use hyprland::shared::HyprData;
+use hyprland::shared::HyprDataActive;
+use lifelog_core::{LifelogError, Utc, Uuid};
+use lifelog_types::{
+    to_pb_ts, HyprClient, HyprCursor, HyprDevice, HyprMonitor, HyprWorkspace, HyprlandFrame,
+};
+use prost::Message;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
-use utils::current_timestamp;
+use utils::buffer::DiskBuffer;
 
-use hyprland::data::{Clients, CursorPosition, Devices, Monitors, Workspace, Workspaces};
+static RUNNING: AtomicBool = AtomicBool::new(false);
 
-use hyprland::shared::HyprData;
-use hyprland::shared::HyprDataActive;
-
-pub struct HyprlandLogger {
+#[derive(Debug, Clone)]
+pub struct HyprlandDataSource {
     config: HyprlandConfig,
-    running_flag: Arc<AtomicBool>,
+    pub buffer: Arc<DiskBuffer>,
+}
+
+impl HyprlandDataSource {
+    pub fn new(config: HyprlandConfig) -> Result<Self, LifelogError> {
+        let buffer_path = std::path::Path::new(&config.output_dir).join("buffer");
+        let buffer = DiskBuffer::new(&buffer_path).map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+
+        Ok(HyprlandDataSource {
+            config,
+            buffer: Arc::new(buffer),
+        })
+    }
+
+    async fn capture_frame(&self) -> Result<HyprlandFrame, LifelogError> {
+        let mut frame = HyprlandFrame {
+            uuid: Uuid::new_v4().to_string(),
+            timestamp: to_pb_ts(Utc::now()),
+            ..Default::default()
+        };
+
+        if self.config.log_active_monitor {
+            if let Ok(monitors) = Monitors::get() {
+                frame.monitors = monitors
+                    .into_iter()
+                    .map(|m| HyprMonitor {
+                        id: m.id as i32,
+                        name: m.name,
+                        description: m.description,
+                        width: m.width as i32,
+                        height: m.height as i32,
+                        refresh_rate: m.refresh_rate,
+                        x: m.x as i32,
+                        y: m.y as i32,
+                        workspace_id: m.active_workspace.id as i32,
+                        workspace_name: m.active_workspace.name,
+                        scale: m.scale,
+                        focused: m.focused,
+                    })
+                    .collect();
+            }
+        }
+
+        if self.config.log_workspace {
+            if let Ok(workspaces) = Workspaces::get() {
+                frame.workspaces = workspaces
+                    .into_iter()
+                    .map(|w| HyprWorkspace {
+                        id: w.id as i32,
+                        name: w.name,
+                        monitor: w.monitor,
+                        monitor_id: w.monitor_id as i32,
+                        windows: w.windows as i32,
+                        fullscreen: w.fullscreen,
+                        last_window: w.last_window.to_string(),
+                        last_window_title: w.last_window_title,
+                    })
+                    .collect();
+            }
+            if let Ok(aw) = Workspace::get_active() {
+                frame.active_workspace = Some(HyprWorkspace {
+                    id: aw.id as i32,
+                    name: aw.name,
+                    monitor: aw.monitor,
+                    monitor_id: aw.monitor_id as i32,
+                    windows: aw.windows as i32,
+                    fullscreen: aw.fullscreen,
+                    last_window: aw.last_window.to_string(),
+                    last_window_title: aw.last_window_title,
+                });
+            }
+        }
+
+        if self.config.log_clients {
+            if let Ok(clients) = Clients::get() {
+                frame.clients = clients
+                    .into_iter()
+                    .map(|c| HyprClient {
+                        address: c.address.to_string(),
+                        x: c.at.0 as i32,
+                        y: c.at.1 as i32,
+                        width: c.size.0 as i32,
+                        height: c.size.1 as i32,
+                        workspace_id: c.workspace.id as i32,
+                        workspace_name: c.workspace.name,
+                        floating: c.floating,
+                        fullscreen: format!("{:?}", c.fullscreen),
+                        monitor: c.monitor as i32,
+                        title: c.title,
+                        class: c.class,
+                        pid: c.pid as i32,
+                        pinned: c.pinned,
+                        mapped: c.mapped,
+                    })
+                    .collect();
+            }
+        }
+
+        if self.config.log_devices {
+            if let Ok(devices) = Devices::get() {
+                let mut pb_devices = Vec::new();
+                for m in devices.mice {
+                    pb_devices.push(HyprDevice {
+                        r#type: "mouse".to_string(),
+                        name: m.name,
+                        address: m.address.to_string(),
+                    });
+                }
+                for k in devices.keyboards {
+                    pb_devices.push(HyprDevice {
+                        r#type: "keyboard".to_string(),
+                        name: k.name,
+                        address: k.address.to_string(),
+                    });
+                }
+                for t in devices.tablets {
+                    pb_devices.push(HyprDevice {
+                        r#type: "tablet".to_string(),
+                        name: t.name.unwrap_or_default(),
+                        address: t.address.to_string(),
+                    });
+                }
+                frame.devices = pb_devices;
+            }
+        }
+
+        if let Ok(pos) = CursorPosition::get() {
+            frame.cursor = Some(HyprCursor {
+                x: pos.x as f64,
+                y: pos.y as f64,
+            });
+        }
+
+        Ok(frame)
+    }
 }
 
 #[async_trait]
-impl DataLogger for HyprlandLogger {
+impl DataSource for HyprlandDataSource {
     type Config = HyprlandConfig;
 
-    fn setup(&self, config: HyprlandConfig) -> Result<LoggerHandle, LoggerError> {
-        setup::setup_hyprland_db(Path::new(&self.config.output_dir));
-            let logger = Self::new(config)?;
-            let join = tokio::spawn(async move {
-    
-                let task_result = logger.run().await;
-    
-                tracing::debug!(?task_result, "Background task finished");
-    
-                task_result
-            });
-    
-            Ok(LoggerHandle { join })
+    fn new(config: HyprlandConfig) -> Result<Self, LifelogError> {
+        HyprlandDataSource::new(config)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>> {
+        Some(Arc::new(HyprlandBufferedSource {
+            stream_id: "hyprland".to_string(),
+            buffer: self.buffer.clone(),
+        }))
+    }
+
+    fn start(&self) -> Result<DataSourceHandle, LifelogError> {
+        if RUNNING.load(Ordering::SeqCst) {
+            return Err(LifelogError::AlreadyRunning);
         }
 
-    async fn run(&self) -> Result<(), LoggerError> {
-        self.running_flag.store(true, Ordering::SeqCst);
+        tracing::info!("HyprlandDataSource: Starting data source task");
+        RUNNING.store(true, Ordering::SeqCst);
 
-        while self.running_flag.load(Ordering::SeqCst) {
-            let _timestamp = current_timestamp();
-            self.log_data().await?;
+        let source_clone = self.clone();
 
+        let _join_handle = tokio::spawn(async move {
+            let task_result = source_clone.run().await;
+            tracing::info!(result = ?task_result, "HyprlandDataSource background task finished");
+            task_result
+        });
+
+        let new_join_handle = tokio::spawn(async { Ok(()) });
+        Ok(DataSourceHandle {
+            join: new_join_handle,
+        })
+    }
+
+    async fn stop(&mut self) -> Result<(), LifelogError> {
+        RUNNING.store(false, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn run(&self) -> Result<(), LifelogError> {
+        while RUNNING.load(Ordering::SeqCst) {
+            match self.capture_frame().await {
+                Ok(frame) => {
+                    let mut buf = Vec::new();
+                    if let Err(e) = frame.encode(&mut buf) {
+                        tracing::error!("Failed to encode HyprlandFrame: {}", e);
+                    } else if let Err(e) = self.buffer.append(&buf).await {
+                        tracing::error!("Failed to append HyprlandFrame to buffer: {}", e);
+                    } else {
+                        tracing::debug!("Stored hyprland frame in WAL");
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Failed to capture hyprland frame: {}", e);
+                }
+            }
             sleep(Duration::from_secs_f64(self.config.interval)).await;
         }
         Ok(())
     }
 
-    fn stop(&self) {
-        self.running_flag.store(false, Ordering::SeqCst);
+    fn is_running(&self) -> bool {
+        RUNNING.load(Ordering::SeqCst)
     }
 
-    async fn log_data(&self) -> Result<(), LoggerError> {
-        let timestamp = current_timestamp();
-        self.log_hypr_data(timestamp)
-            .await
-            .map_err(|e| LoggerError::Generic(e.to_string()))?;
+    fn get_config(&self) -> Self::Config {
+        self.config.clone()
+    }
+}
+
+pub struct HyprlandBufferedSource {
+    stream_id: String,
+    buffer: Arc<DiskBuffer>,
+}
+
+#[async_trait]
+impl BufferedSource for HyprlandBufferedSource {
+    fn stream_id(&self) -> String {
+        self.stream_id.clone()
+    }
+
+    async fn peek_upload_batch(
+        &self,
+        max_items: usize,
+    ) -> Result<(u64, Vec<Vec<u8>>), LifelogError> {
+        let (next_offset, raws) = self.buffer.peek_chunk(max_items).await.map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+
+        Ok((next_offset, raws))
+    }
+
+    async fn commit_upload(&self, offset: u64) -> Result<(), LifelogError> {
+        self.buffer.commit_offset(offset).await.map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
         Ok(())
-    }
-
-    // TODO: I could set up the connection here...
-    fn new(config: Self::Config) -> Result<Self, LoggerError> {
-        Ok(Self {
-            config,
-            running_flag: Arc::new(AtomicBool::new(false)),
-        })
-    }
-}
-
-// Implementation details
-impl HyprlandLogger {
-    pub fn setup(&self) -> Result<LoggerHandle, LoggerError> {
-        DataLogger::setup(self, self.config.clone())
-    }
-
-    async fn log_hypr_data(&self, timestamp: f64) -> Result<(), Box<dyn std::error::Error>> {
-        {
-            let conn = setup::setup_hyprland_db(Path::new(&self.config.output_dir))
-                .expect("Failed to set up Hyprland database");
-
-            loop {
-                if self.config.log_active_monitor {
-                    log_monitors(&conn, timestamp);
-                }
-
-                if self.config.log_workspace {
-                    log_workspaces(&conn, timestamp);
-                }
-
-                if self.config.log_clients {
-                    log_clients(&conn, timestamp);
-                }
-
-                if self.config.log_devices {
-                    log_devices(&conn, timestamp);
-                }
-
-                log_cursor_position(&conn, timestamp);
-
-                sleep(Duration::from_secs_f64(self.config.interval)).await;
-            }
-        }
-        Ok(())
-    }
-}
-
-fn log_monitors(conn: &Connection, timestamp: f64) {
-    if let Ok(monitors) = Monitors::get() {
-        for monitor in monitors {
-            conn.execute(
-                "INSERT INTO monitors VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
-                params![
-                    timestamp,
-                    monitor.id as i64,
-                    monitor.name,
-                    monitor.description,
-                    monitor.width,
-                    monitor.height,
-                    monitor.refresh_rate,
-                    monitor.x,
-                    monitor.y,
-                    monitor.active_workspace.id as i64,
-                    monitor.active_workspace.name,
-                    monitor.scale,
-                    monitor.focused
-                ],
-            ).unwrap();
-        }
-    }
-}
-
-fn log_workspaces(conn: &Connection, timestamp: f64) {
-    if let Ok(workspaces) = Workspaces::get() {
-        for workspace in workspaces {
-            conn.execute(
-                "INSERT INTO workspaces VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                params![
-                    timestamp,
-                    workspace.id as i64,
-                    workspace.name,
-                    workspace.monitor,
-                    workspace.monitor_id as i64,
-                    workspace.windows,
-                    workspace.fullscreen,
-                    workspace.last_window.to_string(),
-                    workspace.last_window_title
-                ],
-            )
-            .unwrap();
-        }
-    }
-    if let Ok(active_workspaces) = Workspace::get_active() {
-        conn.execute(
-            "INSERT INTO activeworkspace VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-            params![
-                timestamp,
-                active_workspaces.id as i64,
-                active_workspaces.name,
-                active_workspaces.monitor,
-                active_workspaces.monitor_id as i64,
-                active_workspaces.windows,
-                active_workspaces.fullscreen,
-                active_workspaces.last_window.to_string(),
-                active_workspaces.last_window_title
-            ],
-        )
-        .unwrap();
-    }
-}
-
-fn log_clients(conn: &Connection, timestamp: f64) {
-    if let Ok(clients) = Clients::get() {
-        for client in clients {
-            conn.execute(
-                "INSERT INTO clients VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)",
-                params![
-                    timestamp,
-                    client.address.to_string(),
-                    client.at.0,
-                    client.at.1,
-                    client.size.0,
-                    client.size.1,
-                    client.workspace.id,
-                    client.workspace.name,
-                    client.floating,
-                    format!("{:?}", client.fullscreen),
-                    client.monitor as i64,
-                    client.title,
-                    client.class,
-                    client.pid,
-                    client.pinned,
-                    client.mapped,
-                    client.focus_history_id
-                ],
-            ).unwrap();
-        }
-    }
-}
-
-fn log_devices(conn: &Connection, timestamp: f64) {
-    if let Ok(devices) = Devices::get() {
-        // Log mice
-        for mouse in devices.mice {
-            conn.execute(
-                "INSERT INTO devices VALUES (?1, 'mouse', ?2, ?3)",
-                params![timestamp, mouse.name, mouse.address.to_string()],
-            )
-            .unwrap();
-        }
-
-        // Log keyboards
-        for keyboard in devices.keyboards {
-            conn.execute(
-                "INSERT INTO devices VALUES (?1, 'keyboard', ?2, ?3)",
-                params![timestamp, keyboard.name, keyboard.address.to_string()],
-            )
-            .unwrap();
-        }
-        //pub tablets: Vec<Tablet>,
-        for tablet in devices.tablets {
-            conn.execute(
-                "INSERT INTO devices VALUES (?1, 'tablet', ?2, ?3)",
-                params![timestamp, tablet.name, tablet.address.to_string()],
-            )
-            .unwrap();
-        }
-    }
-}
-
-fn log_cursor_position(conn: &Connection, timestamp: f64) {
-    if let Ok(pos) = CursorPosition::get() {
-        conn.execute(
-            "INSERT INTO cursor_positions VALUES (?1, ?2, ?3)",
-            params![timestamp, pos.x, pos.y],
-        )
-        .unwrap();
     }
 }
