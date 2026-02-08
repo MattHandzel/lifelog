@@ -83,7 +83,6 @@ pub trait DataType {
 /// Core trait for any data modality that can be stored in SurrealDB.
 pub trait Modality: Sized + Send + Sync + 'static + serde::de::DeserializeOwned + DataType {
     fn get_table_name() -> &'static str;
-    fn get_surrealdb_schema() -> &'static str;
     fn get_timestamp(&self) -> DateTime<Utc> {
         self.timestamp()
     }

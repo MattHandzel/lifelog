@@ -78,3 +78,33 @@ pub(crate) async fn get_origins_from_db(
         .collect();
     Ok(origins)
 }
+
+#[derive(Serialize, serde::Deserialize, Debug, Clone)]
+pub struct Watermark {
+    pub last_timestamp: DateTime<Utc>,
+}
+
+pub(crate) async fn get_watermark(
+    db: &Surreal<Client>,
+    id: &str,
+) -> Result<DateTime<Utc>, LifelogError> {
+    let w: Option<Watermark> = db
+        .select(("watermarks", id))
+        .await
+        .map_err(|e| LifelogError::Database(e.to_string()))?;
+    Ok(w.map(|w| w.last_timestamp)
+        .unwrap_or_else(|| chrono::DateTime::<Utc>::from_timestamp(0, 0).unwrap_or_default()))
+}
+
+pub(crate) async fn set_watermark(
+    db: &Surreal<Client>,
+    id: &str,
+    ts: DateTime<Utc>,
+) -> Result<(), LifelogError> {
+    let _: Option<Watermark> = db
+        .update(("watermarks", id))
+        .content(Watermark { last_timestamp: ts })
+        .await
+        .map_err(|e| LifelogError::Database(e.to_string()))?;
+    Ok(())
+}

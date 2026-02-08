@@ -3,8 +3,8 @@
 
 #![allow(dead_code)]
 
-use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
-use lifelog_proto::{
+use lifelog_types::lifelog_server_service_client::LifelogServerServiceClient;
+use lifelog_types::{
     control_message, Chunk, CollectorConfig, CollectorState, ControlMessage,
     GetUploadOffsetRequest, RegisterCollectorRequest, ReportStateRequest, ServerCommand,
 };
@@ -87,7 +87,7 @@ impl DeviceClient {
     pub async fn upload_chunks(
         &mut self,
         chunks: Vec<Chunk>,
-    ) -> Result<lifelog_proto::Ack, tonic::Status> {
+    ) -> Result<lifelog_types::Ack, tonic::Status> {
         let stream = tokio_stream::iter(chunks);
         let response = self.client.upload_chunks(stream).await?;
         Ok(response.into_inner())
@@ -103,7 +103,7 @@ impl DeviceClient {
         let resp = self
             .client
             .get_upload_offset(GetUploadOffsetRequest {
-                stream: Some(lifelog_proto::StreamIdentity {
+                stream: Some(lifelog_types::StreamIdentity {
                     collector_id: self.device_id.clone(),
                     stream_id: stream_id.to_string(),
                     session_id,

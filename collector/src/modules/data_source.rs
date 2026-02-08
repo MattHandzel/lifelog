@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use std::any::Any;
 use std::fmt::Debug;
+use std::sync::Arc;
 
 use crate::logger::LoggerError;
 use tokio::task::JoinHandle;
@@ -47,17 +48,28 @@ pub trait DataSource: Any {
 
     async fn stop(&mut self) -> Result<(), DataSourceError>;
 
-    // I should probably add a get_data func here... would be better
-    // or find some way to implmement here rather than in each child class?
-    // also a clear buffer function maybe?
-
     async fn run(&self) -> Result<(), DataSourceError>;
 
     fn is_running(&self) -> bool;
 
     fn get_config(&self) -> Self::Config;
 
+    fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>> {
+        None
+    }
+
     fn new(config: Self::Config) -> Result<Self, DataSourceError>
     where
         Self: Sized;
+}
+
+#[async_trait]
+pub trait BufferedSource: Send + Sync {
+    fn stream_id(&self) -> String;
+    /// Returns (new_offset, items) where items are serialized Prost messages ready for upload.
+    async fn peek_upload_batch(
+        &self,
+        max_items: usize,
+    ) -> Result<(u64, Vec<Vec<u8>>), DataSourceError>;
+    async fn commit_upload(&self, offset: u64) -> Result<(), DataSourceError>;
 }

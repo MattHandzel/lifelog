@@ -1,6 +1,6 @@
 use lifelog_core::{DataOrigin, DataOriginType};
-use lifelog_proto::DataModality;
-use lifelog_proto::ScreenFrame;
+use lifelog_types::DataModality;
+use lifelog_types::ScreenFrame;
 use prost::Message;
 use serde::{Deserialize, Serialize};
 use surrealdb::engine::remote::ws::Client;
@@ -50,50 +50,56 @@ impl IngestBackend for SurrealIngestBackend {
                     DataModality::Screen.as_str_name().to_string(),
                 );
 
-                #[allow(clippy::redundant_pattern_matching)]
                 if let Ok(_) = ensure_table_schema(&db, &origin).await {
                     let table = origin.get_table_name();
-                    // Insert into table. We use create with a UUID-based ID or let Surreal generate one?
-                    // ScreenFrame has uuid field.
-                    let id = &frame.uuid;
-                    #[allow(clippy::redundant_pattern_matching)]
-                    if let Ok(_) = db
-                        .create::<Option<ScreenFrame>>((table, id))
-                        .content(frame)
-                        .await
-                    {
-                        indexed = true;
+                    let id = frame.uuid.clone();
+
+                    let json = match serde_json::to_string(&frame) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            tracing::error!(id = %id, error = %e, "Failed to serialize frame to JSON string");
+                            return Err(e.to_string());
+                        }
+                    };
+
+                    // Use a query with CONTENT string to bypass driver serialization issues.
+                    let q = format!("CREATE `{table}`:`{id}` CONTENT {json}");
+                    if let Ok(mut resp) = db.query(q).await {
+                        let results: Vec<serde_json::Value> = resp.take(0).unwrap_or_default();
+                        if !results.is_empty() {
+                            indexed = true;
+                        }
                     }
                 }
             }
         }
 
-        let record = ChunkRecord {
-            collector_id: collector_id.to_string(),
-            stream_id: stream_id.to_string(),
-            session_id,
-            offset,
-            length,
-            hash: hash.to_string(),
-            indexed,
-        };
-
         // Use a unique ID based on session and offset to ensure idempotency
-        let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
-        tracing::debug!(id = %id, offset, length, indexed, "Persisting chunk metadata");
+        let id_str = format!("{}_{}_{}_{}", collector_id, stream_id, session_id, offset);
 
-        // Use UPDATE/MERGE if it exists to update 'indexed' status?
-        // Or overwrite?
-        // If we processed it now and it was not indexed before, we want to update it.
-        // If it was already indexed, we don't want to unset it (though here we just re-derived it).
+        let record = serde_json::json!({
+            "collector_id": collector_id,
+            "stream_id": stream_id,
+            "session_id": session_id,
+            "offset": offset,
+            "length": length,
+            "hash": hash,
+            "indexed": indexed,
+        });
 
+        // Use a raw SQL query with CONTENT to avoid serialization issues
+        let q = "UPSERT type::thing('upload_chunks', $id) CONTENT $record";
         let result = db
-            .update::<Option<ChunkRecord>>(("upload_chunks", &id))
-            .content(record)
+            .query(q)
+            .bind(("id", id_str))
+            .bind(("record", record))
             .await;
 
         match result {
-            Ok(_) => Ok(()),
+            Ok(resp) => {
+                let _ = resp.check();
+                Ok(())
+            }
             Err(e) => Err(e.to_string()),
         }
     }
@@ -108,9 +114,16 @@ impl IngestBackend for SurrealIngestBackend {
         let db = self.db.clone();
         let _ = ensure_chunks_schema(&db).await;
 
-        let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, offset);
-        let record: Option<ChunkRecord> = db.select(("upload_chunks", id)).await.unwrap_or(None);
+        let id = format!("{}_{}_{}_{}", collector_id, stream_id, session_id, offset);
 
-        record.map(|r| r.indexed).unwrap_or(false)
+        let q =
+            "SELECT VALUE indexed FROM upload_chunks WHERE id = type::thing('upload_chunks', $id)";
+        match db.query(q).bind(("id", id)).await {
+            Ok(mut resp) => {
+                let results: Vec<bool> = resp.take(0).unwrap_or_default();
+                results.first().cloned().unwrap_or(false)
+            }
+            Err(_) => false,
+        }
     }
 }

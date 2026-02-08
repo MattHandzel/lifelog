@@ -4,8 +4,8 @@
 
 #![allow(clippy::expect_used, dead_code)]
 
-use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
-use lifelog_proto::GetUploadOffsetRequest;
+use lifelog_types::lifelog_server_service_client::LifelogServerServiceClient;
+use lifelog_types::GetUploadOffsetRequest;
 use tonic::transport::Channel;
 use utils::cas::FsCas;
 
@@ -19,7 +19,7 @@ pub async fn assert_final_offset(
 ) {
     let resp = client
         .get_upload_offset(GetUploadOffsetRequest {
-            stream: Some(lifelog_proto::StreamIdentity {
+            stream: Some(lifelog_types::StreamIdentity {
                 collector_id: collector_id.to_string(),
                 stream_id: stream_id.to_string(),
                 session_id,
@@ -62,7 +62,7 @@ pub async fn assert_no_cross_contamination(
             // Query device A's collector_id with device B's session_id
             let resp = client
                 .get_upload_offset(GetUploadOffsetRequest {
-                    stream: Some(lifelog_proto::StreamIdentity {
+                    stream: Some(lifelog_types::StreamIdentity {
                         collector_id: cid_a.clone(),
                         stream_id: sid_a.clone(),
                         session_id: *sess_b,

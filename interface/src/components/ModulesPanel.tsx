@@ -1,6 +1,6 @@
 import React from 'react';
 import { useState } from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { 
   Camera, 
   Mic, 
@@ -14,13 +14,6 @@ import {
   Mouse,
   Activity,
   Thermometer,
-  Wifi,
-  MapPin,
-  Upload,
-  Layout,
-  File,
-  HardDrive,
-  Cpu,
   FileText
 } from 'lucide-react';
 
@@ -35,7 +28,7 @@ type ModuleItemProps = {
   disabled?: boolean;
 };
 
-const ModuleItem = ({ 
+function ModuleItem({ 
   to, 
   icon, 
   label, 
@@ -44,16 +37,16 @@ const ModuleItem = ({
   children,
   coming,
   disabled
-}: ModuleItemProps) => {
+}: ModuleItemProps): JSX.Element {
   // If it's a navigation item with a link
   if (to && !disabled) {
     return (
       <NavLink 
         to={to} 
-        className={({ isActive }) => 
-          `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200
-          ${isActive ? 'bg-[#232B3D] text-[#4C8BF5]' : 'text-[#9CA3AF] hover:text-white hover:bg-[#232B3D]'}`
-        }
+        className={function ({ isActive }) {
+          return `flex items-center justify-between px-4 py-3 rounded-lg transition-all duration-200
+          ${isActive ? 'bg-[#232B3D] text-[#4C8BF5]' : 'text-[#9CA3AF] hover:text-white hover:bg-[#232B3D]'}`;
+        }}
       >
         <div className="flex items-center gap-3">
           {icon}
@@ -105,10 +98,9 @@ const ModuleItem = ({
       )}
     </div>
   );
-};
+}
 
-const ModulesPanel: React.FC = () => {
-  const location = useLocation();
+const ModulesPanel: React.FC = function (): JSX.Element {
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
     'data': true,
     'input': false,
@@ -116,12 +108,14 @@ const ModulesPanel: React.FC = () => {
     'environment': false
   });
   
-  const toggleSection = (section: string) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
-  };
+  function toggleSection(section: string): void {
+    setExpandedSections(function (prev) {
+      return {
+        ...prev,
+        [section]: !prev[section]
+      };
+    });
+  }
 
   return (
     <div className="w-64 bg-[#141E33] h-full flex flex-col border-r border-[#232B3D]">

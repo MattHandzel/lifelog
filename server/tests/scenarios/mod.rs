@@ -10,7 +10,7 @@ use crate::harness::device_client::DeviceClient;
 use crate::harness::event_gen::{collect_hashes, expected_final_offset, generate_chunk_sequence};
 use crate::harness::fault_layer::{FaultController, FaultRule};
 use crate::harness::TestContext;
-use lifelog_proto::Chunk;
+use lifelog_types::Chunk;
 use std::sync::Arc;
 use std::time::Duration;
 

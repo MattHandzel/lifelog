@@ -1,1 +1,1 @@
-pub use lifelog_proto::BrowserFrame;
+pub use lifelog_types::BrowserFrame;

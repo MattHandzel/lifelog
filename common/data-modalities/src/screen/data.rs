@@ -1,1 +1,1 @@
-pub use lifelog_proto::ScreenFrame;
+pub use lifelog_types::ScreenFrame;

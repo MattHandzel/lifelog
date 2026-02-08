@@ -1,6 +1,6 @@
 use lifelog_core::*;
-use lifelog_proto::lifelog_server_service_server::LifelogServerService;
-use lifelog_proto::{
+use lifelog_types::lifelog_server_service_server::LifelogServerService;
+use lifelog_types::{
     Ack, Chunk, ControlMessage, GetDataRequest, GetDataResponse, GetStateRequest,
     GetSystemConfigRequest, GetSystemConfigResponse, GetSystemStateResponse,
     GetUploadOffsetRequest, GetUploadOffsetResponse, QueryRequest, QueryResponse, ServerCommand,
@@ -41,7 +41,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                         collector_id = Some(msg.collector_id.clone());
                         if let Some(payload) = msg.msg {
                             match payload {
-                                lifelog_proto::control_message::Msg::Register(reg) => {
+                                lifelog_types::control_message::Msg::Register(reg) => {
                                     if let Some(config) = reg.config {
                                         let registered = RegisteredCollector {
                                             id: config.id.clone(),
@@ -54,15 +54,15 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                                         tracing::info!(id = %msg.collector_id, "Collector registered via ControlStream");
                                     }
                                 }
-                                lifelog_proto::control_message::Msg::State(state_req) => {
+                                lifelog_types::control_message::Msg::State(state_req) => {
                                     if let Some(state) = state_req.state {
                                         let _ = server_handle.report_collector_state(state).await;
                                     }
                                 }
-                                lifelog_proto::control_message::Msg::Heartbeat(_) => {
+                                lifelog_types::control_message::Msg::Heartbeat(_) => {
                                     tracing::debug!(id = ?collector_id, "Heartbeat received");
                                 }
-                                lifelog_proto::control_message::Msg::SuggestUpload(suggest) => {
+                                lifelog_types::control_message::Msg::SuggestUpload(suggest) => {
                                     tracing::info!(id = %msg.collector_id, ?suggest, "SuggestUpload received");
                                 }
                             }
@@ -117,9 +117,9 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             .process_query(query_message)
             .await
             .map_err(|e| tonic::Status::internal(format!("Failed to process query: {}", e)))?;
-        let proto_keys: Vec<lifelog_proto::LifelogDataKey> = keys
+        let proto_keys: Vec<lifelog_types::LifelogDataKey> = keys
             .iter()
-            .map(|key| lifelog_proto::LifelogDataKey {
+            .map(|key| lifelog_types::LifelogDataKey {
                 uuid: key.uuid.to_string(),
                 origin: key.origin.get_table_name(),
             })
@@ -139,7 +139,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         let _server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
         let keys = inner_request.keys;
 
-        let data: Vec<lifelog_proto::LifelogData> = self
+        let data: Vec<lifelog_types::LifelogData> = self
             .server
             .get_data(
                 keys.into_iter()
@@ -175,7 +175,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
     ) -> Result<Response<Ack>, Status> {
         let mut stream = request.into_inner();
         let mut ingester: Option<ChunkIngester<SurrealIngestBackend>> = None;
-        let mut last_stream: Option<lifelog_proto::StreamIdentity> = None;
+        let mut last_stream: Option<lifelog_types::StreamIdentity> = None;
         let mut last_acked_offset = 0;
 
         while let Some(chunk_result) = stream.next().await {
@@ -242,7 +242,13 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             .await
             .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
 
-        let records: Vec<ChunkRecord> = response
+        #[derive(serde::Deserialize)]
+        struct RawOffset {
+            offset: u64,
+            length: u64,
+        }
+
+        let records: Vec<RawOffset> = response
             .take(0)
             .map_err(|e| Status::internal(format!("Parse error: {}", e)))?;
 

@@ -56,14 +56,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_addr = cli.server_address;
     let client_id = config.id.clone();
 
+    let (upload_mgr, upload_trigger) =
+        lifelog_collector::collector::upload_manager::UploadManager::new(
+            server_addr.clone(),
+            config.id.clone(),
+        );
+
     let collector = Arc::new(tokio::sync::RwLock::new(Collector::new(
-        config,
+        config.clone(),
         server_addr,
         client_id,
+        upload_trigger,
     )));
     let collector_handle = CollectorHandle {
         collector: collector.clone(),
     };
+    let collector_clone = collector.clone();
+    tokio::spawn(async move {
+        upload_mgr.run(collector_clone).await;
+    });
 
     tracing::info!("Starting Collector");
     let _ = collector_handle.start().await;

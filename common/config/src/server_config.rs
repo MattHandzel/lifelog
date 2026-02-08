@@ -1,4 +1,4 @@
-pub use lifelog_proto::ServerConfig;
+pub use lifelog_types::ServerConfig;
 
 /// TLS configuration for the server. Loaded from environment variables.
 /// This is Rust-only config (not proto) since cert paths are local deployment details.

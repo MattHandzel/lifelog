@@ -11,12 +11,13 @@ use image::GenericImageView;
 use image::ImageReader;
 use lifelog_core::Utc;
 use lifelog_core::Uuid;
-use lifelog_proto::to_pb_ts;
+use lifelog_types::to_pb_ts;
+use prost::Message;
 use std::io::Cursor;
 
 use std::sync::Arc;
 
-use crate::data_source::{DataSource, DataSourceError, DataSourceHandle};
+use crate::data_source::{BufferedSource, DataSource, DataSourceError, DataSourceHandle};
 use utils::buffer::DiskBuffer;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
@@ -25,7 +26,7 @@ static RUNNING: AtomicBool = AtomicBool::new(false);
 pub struct ScreenDataSource {
     config: ScreenConfig,
     logger: ScreenLogger,
-    pub buffer: Arc<DiskBuffer<ScreenFrame>>,
+    pub buffer: Arc<DiskBuffer>,
 }
 
 impl ScreenDataSource {
@@ -47,13 +48,20 @@ impl ScreenDataSource {
     }
 
     pub async fn get_data(&mut self) -> Result<Vec<ScreenFrame>, DataSourceError> {
-        let (_, items) = self.buffer.peek_chunk(100).await.map_err(|e| {
+        let (_, raw_items) = self.buffer.peek_chunk(100).await.map_err(|e| {
             DataSourceError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),
             ))
         })?;
-        Ok(items)
+
+        let mut frames = Vec::new();
+        for raw in raw_items {
+            if let Ok(frame) = ScreenFrame::decode(raw.as_slice()) {
+                frames.push(frame);
+            }
+        }
+        Ok(frames)
     }
 
     pub async fn clear_buffer(&self) -> Result<(), DataSourceError> {
@@ -90,6 +98,13 @@ impl DataSource for ScreenDataSource {
 
     fn as_any(&self) -> &dyn std::any::Any {
         self
+    }
+
+    fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>> {
+        Some(Arc::new(ScreenBufferedSource {
+            stream_id: "screen".to_string(),
+            buffer: self.buffer.clone(),
+        }))
     }
 
     fn start(&self) -> Result<DataSourceHandle, DataSourceError> {
@@ -149,7 +164,15 @@ impl DataSource for ScreenDataSource {
                         mime_type: "image/png".to_string(),
                     };
 
-                    self.buffer.append(&captured).await.map_err(|e| {
+                    let mut buf = Vec::new();
+                    captured.encode(&mut buf).map_err(|e| {
+                        DataSourceError::Io(std::io::Error::new(
+                            std::io::ErrorKind::Other,
+                            format!("Prost encode error: {}", e),
+                        ))
+                    })?;
+
+                    self.buffer.append(&buf).await.map_err(|e| {
                         DataSourceError::Io(std::io::Error::new(
                             std::io::ErrorKind::Other,
                             e.to_string(),
@@ -174,6 +197,42 @@ impl DataSource for ScreenDataSource {
 
     fn get_config(&self) -> Self::Config {
         self.config.clone()
+    }
+}
+
+pub struct ScreenBufferedSource {
+    stream_id: String,
+    buffer: Arc<DiskBuffer>,
+}
+
+#[async_trait]
+impl BufferedSource for ScreenBufferedSource {
+    fn stream_id(&self) -> String {
+        self.stream_id.clone()
+    }
+
+    async fn peek_upload_batch(
+        &self,
+        max_items: usize,
+    ) -> Result<(u64, Vec<Vec<u8>>), DataSourceError> {
+        let (next_offset, raws) = self.buffer.peek_chunk(max_items).await.map_err(|e| {
+            DataSourceError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+
+        Ok((next_offset, raws))
+    }
+
+    async fn commit_upload(&self, offset: u64) -> Result<(), DataSourceError> {
+        self.buffer.commit_offset(offset).await.map_err(|e| {
+            DataSourceError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+        Ok(())
     }
 }
 
@@ -213,12 +272,7 @@ impl ScreenLogger {
         }
         #[cfg(not(target_os = "macos"))]
         {
-            let cmd = if cfg!(target_os = "linux") {
-                "grim"
-            } else {
-                "screenshot.exe"
-            };
-            Command::new(cmd)
+            Command::new(&self.config.program)
                 .arg("-t")
                 .arg("png")
                 .arg(&out)

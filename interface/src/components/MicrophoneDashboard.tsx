@@ -25,16 +25,10 @@ interface AudioFile {
   size: number;
 }
 
-interface RecordingStatus {
-  is_recording: boolean;
-  is_paused: boolean;
-  auto_recording_enabled: boolean;
-}
-
-const MicrophoneDashboard: React.FC = () => {
+const MicrophoneDashboard: React.FC = function (): JSX.Element {
   // Dashboard states
-  const [isRecording, setIsRecording] = useState<boolean>(false);
-  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [isRecording] = useState<boolean>(false);
+  const [isPaused] = useState<boolean>(false);
   const [recordings, setRecordings] = useState<AudioFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -66,11 +60,11 @@ const MicrophoneDashboard: React.FC = () => {
 
   const statusCheckInterval = useRef<number | null>(null);
 
-  useEffect(() => {
+  useEffect(function () {
     loadSettings();
     fetchRecordings();
 
-    return () => {
+    return function () {
       if (statusCheckInterval.current) {
         clearInterval(statusCheckInterval.current);
       }
@@ -78,45 +72,45 @@ const MicrophoneDashboard: React.FC = () => {
   }, []);
 
   // Ensure recording duration is less than capture interval (80% max)
-  useEffect(() => {
+  useEffect(function () {
     if (tempSettings.recordingDuration >= tempSettings.captureInterval) {
       const newDuration = Math.floor(tempSettings.captureInterval * 0.8);
-      setTempSettings({ ...tempSettings, recordingDuration: newDuration });
+      setTempSettings(function (prev) { return { ...prev, recordingDuration: newDuration }; });
     }
   }, [tempSettings.captureInterval]);
 
-  const loadSettings = async () => {
+  async function loadSettings(): Promise<void> {
     console.warn('Microphone settings: not yet implemented via gRPC');
     setErrorMessage(null);
-  };
+  }
 
-  const saveSettings = async () => {
+  async function saveSettings(): Promise<void> {
     console.warn('Microphone settings save: not yet implemented via gRPC');
     setIsSavingSettings(false);
-  };
+  }
 
-  const fetchRecordings = async () => {
+  async function fetchRecordings(): Promise<void> {
     console.warn('Microphone recordings: not yet implemented via gRPC');
     setRecordings([]);
     setIsLoading(false);
-  };
+  }
 
-  const handleStartRecording = async () => {
+  async function handleStartRecording(): Promise<void> {
     console.warn('Microphone start recording: not yet implemented via gRPC');
     setErrorMessage(null);
-  };
+  }
 
-  const handlePauseRecording = async () => {
+  async function handlePauseRecording(): Promise<void> {
     console.warn('Microphone pause/resume recording: not yet implemented via gRPC');
     setErrorMessage(null);
-  };
+  }
 
-  const handleStopRecording = async () => {
+  async function handleStopRecording(): Promise<void> {
     console.warn('Microphone stop recording: not yet implemented via gRPC');
     setErrorMessage(null);
-  };
+  }
 
-  const handleOpenTerminalForRecording = async () => {
+  async function handleOpenTerminalForRecording(): Promise<void> {
     try {
       setErrorMessage(null);
       // This can still use invoke as it's a Tauri-specific action
@@ -127,13 +121,9 @@ const MicrophoneDashboard: React.FC = () => {
       console.error('Failed to open terminal:', error);
       setErrorMessage(`Failed to open terminal: ${error}`);
     }
-  };
+  }
 
-  const _checkRecordingStatus = async () => {
-    console.warn('Microphone status check: not yet implemented via gRPC');
-  };
-
-  const formatTimeForDisplay = (seconds: number): string => {
+  function formatTimeForDisplay(seconds: number): string {
     if (seconds < 60) {
       return `${seconds} seconds`;
     } else if (seconds === 60) {
@@ -147,19 +137,21 @@ const MicrophoneDashboard: React.FC = () => {
       const minutes = Math.floor((seconds % 3600) / 60);
       return minutes > 0 ? `${hours}h ${minutes}m` : `${hours} hours`;
     }
-  };
+  }
 
-  const getMaxRecordingDuration = () => Math.floor(tempSettings.captureInterval * 0.8);
+  function getMaxRecordingDuration(): number {
+    return Math.floor(tempSettings.captureInterval * 0.8);
+  }
 
-  const handlePlayRecording = async (_audioFile: AudioFile) => {
+  async function handlePlayRecording(_audioFile: AudioFile): Promise<void> {
     console.warn('Microphone play recording: not yet implemented via gRPC');
-  };
+  }
 
-  const formatFileSize = (bytes: number): string => {
+  function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
+  }
 
   return (
     <div className="p-6 md:p-8 space-y-6">

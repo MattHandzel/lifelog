@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from './ui/button';
 import { Settings, Power, Clock, X, RefreshCcw, Camera } from 'lucide-react';
@@ -23,41 +23,39 @@ interface CameraSettings {
   timestamp_format: string;
 }
 
-export default function CameraDashboard() {
+export default function CameraDashboard(): JSX.Element {
   const [frames, setFrames] = useState<CameraFrame[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedFrame, setSelectedFrame] = useState<CameraFrame | null>(null);
-  const [totalPages, setTotalPages] = useState(1);
+  const [totalPages] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
-  const [settings, setSettings] = useState<CameraSettings | null>(null);
+  const [settings] = useState<CameraSettings | null>(null);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [tempInterval, setTempInterval] = useState(60);
   const [tempEnabled, setTempEnabled] = useState(true);
   const [tempFps, setTempFps] = useState(30);
   const [isSupported, setIsSupported] = useState<boolean | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
-  const [status, setStatus] = useState<string>("idle");
-  const [error, setError] = useState<string | null>(null);
   
   const pageSize = 9;
 
-  useEffect(() => {
+  useEffect(function () {
     checkCameraSupport();
     loadFrames();
     loadSettings();
     
-    const refreshInterval = setInterval(() => {
+    const refreshInterval = setInterval(function () {
       if (!showSettings) {
         loadFrames();
       }
     }, 30000);
     
-    return () => clearInterval(refreshInterval);
+    return function () { clearInterval(refreshInterval); };
   }, [currentPage]);
 
-  async function checkCameraSupport() {
+  async function checkCameraSupport(): Promise<void> {
     try {
       // Can still use invoke for system-specific checks
       const supported = await invoke<boolean>('is_camera_supported');
@@ -68,27 +66,27 @@ export default function CameraDashboard() {
     }
   }
 
-  async function loadFrames() {
+  async function loadFrames(): Promise<void> {
     console.warn('Camera frames: not yet implemented via gRPC');
     setFrames([]);
     setIsLoading(false);
   }
 
-  async function loadSettings() {
+  async function loadSettings(): Promise<void> {
     console.warn('Camera settings: not yet implemented via gRPC');
   }
 
-  async function saveSettings() {
+  async function saveSettings(): Promise<void> {
     console.warn('Camera settings save: not yet implemented via gRPC');
     setIsSavingSettings(false);
   }
 
-  async function captureFrame() {
+  async function captureFrame(): Promise<void> {
     console.warn('Camera capture: not yet implemented via gRPC');
     setIsLoading(false);
   }
 
-  async function restartCameraLogger() {
+  async function restartCameraLogger(): Promise<void> {
     console.warn('Camera restart: not yet implemented via gRPC');
     setIsLoading(false);
   }
@@ -104,32 +102,33 @@ export default function CameraDashboard() {
     });
   }
 
-  function handlePreviousPage() {
+  function handlePreviousPage(): void {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
     }
   }
 
-  function handleNextPage() {
+  function handleNextPage(): void {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1);
     }
   }
 
-  function handleFrameClick(frame: CameraFrame) {
+  function handleFrameClick(frame: CameraFrame): void {
     console.log("Opening camera frame:", frame);
     setSelectedImage(frame.dataUrl || '');
     setSelectedFrame(frame);
   }
 
-  function closeModal() {
+  function closeModal(): void {
     setSelectedImage(null);
     setSelectedFrame(null);
   }
 
-  function toggleSettings() {
-    setShowSettings(!showSettings);
-    if (!showSettings && settings) {
+  function toggleSettings(): void {
+    const nextShowSettings = !showSettings;
+    setShowSettings(nextShowSettings);
+    if (nextShowSettings && settings) {
       setTempInterval(settings.interval);
       setTempEnabled(settings.enabled);
       setTempFps(settings.fps);
@@ -156,12 +155,12 @@ export default function CameraDashboard() {
     }
   }
 
-  function toggleSortOrder() {
-    setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+  function toggleSortOrder(): void {
+    setSortOrder(function (prev) { return (prev === 'asc' ? 'desc' : 'asc'); });
   }
 
   // Sort the frames by timestamp according to sortOrder
-  const sortedFrames = [...frames].sort((a, b) => {
+  const sortedFrames = [...frames].sort(function (a, b) {
     return sortOrder === 'asc'
       ? a.timestamp - b.timestamp
       : b.timestamp - a.timestamp;

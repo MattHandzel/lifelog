@@ -43,7 +43,7 @@ async fn it_090_resume_upload_with_byte_offsets() {
     let stream_id = "test-stream";
     let session_id = 12345u64;
 
-    let stream_identity = Some(lifelog_proto::StreamIdentity {
+    let stream_identity = Some(lifelog_types::StreamIdentity {
         collector_id: collector_id.to_string(),
         stream_id: stream_id.to_string(),
         session_id,
@@ -52,7 +52,7 @@ async fn it_090_resume_upload_with_byte_offsets() {
     // 1. Upload first chunk
     let data1 = b"hello world";
     let hash1 = utils::cas::sha256_hex(data1);
-    let chunk1 = lifelog_proto::Chunk {
+    let chunk1 = lifelog_types::Chunk {
         stream: stream_identity.clone(),
         offset: 0,
         data: data1.to_vec(),
@@ -67,7 +67,7 @@ async fn it_090_resume_upload_with_byte_offsets() {
 
     // 2. Get offset (should be 11 because we have chunk 0..11)
     let offset_resp = client
-        .get_upload_offset(lifelog_proto::GetUploadOffsetRequest {
+        .get_upload_offset(lifelog_types::GetUploadOffsetRequest {
             stream: stream_identity.clone(),
         })
         .await
@@ -79,7 +79,7 @@ async fn it_090_resume_upload_with_byte_offsets() {
     // 3. Upload second chunk at offset 11
     let data2 = b" next part"; // length 10
     let hash2 = utils::cas::sha256_hex(data2);
-    let chunk2 = lifelog_proto::Chunk {
+    let chunk2 = lifelog_types::Chunk {
         stream: stream_identity.clone(),
         offset: 11,
         data: data2.to_vec(),
@@ -92,7 +92,7 @@ async fn it_090_resume_upload_with_byte_offsets() {
 
     // Verify highest offset in DB is now 11 + 10 = 21
     let offset_resp = client
-        .get_upload_offset(lifelog_proto::GetUploadOffsetRequest {
+        .get_upload_offset(lifelog_types::GetUploadOffsetRequest {
             stream: stream_identity.clone(),
         })
         .await
@@ -112,7 +112,7 @@ async fn it_081_ack_implies_queryable() {
     let stream_id = "test-stream-81";
     let session_id = 9999u64;
 
-    let stream_identity = Some(lifelog_proto::StreamIdentity {
+    let stream_identity = Some(lifelog_types::StreamIdentity {
         collector_id: collector_id.to_string(),
         stream_id: stream_id.to_string(),
         session_id,
@@ -120,7 +120,7 @@ async fn it_081_ack_implies_queryable() {
 
     let data = b"chunk1";
     let hash = utils::cas::sha256_hex(data);
-    let chunk = lifelog_proto::Chunk {
+    let chunk = lifelog_types::Chunk {
         stream: stream_identity.clone(),
         offset: 0,
         data: data.to_vec(),
@@ -157,29 +157,36 @@ async fn it_081_ack_implies_queryable() {
         .await
         .expect("DB Select failed");
 
-    let id = format!("{}-{}-{}-{}", collector_id, stream_id, session_id, 0);
+    let id = format!("{}_{}_{}_{}", collector_id, stream_id, session_id, 0);
 
-    #[derive(serde::Deserialize)]
-    #[allow(dead_code)]
-    struct ChunkRec {
+    #[derive(serde::Deserialize, serde::Serialize)]
+    struct RawRec {
         indexed: bool,
     }
 
     // Check it exists first
-    let result: Option<ChunkRec> = db
-        .select(("upload_chunks", &id))
+    let mut q_resp = db
+        .query("SELECT * FROM upload_chunks WHERE id = type::thing('upload_chunks', $id)")
+        .bind(("id", id.clone()))
         .await
         .expect("Select failed");
-    assert!(result.is_some(), "Chunk record should exist");
+    let results: Vec<RawRec> = q_resp.take(0).expect("Take failed");
+    assert!(!results.is_empty(), "Chunk record should exist");
 
     // Update to indexed=true
-    let _updated: Option<ChunkRec> = db
-        .query("UPDATE type::thing('upload_chunks', $id) SET indexed = true")
+    let _updated: Option<serde_json::Value> = db
+        .query(
+            "UPDATE upload_chunks SET indexed = true WHERE id = type::thing('upload_chunks', $id)",
+        )
         .bind(("id", id.clone()))
         .await
         .expect("Update failed")
         .take(0)
         .expect("Take failed");
+    assert!(
+        _updated.is_some(),
+        "Update should have affected at least one record"
+    );
 
     // 3. Upload next chunk (or same chunk to probe ACK).
     // If we re-send the same chunk, apply_chunk is idempotent, and it should check indexing again.

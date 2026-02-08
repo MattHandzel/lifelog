@@ -32,7 +32,7 @@ interface SearchResult {
   metadata?: Record<string, any>; 
 }
 
-export default function SearchDashboard() {
+export default function SearchDashboard(): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -42,54 +42,56 @@ export default function SearchDashboard() {
   const [totalPages] = useState(1);
   const [sourceFilter, setSourceFilter] = useState<string>('all');
 
-  const performSearch = async (_resetPage = true) => {
+  async function performSearch(_resetPage = true): Promise<void> {
     if (!searchQuery.trim()) return;
     setIsLoading(true);
     try {
       const entries = await invoke<Array<{uuid: string; origin: string; modality: string; timestamp: number | null}>>('query_timeline', {
         textQuery: [searchQuery],
       });
-      setResults(entries.map(e => ({
-        id: e.uuid,
-        type: (e.modality === 'Screen' ? 'image' : e.modality === 'Audio' ? 'audio' : 'file') as 'image' | 'audio' | 'file',
-        name: e.uuid.substring(0, 8),
-        path: e.origin,
-        timestamp: e.timestamp || 0,
-        source: e.origin,
-      })));
+      setResults(entries.map(function (e) {
+        return {
+          id: e.uuid,
+          type: (e.modality === 'Screen' ? 'image' : e.modality === 'Audio' ? 'audio' : 'file') as 'image' | 'audio' | 'file',
+          name: e.uuid.substring(0, 8),
+          path: e.origin,
+          timestamp: e.timestamp || 0,
+          source: e.origin,
+        };
+      }));
     } catch (error) {
       console.error('Search failed:', error);
       setResults([]);
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const loadMoreResults = async () => {
+  async function loadMoreResults(): Promise<void> {
     // Pagination comes later
     console.log('Load more: pagination not yet implemented');
-  };
+  }
 
-  useEffect(() => {
+  useEffect(function () {
     performSearch();
   }, [fileTypeFilter, sortOrder, sourceFilter]);
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
+  function handleSearchSubmit(e: React.FormEvent): void {
     e.preventDefault();
     performSearch();
-  };
+  }
 
-  const formatDate = (timestamp: number): string => {
+  function formatDate(timestamp: number): string {
     return new Date(timestamp).toLocaleString();
-  };
+  }
 
-  const formatFileSize = (bytes: number): string => {
+  function formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  };
+  }
 
-  const renderTypeIcon = (type: string) => {
+  function renderTypeIcon(type: string): JSX.Element {
     switch (type) {
       case 'image':
         return <Image className="w-5 h-5 text-blue-400" />;
@@ -98,7 +100,7 @@ export default function SearchDashboard() {
       default:
         return <File className="w-5 h-5 text-gray-400" />;
     }
-  };
+  }
 
   return (
     <div className="p-6 md:p-8 space-y-6">

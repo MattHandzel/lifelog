@@ -15,7 +15,7 @@ path = "src/main.rs"
 config = { path = "../common/config" }
 utils = { path = "../common/utils" }
 lifelog-core = {path = "../common/lifelog-core/"}
-lifelog-proto = { path = "../common/lifelog-proto" }
+lifelog-types = { path = "../common/lifelog-types" }
 tokio = { version = "1.44.2", features = ["full", "macros", "rt-multi-thread"] }
 chrono = "0.4"
 thiserror = "2"
@@ -47,6 +47,7 @@ tracing-subscriber = {workspace = true}
 tonic-build = {workspace = true}
 
 [dev-dependencies]
+lifelog-collector = { path = "../collector" }
 tempfile = "3"
 portpicker = "0.1"
 rand = "0.9"

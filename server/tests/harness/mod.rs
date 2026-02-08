@@ -5,9 +5,9 @@ pub mod fault_layer;
 
 use config::ServerConfig;
 use fault_layer::{FaultController, FaultInjectionLayer};
-use lifelog_proto::lifelog_server_service_client::LifelogServerServiceClient;
-use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
 use lifelog_server::server::{GRPCServerLifelogServerService, Server, ServerHandle};
+use lifelog_types::lifelog_server_service_client::LifelogServerServiceClient;
+use lifelog_types::lifelog_server_service_server::LifelogServerServiceServer;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::Arc;

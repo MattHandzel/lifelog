@@ -8,8 +8,8 @@ mod server_config;
 pub use policy_config::*;
 pub use server_config::*;
 
-// Re-export all config types from lifelog_proto
-pub use lifelog_proto::{
+// Re-export all config types from lifelog_types
+pub use lifelog_types::{
     AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, CollectorConfig, GeoConfig,
     HyprlandConfig, InputLoggerConfig, MicrophoneConfig, NetworkConfig, ProcessesConfig,
     ScreenConfig, SystemConfig, SystemPerformanceConfig, TextUploadConfig, WeatherConfig,

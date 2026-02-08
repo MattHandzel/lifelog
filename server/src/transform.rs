@@ -13,14 +13,14 @@ pub(crate) enum LifelogTransform {
 }
 
 impl LifelogTransform {
-    pub fn source(&self) -> DataOrigin {
+    pub fn id(&self) -> String {
         match self {
-            LifelogTransform::OcrTransform(transform) => transform.source(),
+            LifelogTransform::OcrTransform(t) => format!("ocr-{}", t.source()),
         }
     }
-    pub fn destination(&self) -> DataOrigin {
+    pub fn source(&self) -> DataOrigin {
         match self {
-            LifelogTransform::OcrTransform(transform) => transform.destination(),
+            LifelogTransform::OcrTransform(t) => t.source(),
         }
     }
 }
@@ -31,40 +31,43 @@ impl From<OcrTransform> for LifelogTransform {
     }
 }
 
-pub(crate) async fn transform_data(
+pub(crate) async fn transform_data_single(
     db: &Surreal<Client>,
-    untransformed_data_keys: Vec<LifelogFrameKey>,
-    transforms: Vec<LifelogTransform>,
-) {
-    for key in untransformed_data_keys.iter() {
-        let data_to_transform: lifelog_proto::LifelogData = match get_data_by_key(db, key).await {
+    keys: &[LifelogFrameKey],
+    transform: &LifelogTransform,
+) -> Option<DateTime<Utc>> {
+    let mut last_ts = None;
+
+    for key in keys {
+        let data_to_transform: lifelog_types::LifelogData = match get_data_by_key(db, key).await {
             Ok(data) => data,
             Err(_) => continue,
         };
 
-        for transform in transforms.iter() {
-            match transform {
-                LifelogTransform::OcrTransform(transform) => {
-                    if key.origin == transform.source() {
-                        let payload = data_to_transform.payload.as_ref();
-                        if let Some(lifelog_proto::lifelog_data::Payload::Screenframe(
-                            screen_frame,
-                        )) = payload
-                        {
-                            let image: LifelogImage = screen_frame.clone().into();
-                            if let Ok(mut result) = transform.apply(image) {
-                                result.uuid = key.uuid.to_string();
-                                let _ = add_data_to_db::<OcrFrame, OcrFrame>(
-                                    db,
-                                    result,
-                                    &transform.destination(),
-                                )
-                                .await;
+        match transform {
+            LifelogTransform::OcrTransform(t) => {
+                if key.origin == t.source() {
+                    let payload = data_to_transform.payload.as_ref();
+                    if let Some(lifelog_types::lifelog_data::Payload::Screenframe(screen_frame)) =
+                        payload
+                    {
+                        let image: LifelogImage = screen_frame.clone().into();
+                        if let Ok(mut result) = t.apply(image) {
+                            result.uuid = key.uuid.to_string();
+                            let _ =
+                                add_data_to_db::<OcrFrame, OcrFrame>(db, result, &t.destination())
+                                    .await;
+                            if let Some(ts) = screen_frame.timestamp {
+                                last_ts = Some(
+                                    DateTime::<Utc>::from_timestamp(ts.seconds, ts.nanos as u32)
+                                        .unwrap_or_default(),
+                                );
                             }
                         }
                     }
                 }
-            };
+            }
         }
     }
+    last_ts
 }

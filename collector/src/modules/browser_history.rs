@@ -7,7 +7,7 @@ use std::{fs, io::Read};
 
 use data_modalities::browser::BrowserFrame;
 use lifelog_core::Uuid;
-use lifelog_proto::to_pb_ts;
+use lifelog_types::to_pb_ts;
 use rusqlite::Connection;
 use tokio::time::{sleep, Duration};
 

@@ -1,6 +1,4 @@
 import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import ScreenDashboard from './ScreenDashboard';
 
 interface AppSettings {
   theme: 'light' | 'dark';
@@ -21,43 +19,20 @@ export default function SettingsDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // New state for collectors
-  const [collectorIds, setCollectorIds] = useState<string[]>([]);
-  const [selectedCollectorId, setSelectedCollectorId] = useState<string | null>(null);
-  const [collectorError, setCollectorError] = useState<string | null>(null);
-
   useEffect(() => {
     loadSettings();
-    loadCollectorIds();
   }, []);
-
-  const loadCollectorIds = async () => {
-    setCollectorError(null);
-    try {
-      const ids = await invoke<string[]>('get_collector_ids');
-      console.log('[SettingsDashboard] Loaded collector IDs from invoke:', ids);
-      setCollectorIds(ids);
-      if (ids.length > 0 && !selectedCollectorId) {
-        setSelectedCollectorId(ids[0]);
-        console.log('[SettingsDashboard] Auto-selected collector ID:', ids[0]);
-      }
-    } catch (err) {
-      console.error('Failed to load collector IDs:', err);
-      setCollectorError(typeof err === 'string' ? err : 'Failed to load collector IDs.');
-    }
-  };
 
   const loadSettings = async () => {
     setIsLoading(true);
     setError(null);
     
     try {
-      console.warn('Settings: loadSettings not yet implemented via gRPC');
+      // Local settings load simulation
+      setTimeout(() => setIsLoading(false), 500);
     } catch (err) {
       console.error('Failed to load settings:', err);
       setError('Failed to load settings. Using defaults.');
-      // Continue with default settings
-    } finally {
       setIsLoading(false);
     }
   };
@@ -68,10 +43,8 @@ export default function SettingsDashboard() {
     setSuccessMessage(null);
     
     try {
-      console.warn('Settings: saveSettings not yet implemented via gRPC');
+      // Local settings save simulation
       setSuccessMessage('Settings saved successfully');
-      
-      // Clear success message after 3 seconds
       setTimeout(() => {
         setSuccessMessage(null);
       }, 3000);
@@ -94,12 +67,6 @@ export default function SettingsDashboard() {
           ? parseInt(value, 10) 
           : value
     }));
-  };
-
-  const handleCollectorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newSelectedId = e.target.value;
-    setSelectedCollectorId(newSelectedId);
-    console.log('[SettingsDashboard] Collector selection changed to:', newSelectedId);
   };
 
   return (
@@ -125,47 +92,6 @@ export default function SettingsDashboard() {
           )}
           
           <div className="card p-6 space-y-6">
-            {/* Collector Selection Section */}
-            <div className="border-b border-gray-700 pb-6">
-              <h2 className="text-lg font-medium mb-4">Collector Configuration</h2>
-              {collectorError && (
-                <div className="bg-red-500 bg-opacity-10 border border-red-500 text-red-500 px-4 py-3 rounded mb-4">
-                  {collectorError}
-                </div>
-              )}
-              {collectorIds.length > 0 ? (
-                <div>
-                  <label htmlFor="collectorSelect" className="form-label">Select Collector</label>
-                  <select 
-                    id="collectorSelect"
-                    name="collectorSelect"
-                    value={selectedCollectorId || ''}
-                    onChange={handleCollectorChange}
-                    className="form-input"
-                  >
-                    {collectorIds.map(id => (
-                      <option key={id} value={id}>{id}</option>
-                    ))}
-                  </select>
-                  {selectedCollectorId && <p className="text-sm text-gray-400 mt-2">Selected: {selectedCollectorId}</p>}
-                </div>
-              ) : (
-                <p className="text-gray-400">
-                  {collectorError ? 'Could not load collectors.' : 'No collectors found or loading...'}
-                </p>
-              )}
-            </div>
-
-            {selectedCollectorId ? (
-              <>
-                {(() => { console.log('[SettingsDashboard] Rendering ScreenDashboard for collector:', selectedCollectorId); return null; })()}
-                <div className="mt-6 card p-6">
-                  <h2 className="text-lg font-medium mb-4">Screen Settings for Collector: {selectedCollectorId}</h2>
-                  <ScreenDashboard collectorId={selectedCollectorId} />
-                </div>
-              </>
-            ) : null}
-
             <div>
               <h2 className="text-lg font-medium mb-4">Appearance</h2>
               <div className="space-y-4">
@@ -263,4 +189,4 @@ export default function SettingsDashboard() {
       )}
     </div>
   );
-} 
+}

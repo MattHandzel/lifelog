@@ -4,7 +4,7 @@
 
 #![allow(dead_code)]
 
-use lifelog_proto::Chunk;
+use lifelog_types::Chunk;
 use rand::Rng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;
@@ -31,7 +31,7 @@ pub fn generate_chunk_sequence(
         let hash = sha256_hex(&data);
 
         chunks.push(Chunk {
-            stream: Some(lifelog_proto::StreamIdentity {
+            stream: Some(lifelog_types::StreamIdentity {
                 collector_id: collector_id.to_string(),
                 stream_id: stream_id.to_string(),
                 session_id,

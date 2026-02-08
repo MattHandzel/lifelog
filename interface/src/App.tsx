@@ -1,36 +1,93 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter } from 'react-router-dom';
+import { invoke } from '@tauri-apps/api/core';
 import { Login } from './components/Login';
 import SearchDashboard from './components/SearchDashboard';
-import AccountDashboard from './components/AccountDashboard';
-import { LayoutDashboard, Settings, Search, User } from "lucide-react";
+import DevicesDashboard from './components/DevicesDashboard';
+import { LayoutDashboard, Settings, Search, Laptop, Shield, Power } from "lucide-react";
 import FeatureTabs from "./components/FeatureTabs.tsx";
 import { cn } from "./lib/utils";
+import { Switch } from "./components/ui/switch";
 
 import './App.css';
 
-type View = "dashboard" | "search" | "account" | "settings";
+type View = "dashboard" | "search" | "devices" | "settings";
 
-function AppLayout() {
-  const [currentView, setCurrentView] = useState<View>("dashboard");
+interface NavLinkProps {
+  view: View;
+  label: string;
+  icon: React.ElementType;
+  currentView: View;
+  onClick: (view: View) => void;
+}
 
-  const NavLink = ({
-    view,
-    label,
-    icon: Icon,
-  }: {
-    view: View;
-    label: string;
-    icon: React.ElementType;
-  }) => (
+function NavLink({
+  view,
+  label,
+  icon: Icon,
+  currentView,
+  onClick,
+}: NavLinkProps): JSX.Element {
+  return (
     <button
-      onClick={() => setCurrentView(view)}
+      onClick={function () { onClick(view); }}
       className={cn("nav-link w-full", currentView === view && "nav-link-active")}
     >
       <Icon className="w-5 h-5" />
       <span className="text-base font-medium">{label}</span>
     </button>
   );
+}
+
+function AppLayout(): JSX.Element {
+  const [currentView, setCurrentView] = useState<View>("dashboard");
+  const [isPaused, setIsPaused] = useState(false);
+  const [isPausing, setIsPausing] = useState(false);
+
+  function handleViewChange(view: View): void {
+    setCurrentView(view);
+  }
+
+  async function handleGlobalPause(paused: boolean) {
+    if (isPausing) return;
+    setIsPausing(true);
+    try {
+      // 1. Get all collectors
+      const ids = await invoke<string[]>('get_collector_ids');
+      
+      // 2. Iterate and pause/unpause everything
+      // This is a "best effort" broadcast from the frontend
+      const components = ['screen', 'camera', 'microphone', 'processes', 'hyprland'];
+      
+      for (const id of ids) {
+        for (const type of components) {
+          try {
+            // Fetch current config to preserve other settings
+            const current = await invoke<any>('get_component_config', { 
+              collectorId: id, 
+              componentType: type 
+            });
+            
+            if (current) {
+              await invoke('set_component_config', {
+                collectorId: id,
+                componentType: type,
+                configValue: { ...current, enabled: !paused }
+              });
+            }
+          } catch (e) {
+            console.warn(`Failed to set ${type} for ${id}:`, e);
+          }
+        }
+      }
+      setIsPaused(paused);
+    } catch (err) {
+      console.error('Global pause failed:', err);
+      alert('Failed to update some devices. Check device status.');
+    } finally {
+      setIsPausing(false);
+    }
+  }
 
   return (
     <div className="flex h-screen bg-[#0F111A] text-[#F9FAFB]">
@@ -47,13 +104,66 @@ function AppLayout() {
 
         <nav className="flex-1 flex flex-col">
           <div className="flex flex-col gap-2 mt-4">
-            <NavLink view="dashboard" label="Dashboard" icon={LayoutDashboard} />
-            <NavLink view="search" label="Search" icon={Search} />
-            <NavLink view="account" label="Account" icon={User} />
+            <NavLink 
+              view="dashboard" 
+              label="Dashboard" 
+              icon={LayoutDashboard} 
+              currentView={currentView}
+              onClick={handleViewChange}
+            />
+            <NavLink 
+              view="search" 
+              label="Search" 
+              icon={Search} 
+              currentView={currentView}
+              onClick={handleViewChange}
+            />
+            <NavLink 
+              view="devices" 
+              label="Devices" 
+              icon={Laptop} 
+              currentView={currentView}
+              onClick={handleViewChange}
+            />
           </div>
+          
+          {/* Global Pause Control */}
+          <div className="mt-auto mb-4 px-2 hidden md:block">
+            <div className={cn(
+              "rounded-lg p-3 border transition-colors",
+              isPaused 
+                ? "bg-red-500/10 border-red-500/30" 
+                : "bg-[#232B3D] border-[#2A3142]"
+            )}>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Shield className={cn("w-4 h-4", isPaused ? "text-red-500" : "text-[#4C8BF5]")} />
+                  <span className="text-sm font-medium">Recording</span>
+                </div>
+                <Switch 
+                  checked={!isPaused}
+                  onCheckedChange={(checked) => handleGlobalPause(!checked)}
+                  disabled={isPausing}
+                  className={cn(
+                    "data-[state=checked]:bg-[#4C8BF5] data-[state=unchecked]:bg-red-500"
+                  )}
+                />
+              </div>
+              <p className="text-xs text-[#9CA3AF]">
+                {isPausing ? "Updating..." : isPaused ? "All capture paused" : "System active"}
+              </p>
+            </div>
+          </div>
+
           {/* Settings pinned at the bottom */}
-          <div className="mt-auto pt-4 border-t border-[#232B3D] flex flex-col gap-2">
-            <NavLink view="settings" label="Settings" icon={Settings} />
+          <div className="pt-4 border-t border-[#232B3D] flex flex-col gap-2">
+            <NavLink 
+              view="settings" 
+              label="Settings" 
+              icon={Settings} 
+              currentView={currentView}
+              onClick={handleViewChange}
+            />
           </div>
         </nav>
       </aside>
@@ -63,7 +173,7 @@ function AppLayout() {
         <div className="flex-1 overflow-auto">
           {currentView === "dashboard" && <FeatureTabs />}
           {currentView === "search" && <SearchDashboard />}
-          {currentView === "account" && <AccountDashboard />}
+          {currentView === "devices" && <DevicesDashboard />}
           {currentView === "settings" && (
             <div className="p-8">
               <h2 className="title mb-4">Settings</h2>
@@ -89,13 +199,13 @@ function AppLayout() {
   );
 }
 
-function App() {
+function App(): JSX.Element {
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const checkAuth = () => {
+  useEffect(function () {
+    function checkAuth(): void {
       try {
         // For development: bypass authentication
         const authenticated = true;
@@ -106,7 +216,7 @@ function App() {
         setError('Authentication check failed');
         setLoading(false);
       }
-    };
+    }
 
     checkAuth();
   }, []);
@@ -118,7 +228,7 @@ function App() {
         <p className="text-red-400 mb-4">{error}</p>
         <button 
           className="px-4 py-2 bg-blue-600 rounded-md hover:bg-blue-700"
-          onClick={() => window.location.reload()}
+          onClick={function () { window.location.reload(); }}
         >
           Reload Application
         </button>
@@ -177,3 +287,4 @@ function App() {
 }
 
 export default App;
+

@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 
-export function Login() {
+export function Login(): JSX.Element {
   const [credentials, setCredentials] = useState({
     username: 'admin',  // Hardcode for testing
     password: 'admin',  // Hardcode for testing
@@ -13,51 +13,53 @@ export function Login() {
   const [debugInfo, setDebugInfo] = useState<Record<string, any>>({});
   const navigate = useNavigate();
 
-  useEffect(() => {
+  useEffect(function () {
     // Get API URL from environment
     const url = import.meta.env.VITE_API_BASE_URL || 'Not set';
     setApiUrl(url);
     
     // Try to ping the server
-    const pingServer = async () => {
+    async function pingServer(): Promise<void> {
       try {
         const data = await invoke('ping_server', { payload: 'frontend' });
-        setDebugInfo((prev: Record<string, any>) => ({ ...prev, serverPing: 'Success', serverResponse: data }));
+        setDebugInfo(function (prev: Record<string, any>) { return { ...prev, serverPing: 'Success', serverResponse: data }; });
       } catch (err) {
-        setDebugInfo((prev: Record<string, any>) => ({ ...prev, serverPing: 'Failed', error: String(err) }));
+        setDebugInfo(function (prev: Record<string, any>) { return { ...prev, serverPing: 'Failed', error: String(err) }; });
       }
-    };
+    }
     
     pingServer();
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>): void {
     const { name, value } = e.target;
-    setCredentials(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+    setCredentials(function (prev) {
+      return {
+        ...prev,
+        [name]: value
+      };
+    });
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  async function handleSubmit(e: React.FormEvent): Promise<void> {
     e.preventDefault();
     setError('');
     setLoading(true);
-    setDebugInfo((prev: Record<string, any>) => ({ ...prev, loginAttempt: { username: credentials.username, password: credentials.password } }));
+    setDebugInfo(function (prev: Record<string, any>) { return { ...prev, loginAttempt: { username: credentials.username, password: credentials.password } }; });
     try {
       const result = await invoke('login', { username: credentials.username, password: credentials.password });
       console.log('[LOGIN] Login successful:', result);
-      setDebugInfo((prev: Record<string, any>) => ({ ...prev, loginResult: result }));
+      setDebugInfo(function (prev: Record<string, any>) { return { ...prev, loginResult: result }; });
       navigate('/camera');
     } catch (err) {
       console.error('[LOGIN] Login error:', err);
       setError('Invalid username or password');
-      setDebugInfo((prev: Record<string, any>) => ({ ...prev, loginError: String(err) }));
+      setDebugInfo(function (prev: Record<string, any>) { return { ...prev, loginError: String(err) }; });
       alert(`Login failed: ${err}`);
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   console.log('[DEBUG] Rendering login component');
 

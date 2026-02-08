@@ -7,7 +7,7 @@ members = [
     "common/utils",
     "common/lifelog-core",
     "interface/src-tauri",
-    "common/lifelog-proto",
+    "common/lifelog-types",
 ]
 
 # Keep the Tauri UI crate in the workspace, but don't build it by default.
@@ -20,7 +20,7 @@ default-members = [
     "server",
     "common/utils",
     "common/lifelog-core",
-    "common/lifelog-proto",
+    "common/lifelog-types",
 ]
 
 resolver = "2"

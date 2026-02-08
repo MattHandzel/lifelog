@@ -33,7 +33,7 @@ interface LifelogDataKeyWrapper {
   origin: string;
 }
 
-export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
+export default function ScreenDashboard({ collectorId }: ScreenDashboardProps): JSX.Element {
   const [screenshots, setScreenshots] = useState<Screenshot[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -54,8 +54,8 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
   const isLoadingRef = useRef(false);
   const [fetchError, setFetchError] = useState<string | null>(null); // For displaying fetch errors
 
-  useEffect(() => {
-    const initializeCollectorId = async () => {
+  useEffect(function () {
+    async function initializeCollectorId(): Promise<void> {
       let resolvedCollectorId = collectorId;
 
       if (!collectorId) {
@@ -82,24 +82,24 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
       if (savedAutoRefresh !== null) {
         setAutoRefresh(savedAutoRefresh === 'true');
       }
-    };
+    }
 
     initializeCollectorId();
   }, [collectorId]);
 
-  useEffect(() => {
+  useEffect(function () {
     if (activeCollectorId) {
       loadScreenshots(activeCollectorId);
     }
   }, [currentPage, sortOrder, activeCollectorId]);
 
-  useEffect(() => {
+  useEffect(function () {
     if (refreshIntervalRef.current) {
       clearInterval(refreshIntervalRef.current);
       refreshIntervalRef.current = undefined;
     }
     if (autoRefresh && settings && settings.enabled && settings.interval > 0 && activeCollectorId) {
-       refreshIntervalRef.current = window.setInterval(() => {
+       refreshIntervalRef.current = window.setInterval(function () {
          if (currentPage === 1 && sortOrder === 'desc') {
            console.log('[ScreenDashboard] Auto-refresh triggered...');
            loadScreenshots(activeCollectorId);
@@ -107,10 +107,10 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
        }, settings.interval * 1000);
     }
     localStorage.setItem('screenshots_auto_refresh', autoRefresh.toString());
-    return () => { if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current); };
+    return function () { if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current); };
   }, [autoRefresh, settings, currentPage, sortOrder, activeCollectorId]);
 
-  async function loadScreenshots(collectorIdToLoad: string | null) {
+  async function loadScreenshots(collectorIdToLoad: string | null): Promise<void> {
     if (isLoadingRef.current) {
       console.log("[ScreenDashboard] loadScreenshots: Load already in progress, skipping.");
       return;
@@ -121,7 +121,7 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
       setIsLoading(false);
       setTotalPages(1);
       setCurrentPage(1);
-      setFetchError(null)
+      setFetchError(null);
       return;
     }
 
@@ -145,7 +145,7 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
         return;
       }
 
-      const screenKeys = keys.filter(key => {
+      const screenKeys = keys.filter(function (key) {
         const parts = key.origin.split(':');
         return parts.length > 0 && parts[parts.length - 1].toLowerCase() === 'screen';
       });
@@ -224,7 +224,7 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
     }
   }
 
-  async function loadSettings(currentCollectorIdToLoad: string, retries = 3, delay = 1000) {
+  async function loadSettings(currentCollectorIdToLoad: string, retries = 3, delay = 1000): Promise<void> {
     setIsLoadingSettings(true);
     try {
       console.log(`[ScreenDashboard] Requesting screen config for collector ${currentCollectorIdToLoad} via Tauri... (Attempt: ${4 - retries})`);
@@ -251,7 +251,7 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
       console.error(`[ScreenDashboard] Failed to load screen settings for collector ${currentCollectorIdToLoad} via Tauri (Attempt: ${4 - retries}):`, error);
       if (retries > 0 && error.message && error.message.includes("No collector found")) {
         console.log(`[ScreenDashboard] Collector not found, retrying loadSettings in ${delay / 1000}s... (${retries} retries left)`);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(function (resolve) { setTimeout(resolve, delay); });
         if (currentCollectorIdToLoad) {
           await loadSettings(currentCollectorIdToLoad, retries - 1, delay * 2);
         }
@@ -270,11 +270,11 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
     setIsLoadingSettings(false);
   }
 
-  async function saveSettings() {
+  async function saveSettings(): Promise<void> {
     if (!settings || !activeCollectorId) {
         alert("Cannot save settings: Current settings not loaded or collector ID unknown.");
         return;
-    };
+    }
     const wasAutoRefreshEnabled = autoRefresh;
     if (wasAutoRefreshEnabled) {
       setAutoRefresh(false);
@@ -305,7 +305,7 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
     } finally {
         setIsSavingSettings(false);
         if (wasAutoRefreshEnabled) {
-           setTimeout(() => setAutoRefresh(true), 500);
+           setTimeout(function () { setAutoRefresh(true); }, 500);
         }
     }
   }
@@ -319,33 +319,34 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
     });
   }
 
-  function handlePreviousPage() {
+  function handlePreviousPage(): void {
     if (currentPage > 1) {
       setCurrentPage(currentPage - 1);
     }
   }
 
-  function handleNextPage() {
+  function handleNextPage(): void {
     if (currentPage < totalPages) {
       setCurrentPage(currentPage + 1);
     }
   }
 
-  function handleScreenshotClick(screenshot: Screenshot) {
+  function handleScreenshotClick(screenshot: Screenshot): void {
     console.log("Opening screenshot:", screenshot);
     setSelectedImage(screenshot.dataUrl); 
     setSelectedScreenshot(screenshot);
   }
 
-  function closeModal() {
+  function closeModal(): void {
     setSelectedImage(null);
     setSelectedScreenshot(null);
   }
 
-  function toggleSettings() {
+  function toggleSettings(): void {
     console.log('[ScreenDashboard] Toggling settings panel. Current activeCollectorId:', activeCollectorId);
-    setShowSettings(!showSettings);
-    if (!showSettings && settings) {
+    const nextShowSettings = !showSettings;
+    setShowSettings(nextShowSettings);
+    if (nextShowSettings && settings) {
       setTempInterval(settings.interval);
       setTempEnabled(settings.enabled);
     }
@@ -365,11 +366,11 @@ export default function ScreenDashboard({ collectorId }: ScreenDashboardProps) {
     return minutes === 0 ? `${hours} hr` : `${hours}h ${minutes}m`;
   }
 
-  function toggleSortOrder() {
-    setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
+  function toggleSortOrder(): void {
+    setSortOrder(function (prev) { return (prev === 'asc' ? 'desc' : 'asc'); });
   }
 
-  const sortedScreenshots = [...screenshots].sort((a, b) => {
+  const sortedScreenshots = [...screenshots].sort(function (a, b) {
     const tsA = a.timestamp === null ? (sortOrder === 'asc' ? Infinity : -Infinity) : a.timestamp;
     const tsB = b.timestamp === null ? (sortOrder === 'asc' ? Infinity : -Infinity) : b.timestamp;
     return sortOrder === 'asc' ? tsA - tsB : tsB - tsA;

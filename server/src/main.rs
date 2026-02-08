@@ -1,12 +1,12 @@
 use chrono::{DateTime, Utc};
 use config::TlsConfig;
 use lifelog_core::uuid::Uuid;
-use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
 use lifelog_server::server::GRPCServerLifelogServerService;
 use lifelog_server::server::ServerHandle as LifelogServerHandle;
+use lifelog_types::lifelog_server_service_server::LifelogServerServiceServer;
 
-use lifelog_proto::FILE_DESCRIPTOR_SET;
 use lifelog_server::server::Server as LifelogServer;
+use lifelog_types::FILE_DESCRIPTOR_SET;
 use tonic::transport::Server as TonicServer;
 use tonic_reflection::server::Builder;
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Clock, Camera, Mic, FileText, Search, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
@@ -15,14 +15,14 @@ interface TimelineDashboardProps {
   collectorId?: string | null;
 }
 
-export default function TimelineDashboard({ collectorId = null }: TimelineDashboardProps) {
+export default function TimelineDashboard({ collectorId = null }: TimelineDashboardProps): JSX.Element {
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [textQuery, setTextQuery] = useState<string>('');
   const [results, setResults] = useState<TimelineEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const getModalityIcon = (modality: string) => {
+  function getModalityIcon(modality: string): JSX.Element {
     switch (modality?.toLowerCase()) {
       case 'screen':
         return <Camera className="w-4 h-4 text-blue-400" />;
@@ -33,14 +33,14 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
       default:
         return <FileText className="w-4 h-4 text-gray-400" />;
     }
-  };
+  }
 
-  const formatTimestamp = (timestamp: number | null): string => {
+  function formatTimestamp(timestamp: number | null): string {
     if (!timestamp) return 'N/A';
     return new Date(timestamp * 1000).toLocaleString();
-  };
+  }
 
-  const handleSearch = async () => {
+  async function handleSearch(): Promise<void> {
     setIsLoading(true);
     try {
       const startTime = startDate ? Math.floor(new Date(startDate).getTime() / 1000) : undefined;
@@ -60,14 +60,14 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
     } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const handleReset = () => {
+  function handleReset(): void {
     setStartDate('');
     setEndDate('');
     setTextQuery('');
     setResults([]);
-  };
+  }
 
   return (
     <div className="p-6 md:p-8 space-y-6">

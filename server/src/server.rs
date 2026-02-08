@@ -4,9 +4,9 @@ use config::ServerPolicyConfig;
 use config::{CollectorConfig, ServerConfig, SystemConfig};
 use data_modalities::*;
 use lifelog_core::*;
-use lifelog_proto::DataModality;
-use lifelog_proto::*;
-use lifelog_proto::{CollectorState, SystemState};
+use lifelog_types::DataModality;
+use lifelog_types::*;
+use lifelog_types::{CollectorState, SystemState};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time;
@@ -18,17 +18,17 @@ use utils::cas::FsCas;
 
 use crate::data_retrieval::get_data_by_key;
 use crate::db::get_origins_from_db;
-use crate::sync::{get_keys_in_source_not_in_destination, sync_data_with_collectors};
-use crate::transform::{transform_data, LifelogTransform};
+use crate::sync::sync_data_with_collectors;
+use crate::transform::LifelogTransform;
 
 pub type ServerAction = lifelog_core::ServerAction<
-    lifelog_proto::QueryRequest,
-    lifelog_proto::GetDataRequest,
-    lifelog_proto::Uuid,
+    lifelog_types::QueryRequest,
+    lifelog_types::GetDataRequest,
+    lifelog_types::Uuid,
 >;
 
 pub type RegisteredCollector =
-    lifelog_core::RegisteredCollector<lifelog_proto::ServerCommand, lifelog_proto::CollectorConfig>;
+    lifelog_core::RegisteredCollector<lifelog_types::ServerCommand, lifelog_types::CollectorConfig>;
 
 // Re-export for external consumers (main.rs, tests)
 pub use crate::grpc_service::GRPCServerLifelogServerService;
@@ -104,7 +104,7 @@ impl ServerHandle {
 
     pub async fn process_query(
         &self,
-        query: lifelog_proto::Query,
+        query: lifelog_types::Query,
     ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
         tracing::debug!(?query, "Requesting server lock for process_query");
         self.server.read().await.process_query(query).await
@@ -118,7 +118,7 @@ impl ServerHandle {
     pub async fn get_data(
         &self,
         keys: Vec<LifelogFrameKey>,
-    ) -> Result<Vec<lifelog_proto::LifelogData>, LifelogError> {
+    ) -> Result<Vec<lifelog_types::LifelogData>, LifelogError> {
         let server = self.server.read().await;
         server.get_data(keys).await
     }
@@ -239,10 +239,10 @@ impl Server {
     async fn get_data(
         &self,
         req: Vec<LifelogFrameKey>,
-    ) -> Result<Vec<lifelog_proto::LifelogData>, LifelogError> {
-        let mut datas: Vec<lifelog_proto::LifelogData> = vec![];
+    ) -> Result<Vec<lifelog_types::LifelogData>, LifelogError> {
+        let mut datas: Vec<lifelog_types::LifelogData> = vec![];
         for key in req.iter() {
-            let data: lifelog_proto::LifelogData =
+            let data: lifelog_types::LifelogData =
                 get_data_by_key(&self.db, key).await.map_err(|e| {
                     LifelogError::Database(format!("Unable to get data by key {}: {}", key, e))
                 })?;
@@ -372,7 +372,7 @@ impl Server {
 
     async fn process_query(
         &self,
-        query_msg: lifelog_proto::Query,
+        query_msg: lifelog_types::Query,
     ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
         tracing::debug!(?query_msg, "Entered process_query");
         let mut keys: Vec<LifelogFrameKey> = vec![];
@@ -532,19 +532,50 @@ impl Server {
                 let db_connection = self.db.clone();
                 let transforms = self.transforms.clone().read().await.to_vec();
                 let _res = tokio::spawn(async move {
-                    let mut untransformed_data_keys: Vec<LifelogFrameKey> = vec![];
-                    for transform in &transforms {
-                        untransformed_data_keys.extend(
-                            get_keys_in_source_not_in_destination(
-                                &db_connection,
-                                transform.source().clone(),
-                                transform.destination().clone(),
-                            )
-                            .await,
-                        );
+                    for transform in transforms {
+                        let id = transform.id();
+                        let watermark = match crate::db::get_watermark(&db_connection, &id).await {
+                            Ok(w) => w,
+                            Err(e) => {
+                                tracing::error!("Failed to get watermark for {}: {}", id, e);
+                                continue;
+                            }
+                        };
+
+                        let keys = match crate::data_retrieval::get_keys_after_timestamp(
+                            &db_connection,
+                            &transform.source(),
+                            watermark,
+                            50, // Bounded batch
+                        )
+                        .await
+                        {
+                            Ok(k) => k,
+                            Err(e) => {
+                                tracing::error!("Failed to get keys for {}: {}", id, e);
+                                continue;
+                            }
+                        };
+
+                        if keys.is_empty() {
+                            continue;
+                        }
+
+                        if let Some(last_ts) = crate::transform::transform_data_single(
+                            &db_connection,
+                            &keys,
+                            &transform,
+                        )
+                        .await
+                        {
+                            if let Err(e) =
+                                crate::db::set_watermark(&db_connection, &id, last_ts).await
+                            {
+                                tracing::error!("Failed to set watermark for {}: {}", id, e);
+                            }
+                        }
                     }
 
-                    transform_data(&db_connection, untransformed_data_keys, transforms).await;
                     if let Some(ss) = state_clone.write().await.server_state.as_mut() {
                         ss.pending_actions
                             .retain(|&a| a != ServerActionType::TransformData as i32);

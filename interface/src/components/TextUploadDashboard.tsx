@@ -16,7 +16,7 @@ interface TextFile {
   content_hash: string;
 }
 
-export default function TextUploadDashboard() {
+export default function TextUploadDashboard(): JSX.Element {
   const [files, setFiles] = useState<TextFile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -25,10 +25,10 @@ export default function TextUploadDashboard() {
   
   const debouncedSearch = useDebounce(searchQuery, 300);
 
-  useEffect(() => {
-    const checkTauriAvailable = async () => {
+  useEffect(function () {
+    async function checkTauriAvailable(): Promise<void> {
       try {
-        await invoke('get_all_text_files').catch(() => {
+        await invoke('get_all_text_files').catch(function () {
           console.log('Initial invoke test failed, but that\'s okay');
         });
         setTauriReady(true);
@@ -38,18 +38,18 @@ export default function TextUploadDashboard() {
         console.log('Tauri API not ready yet, trying again in 500ms');
         setTimeout(checkTauriAvailable, 500);
       }
-    };
+    }
     
     checkTauriAvailable();
   }, []);
 
-  useEffect(() => {
+  useEffect(function () {
     if (debouncedSearch !== undefined && tauriReady) {
       handleSearch();
     }
   }, [debouncedSearch, tauriReady]);
 
-  async function loadFiles() {
+  async function loadFiles(): Promise<void> {
     if (!tauriReady) return;
     
     setIsLoading(true);
@@ -63,7 +63,7 @@ export default function TextUploadDashboard() {
     }
   }
 
-  async function handleFileUpload() {
+  async function handleFileUpload(): Promise<void> {
     if (!tauriReady) {
       console.error('Tauri API not initialized yet');
       alert('Application is still initializing. Please try again in a moment.');
@@ -106,7 +106,7 @@ export default function TextUploadDashboard() {
     }
   }
 
-  async function handleSearch() {
+  async function handleSearch(): Promise<void> {
     if (!tauriReady) return;
     
     if (!searchQuery.trim()) {
@@ -124,7 +124,7 @@ export default function TextUploadDashboard() {
     }
   }
 
-  async function handleOpenFile(path: string) {
+  async function handleOpenFile(path: string): Promise<void> {
     if (!tauriReady) return;
     
     try {

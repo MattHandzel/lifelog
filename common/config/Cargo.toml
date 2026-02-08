@@ -19,7 +19,7 @@ serde_json = { workspace = true }
 cpal = "0.15.3"
 derive_more = { version = "2.0.1", features = ["full"] }
 dashmap = { version = "6.1", features = ["serde"] }
-lifelog-proto = { path = "../lifelog-proto" }
+lifelog-types = { path = "../lifelog-types" }
 tracing = { workspace = true }
 
 

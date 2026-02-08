@@ -9,21 +9,11 @@ import {
   MousePointerIcon,
   KeyboardIcon,
   CloudIcon,
-  ThermometerIcon,
-  WifiIcon,
   LayoutGridIcon,
-  MonitorIcon,
   KeyboardIcon as InputIcon,
   PanelTopIcon,
   MonitorIcon as DesktopIcon,
   ChevronRightIcon,
-  User as UserIcon,
-  Cpu as CpuIcon,
-  MemoryStick as MemoryStickIcon,
-  Network as NetworkIcon,
-  Disc3 as DiskIcon,
-  Power as PowerIcon,
-  ScreenShare,
   Clock
 } from "lucide-react";
 import TextUploadDashboard from "./TextUploadDashboard";
@@ -67,7 +57,7 @@ interface CategoryDefinition {
   description: string;
 }
 
-export default function FeatureTabs() {
+export default function FeatureTabs(): JSX.Element {
   const [activeTab, setActiveTab] = useState<ModuleType>("timeline");
   const [expandedCategory, setExpandedCategory] = useState<CategoryType>("data");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -229,27 +219,28 @@ export default function FeatureTabs() {
   ];
 
   // Get the active tab component
-  const activeComponent = tabs.find(tab => tab.id === activeTab)?.component || null;
-  const activeTabData = tabs.find(tab => tab.id === activeTab);
-  const activeCategory = categories.find(cat => cat.id === activeTabData?.category);
+  const activeComponent = tabs.find(function (tab) { return tab.id === activeTab; })?.component || null;
+  const activeTabData = tabs.find(function (tab) { return tab.id === activeTab; });
+  const activeCategory = categories.find(function (cat) { return cat.id === activeTabData?.category; });
 
   // Filter tabs by category
-  const getTabsByCategory = (category: CategoryType) => 
-    tabs.filter(tab => tab.category === category);
+  function getTabsByCategory(category: CategoryType): TabDefinition[] {
+    return tabs.filter(function (tab) { return tab.category === category; });
+  }
 
   // Toggle category
-  const toggleCategory = (category: CategoryType) => {
+  function toggleCategory(category: CategoryType): void {
     if (expandedCategory === category) {
       // Don't close - just keep it open
       return;
     }
     setExpandedCategory(category);
-  };
+  }
 
   // Mobile menu toggle
-  const toggleMobileMenu = () => {
+  function toggleMobileMenu(): void {
     setIsMobileMenuOpen(!isMobileMenuOpen);
-  };
+  }
 
   return (
     <div className="flex flex-col md:flex-row h-full">

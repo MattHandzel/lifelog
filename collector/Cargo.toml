@@ -11,7 +11,7 @@ workspace = true
 utils = { path = "../common/utils" }
 config = { path = "../common/config" }
 lifelog-core = {path="../common/lifelog-core"}
-lifelog-proto = { path = "../common/lifelog-proto" }
+lifelog-types = { path = "../common/lifelog-types" }
 data-modalities = { path = "../common/data-modalities" } 
 
 # Inherit workspace dependencies where possible

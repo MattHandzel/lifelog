@@ -1,5 +1,5 @@
 use lifelog_core::*;
-use lifelog_proto::DataModality;
+use lifelog_types::DataModality;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 
@@ -23,8 +23,8 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD timestamp  ON `{table}` TYPE datetime;
             DEFINE FIELD width      ON `{table}` TYPE int;
             DEFINE FIELD height     ON `{table}` TYPE int;
-            DEFINE FIELD image_bytes ON `{table}` TYPE bytes;
-            DEFINE FIELD mime_type  ON `{table}` TYPE string;
+            DEFINE FIELD imageBytes ON `{table}` TYPE string;
+            DEFINE FIELD mimeType   ON `{table}` TYPE string;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
@@ -36,7 +36,7 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
             DEFINE FIELD url         ON `{table}` TYPE string;
             DEFINE FIELD title       ON `{table}` TYPE string;
-            DEFINE FIELD visit_count ON `{table}` TYPE int;
+            DEFINE FIELD visitCount  ON `{table}` TYPE int;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
@@ -59,11 +59,11 @@ static SCHEMAS: &[TableSchema] = &[
         modality: DataModality::Audio,
         fields_ddl: r#"
             DEFINE FIELD timestamp     ON `{table}` TYPE datetime;
-            DEFINE FIELD audio_bytes  ON `{table}` TYPE bytes;
+            DEFINE FIELD audioBytes    ON `{table}` TYPE string;
             DEFINE FIELD codec         ON `{table}` TYPE string;
-            DEFINE FIELD sample_rate   ON `{table}` TYPE int;
+            DEFINE FIELD sampleRate    ON `{table}` TYPE int;
             DEFINE FIELD channels      ON `{table}` TYPE int;
-            DEFINE FIELD duration_secs ON `{table}` TYPE float;
+            DEFINE FIELD durationSecs  ON `{table}` TYPE float;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
@@ -75,7 +75,7 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD timestamp    ON `{table}` TYPE datetime;
             DEFINE FIELD text         ON `{table}` TYPE string;
             DEFINE FIELD application  ON `{table}` TYPE string;
-            DEFINE FIELD window_title ON `{table}` TYPE string;
+            DEFINE FIELD windowTitle  ON `{table}` TYPE string;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
@@ -87,8 +87,8 @@ static SCHEMAS: &[TableSchema] = &[
         fields_ddl: r#"
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
             DEFINE FIELD text        ON `{table}` TYPE string;
-            DEFINE FIELD binary_data ON `{table}` TYPE bytes;
-            DEFINE FIELD mime_type   ON `{table}` TYPE string;
+            DEFINE FIELD binaryData  ON `{table}` TYPE string;
+            DEFINE FIELD mimeType    ON `{table}` TYPE string;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
@@ -100,8 +100,8 @@ static SCHEMAS: &[TableSchema] = &[
         fields_ddl: r#"
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
             DEFINE FIELD command     ON `{table}` TYPE string;
-            DEFINE FIELD working_dir ON `{table}` TYPE string;
-            DEFINE FIELD exit_code   ON `{table}` TYPE int;
+            DEFINE FIELD workingDir  ON `{table}` TYPE string;
+            DEFINE FIELD exitCode    ON `{table}` TYPE int;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
@@ -113,22 +113,22 @@ static SCHEMAS: &[TableSchema] = &[
         fields_ddl: r#"
             DEFINE FIELD timestamp     ON `{table}` TYPE datetime;
             DEFINE FIELD application   ON `{table}` TYPE string;
-            DEFINE FIELD window_title  ON `{table}` TYPE string;
+            DEFINE FIELD windowTitle   ON `{table}` TYPE string;
             DEFINE FIELD focused       ON `{table}` TYPE bool;
-            DEFINE FIELD duration_secs ON `{table}` TYPE float;
+            DEFINE FIELD durationSecs  ON `{table}` TYPE float;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_app_idx` ON `{table}` FIELDS application SEARCH ANALYZER SIMPLE BM25;
-            DEFINE INDEX `{table}_win_idx` ON `{table}` FIELDS window_title SEARCH ANALYZER SIMPLE BM25;
+            DEFINE INDEX `{table}_win_idx` ON `{table}` FIELDS windowTitle SEARCH ANALYZER SIMPLE BM25;
         "#,
     },
     TableSchema {
         modality: DataModality::Mouse,
         fields_ddl: r#"
             DEFINE FIELD timestamp      ON `{table}` TYPE datetime;
-            DEFINE FIELD activity_level ON `{table}` TYPE int;
-            DEFINE FIELD button_mask    ON `{table}` TYPE int;
+            DEFINE FIELD activityLevel  ON `{table}` TYPE int;
+            DEFINE FIELD buttonMask     ON `{table}` TYPE int;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
@@ -139,6 +139,11 @@ static SCHEMAS: &[TableSchema] = &[
 /// Upload chunks metadata table schema.
 static CHUNKS_DDL: &str = r#"
     DEFINE TABLE upload_chunks SCHEMALESS;
+"#;
+
+static WATERMARKS_DDL: &str = r#"
+    DEFINE TABLE watermarks SCHEMAFULL;
+    DEFINE FIELD last_timestamp ON watermarks TYPE datetime;
 "#;
 
 /// Look up the schema definition for a given modality.
@@ -198,6 +203,16 @@ pub(crate) async fn ensure_chunks_schema(db: &Surreal<Client>) -> surrealdb::Res
     Ok(())
 }
 
+/// Ensure the watermarks table exists.
+pub(crate) async fn ensure_watermarks_schema(db: &Surreal<Client>) -> surrealdb::Result<()> {
+    if CREATED_TABLES.contains("watermarks") {
+        return Ok(());
+    }
+    db.query(WATERMARKS_DDL).await?.check()?;
+    CREATED_TABLES.insert("watermarks".to_string());
+    Ok(())
+}
+
 /// Run all schema migrations at startup.
 /// Creates tables for every known origin already in the database
 /// and ensures the chunks metadata table exists.
@@ -206,6 +221,11 @@ pub(crate) async fn run_startup_migrations(db: &Surreal<Client>) -> Result<(), L
     ensure_chunks_schema(db)
         .await
         .map_err(|e| LifelogError::Database(format!("chunks schema: {}", e)))?;
+
+    // Ensure watermarks table
+    ensure_watermarks_schema(db)
+        .await
+        .map_err(|e| LifelogError::Database(format!("watermarks schema: {}", e)))?;
 
     // Ensure tables for any existing origins
     let origins = crate::db::get_origins_from_db(db).await?;

@@ -1,8 +1,8 @@
 use lifelog_core::*;
 
 use lifelog_core::{DataOrigin, DataOriginType, LifelogImage, Transform, TransformError};
-use lifelog_proto::DataModality;
-pub use lifelog_proto::OcrFrame;
+use lifelog_types::DataModality;
+pub use lifelog_types::OcrFrame;
 use rusty_tesseract::{Args, Image};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;

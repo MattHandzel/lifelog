@@ -19,7 +19,7 @@ interface Process {
   timestamp?: number;
 }
 
-export default function ProcessesDashboard() {
+export default function ProcessesDashboard(): JSX.Element {
   const [processes, setProcesses] = useState<Process[]>([]);
   const [processHistory, setProcessHistory] = useState<Process[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -32,32 +32,32 @@ export default function ProcessesDashboard() {
   const [historyLimit, setHistoryLimit] = useState(100);
   const [activeTab, setActiveTab] = useState('current');
 
-  useEffect(() => {
+  useEffect(function () {
     loadProcesses();
     let intervalId: number | undefined;
     if (autoRefresh && activeTab === 'current') {
       intervalId = window.setInterval(loadProcesses, 5000);
     }
-    return () => {
+    return function () {
       if (intervalId !== undefined) {
         clearInterval(intervalId);
       }
     };
   }, [autoRefresh, activeTab]);
 
-  async function loadProcesses() {
+  async function loadProcesses(): Promise<void> {
     console.warn('Processes: not yet implemented via gRPC');
     setProcesses([]);
     setIsLoading(false);
   }
 
-  async function loadProcessHistory() {
+  async function loadProcessHistory(): Promise<void> {
     console.warn('Process history: not yet implemented via gRPC');
     setProcessHistory([]);
     setIsHistoryLoading(false);
   }
 
-  function toggleSort(field: keyof Process) {
+  function toggleSort(field: keyof Process): void {
     if (field === sortField) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
