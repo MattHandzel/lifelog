@@ -1,8 +1,8 @@
 use crate::data_source::*;
-use lifelog_core::LifelogError;
 use async_trait::async_trait;
 use chrono::Utc;
 use config::BrowserHistoryConfig;
+use lifelog_core::LifelogError;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{fs, io::Read};
 
@@ -67,7 +67,8 @@ impl BrowserHistorySource {
             + ts.timestamp_subsec_micros() as i64
             + WINDOWS_EPOCH_MICROS;
 
-        let conn = Connection::open(history_path).map_err(|e| LifelogError::Sqlite(e.to_string()))?;
+        let conn =
+            Connection::open(history_path).map_err(|e| LifelogError::Sqlite(e.to_string()))?;
 
         let mut stmt = conn
             .prepare(

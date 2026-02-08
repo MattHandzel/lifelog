@@ -1,13 +1,15 @@
+#![allow(clippy::print_stdout)]
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
 mod harness;
 
 use harness::TestContext;
-use lifelog_types::{ScreenFrame, BrowserFrame, QueryRequest, Query, GetDataRequest, };
-use lifelog_core::{Utc};
+use lifelog_core::Utc;
+use lifelog_types::{BrowserFrame, GetDataRequest, Query, QueryRequest, ScreenFrame};
 use prost::Message;
 
 #[tokio::test]
+#[ignore = "integration test: requires SurrealDB"]
 async fn test_cross_modal_query() {
     let _ = tracing_subscriber::fmt::try_init();
     let ctx = TestContext::new().await;
@@ -70,10 +72,16 @@ async fn test_cross_modal_query() {
     };
 
     let stream_screen = tokio_stream::iter(vec![screen_chunk]);
-    client.upload_chunks(stream_screen).await.expect("Ingest screen failed");
+    client
+        .upload_chunks(stream_screen)
+        .await
+        .expect("Ingest screen failed");
 
     let stream_browser = tokio_stream::iter(vec![browser_chunk]);
-    client.upload_chunks(stream_browser).await.expect("Ingest browser failed");
+    client
+        .upload_chunks(stream_browser)
+        .await
+        .expect("Ingest browser failed");
 
     // Wait for indexing
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -94,25 +102,29 @@ async fn test_cross_modal_query() {
         .expect("DB Select failed");
 
     let table = format!("{}:Browser", collector_id);
-    let mut db_resp = db.query(format!("SELECT * FROM `{table}`")).await.expect("Debug query failed");
+    let mut db_resp = db
+        .query(format!("SELECT * FROM `{table}`"))
+        .await
+        .expect("Debug query failed");
     let all_browser: Vec<lifelog_types::BrowserRecord> = db_resp.take(0).expect("Take failed");
     println!("DEBUG: All browser records in {}: {:?}", table, all_browser);
 
     // 3. Perform Unified Search via Query and GetData
-    
+
     // Search for "Rust"
     let query = Query {
         text: vec!["Rust".to_string()],
         ..Default::default()
     };
-    let search_req = QueryRequest {
-        query: Some(query),
-    };
+    let search_req = QueryRequest { query: Some(query) };
 
     let response = client.query(search_req).await.expect("Query failed");
     let keys = response.into_inner().keys;
 
-    assert!(!keys.is_empty(), "Should have found at least one match for 'Rust'");
+    assert!(
+        !keys.is_empty(),
+        "Should have found at least one match for 'Rust'"
+    );
 
     // Get data for these keys
     let get_data_req = GetDataRequest { keys };
@@ -127,7 +139,10 @@ async fn test_cross_modal_query() {
             false
         }
     });
-    assert!(has_browser_result, "Should have returned the browser result");
+    assert!(
+        has_browser_result,
+        "Should have returned the browser result"
+    );
 
     // Search for everything (all modalities)
     let query_all = Query {

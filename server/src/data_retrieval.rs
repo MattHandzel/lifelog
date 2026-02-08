@@ -189,12 +189,19 @@ pub(crate) async fn get_keys_after_timestamp(
         .take(0)
         .map_err(|e| LifelogError::Database(format!("take(0) failed: {}", e)))?;
 
-
     let keys = res
         .into_iter()
         .filter_map(|v| {
-            let id_str = v.id.id.to_string().trim_matches('⟨').trim_matches('⟩').to_string();
-            id_str.parse::<Uuid>().ok().map(|uuid| LifelogFrameKey::new(uuid, origin.clone()))
+            let id_str =
+                v.id.id
+                    .to_string()
+                    .trim_matches('⟨')
+                    .trim_matches('⟩')
+                    .to_string();
+            id_str
+                .parse::<Uuid>()
+                .ok()
+                .map(|uuid| LifelogFrameKey::new(uuid, origin.clone()))
         })
         .collect();
     Ok(keys)

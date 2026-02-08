@@ -50,7 +50,7 @@ impl IngestBackend for SurrealIngestBackend {
                     DataModality::Screen.as_str_name().to_string(),
                 );
 
-                if let Ok(_) = ensure_table_schema(&db, &origin).await {
+                if ensure_table_schema(&db, &origin).await.is_ok() {
                     let table = origin.get_table_name();
                     let id = frame.uuid.clone();
                     let record = frame.to_record();
@@ -90,7 +90,7 @@ impl IngestBackend for SurrealIngestBackend {
                     DataModality::Browser.as_str_name().to_string(),
                 );
 
-                if let Ok(_) = ensure_table_schema(&db, &origin).await {
+                if ensure_table_schema(&db, &origin).await.is_ok() {
                     let table = origin.get_table_name();
                     let id = frame.uuid.clone();
                     let record = frame.to_record();

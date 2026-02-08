@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use config::TlsConfig;
 use lifelog_core::uuid::Uuid;
-use lifelog_server::server::GRPCServerLifelogServerService;
+use lifelog_server::grpc_service::GRPCServerLifelogServerService;
 use lifelog_server::server::ServerHandle as LifelogServerHandle;
 use lifelog_types::lifelog_server_service_server::LifelogServerServiceServer;
 

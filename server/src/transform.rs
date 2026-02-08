@@ -1,6 +1,6 @@
 use data_modalities::ocr::OcrTransform;
 use lifelog_core::{DataOrigin, DateTime, LifelogFrameKey, LifelogImage, Transform, Utc};
-use lifelog_types::{OcrFrame, ToRecord};
+use lifelog_types::ToRecord;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 
@@ -24,6 +24,7 @@ impl LifelogTransform {
         }
     }
 
+    #[allow(dead_code)]
     pub fn destination(&self) -> DataOrigin {
         match self {
             LifelogTransform::OcrTransform(t) => t.destination(),

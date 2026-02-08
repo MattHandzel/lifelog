@@ -79,10 +79,26 @@ mod tests {
         let delta = Duration::seconds(5);
 
         assert!(within_interval(base, interval, delta));
-        assert!(within_interval(base - Duration::seconds(5), interval, delta));
-        assert!(!within_interval(base - Duration::seconds(6), interval, delta));
-        assert!(within_interval(base + Duration::seconds(15), interval, delta));
-        assert!(!within_interval(base + Duration::seconds(16), interval, delta));
+        assert!(within_interval(
+            base - Duration::seconds(5),
+            interval,
+            delta
+        ));
+        assert!(!within_interval(
+            base - Duration::seconds(6),
+            interval,
+            delta
+        ));
+        assert!(within_interval(
+            base + Duration::seconds(15),
+            interval,
+            delta
+        ));
+        assert!(!within_interval(
+            base + Duration::seconds(16),
+            interval,
+            delta
+        ));
     }
 
     #[test]

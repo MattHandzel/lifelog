@@ -5,12 +5,14 @@ pub enum ExecutionPlan {
     /// A single SurrealQL query string.
     SimpleQuery(String),
     /// Placeholder for multi-stage plans.
+    #[allow(dead_code)]
     Unsupported(String),
 }
 
 pub struct Planner;
 
 impl Planner {
+    #[allow(dead_code)]
     pub fn plan(query: &Query) -> ExecutionPlan {
         let table = match &query.target {
             StreamSelector::Modality(m) => m.clone(),

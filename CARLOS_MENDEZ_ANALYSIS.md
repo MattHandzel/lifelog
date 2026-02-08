@@ -42,7 +42,7 @@ Today’s implementation diverges on the most ops-critical parts (install/run-as
   - `x86_64-linux`
   - `x86_64-darwin`
   - `aarch64-darwin`
-  (`flake.nix`)
+    (`flake.nix`)
 - No packaged artifacts for:
   - Windows (CI matrix comments out `windows-latest`)
   - Debian/RPM/Arch packages
@@ -94,7 +94,7 @@ Today’s implementation diverges on the most ops-critical parts (install/run-as
 - Collector config is loaded from:
   - dev mode: `./dev-config.toml`
   - non-dev: `~/.config/lifelog/config.toml`
-  (`common/config/src/lib.rs`)
+    (`common/config/src/lib.rs`)
 - Config bootstrap is currently high-friction:
   - In non-dev mode, if the file doesn’t exist, the code panics before it can write a default (`common/config/src/lib.rs`).
 - There are gRPC methods for `GetConfig`/`SetConfig` on server and collector (`proto/lifelog.proto`), and UI code that expects to edit config.
@@ -193,7 +193,7 @@ Today’s implementation diverges on the most ops-critical parts (install/run-as
   - Windows is disabled in matrix.
   - Tests are commented out.
   - Linux uses `nix build` for server/collector only; macOS does `cargo build --release` for the whole workspace.
-  (`.github/workflows/ci.yml`)
+    (`.github/workflows/ci.yml`)
 
 ### Recommendations
 
@@ -224,7 +224,6 @@ Today’s implementation diverges on the most ops-critical parts (install/run-as
   - Data upload is collector-initiated and uses resumable chunking with durable offsets/acks.
 - Enrollment/pairing:
   - Replace MAC-based identity with a generated device keypair + backend-issued cert (mTLS) or a PSK token during enrollment.
-- Optional: LAN discovery via mDNS to simplify first-time pairing, but don’t rely on it for correctness.
 
 ## Highest-Leverage Fix List (In Priority Order)
 
@@ -244,4 +243,3 @@ P1 (prevents silent loss / reduces friction):
 P2 (fleet polish):
 
 - Cross-platform installers (Windows, more Linux distros), signing/notarization, mDNS-assisted pairing, and UI-driven enrollment.
-

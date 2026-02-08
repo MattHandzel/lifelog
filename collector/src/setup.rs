@@ -417,9 +417,11 @@ mod tests {
         let tmp = tempdir().unwrap();
         let db_path = tmp.path().join("test.db");
         let schema = "CREATE TABLE test (id INTEGER PRIMARY KEY)";
-        
+
         let conn = initialize_database(&db_path, schema).unwrap();
-        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='test'").unwrap();
+        let mut stmt = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='test'")
+            .unwrap();
         let exists: bool = stmt.exists([]).unwrap();
         assert!(exists);
     }
@@ -428,7 +430,9 @@ mod tests {
     fn test_setup_keyboard_db() {
         let tmp = tempdir().unwrap();
         let conn = setup_keyboard_db(tmp.path()).unwrap();
-        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='key_events'").unwrap();
+        let mut stmt = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='key_events'")
+            .unwrap();
         assert!(stmt.exists([]).unwrap());
     }
 }

@@ -12,15 +12,16 @@
 
 ## Build, Test, and Development Commands
 
-- `cargo check`: fast compile/typecheck for the Rust workspace (matches CI intent).
-- `cargo build --release`: build optimized binaries into `target/release/`.
-- `cargo run -p lifelog-server --bin lifelog-server-backend`: run the server backend.
-- `cargo run -p lifelog-collector`: run the collector.
-- `cargo test`: run Rust unit/integration tests (add tests as features stabilize).
-- `nix develop`: enter a dev shell with native deps (e.g., protobuf/tesseract on Linux).
-- `nix build .#lifelog-server` / `nix build .#lifelog-collector`: reproducible builds on Linux.
-- `cd interface && npm ci && npm run dev`: run the web UI locally.
-- `cd interface && npm run build`: typecheck (`tsc`) and build the UI bundle.
+**ALL COMMANDS MUST RUN WITHIN `nix develop`.** Prefer using `just` recipes which wrap the necessary nix context.
+
+- `just check`: fast compile/typecheck for the Rust workspace (matches CI intent).
+- `just validate`: full gate including fmt, check, clippy, and unit tests.
+- `just run-server`: run the server backend.
+- `just run-collector`: run the collector.
+- `just test`: run Rust unit tests.
+- `just test-e2e`: run full integration suite (requires SurrealDB).
+- `nix develop --command cargo test -p <pkg> --test <test_name> -- --include-ignored`: run specific ignored integration tests.
+- `cd interface && npm run dev`: run the web UI locally (ensure server is running).
 
 ## Coding Style & Naming Conventions
 

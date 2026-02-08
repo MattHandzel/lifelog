@@ -1,20 +1,13 @@
-use lifelog_core::*;
+use crate::ingest::SurrealIngestBackend;
+use crate::server::ServerHandle;
+use futures_core::Stream;
 use lifelog_types::lifelog_server_service_server::LifelogServerService;
-use lifelog_types::{
-    Ack, Chunk, ControlMessage, GetDataRequest, GetDataResponse, GetStateRequest,
-    GetSystemConfigRequest, GetSystemConfigResponse, GetSystemStateResponse,
-    GetUploadOffsetRequest, GetUploadOffsetResponse, QueryRequest, QueryResponse, ServerCommand,
-    SetSystemConfigRequest, SetSystemConfigResponse,
-};
-use tokio::sync::mpsc;
+use lifelog_types::*;
+use std::pin::Pin;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::{Request, Response, Status, Streaming};
-use tonic::{Response as TonicResponse, Status as TonicStatus};
 use utils::ingest::ChunkIngester;
-
-use crate::ingest::SurrealIngestBackend;
-use crate::server::{RegisteredCollector, ServerHandle};
 
 pub struct GRPCServerLifelogServerService {
     pub server: ServerHandle,
@@ -22,87 +15,80 @@ pub struct GRPCServerLifelogServerService {
 
 #[tonic::async_trait]
 impl LifelogServerService for GRPCServerLifelogServerService {
-    type ControlStreamStream = ReceiverStream<Result<ServerCommand, Status>>;
+    type ControlStreamStream = Pin<Box<dyn Stream<Item = Result<ServerCommand, Status>> + Send>>;
 
     async fn control_stream(
         &self,
         request: Request<Streaming<ControlMessage>>,
     ) -> Result<Response<Self::ControlStreamStream>, Status> {
-        let mut in_stream = request.into_inner();
-        let (tx, rx) = mpsc::channel::<Result<ServerCommand, Status>>(128);
+        let mut stream = request.into_inner();
+        let (tx, rx) = tokio::sync::mpsc::channel(128);
         let server_handle = self.server.clone();
 
         tokio::spawn(async move {
-            let mut collector_id: Option<String> = None;
-
-            while let Some(result) = in_stream.next().await {
-                match result {
+            while let Some(msg_result) = stream.next().await {
+                match msg_result {
                     Ok(msg) => {
-                        collector_id = Some(msg.collector_id.clone());
-                        if let Some(payload) = msg.msg {
-                            match payload {
-                                lifelog_types::control_message::Msg::Register(reg) => {
-                                    if let Some(config) = reg.config {
-                                        let registered = RegisteredCollector {
-                                            id: config.id.clone(),
-                                            mac: config.id.clone(),
-                                            address: String::new(), // Address no longer needed for dial-back
-                                            command_tx: tx.clone(),
-                                            latest_config: Some(config),
-                                        };
-                                        server_handle.register_collector(registered).await;
-                                        tracing::info!(id = %msg.collector_id, "Collector registered via ControlStream");
+                        let collector_id = msg.collector_id.clone();
+                        match msg.msg {
+                            Some(lifelog_types::control_message::Msg::Register(reg)) => {
+                                tracing::info!(id = %collector_id, "Registering collector");
+                                let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::channel(32);
+                                let registered = crate::server::RegisteredCollector {
+                                    id: collector_id.clone(),
+                                    address: "unknown".to_string(), // TODO: extract from peer
+                                    mac: collector_id.clone(),
+                                    command_tx: cmd_tx,
+                                    latest_config: reg.config,
+                                };
+                                server_handle.register_collector(registered).await;
+
+                                // Forward commands from server to this collector stream
+                                let tx_clone = tx.clone();
+                                tokio::spawn(async move {
+                                    while let Some(cmd) = cmd_rx.recv().await {
+                                        let _ = tx_clone.send(cmd).await;
                                     }
-                                }
-                                lifelog_types::control_message::Msg::State(state_req) => {
-                                    if let Some(state) = state_req.state {
-                                        let _ = server_handle.report_collector_state(state).await;
-                                    }
-                                }
-                                lifelog_types::control_message::Msg::Heartbeat(_) => {
-                                    tracing::debug!(id = ?collector_id, "Heartbeat received");
-                                }
-                                lifelog_types::control_message::Msg::SuggestUpload(suggest) => {
-                                    tracing::info!(id = %msg.collector_id, ?suggest, "SuggestUpload received");
+                                });
+                            }
+                            Some(lifelog_types::control_message::Msg::State(report)) => {
+                                if let Some(state) = report.state {
+                                    server_handle.report_collector_state(state).await;
                                 }
                             }
+                            _ => {}
                         }
                     }
                     Err(e) => {
-                        tracing::error!("ControlStream error: {}", e);
+                        tracing::error!("Control stream error: {}", e);
                         break;
                     }
                 }
             }
-
-            if let Some(id) = collector_id {
-                server_handle.remove_collector(&id).await;
-                tracing::info!(id = %id, "Collector ControlStream closed");
-            }
+            tracing::warn!("Collector disconnected from ControlStream");
         });
 
-        Ok(Response::new(ReceiverStream::new(rx)))
+        Ok(Response::new(
+            Box::pin(ReceiverStream::new(rx)) as Self::ControlStreamStream
+        ))
     }
 
     async fn get_config(
         &self,
-        _request: tonic::Request<GetSystemConfigRequest>,
-    ) -> Result<TonicResponse<GetSystemConfigResponse>, TonicStatus> {
-        let system_config =
-            self.server.get_system_config().await.map_err(|e| {
-                TonicStatus::internal(format!("Failed to get system config: {}", e))
-            })?;
-        Ok(TonicResponse::new(GetSystemConfigResponse {
-            config: Some(system_config),
+        _request: Request<GetSystemConfigRequest>,
+    ) -> Result<Response<GetSystemConfigResponse>, Status> {
+        let config = self.server.get_config().await;
+        Ok(Response::new(GetSystemConfigResponse {
+            config: Some(config),
         }))
     }
 
     async fn set_config(
         &self,
-        _request: tonic::Request<SetSystemConfigRequest>,
-    ) -> Result<TonicResponse<SetSystemConfigResponse>, TonicStatus> {
+        _request: Request<SetSystemConfigRequest>,
+    ) -> Result<Response<SetSystemConfigResponse>, Status> {
         tracing::info!("Received set config request");
-        Ok(TonicResponse::new(SetSystemConfigResponse::default()))
+        Ok(Response::new(SetSystemConfigResponse::default()))
     }
 
     async fn query(
@@ -116,7 +102,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             .server
             .process_query(query_message)
             .await
-            .map_err(|e| tonic::Status::internal(format!("Failed to process query: {}", e)))?;
+            .map_err(|e| Status::internal(format!("Failed to process query: {}", e)))?;
         let proto_keys: Vec<lifelog_types::LifelogDataKey> = keys
             .iter()
             .map(|key| lifelog_types::LifelogDataKey {
@@ -136,20 +122,12 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         let inner_request = request.into_inner();
         tracing::info!(count = inner_request.keys.len(), "Received GetDataRequest");
 
-        let _server_arc = self.server.clone(); // Clone Arc for use in spawn_blocking
         let keys = inner_request.keys;
-
-        let data: Vec<lifelog_types::LifelogData> = self
+        let data = self
             .server
-            .get_data(
-                keys.into_iter()
-                    .map(|k| k.try_into())
-                    .collect::<Result<Vec<_>, _>>()
-                    .map_err(|e| Status::invalid_argument(format!("Invalid key: {e}")))?,
-            )
+            .get_data(keys)
             .await
-            .map_err(|e| Status::internal(format!("Failed to get data: {}", e)))?
-            .to_vec();
+            .map_err(|e| Status::internal(format!("Failed to get data: {}", e)))?;
 
         let response = GetDataResponse { data };
         tracing::info!(count = response.data.len(), "GetData response");
@@ -158,15 +136,11 @@ impl LifelogServerService for GRPCServerLifelogServerService {
 
     async fn get_state(
         &self,
-        _request: tonic::Request<GetStateRequest>,
-    ) -> Result<TonicResponse<GetSystemStateResponse>, TonicStatus> {
+        _request: Request<GetStateRequest>,
+    ) -> Result<Response<GetSystemStateResponse>, Status> {
         tracing::debug!("Received get state request");
         let state = self.server.get_state().await;
-        //let proto_state = s
-        Ok(TonicResponse::new(GetSystemStateResponse {
-            state: Some(state), // TODO: Replace this with the system state
-                                // instead of the server state (i need some work with the proto files)
-        }))
+        Ok(Response::new(GetSystemStateResponse { state: Some(state) }))
     }
 
     async fn upload_chunks(
@@ -200,19 +174,22 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                     stream_id.collector_id.clone(),
                     stream_id.stream_id.clone(),
                     stream_id.session_id,
-                    chunk.offset,
+                    0, // start_offset
                 ));
             }
 
             if let Some(ref mut ing) = ingester {
-                let next_offset = ing
+                match ing
                     .apply_chunk(chunk.offset, &chunk.data, &chunk.hash)
                     .await
-                    .map_err(|e| Status::invalid_argument(format!("Ingest error: {}", e)))?;
-
-                // REQ-014: ACK only if fully indexed (durable ACK gate)
-                if ing.is_chunk_indexed(chunk.offset).await {
-                    last_acked_offset = next_offset;
+                {
+                    Ok(_) => {
+                        last_acked_offset = chunk.offset + chunk.data.len() as u64;
+                    }
+                    Err(e) => {
+                        tracing::error!("Ingest error: {}", e);
+                        return Err(Status::internal(format!("Ingest error: {}", e)));
+                    }
                 }
             }
         }
@@ -234,7 +211,6 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             .ok_or_else(|| Status::invalid_argument("missing stream identity"))?;
         let db = self.server.server.read().await.db.clone();
 
-        // Find the highest offset for this session in the 'upload_chunks' table
         let mut response = db.query("SELECT * FROM upload_chunks WHERE collector_id = $c AND stream_id = $s AND session_id = $sess ORDER BY offset DESC LIMIT 1")
             .bind(("c", stream_id.collector_id.clone()))
             .bind(("s", stream_id.stream_id.clone()))
@@ -248,11 +224,11 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             length: u64,
         }
 
-        let records: Vec<RawOffset> = response
+        let results: Vec<RawOffset> = response
             .take(0)
-            .map_err(|e| Status::internal(format!("Parse error: {}", e)))?;
+            .map_err(|e| Status::internal(format!("Database take error: {}", e)))?;
 
-        let offset = records.first().map(|r| r.offset + r.length).unwrap_or(0);
+        let offset = results.first().map(|r| r.offset + r.length).unwrap_or(0);
 
         Ok(Response::new(GetUploadOffsetResponse { offset }))
     }

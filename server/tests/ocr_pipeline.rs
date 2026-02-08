@@ -1,10 +1,11 @@
+#![allow(clippy::print_stdout)]
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
 mod harness;
 
 use harness::TestContext;
-use lifelog_types::{ScreenFrame,  DataModality};
 use lifelog_core::{DataOrigin, DataOriginType, Utc};
+use lifelog_types::{DataModality, ScreenFrame};
 use prost::Message;
 use std::time::Duration;
 
@@ -58,7 +59,7 @@ async fn test_ocr_transformation_pipeline() {
 
     // 2. Wait for ServerPolicy to trigger transformation
     // Server loop runs every 100ms. OcrTransform watermark polling should pick it up.
-    
+
     let mut success = false;
     let destination_origin = DataOrigin::new(
         DataOriginType::DataOrigin(Box::new(DataOrigin::new(
@@ -89,12 +90,13 @@ async fn test_ocr_transformation_pipeline() {
 
     for i in 0..20 {
         tokio::time::sleep(Duration::from_secs(1)).await;
-        
-        let mut response = db.query(format!("SELECT count() FROM `{table}` WHERE uuid = $uuid"))
+
+        let mut response = db
+            .query(format!("SELECT count() FROM `{table}` WHERE uuid = $uuid"))
             .bind(("uuid", frame_uuid.clone()))
             .await
             .expect("Query failed");
-        
+
         let results: Vec<serde_json::Value> = response.take(0).expect("Take failed");
         if let Some(count_obj) = results.first() {
             let count = count_obj.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
@@ -106,5 +108,8 @@ async fn test_ocr_transformation_pipeline() {
         }
     }
 
-    assert!(success, "OCR transformation did not complete within timeout");
+    assert!(
+        success,
+        "OCR transformation did not complete within timeout"
+    );
 }

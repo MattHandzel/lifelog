@@ -21,13 +21,26 @@ Use `just` recipes (which wrap nix) instead of raw cargo.
 **Proto-first:** `.proto` files are the single source of truth for Config, State,
 and DataModality types. Rust types generated via `prost`/`tonic-build`.
 
+**Unified Trait Model:** `DataType` and `Modality` provide basic identity. 
+`ToRecord` (guarded by `surrealdb` feature in `lifelog-types`) provides 
+SurrealDB 2.x friendly record types to avoid generic `serde_json` serialization 
+issues with native types like `datetime` and `bytes`.
+
+**Catalog System:** Explicit `catalog` table in SurrealDB tracks registered 
+origins. Avoids expensive `INFO FOR DB` discovery during query execution.
+
 See @README.md for project overview.
 
 ## Conventions
 
 - **Commit style:** `type: short description` (feat/fix/refactor/docs/tests/build)
-- **Error handling:** `thiserror` in libraries, `anyhow` only in binary crates
-- **Testing:** `just test` for unit, `just test-e2e` for integration (needs SurrealDB at `127.0.0.1:7183`)
+- **Error handling:** Unified `LifelogError` in `lifelog-core`. `thiserror` in libraries, `anyhow` only in binary crates.
+- **Testing:** 
+  - `just test`: Unit tests.
+  - `just test-e2e`: Comprehensive integration suite.
+  - `server/tests/ocr_pipeline.rs`: End-to-end transformation test.
+  - `server/tests/cross_modal_query.rs`: Unified search verification.
+  - `server/tests/performance_suite.rs`: Throughput and latency baselines.
 - **Seesion End**: At the end of the session, commit, push, and merge your changes into main.
 
 ## IMPORTANT: Anti-Patterns

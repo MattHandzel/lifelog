@@ -439,7 +439,7 @@ pub use helpers::*;
 #[allow(clippy::unwrap_used, clippy::print_stdout)]
 mod tests {
     use super::*;
-    use lifelog_core::{Utc, Validate};
+    use lifelog_core::Validate;
 
     #[test]
     fn test_serialize_timestamp() {
@@ -453,7 +453,10 @@ mod tests {
     fn test_screen_to_record() {
         let frame = ScreenFrame {
             uuid: lifelog_core::Uuid::new_v4().to_string(),
-            timestamp: Some(::pbjson_types::Timestamp { seconds: 12345, nanos: 0 }),
+            timestamp: Some(::pbjson_types::Timestamp {
+                seconds: 12345,
+                nanos: 0,
+            }),
             width: 1920,
             height: 1080,
             image_bytes: vec![1, 2, 3],
@@ -471,7 +474,10 @@ mod tests {
     fn test_browser_to_record() {
         let frame = BrowserFrame {
             uuid: lifelog_core::Uuid::new_v4().to_string(),
-            timestamp: Some(::pbjson_types::Timestamp { seconds: 12345, nanos: 0 }),
+            timestamp: Some(::pbjson_types::Timestamp {
+                seconds: 12345,
+                nanos: 0,
+            }),
             url: "http://test".to_string(),
             title: "title".to_string(),
             visit_count: 5,

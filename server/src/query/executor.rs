@@ -10,7 +10,7 @@ pub async fn execute(
     match plan {
         ExecutionPlan::SimpleQuery(sql) => {
             tracing::debug!(sql = %sql, "Executing query");
-            
+
             // Extract table from SQL query string before moving sql
             let table = sql.split('`').nth(1).unwrap_or("unknown").to_string();
 
@@ -27,7 +27,7 @@ pub async fn execute(
             let mut keys = Vec::new();
             for res in results {
                 let id_str = res.uuid;
-                
+
                 if let Ok(uuid) = id_str.parse::<lifelog_core::uuid::Uuid>() {
                     if let Ok(origin) = lifelog_core::DataOrigin::tryfrom_string(table.clone()) {
                         keys.push(LifelogFrameKey { uuid, origin });
