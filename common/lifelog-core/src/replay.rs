@@ -62,6 +62,28 @@ mod tests {
     use crate::chrono::{Duration, TimeZone};
 
     #[test]
+    fn replay_steps_empty_returns_empty() {
+        let end = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+        let steps = build_replay_steps(vec![], end);
+        assert!(steps.is_empty());
+    }
+
+    #[test]
+    fn replay_steps_frame_at_window_end() {
+        let t0 = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+        let steps = build_replay_steps(vec![t0], t0);
+        assert!(steps.is_empty());
+    }
+
+    #[test]
+    fn replay_steps_frame_after_window_end() {
+        let t0 = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+        let end = t0 - Duration::seconds(1);
+        let steps = build_replay_steps(vec![t0], end);
+        assert!(steps.is_empty());
+    }
+
+    #[test]
     fn replay_steps_multi_frame_maps_to_intervals() {
         let t0 = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
         let t1 = t0 + Duration::seconds(10);

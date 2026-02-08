@@ -76,9 +76,15 @@ impl TestContext {
 
         let server = Server::new(&config).await.expect("Failed to create server");
         let server_handle = Arc::new(RwLock::new(server));
+        let handle_clone = ServerHandle::new(server_handle.clone());
         let grpc_service = GRPCServerLifelogServerService {
-            server: ServerHandle::new(server_handle),
+            server: handle_clone.clone(),
         };
+
+        // Start server background loop
+        tokio::spawn(async move {
+            handle_clone.r#loop().await;
+        });
 
         let addr = format!("127.0.0.1:{}", server_port).parse().unwrap();
         let fault_layer = FaultInjectionLayer::new(fault_controller.clone());

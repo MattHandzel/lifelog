@@ -35,36 +35,59 @@ pub(crate) async fn get_data_by_key(
 
     match modality {
         DataModality::Screen => {
-            let mut frame: lifelog_types::ScreenFrame = db
+            let frame_record: lifelog_types::ScreenRecord = db
                 .select((&table, &*id))
                 .await
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
-            frame.uuid = key.uuid.to_string();
+
+            let frame = lifelog_types::ScreenFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                width: frame_record.width,
+                height: frame_record.height,
+                image_bytes: frame_record.image_bytes.into(),
+                mime_type: frame_record.mime_type,
+            };
+
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Screenframe(frame)),
             })
         }
-        DataModality::Ocr => {
-            let mut frame: lifelog_types::OcrFrame = db
-                .select((&table, &*id))
-                .await
-                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
-                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
-            frame.uuid = key.uuid.to_string();
-            Ok(lifelog_types::LifelogData {
-                payload: Some(lifelog_types::lifelog_data::Payload::Ocrframe(frame)),
-            })
-        }
         DataModality::Browser => {
-            let mut frame: lifelog_types::BrowserFrame = db
+            let frame_record: lifelog_types::BrowserRecord = db
                 .select((&table, &*id))
                 .await
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
-            frame.uuid = key.uuid.to_string();
+
+            let frame = lifelog_types::BrowserFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                url: frame_record.url,
+                title: frame_record.title,
+                visit_count: frame_record.visit_count,
+            };
+
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Browserframe(frame)),
+            })
+        }
+        DataModality::Ocr => {
+            let frame_record: lifelog_types::OcrRecord = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+
+            let frame = lifelog_types::OcrFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                text: frame_record.text,
+            };
+
+            Ok(lifelog_types::LifelogData {
+                payload: Some(lifelog_types::lifelog_data::Payload::Ocrframe(frame)),
             })
         }
         DataModality::Audio => {
@@ -141,6 +164,13 @@ pub(crate) async fn get_data_by_key(
 }
 
 #[allow(dead_code)]
+#[derive(serde::Deserialize, Debug)]
+struct KeyResult {
+    id: surrealdb::sql::Thing,
+    #[allow(dead_code)]
+    timestamp: surrealdb::sql::Datetime,
+}
+
 pub(crate) async fn get_keys_after_timestamp(
     db: &Surreal<Client>,
     origin: &DataOrigin,
@@ -149,19 +179,23 @@ pub(crate) async fn get_keys_after_timestamp(
 ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
     let table = validate_table_name(origin.get_table_name())?;
     let after_str = after.to_rfc3339();
-    let sql = format!("SELECT VALUE record::id(id) as uuid FROM `{table}` WHERE timestamp > '{after_str}' ORDER BY timestamp ASC LIMIT {limit}");
+    // In SurrealDB 2.x, if we want to ORDER BY a field, it must be part of the selection.
+    let sql = format!("SELECT id, timestamp FROM `{table}` WHERE timestamp > '{after_str}' ORDER BY timestamp ASC LIMIT {limit}");
 
-    let uuids: Vec<String> = db
+    let res: Vec<KeyResult> = db
         .query(sql)
         .await
         .map_err(|e| LifelogError::Database(format!("query failed: {}", e)))?
         .take(0)
         .map_err(|e| LifelogError::Database(format!("take(0) failed: {}", e)))?;
 
-    let uuids = uuids
+
+    let keys = res
         .into_iter()
-        .filter_map(|s| s.parse::<Uuid>().ok())
-        .map(|uuid| LifelogFrameKey::new(uuid, origin.clone()))
+        .filter_map(|v| {
+            let id_str = v.id.id.to_string().trim_matches('⟨').trim_matches('⟩').to_string();
+            id_str.parse::<Uuid>().ok().map(|uuid| LifelogFrameKey::new(uuid, origin.clone()))
+        })
         .collect();
-    Ok(uuids)
+    Ok(keys)
 }

@@ -44,56 +44,6 @@ impl<C: Send + Sync + Debug + 'static> fmt::Debug for RunningSource<C> {
     }
 }
 
-#[derive(Debug)]
-pub enum CollectorError {
-    SourceSetupError(String, Box<dyn std::error::Error + Send + Sync>),
-    GrpcConnectionError(tonic::transport::Error),
-    GrpcRequestError(tonic::Status),
-    NotConnected,
-    RegistrationFailed(String),
-    Other(String),
-}
-
-impl std::fmt::Display for CollectorError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            CollectorError::SourceSetupError(name, e) => {
-                write!(f, "Source '{}' setup failed: {}", name, e)
-            }
-            CollectorError::GrpcConnectionError(e) => write!(f, "gRPC connection failed: {}", e),
-            CollectorError::GrpcRequestError(s) => write!(f, "gRPC request failed: {}", s),
-            CollectorError::NotConnected => write!(f, "gRPC client not connected"),
-            CollectorError::RegistrationFailed(msg) => {
-                write!(f, "gRPC registration failed: {}", msg)
-            }
-            CollectorError::Other(msg) => write!(f, "Collector error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for CollectorError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            CollectorError::SourceSetupError(_, e) => Some(e.as_ref()),
-            CollectorError::GrpcConnectionError(e) => Some(e),
-            CollectorError::GrpcRequestError(s) => Some(s),
-            _ => None,
-        }
-    }
-}
-
-impl From<tonic::transport::Error> for CollectorError {
-    fn from(err: tonic::transport::Error) -> Self {
-        CollectorError::GrpcConnectionError(err)
-    }
-}
-
-impl From<tonic::Status> for CollectorError {
-    fn from(status: tonic::Status) -> Self {
-        CollectorError::GrpcRequestError(status)
-    }
-}
-
 pub struct Collector {
     task: Option<AbortHandle>,
     config: Arc<config::CollectorConfig>,
@@ -130,7 +80,7 @@ impl CollectorHandle {
         }
     }
 
-    pub async fn start(&self) -> Result<(), CollectorError> {
+    pub async fn start(&self) -> Result<(), LifelogError> {
         let collector = self.collector.clone();
         let mut collector = collector.write().await;
         collector.start().await
@@ -192,32 +142,18 @@ impl Collector {
         }
     }
 
-    pub async fn get_buffered_sources(&self) -> Vec<Arc<dyn BufferedSource>> {
-        let mut buffered = Vec::new();
-        for source in self.sources.values() {
-            if let Some(bs) = source.get_buffered_source().await {
-                buffered.push(bs);
-            }
-        }
-        buffered
-    }
-
-    pub fn get_upload_trigger_for_test(&self) -> mpsc::Sender<()> {
-        self.upload_trigger.clone()
-    }
-
-    pub async fn handshake(&mut self, handle: CollectorHandle) -> Result<(), CollectorError> {
+    pub async fn handshake(&mut self, handle: CollectorHandle) -> Result<(), LifelogError> {
         tracing::info!(addr = %self.server_address, "Attempting gRPC ControlStream connection");
 
         let mut endpoint = Endpoint::from_shared(self.server_address.clone())
-            .map_err(|e| CollectorError::Other(format!("Invalid server address: {}", e)))?
+            .map_err(|e| LifelogError::Database(format!("Invalid server address: {}", e)))?
             .connect_timeout(Duration::from_secs(10));
 
         if self.server_address.starts_with("https://") {
             let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
             endpoint = endpoint
                 .tls_config(tls)
-                .map_err(|e| CollectorError::Other(format!("TLS config error: {}", e)))?;
+                .map_err(|e| LifelogError::Database(format!("TLS config error: {}", e)))?;
             tracing::info!("TLS enabled for server connection");
         }
 
@@ -244,7 +180,7 @@ impl Collector {
         };
         tx.send(reg_msg)
             .await
-            .map_err(|_| CollectorError::Other("Failed to send registration".into()))?;
+            .map_err(|_| LifelogError::Database("Failed to send registration".to_string()))?;
 
         let stream_req = Request::new(ReceiverStreamWrapper::new(rx));
         let response = client.control_stream(stream_req).await?;
@@ -277,10 +213,10 @@ impl Collector {
 
     pub fn listen(&mut self) {}
 
-    pub async fn start(&mut self) -> Result<(), CollectorError> {
+    pub async fn start(&mut self) -> Result<(), LifelogError> {
         let config = Arc::clone(&self.config);
         self.sources.clear();
-        let mut setup_errors: Vec<CollectorError> = Vec::new();
+        let mut setup_errors: Vec<LifelogError> = Vec::new();
 
         if config.screen.as_ref().map(|s| s.enabled).unwrap_or(false) {
             let config_clone = Arc::clone(&self.config);
@@ -295,14 +231,13 @@ impl Collector {
                             .insert("screen".to_string(), Box::new(running_src));
                     }
                     Err(e) => {
-                        let err =
-                            CollectorError::SourceSetupError("screen".to_string(), Box::new(e));
+                        let err = LifelogError::SourceSetup("screen".to_string(), e.to_string());
                         tracing::error!("{}", err);
                         setup_errors.push(err);
                     }
                 },
                 Err(e) => {
-                    let err = CollectorError::SourceSetupError("screen".to_string(), Box::new(e));
+                    let err = LifelogError::SourceSetup("screen".to_string(), e.to_string());
                     tracing::error!("{}", err);
                     setup_errors.push(err);
                 }
@@ -322,14 +257,13 @@ impl Collector {
                             .insert("browser".to_string(), Box::new(running_src));
                     }
                     Err(e) => {
-                        let err =
-                            CollectorError::SourceSetupError("browser".to_string(), Box::new(e));
+                        let err = LifelogError::SourceSetup("browser".to_string(), e.to_string());
                         tracing::error!("{}", err);
                         setup_errors.push(err);
                     }
                 },
                 Err(e) => {
-                    let err = CollectorError::SourceSetupError("browser".to_string(), Box::new(e));
+                    let err = LifelogError::SourceSetup("browser".to_string(), e.to_string());
                     tracing::error!("{}", err);
                     setup_errors.push(err);
                 }
@@ -347,6 +281,20 @@ impl Collector {
         }
 
         Ok(())
+    }
+
+    pub async fn get_buffered_sources(&self) -> Vec<Arc<dyn BufferedSource>> {
+        let mut buffered = Vec::new();
+        for source in self.sources.values() {
+            if let Some(bs) = source.get_buffered_source().await {
+                buffered.push(bs);
+            }
+        }
+        buffered
+    }
+
+    pub fn get_upload_trigger_for_test(&self) -> mpsc::Sender<()> {
+        self.upload_trigger.clone()
     }
 
     async fn _get_state(&self) -> CollectorState {
@@ -406,7 +354,7 @@ impl Collector {
         }
     }
 
-    pub async fn report_state(&mut self) -> Result<(), CollectorError> {
+    pub async fn report_state(&mut self) -> Result<(), LifelogError> {
         let current_state = self._get_state().await;
         let mac_addr = get_mac_address()
             .ok()
@@ -429,11 +377,11 @@ impl Collector {
 
             tx.send(msg)
                 .await
-                .map_err(|_| CollectorError::Other("Failed to send state report".into()))?;
+                .map_err(|_| LifelogError::Database("Failed to send state report".to_string()))?;
             Ok(())
         } else {
             tracing::error!("Cannot report status: ControlStream not established");
-            Err(CollectorError::NotConnected)
+            Err(LifelogError::NotConnected)
         }
     }
 
@@ -454,7 +402,7 @@ impl Collector {
         tracing::info!("Collector stopped");
     }
 
-    pub async fn restart(&mut self) -> Result<(), CollectorError> {
+    pub async fn restart(&mut self) -> Result<(), LifelogError> {
         tracing::info!("Restarting Collector");
         self.stop();
         tokio::time::sleep(Duration::from_secs(1)).await;

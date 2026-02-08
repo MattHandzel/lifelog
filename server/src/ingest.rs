@@ -1,6 +1,7 @@
 use lifelog_core::{DataOrigin, DataOriginType};
 use lifelog_types::DataModality;
 use lifelog_types::ScreenFrame;
+use lifelog_types::ToRecord;
 use prost::Message;
 use serde::{Deserialize, Serialize};
 use surrealdb::engine::remote::ws::Client;
@@ -42,7 +43,6 @@ impl IngestBackend for SurrealIngestBackend {
         let mut indexed = false;
 
         // Try to index the content
-        // TODO: Handle other modalities
         if stream_id.eq_ignore_ascii_case("screen") {
             if let Ok(frame) = ScreenFrame::decode(payload) {
                 let origin = DataOrigin::new(
@@ -53,21 +53,60 @@ impl IngestBackend for SurrealIngestBackend {
                 if let Ok(_) = ensure_table_schema(&db, &origin).await {
                     let table = origin.get_table_name();
                     let id = frame.uuid.clone();
+                    let record = frame.to_record();
 
-                    let json = match serde_json::to_string(&frame) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            tracing::error!(id = %id, error = %e, "Failed to serialize frame to JSON string");
-                            return Err(e.to_string());
+                    // Use native upsert to handle bytes and complex types correctly
+                    match db
+                        .upsert::<Option<lifelog_types::ScreenRecord>>((&table, &id))
+                        .content(record)
+                        .await
+                    {
+                        Ok(result) => {
+                            if result.is_some() {
+                                indexed = true;
+                            } else {
+                                tracing::warn!(
+                                    "Frame ingestion returned no results for {} in table {}",
+                                    id,
+                                    table
+                                );
+                            }
                         }
-                    };
+                        Err(e) => {
+                            tracing::error!(
+                                id = %id,
+                                error = %e,
+                                "Frame ingestion failed for table {}",
+                                table
+                            );
+                        }
+                    }
+                }
+            }
+        } else if stream_id.eq_ignore_ascii_case("browser") {
+            if let Ok(frame) = lifelog_types::BrowserFrame::decode(payload) {
+                let origin = DataOrigin::new(
+                    DataOriginType::DeviceId(collector_id.to_string()),
+                    DataModality::Browser.as_str_name().to_string(),
+                );
 
-                    // Use a query with CONTENT string to bypass driver serialization issues.
-                    let q = format!("CREATE `{table}`:`{id}` CONTENT {json}");
-                    if let Ok(mut resp) = db.query(q).await {
-                        let results: Vec<serde_json::Value> = resp.take(0).unwrap_or_default();
-                        if !results.is_empty() {
-                            indexed = true;
+                if let Ok(_) = ensure_table_schema(&db, &origin).await {
+                    let table = origin.get_table_name();
+                    let id = frame.uuid.clone();
+                    let record = frame.to_record();
+
+                    match db
+                        .upsert::<Option<lifelog_types::BrowserRecord>>((&table, &id))
+                        .content(record)
+                        .await
+                    {
+                        Ok(result) => {
+                            if result.is_some() {
+                                indexed = true;
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!(id = %id, error = %e, "Browser frame ingestion failed");
                         }
                     }
                 }

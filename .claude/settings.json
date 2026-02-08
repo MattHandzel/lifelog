@@ -1,0 +1,80 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/session-context.sh",
+            "timeout": 10,
+            "statusMessage": "Loading project context..."
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-raw-cargo.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/warn-proto-edit.sh",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-unsafe.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/async-cargo-check.sh",
+            "async": true,
+            "timeout": 120,
+            "statusMessage": "Running cargo check..."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "You are reviewing whether Claude should stop working. Context: $ARGUMENTS\n\nCheck the conversation transcript for:\n1. Did Claude modify any .rs files? If so, did it run `just validate`, `just check`, or `just test` afterward?\n2. Are there any unresolved errors mentioned in the conversation?\n3. Did Claude complete the task the user requested?\n\nIf code was changed but no validation was run, respond {\"ok\": false, \"reason\": \"You modified Rust files but didn't run validation. Run `just validate` before finishing.\"}.\nIf the task appears incomplete, respond {\"ok\": false, \"reason\": \"Task appears incomplete. <specific detail>.\"}.\nOtherwise respond {\"ok\": true}.",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/precompact-save-state.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

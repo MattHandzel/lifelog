@@ -396,3 +396,39 @@ pub fn setup_text_upload_db(output_dir: &Path) -> rusqlite::Result<Connection> {
         )",
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_ensure_directory() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("subdir");
+        assert!(!path.exists());
+        ensure_directory(&path).unwrap();
+        assert!(path.exists());
+        assert!(path.is_dir());
+    }
+
+    #[test]
+    fn test_initialize_database() {
+        let tmp = tempdir().unwrap();
+        let db_path = tmp.path().join("test.db");
+        let schema = "CREATE TABLE test (id INTEGER PRIMARY KEY)";
+        
+        let conn = initialize_database(&db_path, schema).unwrap();
+        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='test'").unwrap();
+        let exists: bool = stmt.exists([]).unwrap();
+        assert!(exists);
+    }
+
+    #[test]
+    fn test_setup_keyboard_db() {
+        let tmp = tempdir().unwrap();
+        let conn = setup_keyboard_db(tmp.path()).unwrap();
+        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='key_events'").unwrap();
+        assert!(stmt.exists([]).unwrap());
+    }
+}

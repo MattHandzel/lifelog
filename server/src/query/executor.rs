@@ -1,5 +1,4 @@
 use super::planner::ExecutionPlan;
-use lifelog_core::uuid::Uuid;
 use lifelog_core::LifelogFrameKey;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
@@ -11,23 +10,28 @@ pub async fn execute(
     match plan {
         ExecutionPlan::SimpleQuery(sql) => {
             tracing::debug!(sql = %sql, "Executing query");
+            
+            // Extract table from SQL query string before moving sql
+            let table = sql.split('`').nth(1).unwrap_or("unknown").to_string();
+
             let mut response = db.query(sql).await?;
 
-            // We assume the query is "SELECT * FROM table ..."
-            // We want to extract 'id'.
-            // response.take(0) gives the first result set.
-            let results: Vec<surrealdb::sql::Thing> = response.take("id")?;
+            #[derive(serde::Deserialize, Debug)]
+            struct UuidResult {
+                uuid: String,
+            }
+
+            // Extract record UUIDs as strings
+            let results: Vec<UuidResult> = response.take(0)?;
 
             let mut keys = Vec::new();
-            for thing in results {
-                // thing.tb is table name, thing.id is the ID part.
-                // Assuming ID part is UUID string.
-                if let Ok(uuid) = thing.id.to_string().parse::<Uuid>() {
-                    let origin = lifelog_core::DataOrigin {
-                        origin: lifelog_core::DataOriginType::DeviceId("unknown".to_string()),
-                        modality_name: thing.tb,
-                    };
-                    keys.push(LifelogFrameKey { uuid, origin });
+            for res in results {
+                let id_str = res.uuid;
+                
+                if let Ok(uuid) = id_str.parse::<lifelog_core::uuid::Uuid>() {
+                    if let Ok(origin) = lifelog_core::DataOrigin::tryfrom_string(table.clone()) {
+                        keys.push(LifelogFrameKey { uuid, origin });
+                    }
                 }
             }
             Ok(keys)

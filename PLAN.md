@@ -33,8 +33,24 @@
 - [x] **Schema Registry:** Centralized SurrealDB DDL in `server/src/schema.rs`.
 - [x] **Strict Typing:** Enabled `SCHEMAFULL` tables for improved data integrity.
 
-## Phase 4: Final Validation & Cleanup (TODO)
-- [ ] **Error Consolidation:** Unify `LifelogError` hierarchy across all crates.
-- [ ] **IT-010:** Cross-modal query E2E test.
-- [ ] **IT-110:** Full OCR Transform Pipeline integration test.
-- [ ] **IT-160:** Performance Suite & established baselines.
+## Phase 4: Final Validation & Cleanup (COMPLETED)
+
+- [x] **Error Consolidation:** Unified `LifelogError` hierarchy across all crates.
+
+- [x] **IT-010:** Cross-modal query E2E test.
+
+- [x] **IT-110:** Full OCR Transform Pipeline integration test.
+
+- [x] **IT-160:** Performance Suite & established baselines.
+
+
+
+## Phase 5: Polish & Architectural Cleanup (COMPLETED)
+
+- [x] **Unified Trait Model:** Finalized `DataType`, `Modality`, and `ToRecord` traits.
+
+- [x] **Catalog Refactor:** Moved away from `INFO FOR DB` to explicit `catalog` table.
+
+- [x] **Robust Key Retrieval:** Fixed serialization issues with SurrealDB native types in query results.
+
+- [x] **Code Coverage:** Increased test coverage for core modules.

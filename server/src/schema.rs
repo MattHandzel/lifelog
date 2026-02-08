@@ -20,11 +20,12 @@ static SCHEMAS: &[TableSchema] = &[
     TableSchema {
         modality: DataModality::Screen,
         fields_ddl: r#"
-            DEFINE FIELD timestamp  ON `{table}` TYPE datetime;
-            DEFINE FIELD width      ON `{table}` TYPE int;
-            DEFINE FIELD height     ON `{table}` TYPE int;
-            DEFINE FIELD imageBytes ON `{table}` TYPE string;
-            DEFINE FIELD mimeType   ON `{table}` TYPE string;
+            DEFINE FIELD uuid        ON `{table}` TYPE string;
+            DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
+            DEFINE FIELD width       ON `{table}` TYPE int;
+            DEFINE FIELD height      ON `{table}` TYPE int;
+            DEFINE FIELD image_bytes ON `{table}` TYPE bytes;
+            DEFINE FIELD mime_type   ON `{table}` TYPE string;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
@@ -33,37 +34,37 @@ static SCHEMAS: &[TableSchema] = &[
     TableSchema {
         modality: DataModality::Browser,
         fields_ddl: r#"
+            DEFINE FIELD uuid        ON `{table}` TYPE string;
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
             DEFINE FIELD url         ON `{table}` TYPE string;
             DEFINE FIELD title       ON `{table}` TYPE string;
-            DEFINE FIELD visitCount  ON `{table}` TYPE int;
+            DEFINE FIELD visit_count ON `{table}` TYPE int;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
-            DEFINE INDEX `{table}_url_idx` ON `{table}` FIELDS url SEARCH ANALYZER SIMPLE BM25;
-            DEFINE INDEX `{table}_title_idx` ON `{table}` FIELDS title SEARCH ANALYZER SIMPLE BM25;
         "#,
     },
     TableSchema {
         modality: DataModality::Ocr,
         fields_ddl: r#"
+            DEFINE FIELD uuid      ON `{table}` TYPE string;
             DEFINE FIELD timestamp ON `{table}` TYPE datetime;
             DEFINE FIELD text      ON `{table}` TYPE string;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
-            DEFINE INDEX `{table}_text_idx` ON `{table}` FIELDS text SEARCH ANALYZER SIMPLE BM25;
         "#,
     },
     TableSchema {
         modality: DataModality::Audio,
         fields_ddl: r#"
+            DEFINE FIELD uuid          ON `{table}` TYPE string;
             DEFINE FIELD timestamp     ON `{table}` TYPE datetime;
-            DEFINE FIELD audioBytes    ON `{table}` TYPE string;
+            DEFINE FIELD audio_bytes   ON `{table}` TYPE bytes;
             DEFINE FIELD codec         ON `{table}` TYPE string;
-            DEFINE FIELD sampleRate    ON `{table}` TYPE int;
+            DEFINE FIELD sample_rate   ON `{table}` TYPE int;
             DEFINE FIELD channels      ON `{table}` TYPE int;
-            DEFINE FIELD durationSecs  ON `{table}` TYPE float;
+            DEFINE FIELD duration_secs ON `{table}` TYPE float;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
@@ -72,63 +73,63 @@ static SCHEMAS: &[TableSchema] = &[
     TableSchema {
         modality: DataModality::Keystrokes,
         fields_ddl: r#"
+            DEFINE FIELD uuid         ON `{table}` TYPE string;
             DEFINE FIELD timestamp    ON `{table}` TYPE datetime;
             DEFINE FIELD text         ON `{table}` TYPE string;
             DEFINE FIELD application  ON `{table}` TYPE string;
-            DEFINE FIELD windowTitle  ON `{table}` TYPE string;
+            DEFINE FIELD window_title ON `{table}` TYPE string;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
-            DEFINE INDEX `{table}_text_idx` ON `{table}` FIELDS text SEARCH ANALYZER SIMPLE BM25;
         "#,
     },
     TableSchema {
         modality: DataModality::Clipboard,
         fields_ddl: r#"
+            DEFINE FIELD uuid        ON `{table}` TYPE string;
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
             DEFINE FIELD text        ON `{table}` TYPE string;
-            DEFINE FIELD binaryData  ON `{table}` TYPE string;
-            DEFINE FIELD mimeType    ON `{table}` TYPE string;
+            DEFINE FIELD binary_data ON `{table}` TYPE bytes;
+            DEFINE FIELD mime_type   ON `{table}` TYPE string;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
-            DEFINE INDEX `{table}_text_idx` ON `{table}` FIELDS text SEARCH ANALYZER SIMPLE BM25;
         "#,
     },
     TableSchema {
         modality: DataModality::ShellHistory,
         fields_ddl: r#"
+            DEFINE FIELD uuid        ON `{table}` TYPE string;
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
             DEFINE FIELD command     ON `{table}` TYPE string;
-            DEFINE FIELD workingDir  ON `{table}` TYPE string;
-            DEFINE FIELD exitCode    ON `{table}` TYPE int;
+            DEFINE FIELD working_dir ON `{table}` TYPE string;
+            DEFINE FIELD exit_code   ON `{table}` TYPE int;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
-            DEFINE INDEX `{table}_cmd_idx` ON `{table}` FIELDS command SEARCH ANALYZER SIMPLE BM25;
         "#,
     },
     TableSchema {
         modality: DataModality::WindowActivity,
         fields_ddl: r#"
+            DEFINE FIELD uuid          ON `{table}` TYPE string;
             DEFINE FIELD timestamp     ON `{table}` TYPE datetime;
             DEFINE FIELD application   ON `{table}` TYPE string;
-            DEFINE FIELD windowTitle   ON `{table}` TYPE string;
+            DEFINE FIELD window_title  ON `{table}` TYPE string;
             DEFINE FIELD focused       ON `{table}` TYPE bool;
-            DEFINE FIELD durationSecs  ON `{table}` TYPE float;
+            DEFINE FIELD duration_secs ON `{table}` TYPE float;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
-            DEFINE INDEX `{table}_app_idx` ON `{table}` FIELDS application SEARCH ANALYZER SIMPLE BM25;
-            DEFINE INDEX `{table}_win_idx` ON `{table}` FIELDS windowTitle SEARCH ANALYZER SIMPLE BM25;
         "#,
     },
     TableSchema {
         modality: DataModality::Mouse,
         fields_ddl: r#"
+            DEFINE FIELD uuid           ON `{table}` TYPE string;
             DEFINE FIELD timestamp      ON `{table}` TYPE datetime;
-            DEFINE FIELD activityLevel  ON `{table}` TYPE int;
-            DEFINE FIELD buttonMask     ON `{table}` TYPE int;
+            DEFINE FIELD activity_level ON `{table}` TYPE int;
+            DEFINE FIELD button_mask    ON `{table}` TYPE int;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
@@ -144,6 +145,13 @@ static CHUNKS_DDL: &str = r#"
 static WATERMARKS_DDL: &str = r#"
     DEFINE TABLE watermarks SCHEMAFULL;
     DEFINE FIELD last_timestamp ON watermarks TYPE datetime;
+"#;
+
+static CATALOG_DDL: &str = r#"
+    DEFINE TABLE catalog SCHEMAFULL;
+    DEFINE FIELD origin ON catalog TYPE string;
+    DEFINE FIELD modality ON catalog TYPE string;
+    DEFINE INDEX origin_idx ON catalog FIELDS origin, modality UNIQUE;
 "#;
 
 /// Look up the schema definition for a given modality.
@@ -190,6 +198,20 @@ pub(crate) async fn ensure_table_schema(
     db.query(ddl.clone()).await?;
     CREATED_TABLES.insert(table.to_owned());
     tracing::info!(table = %table, "Ensured table schema");
+
+    // Register in catalog
+    let origin_str = match &data_origin.origin {
+        DataOriginType::DeviceId(id) => id.clone(),
+        DataOriginType::DataOrigin(o) => o.get_table_name(),
+    };
+    let modality_str = data_origin.modality_name.clone();
+
+    let _ = db
+        .query("UPSERT catalog SET origin = $origin, modality = $modality WHERE origin = $origin AND modality = $modality")
+        .bind(("origin", origin_str))
+        .bind(("modality", modality_str))
+        .await;
+
     Ok(())
 }
 
@@ -213,6 +235,16 @@ pub(crate) async fn ensure_watermarks_schema(db: &Surreal<Client>) -> surrealdb:
     Ok(())
 }
 
+/// Ensure the catalog table exists.
+pub(crate) async fn ensure_catalog_schema(db: &Surreal<Client>) -> surrealdb::Result<()> {
+    if CREATED_TABLES.contains("catalog") {
+        return Ok(());
+    }
+    db.query(CATALOG_DDL).await?.check()?;
+    CREATED_TABLES.insert("catalog".to_string());
+    Ok(())
+}
+
 /// Run all schema migrations at startup.
 /// Creates tables for every known origin already in the database
 /// and ensures the chunks metadata table exists.
@@ -226,6 +258,11 @@ pub(crate) async fn run_startup_migrations(db: &Surreal<Client>) -> Result<(), L
     ensure_watermarks_schema(db)
         .await
         .map_err(|e| LifelogError::Database(format!("watermarks schema: {}", e)))?;
+
+    // Ensure catalog table
+    ensure_catalog_schema(db)
+        .await
+        .map_err(|e| LifelogError::Database(format!("catalog schema: {}", e)))?;
 
     // Ensure tables for any existing origins
     let origins = crate::db::get_origins_from_db(db).await?;

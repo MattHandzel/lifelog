@@ -3993,6 +3993,7 @@ name = "lifelog-types"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "chrono",
  "image 0.25.6",
  "lifelog-core",
  "maplit",
@@ -4005,6 +4006,7 @@ dependencies = [
  "rand 0.9.1",
  "serde",
  "serde_json",
+ "surrealdb",
  "tonic",
  "tonic-build",
  "tracing",

@@ -1,4 +1,5 @@
 use crate::data_source::*;
+use lifelog_core::LifelogError;
 use async_trait::async_trait;
 use chrono::Utc;
 use config::BrowserHistoryConfig;
@@ -21,16 +22,16 @@ pub struct BrowserHistorySource {
 }
 
 impl BrowserHistorySource {
-    pub fn new(config: BrowserHistoryConfig) -> Result<Self, DataSourceError> {
+    pub fn new(config: BrowserHistoryConfig) -> Result<Self, LifelogError> {
         Ok(BrowserHistorySource { config })
     }
 
-    pub fn get_data(&mut self) -> Result<Vec<BrowserFrame>, DataSourceError> {
+    pub fn get_data(&mut self) -> Result<Vec<BrowserFrame>, LifelogError> {
         let last_query = match fs::File::open(&self.config.output_file) {
             Ok(mut file) => {
                 let mut contents = String::new();
                 file.read_to_string(&mut contents)
-                    .map_err(DataSourceError::Io)?;
+                    .map_err(LifelogError::Io)?;
                 contents
                     .parse::<i64>()
                     .map(|ts_micros| {
@@ -66,14 +67,16 @@ impl BrowserHistorySource {
             + ts.timestamp_subsec_micros() as i64
             + WINDOWS_EPOCH_MICROS;
 
-        let conn = Connection::open(history_path)?;
+        let conn = Connection::open(history_path).map_err(|e| LifelogError::Sqlite(e.to_string()))?;
 
-        let mut stmt = conn.prepare(
-            "SELECT urls.url, title, visit_time, visit_count FROM urls INNER JOIN visits ON urls.id = visits.url WHERE visit_time > ? AND visit_time <= ?"
-        )?;
+        let mut stmt = conn
+            .prepare(
+                "SELECT urls.url, title, visit_time, visit_count FROM urls INNER JOIN visits ON urls.id = visits.url WHERE visit_time > ? AND visit_time <= ?"
+            )
+            .map_err(|e| LifelogError::Sqlite(e.to_string()))?;
 
-        let history_iter =
-            stmt.query_map([last_query_chrome_micros, now_chrome_micros], |row| {
+        let history_iter = stmt
+            .query_map([last_query_chrome_micros, now_chrome_micros], |row| {
                 Ok(BrowserFrame {
                     uuid: Uuid::new_v4().to_string(), //use v6
                     url: row.get::<_, String>(0)?,
@@ -89,11 +92,12 @@ impl BrowserHistorySource {
                     },
                     visit_count: row.get::<_, u32>(3)?,
                 })
-            })?;
+            })
+            .map_err(|e| LifelogError::Sqlite(e.to_string()))?;
 
         let mut history_entries = Vec::new();
         for entry in history_iter {
-            history_entries.push(entry?);
+            history_entries.push(entry.map_err(|e| LifelogError::Sqlite(e.to_string()))?);
         }
 
         if let Err(e) = fs::write(&self.config.output_file, now_chrome_micros.to_string()) {
@@ -108,7 +112,7 @@ impl BrowserHistorySource {
 impl DataSource for BrowserHistorySource {
     type Config = BrowserHistoryConfig;
 
-    fn new(config: BrowserHistoryConfig) -> Result<Self, DataSourceError> {
+    fn new(config: BrowserHistoryConfig) -> Result<Self, LifelogError> {
         BrowserHistorySource::new(config)
     }
 
@@ -116,10 +120,10 @@ impl DataSource for BrowserHistorySource {
         self
     }
 
-    fn start(&self) -> Result<DataSourceHandle, DataSourceError> {
+    fn start(&self) -> Result<DataSourceHandle, LifelogError> {
         if RUNNING.load(Ordering::SeqCst) {
             tracing::warn!("BrowserHistorySource: Start called but task is already running.");
-            return Err(DataSourceError::AlreadyRunning);
+            return Err(LifelogError::AlreadyRunning);
         }
 
         tracing::info!("BrowserHistorySource: Starting data source task to store in memory");
@@ -140,13 +144,13 @@ impl DataSource for BrowserHistorySource {
         })
     }
 
-    async fn stop(&mut self) -> Result<(), DataSourceError> {
+    async fn stop(&mut self) -> Result<(), LifelogError> {
         RUNNING.store(false, Ordering::SeqCst);
         // FIXME, actually implmenet stop handles
         Ok(())
     }
 
-    async fn run(&self) -> Result<(), DataSourceError> {
+    async fn run(&self) -> Result<(), LifelogError> {
         while RUNNING.load(Ordering::SeqCst) {
             sleep(Duration::from_secs_f64(5.0)).await; //fixme
         }

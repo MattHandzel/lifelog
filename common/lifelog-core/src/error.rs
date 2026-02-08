@@ -54,6 +54,30 @@ pub enum LifelogError {
     #[error("tried to parse invalid data modality: '{0}'")]
     InvalidDataModality(String),
 
+    #[error("source '{0}' setup failed: {1}")]
+    SourceSetup(String, String),
+
+    #[error("not connected to server")]
+    NotConnected,
+
+    #[error("registration failed: {0}")]
+    RegistrationFailed(String),
+
+    #[error("task is already running")]
+    AlreadyRunning,
+
+    #[error("task is not running")]
+    NotRunning,
+
+    #[error("SQLite error: {0}")]
+    Sqlite(String),
+
+    #[error("buffer corrupt: {0}")]
+    BufferCorrupt(String),
+
+    #[error("logger error: {0}")]
+    Logger(String),
+
     #[error(transparent)]
     Other(#[from] anyhow::Error),
 }

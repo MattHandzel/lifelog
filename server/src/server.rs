@@ -374,30 +374,23 @@ impl Server {
         &self,
         query_msg: lifelog_types::Query,
     ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
-        tracing::debug!(?query_msg, "Entered process_query");
         let mut keys: Vec<LifelogFrameKey> = vec![];
 
-        // Determine targets (modalities)
-        let targets: Vec<String> = if query_msg.search_origins.is_empty() {
-            // Fallback: search all known origins from DB
-            // We need to fetch them to know available modalities
-            match get_origins_from_db(&self.db).await {
-                Ok(db_origins) => db_origins.into_iter().map(|o| o.modality_name).collect(),
-                Err(e) => {
-                    tracing::error!("Failed to fetch origins for query: {}", e);
-                    return Err(LifelogError::Database(e.to_string()));
-                }
-            }
+        // Determine target origins
+        let target_origins: Vec<DataOrigin> = if query_msg.search_origins.is_empty() {
+            get_origins_from_db(&self.db).await?
         } else {
-            query_msg.search_origins
+            query_msg
+                .search_origins
+                .into_iter()
+                .filter_map(|s| DataOrigin::tryfrom_string(s).ok())
+                .collect()
         };
 
-        // De-duplicate targets
-        let mut targets = targets;
-        targets.sort();
-        targets.dedup();
+        for origin in target_origins {
+            let table = origin.get_table_name();
+            let modality = origin.modality_name.clone();
 
-        for modality in targets {
             // Build filter
             // 1. Time ranges (OR)
             let mut time_expr = None;
@@ -431,6 +424,10 @@ impl Server {
             // 2. Text (OR)
             let mut text_expr = None;
             for text in &query_msg.text {
+                if text == "*" {
+                    // Wildcard: match everything (effectively no text filter)
+                    continue;
+                }
                 let field = match modality.as_str() {
                     "Browser" => "title",
                     "ShellHistory" => "command",
@@ -461,19 +458,17 @@ impl Server {
                 ),
             };
 
-            let query_ast = crate::query::ast::Query {
-                target: crate::query::ast::StreamSelector::Modality(modality.clone()),
-                filter,
-            };
+            // Directly build the SQL for this specific table
+            let where_clause = crate::query::planner::Planner::compile_expression(&filter);
+            let sql = format!("SELECT * FROM `{}` WHERE {};", table, where_clause);
 
-            let plan = crate::query::planner::Planner::plan(&query_ast);
+            let plan = crate::query::planner::ExecutionPlan::SimpleQuery(sql);
             match crate::query::executor::execute(&self.db, plan).await {
                 Ok(res) => keys.extend(res),
-                Err(e) => tracing::error!("Query execution failed for {}: {}", modality, e),
+                Err(e) => tracing::error!("Query execution failed for {}: {}", table, e),
             }
         }
 
-        tracing::debug!(count = keys.len(), "Process query complete");
         Ok(keys)
     }
 
@@ -573,6 +568,7 @@ impl Server {
                             {
                                 tracing::error!("Failed to set watermark for {}: {}", id, e);
                             }
+                        } else {
                         }
                     }
 

@@ -17,7 +17,8 @@ use std::io::Cursor;
 
 use std::sync::Arc;
 
-use crate::data_source::{BufferedSource, DataSource, DataSourceError, DataSourceHandle};
+use crate::data_source::{BufferedSource, DataSource, DataSourceHandle};
+use lifelog_core::LifelogError;
 use utils::buffer::DiskBuffer;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
@@ -30,11 +31,11 @@ pub struct ScreenDataSource {
 }
 
 impl ScreenDataSource {
-    pub fn new(config: ScreenConfig) -> Result<Self, DataSourceError> {
+    pub fn new(config: ScreenConfig) -> Result<Self, LifelogError> {
         let logger = ScreenLogger::new(config.clone());
         let buffer_path = std::path::Path::new(&config.output_dir).join("buffer");
         let buffer = DiskBuffer::new(&buffer_path).map_err(|e| {
-            DataSourceError::Io(std::io::Error::new(
+            LifelogError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),
             ))
@@ -47,9 +48,9 @@ impl ScreenDataSource {
         })
     }
 
-    pub async fn get_data(&mut self) -> Result<Vec<ScreenFrame>, DataSourceError> {
+    pub async fn get_data(&mut self) -> Result<Vec<ScreenFrame>, LifelogError> {
         let (_, raw_items) = self.buffer.peek_chunk(100).await.map_err(|e| {
-            DataSourceError::Io(std::io::Error::new(
+            LifelogError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),
             ))
@@ -64,22 +65,22 @@ impl ScreenDataSource {
         Ok(frames)
     }
 
-    pub async fn clear_buffer(&self) -> Result<(), DataSourceError> {
+    pub async fn clear_buffer(&self) -> Result<(), LifelogError> {
         // Mark all current data as committed
         let start = self.buffer.get_committed_offset().await.map_err(|e| {
-            DataSourceError::Io(std::io::Error::new(
+            LifelogError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),
             ))
         })?;
         let size = self.buffer.get_uncommitted_size().await.map_err(|e| {
-            DataSourceError::Io(std::io::Error::new(
+            LifelogError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),
             ))
         })?;
         self.buffer.commit_offset(start + size).await.map_err(|e| {
-            DataSourceError::Io(std::io::Error::new(
+            LifelogError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),
             ))
@@ -92,7 +93,7 @@ impl ScreenDataSource {
 impl DataSource for ScreenDataSource {
     type Config = ScreenConfig;
 
-    fn new(config: ScreenConfig) -> Result<Self, DataSourceError> {
+    fn new(config: ScreenConfig) -> Result<Self, LifelogError> {
         ScreenDataSource::new(config)
     }
 
@@ -107,10 +108,10 @@ impl DataSource for ScreenDataSource {
         }))
     }
 
-    fn start(&self) -> Result<DataSourceHandle, DataSourceError> {
+    fn start(&self) -> Result<DataSourceHandle, LifelogError> {
         if RUNNING.load(Ordering::SeqCst) {
             tracing::warn!("ScreenDataSource: Start called but task is already running.");
-            return Err(DataSourceError::AlreadyRunning);
+            return Err(LifelogError::AlreadyRunning);
         }
 
         tracing::info!("ScreenDataSource: Starting data source task to store in WAL");
@@ -131,13 +132,13 @@ impl DataSource for ScreenDataSource {
         })
     }
 
-    async fn stop(&mut self) -> Result<(), DataSourceError> {
+    async fn stop(&mut self) -> Result<(), LifelogError> {
         RUNNING.store(false, Ordering::SeqCst);
         // FIXME, actually implmenet stop handles
         Ok(())
     }
 
-    async fn run(&self) -> Result<(), DataSourceError> {
+    async fn run(&self) -> Result<(), LifelogError> {
         while RUNNING.load(Ordering::SeqCst) {
             match self.logger.log_data().await {
                 Ok(image_data_bytes) => {
@@ -146,11 +147,11 @@ impl DataSource for ScreenDataSource {
                     let img = ImageReader::new(Cursor::new(&image_data_bytes))
                         .with_guessed_format()
                         .map_err(|e| {
-                            LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+                            LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
                         })?
                         .decode()
                         .map_err(|e| {
-                            LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
+                            LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
                         })?;
 
                     let (width, height) = img.dimensions();
@@ -166,14 +167,14 @@ impl DataSource for ScreenDataSource {
 
                     let mut buf = Vec::new();
                     captured.encode(&mut buf).map_err(|e| {
-                        DataSourceError::Io(std::io::Error::new(
+                        LifelogError::Io(std::io::Error::new(
                             std::io::ErrorKind::Other,
                             format!("Prost encode error: {}", e),
                         ))
                     })?;
 
                     self.buffer.append(&buf).await.map_err(|e| {
-                        DataSourceError::Io(std::io::Error::new(
+                        LifelogError::Io(std::io::Error::new(
                             std::io::ErrorKind::Other,
                             e.to_string(),
                         ))
@@ -214,9 +215,9 @@ impl BufferedSource for ScreenBufferedSource {
     async fn peek_upload_batch(
         &self,
         max_items: usize,
-    ) -> Result<(u64, Vec<Vec<u8>>), DataSourceError> {
+    ) -> Result<(u64, Vec<Vec<u8>>), LifelogError> {
         let (next_offset, raws) = self.buffer.peek_chunk(max_items).await.map_err(|e| {
-            DataSourceError::Io(std::io::Error::new(
+            LifelogError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),
             ))
@@ -225,9 +226,9 @@ impl BufferedSource for ScreenBufferedSource {
         Ok((next_offset, raws))
     }
 
-    async fn commit_upload(&self, offset: u64) -> Result<(), DataSourceError> {
+    async fn commit_upload(&self, offset: u64) -> Result<(), LifelogError> {
         self.buffer.commit_offset(offset).await.map_err(|e| {
-            DataSourceError::Io(std::io::Error::new(
+            LifelogError::Io(std::io::Error::new(
                 std::io::ErrorKind::Other,
                 e.to_string(),
             ))
@@ -242,17 +243,17 @@ pub struct ScreenLogger {
 }
 
 impl ScreenLogger {
-    pub fn new(config: ScreenConfig) -> Result<Self, LoggerError> {
+    pub fn new(config: ScreenConfig) -> Result<Self, LifelogError> {
         Ok(ScreenLogger { config })
     }
 
-    pub fn setup(&self) -> Result<LoggerHandle, LoggerError> {
+    pub fn setup(&self) -> Result<LoggerHandle, LifelogError> {
         DataLogger::setup(self, self.config.clone())
     }
 
-    async fn capture_screenshot_data(&self) -> Result<Vec<u8>, LoggerError> {
+    async fn capture_screenshot_data(&self) -> Result<Vec<u8>, LifelogError> {
         // let temp_file = NamedTempFile::new_in(env::temp_dir())?.into_temp_path();
-        // let temp_file_path_str = temp_file.to_str().ok_or_else(|| LoggerError::Io(std::io::Error::new(std::io::ErrorKind::Other, "Invalid temp file path")))?;
+        // let temp_file_path_str = temp_file.to_str().ok_or_else(|| LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, "Invalid temp file path")))?;
 
         let now = Local::now();
         let _ts = now.timestamp() as f64 + now.timestamp_subsec_nanos() as f64 / 1e9;
@@ -268,7 +269,7 @@ impl ScreenLogger {
                 .arg("png")
                 .arg(&out)
                 .status()
-                .map_err(LoggerError::Io)?;
+                .map_err(LifelogError::Io)?;
         }
         #[cfg(not(target_os = "macos"))]
         {
@@ -277,10 +278,10 @@ impl ScreenLogger {
                 .arg("png")
                 .arg(&out)
                 .status()
-                .map_err(LoggerError::Io)?;
+                .map_err(LifelogError::Io)?;
         }
 
-        let image_data = tokio::fs::read(&out).await.map_err(LoggerError::Io)?;
+        let image_data = tokio::fs::read(&out).await.map_err(LifelogError::Io)?;
 
         if let Err(e) = tokio::fs::remove_file(&out).await {
             tracing::warn!(error = %e, "Failed to delete temporary screenshot");
@@ -294,11 +295,11 @@ impl ScreenLogger {
 impl DataLogger for ScreenLogger {
     type Config = ScreenConfig;
 
-    fn new(config: ScreenConfig) -> Result<Self, LoggerError> {
+    fn new(config: ScreenConfig) -> Result<Self, LifelogError> {
         ScreenLogger::new(config)
     }
 
-    fn setup(&self, config: ScreenConfig) -> Result<LoggerHandle, LoggerError> {
+    fn setup(&self, config: ScreenConfig) -> Result<LoggerHandle, LifelogError> {
         let logger = Self::new(config)?;
         let join = tokio::spawn(async move {
             let task_result = logger.run().await;
@@ -311,7 +312,7 @@ impl DataLogger for ScreenLogger {
         Ok(LoggerHandle { join })
     }
 
-    async fn run(&self) -> Result<(), LoggerError> {
+    async fn run(&self) -> Result<(), LifelogError> {
         RUNNING.store(true, Ordering::SeqCst);
         while RUNNING.load(Ordering::SeqCst) {
             self.log_data().await?;
@@ -324,7 +325,7 @@ impl DataLogger for ScreenLogger {
         RUNNING.store(false, Ordering::SeqCst);
     }
 
-    async fn log_data(&self) -> Result<Vec<u8>, LoggerError> {
+    async fn log_data(&self) -> Result<Vec<u8>, LifelogError> {
         self.capture_screenshot_data().await
     }
 }

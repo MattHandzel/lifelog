@@ -13,7 +13,7 @@ use tonic::{Request, Response, Status, Streaming};
 use tonic::{Response as TonicResponse, Status as TonicStatus};
 use utils::ingest::ChunkIngester;
 
-use crate::ingest::{ChunkRecord, SurrealIngestBackend};
+use crate::ingest::SurrealIngestBackend;
 use crate::server::{RegisteredCollector, ServerHandle};
 
 pub struct GRPCServerLifelogServerService {

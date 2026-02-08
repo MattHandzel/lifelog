@@ -163,3 +163,50 @@ impl DiskBuffer {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn test_disk_buffer_basic() {
+        let tmp = tempdir().unwrap();
+        let buffer = DiskBuffer::new(tmp.path()).unwrap();
+
+        // Initially empty
+        assert_eq!(buffer.get_committed_offset().await.unwrap(), 0);
+        let (next, items) = buffer.peek_chunk(10).await.unwrap();
+        assert_eq!(next, 0);
+        assert!(items.is_empty());
+
+        // Append items
+        buffer.append(b"hello").await.unwrap();
+        buffer.append(b"world").await.unwrap();
+
+        assert_eq!(buffer.get_uncommitted_size().await.unwrap(), 18); // (4+5) + (4+5)
+
+        // Peek
+        let (next, items) = buffer.peek_chunk(1).await.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0], b"hello");
+        assert_eq!(next, 9);
+
+        let (next, items) = buffer.peek_chunk(10).await.unwrap();
+        assert_eq!(items.len(), 2);
+        assert_eq!(items[0], b"hello");
+        assert_eq!(items[1], b"world");
+        assert_eq!(next, 18);
+
+        // Commit first item
+        buffer.commit_offset(9).await.unwrap();
+        assert_eq!(buffer.get_committed_offset().await.unwrap(), 9);
+        assert_eq!(buffer.get_uncommitted_size().await.unwrap(), 9);
+
+        // Peek again
+        let (next, items) = buffer.peek_chunk(10).await.unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0], b"world");
+        assert_eq!(next, 18);
+    }
+}

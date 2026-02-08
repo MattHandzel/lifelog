@@ -69,6 +69,82 @@ mod helpers {
 
     // --- Trait Implementations ---
 
+    #[cfg(feature = "surrealdb")]
+    pub trait ToRecord {
+        type Record: serde::Serialize + serde::de::DeserializeOwned + Send + Sync + std::fmt::Debug;
+        fn to_record(&self) -> Self::Record;
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct ScreenRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub width: u32,
+        pub height: u32,
+        pub image_bytes: surrealdb::sql::Bytes,
+        pub mime_type: String,
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct BrowserRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub url: String,
+        pub title: String,
+        pub visit_count: u32,
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct OcrRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub text: String,
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for ScreenFrame {
+        type Record = ScreenRecord;
+        fn to_record(&self) -> Self::Record {
+            ScreenRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                width: self.width,
+                height: self.height,
+                image_bytes: self.image_bytes.clone().into(),
+                mime_type: self.mime_type.clone(),
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for BrowserFrame {
+        type Record = BrowserRecord;
+        fn to_record(&self) -> Self::Record {
+            BrowserRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                url: self.url.clone(),
+                title: self.title.clone(),
+                visit_count: self.visit_count,
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for OcrFrame {
+        type Record = OcrRecord;
+        fn to_record(&self) -> Self::Record {
+            OcrRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                text: self.text.clone(),
+            }
+        }
+    }
+
     impl Validate for ServerConfig {
         fn validate(&self) -> Result<(), LifelogError> {
             if self.host.is_empty() {
@@ -363,11 +439,62 @@ pub use helpers::*;
 #[allow(clippy::unwrap_used, clippy::print_stdout)]
 mod tests {
     use super::*;
+    use lifelog_core::{Utc, Validate};
 
     #[test]
     fn test_serialize_timestamp() {
         let ts = Timerange::default();
         let json = serde_json::to_string(&ts).unwrap();
         println!("{}", json);
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[test]
+    fn test_screen_to_record() {
+        let frame = ScreenFrame {
+            uuid: lifelog_core::Uuid::new_v4().to_string(),
+            timestamp: Some(::pbjson_types::Timestamp { seconds: 12345, nanos: 0 }),
+            width: 1920,
+            height: 1080,
+            image_bytes: vec![1, 2, 3],
+            mime_type: "image/png".to_string(),
+        };
+        let record = frame.to_record();
+        assert_eq!(record.uuid, frame.uuid);
+        assert_eq!(record.width, 1920);
+        let bytes: Vec<u8> = record.image_bytes.into();
+        assert_eq!(bytes, vec![1, 2, 3]);
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[test]
+    fn test_browser_to_record() {
+        let frame = BrowserFrame {
+            uuid: lifelog_core::Uuid::new_v4().to_string(),
+            timestamp: Some(::pbjson_types::Timestamp { seconds: 12345, nanos: 0 }),
+            url: "http://test".to_string(),
+            title: "title".to_string(),
+            visit_count: 5,
+        };
+        let record = frame.to_record();
+        assert_eq!(record.url, "http://test");
+        assert_eq!(record.visit_count, 5);
+    }
+
+    #[test]
+    fn test_collector_config_validation() {
+        let config = CollectorConfig {
+            id: "".to_string(), // Invalid
+            ..Default::default()
+        };
+        assert!(config.validate().is_err());
+
+        let config = CollectorConfig {
+            id: "test".to_string(),
+            host: "localhost".to_string(),
+            port: 8080,
+            ..Default::default()
+        };
+        assert!(config.validate().is_ok());
     }
 }

@@ -15,7 +15,7 @@ path = "src/main.rs"
 config = { path = "../common/config" }
 utils = { path = "../common/utils" }
 lifelog-core = {path = "../common/lifelog-core/"}
-lifelog-types = { path = "../common/lifelog-types" }
+lifelog-types = { path = "../common/lifelog-types", features = ["full", "surrealdb"] }
 tokio = { version = "1.44.2", features = ["full", "macros", "rt-multi-thread"] }
 chrono = "0.4"
 thiserror = "2"

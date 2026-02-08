@@ -55,6 +55,37 @@ mod tests {
     }
 
     #[test]
+    fn test_time_interval_new() {
+        let base = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+        assert!(TimeInterval::new(base, base + Duration::seconds(1)).is_some());
+        assert!(TimeInterval::new(base, base).is_none());
+        assert!(TimeInterval::new(base + Duration::seconds(1), base).is_none());
+    }
+
+    #[test]
+    fn test_contains_point() {
+        let base = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+        let interval = TimeInterval::new(base, base + Duration::seconds(10)).unwrap();
+        assert!(interval.contains_point(base));
+        assert!(interval.contains_point(base + Duration::seconds(5)));
+        assert!(!interval.contains_point(base - Duration::seconds(1)));
+        assert!(!interval.contains_point(base + Duration::seconds(10)));
+    }
+
+    #[test]
+    fn test_within_interval() {
+        let base = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
+        let interval = TimeInterval::new(base, base + Duration::seconds(10)).unwrap();
+        let delta = Duration::seconds(5);
+
+        assert!(within_interval(base, interval, delta));
+        assert!(within_interval(base - Duration::seconds(5), interval, delta));
+        assert!(!within_interval(base - Duration::seconds(6), interval, delta));
+        assert!(within_interval(base + Duration::seconds(15), interval, delta));
+        assert!(!within_interval(base + Duration::seconds(16), interval, delta));
+    }
+
+    #[test]
     fn overlaps_matches_worked_example() {
         let base = Utc.timestamp_opt(1_700_000_000, 0).unwrap();
         let a = TimeInterval::new(base, base + Duration::minutes(5)).unwrap();

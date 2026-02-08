@@ -26,11 +26,11 @@ impl Planner {
 
         let where_clause = Self::compile_expression(&query.filter);
 
-        let sql = format!("SELECT * FROM `{}` WHERE {};", table, where_clause);
+        let sql = format!("SELECT uuid FROM `{}` WHERE {};", table, where_clause);
         ExecutionPlan::SimpleQuery(sql)
     }
 
-    fn compile_expression(expr: &Expression) -> String {
+    pub fn compile_expression(expr: &Expression) -> String {
         match expr {
             Expression::And(left, right) => {
                 format!(
@@ -53,8 +53,8 @@ impl Planner {
                 format!("{} = {}", field, Self::compile_value(value))
             }
             Expression::Contains(field, text) => {
-                // Using 'CONTAINS' operator or search analyzer if mapped
-                format!("{} CONTAINS {}", field, Self::quote_string(text))
+                // Using '~' operator for case-insensitive substring matching
+                format!("{} ~ {}", field, Self::quote_string(text))
             }
             Expression::TimeRange(start, end) => {
                 // SurrealDB datetime format
