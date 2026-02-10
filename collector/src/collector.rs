@@ -9,6 +9,7 @@ use crate::modules::processes::ProcessDataSource;
 use crate::modules::screen::ScreenDataSource;
 use crate::modules::shell_history::ShellHistoryDataSource;
 use crate::modules::weather::WeatherDataSource;
+use crate::modules::window_activity::WindowActivityDataSource;
 use async_trait::async_trait;
 use config;
 use mac_address::get_mac_address;
@@ -24,6 +25,7 @@ use tokio::time::Duration;
 use config::{
     BrowserHistoryConfig, CameraConfig, ClipboardConfig, HyprlandConfig, MicrophoneConfig,
     MouseConfig, ProcessesConfig, ScreenConfig, ShellHistoryConfig, WeatherConfig,
+    WindowActivityConfig,
 };
 use lifelog_core::*;
 use lifelog_types::CollectorState;
@@ -554,6 +556,39 @@ impl Collector {
                 },
                 Err(e) => {
                     let err = LifelogError::SourceSetup("mouse".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
+        if config
+            .window_activity
+            .as_ref()
+            .map(|w| w.enabled)
+            .unwrap_or(false)
+        {
+            let config_clone = Arc::clone(&self.config);
+            match WindowActivityDataSource::new(config_clone.window_activity.clone().unwrap()) {
+                Ok(window_source) => match window_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<WindowActivityConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(window_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("window_activity".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err =
+                            LifelogError::SourceSetup("window_activity".to_string(), e.to_string());
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err =
+                        LifelogError::SourceSetup("window_activity".to_string(), e.to_string());
                     tracing::error!("{}", err);
                     setup_errors.push(err);
                 }

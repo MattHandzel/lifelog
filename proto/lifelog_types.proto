@@ -115,6 +115,7 @@ message CollectorConfig {
   ClipboardConfig clipboard = 13;
   ShellHistoryConfig shell_history = 14;
   MouseConfig mouse = 15;
+  WindowActivityConfig window_activity = 16;
 }
 
 message CollectorState {
@@ -269,6 +270,14 @@ message MouseConfig {
   bool enabled = 1;
   double interval = 2;
   string output_dir = 3;
+}
+
+message WindowActivityConfig {
+  bool enabled = 1;
+  double interval = 2;
+  string output_dir = 3;
+  // "auto" (default), "x11", or "hyprctl".
+  string backend = 4;
 }
 
 message NetworkConfig {

@@ -13,7 +13,7 @@ pub use lifelog_types::{
     AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, ClipboardConfig,
     CollectorConfig, GeoConfig, HyprlandConfig, InputLoggerConfig, MicrophoneConfig, MouseConfig,
     NetworkConfig, ProcessesConfig, ScreenConfig, ShellHistoryConfig, SystemConfig,
-    SystemPerformanceConfig, TextUploadConfig, WeatherConfig, WifiConfig,
+    SystemPerformanceConfig, TextUploadConfig, WeatherConfig, WifiConfig, WindowActivityConfig,
 };
 
 pub fn load_config() -> CollectorConfig {
@@ -188,6 +188,12 @@ pub fn create_default_config() -> CollectorConfig {
             // avoid huge volumes of events.
             interval: 0.25,
             output_dir: lifelog_dir.join("mouse").display().to_string(),
+        }),
+        window_activity: Some(WindowActivityConfig {
+            enabled: false,
+            interval: 1.0,
+            output_dir: lifelog_dir.join("window_activity").display().to_string(),
+            backend: "auto".to_string(),
         }),
     }
 }
