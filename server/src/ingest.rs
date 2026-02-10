@@ -476,7 +476,7 @@ impl IngestBackend for SurrealIngestBackend {
 
         match result {
             Ok(resp) => {
-                let _ = resp.check();
+                resp.check().map_err(|e| e.to_string())?;
                 Ok(())
             }
             Err(e) => Err(e.to_string()),
