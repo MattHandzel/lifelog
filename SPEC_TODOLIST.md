@@ -81,7 +81,7 @@ Priority tiers:
 |---|------|----------|--------|-------|
 | 4.1 | Separate blobs to CAS (don't store inline in SurrealDB) | P0 | `[x]` | Screen/Camera/Audio blobs stored in CAS with `blob_hash` + `blob_size`. Clipboard binary payloads (when present) are now stored in CAS; SurrealDB stores only the CAS reference. |
 | 4.2 | Define & create text search indexes | P0 | `[x]` | `schema.rs` defines `lifelog_text` analyzer + BM25 search indexes for OCR text, browser URL/title, clipboard text, shell commands, and keystrokes. |
-| 4.3 | Durable ACK = metadata + blobs + indexes all persisted | P0 | `[~]` | ACK fires after metadata write. Must wait for text index update too (Spec §6.2.1). |
+| 4.3 | Durable ACK = metadata + blobs + indexes all persisted | P0 | `[~]` | `UploadChunks` ACK now only advances when the backend reports the chunk as indexed/queryable (`upload_chunks.indexed=true`). Remaining gap: full-text index update + derived-index completion (e.g. OCR) are not yet included in the ACK contract (Spec §6.2.1). |
 | 4.4 | Idempotent chunk writes with dedup key | P1 | `[x]` | `(collector_id, stream_id, session_id, offset)` used |
 | 4.5 | Catalog table for origin registry | P1 | `[x]` | `catalog` table avoids `INFO FOR DB` |
 | 4.6 | Per-modality typed schema with time index | P1 | `[x]` | `schema.rs` creates SCHEMAFULL tables + `_ts_idx` |
