@@ -368,7 +368,8 @@ v1 requires a query language that compiles deterministically to a typed query pl
 
 Implementation note (as of 2026-02-10):
 - Backend query engine supports `WITHIN(...)` via a two-stage plan (source timestamps -> target time-window filter).
-- Current limitation: `WITHIN(...)` is only supported under conjunctions (`AND`), not under `OR`/`NOT`, and `DURING(...)`/`OVERLAPS(...)` remain unimplemented.
+- Backend query engine supports a basic `DURING(...)` via a two-stage plan (source intervals -> target time-window filter).
+- Current limitation: temporal joins (`WITHIN(...)`/`DURING(...)`) are only supported under conjunctions (`AND`), not under `OR`/`NOT`. `OVERLAPS(...)` and multi-stream predicate assembly for the canonical `DURING(audio, browser+OCR predicate)` example remain unimplemented.
 
 ### 10.2 Canonical Example (Must Work)
 

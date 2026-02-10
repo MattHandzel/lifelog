@@ -23,12 +23,14 @@ Phase 5: Polish & Architectural Cleanup (COMPLETED). Starting next logical featu
 - **Explicit Catalog**: Replaced `INFO FOR DB` table discovery with a dedicated `catalog` table for robust and efficient origin discovery during queries.
 - **Robust Transformation Pipeline**: Verified OCR transformation end-to-end, including watermark persistence and idempotent processing.
 - **Cross-Modal Search**: Successfully implemented and verified unified search across different data sources (Screen, Browser).
+- **Cross-Modal Correlation**: Added `DURING(...)` support as a two-stage query plan (source intervals -> target time-window filter) alongside `WITHIN(...)`.
 - **Performance Baselines**: Established throughput and latency benchmarks via `performance_suite.rs`.
 - **Improved Test Coverage**: Added unit tests for `DiskBuffer`, `TimeInterval`, `ReplayStep`, and config validation.
 
 ## What's Next
 
 - **IT-100 (Blob Separation)**: Ensure large payloads are strictly stored in CAS while metadata remains in SurrealDB.
+- **Canonical Query (Spec §10.2)**: Implement multi-stream `DURING(audio, browser+OCR predicate)` by assembling and intersecting time windows across streams.
 - **UI Connectivity**: Verify frontend can consume the refactored `Query`/`GetData` API.
 - **New Modalities**: Re-enable and modernize `Hyprland` and `Microphone` capture modules.
 - **Security Audit**: Implement REQ-026 (Pairing) and REQ-025 (TLS Enforcement).
