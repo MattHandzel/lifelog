@@ -60,7 +60,8 @@ impl ClipboardDataSource {
             if s.is_empty() {
                 continue;
             }
-            if self.config.max_text_bytes > 0 && s.as_bytes().len() > self.config.max_text_bytes as usize
+            if self.config.max_text_bytes > 0
+                && s.as_bytes().len() > self.config.max_text_bytes as usize
             {
                 s.truncate(self.config.max_text_bytes as usize);
             }
@@ -186,15 +187,20 @@ impl BufferedSource for ClipboardBufferedSource {
         max_items: usize,
     ) -> Result<(u64, Vec<Vec<u8>>), LifelogError> {
         let (next_offset, raws) = self.buffer.peek_chunk(max_items).await.map_err(|e| {
-            LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
         })?;
         Ok((next_offset, raws))
     }
 
     async fn commit_upload(&self, offset: u64) -> Result<(), LifelogError> {
         self.buffer.commit_offset(offset).await.map_err(|e| {
-            LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
         })
     }
 }
-

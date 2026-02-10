@@ -429,8 +429,7 @@ impl Collector {
                             .insert("clipboard".to_string(), Box::new(running_src));
                     }
                     Err(e) => {
-                        let err =
-                            LifelogError::SourceSetup("clipboard".to_string(), e.to_string());
+                        let err = LifelogError::SourceSetup("clipboard".to_string(), e.to_string());
                         tracing::error!("{}", err);
                         setup_errors.push(err);
                     }
@@ -461,10 +460,8 @@ impl Collector {
                             .insert("shell_history".to_string(), Box::new(running_src));
                     }
                     Err(e) => {
-                        let err = LifelogError::SourceSetup(
-                            "shell_history".to_string(),
-                            e.to_string(),
-                        );
+                        let err =
+                            LifelogError::SourceSetup("shell_history".to_string(), e.to_string());
                         tracing::error!("{}", err);
                         setup_errors.push(err);
                     }
@@ -618,8 +615,8 @@ impl Collector {
         }
 
         if let Some(running_src_trait) = self.sources.get("shell_history") {
-            if let Some(running_shell_src) = (running_src_trait as &dyn Any)
-                .downcast_ref::<RunningSource<ShellHistoryConfig>>()
+            if let Some(running_shell_src) =
+                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ShellHistoryConfig>>()
             {
                 let guard = running_shell_src.instance.lock().await;
                 if let Some(shell_ds) = guard.as_any().downcast_ref::<ShellHistoryDataSource>() {
@@ -630,10 +627,7 @@ impl Collector {
                             0
                         }
                     };
-                    buffer_states.push(format!(
-                        "Shell history source buffer length: {}",
-                        buf_size
-                    ));
+                    buffer_states.push(format!("Shell history source buffer length: {}", buf_size));
                     total += buf_size;
                     source_states.push(format!(
                         "Shell history source running state: {}",

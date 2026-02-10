@@ -66,9 +66,7 @@ impl ShellHistoryDataSource {
         Some((Utc.timestamp_opt(epoch, 0).single()?, cmd.to_string()))
     }
 
-    fn parse_bash_histtime(
-        lines: &[String],
-    ) -> Vec<(chrono::DateTime<Utc>, String)> {
+    fn parse_bash_histtime(lines: &[String]) -> Vec<(chrono::DateTime<Utc>, String)> {
         // Format:
         //   # 1700000000
         //   command
@@ -118,8 +116,7 @@ impl ShellHistoryDataSource {
         }
 
         let mut f = File::open(&path).map_err(LifelogError::Io)?;
-        f.seek(SeekFrom::Start(cursor))
-            .map_err(LifelogError::Io)?;
+        f.seek(SeekFrom::Start(cursor)).map_err(LifelogError::Io)?;
         let mut reader = BufReader::new(f);
 
         let mut lines = Vec::new();
@@ -293,14 +290,20 @@ impl BufferedSource for ShellHistoryBufferedSource {
         max_items: usize,
     ) -> Result<(u64, Vec<Vec<u8>>), LifelogError> {
         let (next_offset, raws) = self.buffer.peek_chunk(max_items).await.map_err(|e| {
-            LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
         })?;
         Ok((next_offset, raws))
     }
 
     async fn commit_upload(&self, offset: u64) -> Result<(), LifelogError> {
         self.buffer.commit_offset(offset).await.map_err(|e| {
-            LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
         })
     }
 }
@@ -311,8 +314,8 @@ mod tests {
 
     #[test]
     fn parse_zsh_extended_line() {
-        let (ts, cmd) = ShellHistoryDataSource::parse_zsh_extended(": 1700000000:0;ls -la")
-            .expect("parse");
+        let (ts, cmd) =
+            ShellHistoryDataSource::parse_zsh_extended(": 1700000000:0;ls -la").expect("parse");
         assert_eq!(cmd, "ls -la");
         assert_eq!(ts.timestamp(), 1700000000);
     }

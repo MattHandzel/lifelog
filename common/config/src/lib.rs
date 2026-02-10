@@ -10,10 +10,10 @@ pub use server_config::*;
 
 // Re-export all config types from lifelog_types
 pub use lifelog_types::{
-    AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, ClipboardConfig, CollectorConfig,
-    GeoConfig, HyprlandConfig, InputLoggerConfig, MicrophoneConfig, NetworkConfig, ProcessesConfig,
-    ScreenConfig, ShellHistoryConfig, SystemConfig, SystemPerformanceConfig, TextUploadConfig,
-    WeatherConfig, WifiConfig,
+    AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, ClipboardConfig,
+    CollectorConfig, GeoConfig, HyprlandConfig, InputLoggerConfig, MicrophoneConfig, NetworkConfig,
+    ProcessesConfig, ScreenConfig, ShellHistoryConfig, SystemConfig, SystemPerformanceConfig,
+    TextUploadConfig, WeatherConfig, WifiConfig,
 };
 
 pub fn load_config() -> CollectorConfig {
@@ -54,10 +54,9 @@ pub fn load_config() -> CollectorConfig {
     // forwards/backwards compatible, we merge the user config on top of defaults at the TOML
     // value level before deserializing into `CollectorConfig`.
     let default_config = create_default_config();
-    let default_toml: toml::Value = toml::from_str(
-        &toml::to_string(&default_config).unwrap_or_else(|_| String::new()),
-    )
-    .unwrap_or(toml::Value::Table(Default::default()));
+    let default_toml: toml::Value =
+        toml::from_str(&toml::to_string(&default_config).unwrap_or_else(|_| String::new()))
+            .unwrap_or(toml::Value::Table(Default::default()));
 
     let user_toml: toml::Value = match toml::from_str(&replace_home_dir_in_path(config_str)) {
         Ok(v) => v,
