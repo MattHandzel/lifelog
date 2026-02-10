@@ -1,9 +1,11 @@
 use crate::ingest::SurrealIngestBackend;
 use crate::server::ServerHandle;
+use chrono::Utc;
 use futures_core::Stream;
 use lifelog_types::lifelog_server_service_server::LifelogServerService;
 use lifelog_types::*;
 use std::pin::Pin;
+use std::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::{Request, Response, Status, Streaming};
@@ -34,6 +36,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                             Some(lifelog_types::control_message::Msg::Register(reg)) => {
                                 tracing::info!(id = %collector_id, "Registering collector");
                                 let (cmd_tx, mut cmd_rx) = tokio::sync::mpsc::channel(32);
+                                let cmd_tx_clock = cmd_tx.clone();
                                 let registered = crate::server::RegisteredCollector {
                                     id: collector_id.clone(),
                                     address: "unknown".to_string(), // TODO: extract from peer
@@ -50,6 +53,25 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                                         let _ = tx_clone.send(cmd).await;
                                     }
                                 });
+
+                                // Periodic clock-sync pings to improve skew estimation.
+                                // This exercises the command channel and allows collectors to report
+                                // (device_now, backend_now) pairs.
+                                tokio::spawn(async move {
+                                    let mut interval =
+                                        tokio::time::interval(Duration::from_secs(30));
+                                    loop {
+                                        interval.tick().await;
+                                        let backend_now = Utc::now().to_rfc3339();
+                                        let cmd = Ok(ServerCommand {
+                                            r#type: CommandType::ClockSync as i32,
+                                            payload: backend_now,
+                                        });
+                                        if cmd_tx_clock.send(cmd).await.is_err() {
+                                            break;
+                                        }
+                                    }
+                                });
                             }
                             Some(lifelog_types::control_message::Msg::State(report)) => {
                                 if let Some(state) = report.state {
@@ -57,13 +79,21 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                                 }
                             }
                             Some(lifelog_types::control_message::Msg::ClockSample(sample)) => {
+                                let backend_now = sample.backend_now.and_then(|ts| {
+                                    chrono::DateTime::from_timestamp(ts.seconds, ts.nanos as u32)
+                                });
+
                                 if let Some(ts) = sample.device_now {
                                     if let Some(device_now) = chrono::DateTime::from_timestamp(
                                         ts.seconds,
                                         ts.nanos as u32,
                                     ) {
                                         server_handle
-                                            .handle_clock_sample(&collector_id, device_now)
+                                            .handle_clock_sample(
+                                                &collector_id,
+                                                device_now,
+                                                backend_now,
+                                            )
                                             .await;
                                     }
                                 }

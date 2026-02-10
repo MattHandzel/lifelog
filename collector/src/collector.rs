@@ -193,6 +193,9 @@ impl Collector {
         let response = client.control_stream(stream_req).await?;
         let mut server_commands = response.into_inner();
 
+        let control_tx_for_commands = tx.clone();
+        let collector_id_for_commands = collector_id.clone();
+
         tokio::spawn(async move {
             tracing::info!("ControlStream established, listening for commands");
             while let Some(command_result) = server_commands.next().await {
@@ -202,6 +205,26 @@ impl Collector {
                         if command.r#type == lifelog_types::CommandType::BeginUploadSession as i32 {
                             let coll = handle.collector.write().await;
                             let _ = coll.upload_trigger.try_send(());
+                        } else if command.r#type == lifelog_types::CommandType::ClockSync as i32 {
+                            // Server sends its current time as RFC3339 in payload; echo it back as
+                            // backend_now so server can estimate clock skew.
+                            if let Ok(parsed) =
+                                chrono::DateTime::parse_from_rfc3339(command.payload.trim())
+                            {
+                                let backend_now = parsed.with_timezone(&chrono::Utc);
+                                let clock_msg = ControlMessage {
+                                    collector_id: collector_id_for_commands.clone(),
+                                    msg: Some(lifelog_types::control_message::Msg::ClockSample(
+                                        lifelog_types::ClockSample {
+                                            device_now: lifelog_types::to_pb_ts(chrono::Utc::now()),
+                                            backend_now: lifelog_types::to_pb_ts(backend_now),
+                                        },
+                                    )),
+                                };
+                                // Best-effort. If ControlStream is failing, other logic will
+                                // reconnect anyway.
+                                let _ = control_tx_for_commands.send(clock_msg).await;
+                            }
                         }
                     }
                     Err(e) => {
@@ -601,6 +624,7 @@ impl Collector {
                 msg: Some(lifelog_types::control_message::Msg::ClockSample(
                     lifelog_types::ClockSample {
                         device_now: lifelog_types::to_pb_ts(chrono::Utc::now()),
+                        backend_now: None,
                     },
                 )),
             };

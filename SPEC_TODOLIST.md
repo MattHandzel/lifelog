@@ -26,9 +26,9 @@ Priority tiers:
 |---|------|--------|-------|
 | 1.1 | Add `t_device`, `t_ingest`, `t_canonical` fields to proto records | `[x]` | Frame protos now include `t_device`/`t_ingest`/`t_canonical` (plus `t_end`); server populates them in `GetData` responses. |
 | 1.2 | Add `time_quality` enum to proto (Good/Degraded/Unknown) | `[x]` | Added `TimeQuality` enum to proto; server maps stored quality strings (`good`/`degraded`/`unknown`) into the enum for responses. |
-| 1.3 | Collector reports `(device_now, backend_now)` samples in `ControlMessage` | `[ ]` | Needed for skew estimation |
-| 1.4 | Server computes & stores `skew_estimate` per collector | `[ ]` | `time_skew.rs` has the algorithm, not integrated |
-| 1.5 | Server computes `t_canonical = t_device + skew` at ingest time | `[ ]` | `ingest.rs` stores raw timestamp only |
+| 1.3 | Collector reports `(device_now, backend_now)` samples in `ControlMessage` | `[x]` | Implemented clock sync: server sends `ClockSync` command with `backend_now`, collector responds with `ClockSample { device_now, backend_now }` (`collector/src/collector.rs`, `server/src/grpc_service.rs`, `proto/lifelog.proto`). |
+| 1.4 | Server computes & stores `skew_estimate` per collector | `[x]` | `ServerHandle::handle_clock_sample` stores recent samples and updates `skew_estimates` (`server/src/server.rs`, `common/lifelog-core/src/time_skew.rs`). |
+| 1.5 | Server computes `t_canonical = t_device + skew` at ingest time | `[x]` | Ingest applies per-collector skew estimate and persists `t_ingest`/`t_canonical`/`t_end`/`time_quality` (`server/src/ingest.rs`). |
 | 1.6 | Add point vs interval semantics to proto (explicit `record_type` field) | `[ ]` | Some frames have `duration_secs`, but no formal model |
 | 1.7 | Define global default correlation window `Δt_default` in config | `[ ]` | Spec §4.3 requires this |
 | 1.8 | Support per-predicate `Δt` overrides in query AST | `[ ]` | AST has `Within` operator but no window config |
