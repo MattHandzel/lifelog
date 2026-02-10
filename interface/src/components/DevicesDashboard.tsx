@@ -5,15 +5,12 @@ import {
   Camera, 
   Mic, 
   Monitor, 
-  Activity, 
-  Settings, 
-  Power,
   RefreshCw,
   AlertCircle
 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Switch } from './ui/switch';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import ScreenDashboard from './ScreenDashboard';
 import { cn } from '../lib/utils';
 
@@ -22,11 +19,6 @@ interface BaseConfig {
   enabled: boolean;
   interval?: number;
   output_dir?: string;
-}
-
-interface ScreenConfig extends BaseConfig {
-  program?: string;
-  timestamp_format?: string;
 }
 
 interface CameraConfig extends BaseConfig {

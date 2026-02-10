@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Login } from './components/Login';
 import SearchDashboard from './components/SearchDashboard';
 import DevicesDashboard from './components/DevicesDashboard';
-import { LayoutDashboard, Settings, Search, Laptop, Shield, Power } from "lucide-react";
+import { LayoutDashboard, Settings, Search, Laptop, Shield } from "lucide-react";
 import FeatureTabs from "./components/FeatureTabs.tsx";
 import { cn } from "./lib/utils";
 import { Switch } from "./components/ui/switch";
@@ -287,4 +287,3 @@ function App(): JSX.Element {
 }
 
 export default App;
-
