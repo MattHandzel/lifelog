@@ -158,6 +158,134 @@ pub async fn execute(
             }
             Ok(keys)
         }
+        ExecutionPlan::DuringQuery {
+            target_table,
+            target_origin,
+            target_base_where,
+            source_plans,
+            max_source_intervals,
+            max_time_clauses,
+        } => {
+            #[derive(serde::Deserialize, Debug)]
+            struct IntervalRow {
+                timestamp: surrealdb::sql::Datetime,
+                // Optional: many modalities won't have it.
+                duration_secs: Option<f64>,
+            }
+
+            let mut intervals: Vec<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> =
+                Vec::new();
+
+            for sp in &source_plans {
+                tracing::debug!(source_table = %sp.source_table, "Executing DURING source query");
+                let mut resp = db.query(sp.sql.clone()).await?;
+                let rows: Vec<IntervalRow> = resp.take(0)?;
+                tracing::debug!(
+                    source_table = %sp.source_table,
+                    rows = %rows.len(),
+                    "DURING source query returned rows"
+                );
+
+                for r in rows {
+                    let start = r.timestamp.0;
+                    let dur = r.duration_secs.unwrap_or(0.0);
+                    let dur_ms = if dur.is_finite() && dur > 0.0 {
+                        (dur * 1000.0).round() as i64
+                    } else {
+                        0
+                    };
+                    let end = start + chrono::Duration::milliseconds(dur_ms);
+                    intervals.push((start, end));
+                    if intervals.len() >= max_source_intervals {
+                        break;
+                    }
+                }
+
+                if intervals.len() >= max_source_intervals {
+                    intervals.truncate(max_source_intervals);
+                    break;
+                }
+            }
+
+            if intervals.is_empty() {
+                tracing::debug!("DURING: no source intervals; returning 0 results");
+                return Ok(vec![]);
+            }
+
+            // Normalize and merge overlapping intervals to keep SQL bounded.
+            intervals.sort_by_key(|(s, _e)| *s);
+            let mut merged: Vec<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> =
+                Vec::new();
+            for (s, e) in intervals {
+                let (start, end) = if e < s { (s, s) } else { (s, e) };
+                match merged.last_mut() {
+                    Some((_cur_start, cur_end)) => {
+                        // Treat adjacency as mergeable.
+                        if start <= *cur_end {
+                            if end > *cur_end {
+                                *cur_end = end;
+                            }
+                        } else {
+                            merged.push((start, end));
+                        }
+                    }
+                    None => merged.push((start, end)),
+                }
+                if merged.len() >= max_time_clauses {
+                    break;
+                }
+            }
+
+            tracing::debug!(merged_intervals = %merged.len(), "DURING: merged intervals");
+
+            let mut clauses = Vec::with_capacity(merged.len());
+            for (start, end) in merged {
+                clauses.push(format!(
+                    "(timestamp >= d'{}' AND timestamp <= d'{}')",
+                    start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                    end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
+                ));
+            }
+            let time_where = clauses.join(" OR ");
+
+            let sql = format!(
+                "SELECT uuid FROM `{}` WHERE ({}) AND ({});",
+                target_table, target_base_where, time_where
+            );
+
+            tracing::info!(
+                target_table = %target_table,
+                source_tables = %source_plans.len(),
+                time_clauses = %clauses.len(),
+                sql_len = %sql.len(),
+                "Executing DURING target query"
+            );
+
+            let mut response = db.query(sql).await?;
+
+            #[derive(serde::Deserialize, Debug)]
+            struct UuidResult {
+                uuid: String,
+            }
+
+            let results: Vec<UuidResult> = response.take(0)?;
+            tracing::info!(rows = %results.len(), "DURING target query returned uuids");
+
+            let mut seen = BTreeSet::new();
+            let mut keys = Vec::new();
+            for res in results {
+                if let Ok(uuid) = res.uuid.parse::<lifelog_core::uuid::Uuid>() {
+                    if seen.insert(uuid) {
+                        keys.push(LifelogFrameKey {
+                            uuid,
+                            origin: target_origin.clone(),
+                        });
+                    }
+                }
+            }
+
+            Ok(keys)
+        }
         ExecutionPlan::Unsupported(msg) => Err(anyhow::anyhow!("Unsupported query plan: {}", msg)),
     }
 }
