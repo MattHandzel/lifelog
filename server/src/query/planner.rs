@@ -35,7 +35,7 @@ pub enum ExecutionPlan {
         target_table: String,
         target_origin: DataOrigin,
         target_base_where: String,
-        source_plans: Vec<DuringSourcePlan>,
+        during_terms: Vec<DuringTermPlan>,
         max_source_intervals: usize,
         max_time_clauses: usize,
     },
@@ -56,6 +56,12 @@ pub struct DuringSourcePlan {
     pub source_table: String,
     pub source_origin: DataOrigin,
     pub sql: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DuringTermPlan {
+    pub source_plans: Vec<DuringSourcePlan>,
+    pub window: chrono::Duration,
 }
 
 pub struct Planner;
@@ -84,13 +90,42 @@ impl Planner {
                             sql_terms.join(" AND ")
                         };
 
-                        let Some(temporal) = temporal_terms else {
+                        if temporal_terms.is_empty() {
                             let sql = format!("SELECT uuid FROM `{}` WHERE {};", table, target_base_where);
                             return ExecutionPlan::TableQuery { table, origin, sql };
                         };
 
-                        match temporal {
-                            TemporalTerm::Within(within) => {
+                        let has_within = temporal_terms
+                            .iter()
+                            .any(|t| matches!(t, TemporalTerm::Within(_)));
+                        let has_during = temporal_terms
+                            .iter()
+                            .any(|t| matches!(t, TemporalTerm::During(_)));
+
+                        if has_within && has_during {
+                            return ExecutionPlan::Unsupported(
+                                "Mixing WITHIN and DURING in a single query is not supported yet"
+                                    .to_string(),
+                            );
+                        }
+
+                        if has_within {
+                            if temporal_terms.len() != 1 {
+                                return ExecutionPlan::Unsupported(
+                                    "Multiple WITHIN terms are not supported yet".to_string(),
+                                );
+                            }
+                            let Some(term) = temporal_terms.into_iter().next() else {
+                                return ExecutionPlan::Unsupported(
+                                    "missing temporal term".to_string(),
+                                );
+                            };
+                            let TemporalTerm::Within(within) = term else {
+                                return ExecutionPlan::Unsupported(
+                                    "invalid temporal term".to_string(),
+                                );
+                            };
+
                                 // Resolve source streams for the WITHIN clause.
                                 let source_origins =
                                     Self::resolve_selector(&within.stream, available_origins);
@@ -134,8 +169,14 @@ impl Planner {
                                     max_source_timestamps: DEFAULT_MAX_SOURCE_TIMESTAMPS,
                                     max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
                                 }
-                            }
-                            TemporalTerm::During(during) => {
+                        } else {
+                            // DURING terms: build one interval set per term, then intersect at execution time.
+                            let mut during_terms = Vec::new();
+                            for t in temporal_terms {
+                                let TemporalTerm::During(during) = t else {
+                                    return ExecutionPlan::Unsupported("invalid temporal term".to_string());
+                                };
+
                                 let source_origins =
                                     Self::resolve_selector(&during.stream, available_origins);
                                 if source_origins.is_empty() {
@@ -150,7 +191,8 @@ impl Planner {
                                     );
                                 }
 
-                                let source_where = Self::compile_expression_sql(&during.predicate);
+                                let source_where =
+                                    Self::compile_expression_sql(&during.predicate);
                                 let source_plans = source_origins
                                     .into_iter()
                                     .map(|source_origin| {
@@ -169,14 +211,19 @@ impl Planner {
                                     })
                                     .collect();
 
-                                ExecutionPlan::DuringQuery {
-                                    target_table: table,
-                                    target_origin: origin,
-                                    target_base_where,
+                                during_terms.push(DuringTermPlan {
                                     source_plans,
-                                    max_source_intervals: DEFAULT_MAX_SOURCE_INTERVALS,
-                                    max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
-                                }
+                                    window: during.window,
+                                });
+                            }
+
+                            ExecutionPlan::DuringQuery {
+                                target_table: table,
+                                target_origin: origin,
+                                target_base_where,
+                                during_terms,
+                                max_source_intervals: DEFAULT_MAX_SOURCE_INTERVALS,
+                                max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
                             }
                         }
                     }
@@ -229,12 +276,10 @@ impl Planner {
     }
 
     /// Attempts to decompose `expr` into a conjunction of SQL-compilable terms plus
-    /// at most one top-level temporal join term (`WITHIN(...)` or `DURING(...)`).
+    /// one or more top-level temporal join terms (`WITHIN(...)` and/or `DURING(...)`).
     ///
     /// Current limitation (intentional): `WITHIN` cannot appear under `OR` / `NOT`.
-    fn compile_conjunctive(
-        expr: &Expression,
-    ) -> Result<(Vec<String>, Option<TemporalTerm>), String> {
+    fn compile_conjunctive(expr: &Expression) -> Result<(Vec<String>, Vec<TemporalTerm>), String> {
         let mut sql_terms: Vec<String> = Vec::new();
         let mut temporal_terms: Vec<TemporalTerm> = Vec::new();
 
@@ -257,10 +302,15 @@ impl Planner {
                     predicate: (**predicate).clone(),
                     window: *window,
                 })),
-                Expression::During { stream, predicate } => {
+                Expression::During {
+                    stream,
+                    predicate,
+                    window,
+                } => {
                     temporal_terms.push(TemporalTerm::During(DuringTerm {
                         stream: stream.clone(),
                         predicate: (**predicate).clone(),
+                        window: *window,
                     }));
                 }
                 Expression::Or(..) | Expression::Not(..) => {
@@ -276,13 +326,7 @@ impl Planner {
             }
         }
 
-        if temporal_terms.is_empty() {
-            return Ok((sql_terms, None));
-        }
-        if temporal_terms.len() > 1 {
-            return Err("Multiple temporal join terms are not supported yet".to_string());
-        }
-        Ok((sql_terms, temporal_terms.into_iter().next()))
+        Ok((sql_terms, temporal_terms))
     }
 
     fn contains_temporal_ops(expr: &Expression) -> bool {
@@ -363,6 +407,7 @@ struct WithinTerm {
 struct DuringTerm {
     stream: StreamSelector,
     predicate: Expression,
+    window: chrono::Duration,
 }
 
 #[derive(Debug, Clone, PartialEq)]
