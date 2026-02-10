@@ -19,7 +19,7 @@ Last updated: 2026-02-10
 
 ## P1 (v1 Requirements)
 
-- `[ ]` Remove hardcoded DB credentials (`server/src/server.rs`)
+- `[x]` Remove hardcoded DB credentials (`server/src/server.rs`) (now requires `LIFELOG_DB_USER`/`LIFELOG_DB_PASS`)
 - `[ ]` Security: TLS enforcement + pairing + auth on RPCs
 - `[ ]` Collector: audio, clipboard, shell, mouse, window activity modules (plus safe defaults)
 - `[ ]` UI: replay view + query builder/templates + previews

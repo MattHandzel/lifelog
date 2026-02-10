@@ -85,7 +85,7 @@ Priority tiers:
 | 4.4 | Idempotent chunk writes with dedup key | P1 | `[x]` | `(collector_id, stream_id, session_id, offset)` used |
 | 4.5 | Catalog table for origin registry | P1 | `[x]` | `catalog` table avoids `INFO FOR DB` |
 | 4.6 | Per-modality typed schema with time index | P1 | `[x]` | `schema.rs` creates SCHEMAFULL tables + `_ts_idx` |
-| 4.7 | Remove hardcoded DB credentials | P1 | `[ ]` | `server.rs` has `root/root`. Use env var or secrets file. |
+| 4.7 | Remove hardcoded DB credentials | P1 | `[x]` | `server/src/server.rs` now reads `LIFELOG_DB_USER` / `LIFELOG_DB_PASS` from env (no hardcoded creds). |
 | 4.8 | Populate `ServerState.total_frames_stored` and `disk_usage_bytes` | P2 | `[ ]` | Proto fields added but not wired to queries |
 
 ---
