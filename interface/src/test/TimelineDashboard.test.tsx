@@ -31,7 +31,11 @@ describe('TimelineDashboard', () => {
       { uuid: 'xyz98765-uvwx-4321-abcd-efghijklmnop', origin: 'collector:Audio', modality: 'Audio', timestamp: 1700001000 },
     ];
 
-    mockInvoke('query_timeline', () => mockEntries);
+    let capturedArgs: unknown = null;
+    mockInvoke('query_timeline', (args) => {
+      capturedArgs = args;
+      return mockEntries;
+    });
 
     render(<TimelineDashboard />);
 
@@ -45,6 +49,10 @@ describe('TimelineDashboard', () => {
       expect(screen.getByText('Screen')).toBeInTheDocument();
       expect(screen.getByText('Audio')).toBeInTheDocument();
     });
+
+    // Text mode should pass a string array.
+    const args = capturedArgs as Record<string, unknown>;
+    expect(args.textQuery).toEqual(['test query']);
 
     // UUIDs are truncated to 16 chars + "..."
     expect(screen.getByText('abc12345-def6-78...')).toBeInTheDocument();

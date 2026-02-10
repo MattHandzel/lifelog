@@ -19,6 +19,7 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [textQuery, setTextQuery] = useState<string>('');
+  const [queryMode, setQueryMode] = useState<'text' | 'llql'>('text');
   const [results, setResults] = useState<TimelineEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -45,10 +46,16 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
     try {
       const startTime = startDate ? Math.floor(new Date(startDate).getTime() / 1000) : undefined;
       const endTime = endDate ? Math.floor(new Date(endDate).getTime() / 1000) : undefined;
+      const q = textQuery.trim();
+      const queryText = q.length === 0
+        ? undefined
+        : queryMode === 'llql'
+          ? [(q.startsWith('llql:') || q.startsWith('llql-json:')) ? q : `llql:${q}`]
+          : [q];
 
       const entries = await invoke<TimelineEntry[]>('query_timeline', {
         collectorId: collectorId || undefined,
-        textQuery: textQuery || undefined,
+        textQuery: queryText,
         startTime,
         endTime,
       });
@@ -84,12 +91,34 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
         <div className="p-6 space-y-4">
           {/* Text Search */}
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-[#F9FAFB]">Search</label>
+            <div className="flex items-center justify-between gap-2">
+              <label className="block text-sm font-medium text-[#F9FAFB]">Search</label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={queryMode === 'text' ? 'secondary' : 'outline'}
+                  onClick={() => setQueryMode('text')}
+                  disabled={isLoading}
+                >
+                  Text
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={queryMode === 'llql' ? 'secondary' : 'outline'}
+                  onClick={() => setQueryMode('llql')}
+                  disabled={isLoading}
+                >
+                  LLQL
+                </Button>
+              </div>
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-[#9CA3AF] w-5 h-5" />
               <Input
                 type="text"
-                placeholder="Enter search query..."
+                placeholder={queryMode === 'llql' ? 'Enter LLQL JSON (or llql:...)' : 'Enter search query...'}
                 value={textQuery}
                 onChange={(e) => setTextQuery(e.target.value)}
                 className="pl-10 bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
