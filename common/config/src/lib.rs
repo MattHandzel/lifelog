@@ -10,10 +10,10 @@ pub use server_config::*;
 
 // Re-export all config types from lifelog_types
 pub use lifelog_types::{
-    AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, CollectorConfig, GeoConfig,
-    HyprlandConfig, InputLoggerConfig, MicrophoneConfig, NetworkConfig, ProcessesConfig,
-    ScreenConfig, SystemConfig, SystemPerformanceConfig, TextUploadConfig, WeatherConfig,
-    WifiConfig,
+    AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, ClipboardConfig, CollectorConfig,
+    GeoConfig, HyprlandConfig, InputLoggerConfig, MicrophoneConfig, NetworkConfig, ProcessesConfig,
+    ScreenConfig, ShellHistoryConfig, SystemConfig, SystemPerformanceConfig, TextUploadConfig,
+    WeatherConfig, WifiConfig,
 };
 
 pub fn load_config() -> CollectorConfig {
@@ -49,15 +49,50 @@ pub fn load_config() -> CollectorConfig {
         return create_default_config();
     }
 
-    // Use a custom deserializer or just allow missing fields to be Default?
-    // Proto structs with pbjson support serde(default) on the struct if we added it in build.rs.
-    // I added #[derive(serde::Serialize, serde::Deserialize)] but not #[serde(default)].
-    // For now, assume config is complete or manually default it.
-    match toml::from_str::<CollectorConfig>(&replace_home_dir_in_path(config_str)) {
+    // The generated proto config structs do not guarantee `#[serde(default)]`, so missing
+    // fields can fail deserialization after we add new config options. To keep config files
+    // forwards/backwards compatible, we merge the user config on top of defaults at the TOML
+    // value level before deserializing into `CollectorConfig`.
+    let default_config = create_default_config();
+    let default_toml: toml::Value = toml::from_str(
+        &toml::to_string(&default_config).unwrap_or_else(|_| String::new()),
+    )
+    .unwrap_or(toml::Value::Table(Default::default()));
+
+    let user_toml: toml::Value = match toml::from_str(&replace_home_dir_in_path(config_str)) {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to parse config file TOML, using defaults");
+            return default_config;
+        }
+    };
+
+    let mut merged = default_toml;
+    merge_toml(&mut merged, user_toml);
+
+    match toml::from_str::<CollectorConfig>(&toml::to_string(&merged).unwrap_or_default()) {
         Ok(config) => config,
         Err(e) => {
-            tracing::error!(error = %e, "Failed to parse config file, using defaults");
-            create_default_config()
+            tracing::error!(error = %e, "Failed to deserialize merged config, using defaults");
+            default_config
+        }
+    }
+}
+
+fn merge_toml(base: &mut toml::Value, overlay: toml::Value) {
+    match (base, overlay) {
+        (toml::Value::Table(base_tbl), toml::Value::Table(overlay_tbl)) => {
+            for (k, v) in overlay_tbl {
+                match base_tbl.get_mut(&k) {
+                    Some(existing) => merge_toml(existing, v),
+                    None => {
+                        base_tbl.insert(k, v);
+                    }
+                }
+            }
+        }
+        (base_slot, overlay_val) => {
+            *base_slot = overlay_val;
         }
     }
 }
@@ -134,6 +169,19 @@ pub fn create_default_config() -> CollectorConfig {
             interval: 300.0,
             output_dir: lifelog_dir.join("wifi").display().to_string(),
             scan_command: "nmcli -t -f SSID,SIGNAL,BSSID device wifi list".to_string(),
+        }),
+        clipboard: Some(ClipboardConfig {
+            enabled: false,
+            interval: 2.0,
+            output_dir: lifelog_dir.join("clipboard").display().to_string(),
+            max_text_bytes: 262_144,
+        }),
+        shell_history: Some(ShellHistoryConfig {
+            enabled: false,
+            interval: 2.0,
+            output_dir: lifelog_dir.join("shell_history").display().to_string(),
+            history_file: home_dir.join(".zsh_history").display().to_string(),
+            shell_type: "auto".to_string(),
         }),
     }
 }

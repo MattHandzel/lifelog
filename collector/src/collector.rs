@@ -1,9 +1,11 @@
 use super::data_source::{BufferedSource, DataSource, DataSourceHandle};
 use crate::modules::browser_history::BrowserHistorySource;
 use crate::modules::camera::CameraDataSource;
+use crate::modules::clipboard::ClipboardDataSource;
 use crate::modules::hyprland::HyprlandDataSource;
 use crate::modules::processes::ProcessDataSource;
 use crate::modules::screen::ScreenDataSource;
+use crate::modules::shell_history::ShellHistoryDataSource;
 use crate::modules::weather::WeatherDataSource;
 use async_trait::async_trait;
 use config;
@@ -18,8 +20,8 @@ use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
 use config::{
-    BrowserHistoryConfig, CameraConfig, HyprlandConfig, ProcessesConfig, ScreenConfig,
-    WeatherConfig,
+    BrowserHistoryConfig, CameraConfig, ClipboardConfig, HyprlandConfig, ProcessesConfig,
+    ScreenConfig, ShellHistoryConfig, WeatherConfig,
 };
 use lifelog_core::*;
 use lifelog_types::CollectorState;
@@ -409,6 +411,72 @@ impl Collector {
             }
         }
 
+        if config
+            .clipboard
+            .as_ref()
+            .map(|c| c.enabled)
+            .unwrap_or(false)
+        {
+            let config_clone = Arc::clone(&self.config);
+            match ClipboardDataSource::new(config_clone.clipboard.clone().unwrap()) {
+                Ok(clipboard_source) => match clipboard_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<ClipboardConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(clipboard_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("clipboard".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err =
+                            LifelogError::SourceSetup("clipboard".to_string(), e.to_string());
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = LifelogError::SourceSetup("clipboard".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
+        if config
+            .shell_history
+            .as_ref()
+            .map(|s| s.enabled)
+            .unwrap_or(false)
+        {
+            let config_clone = Arc::clone(&self.config);
+            match ShellHistoryDataSource::new(config_clone.shell_history.clone().unwrap()) {
+                Ok(shell_source) => match shell_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<ShellHistoryConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(shell_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("shell_history".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err = LifelogError::SourceSetup(
+                            "shell_history".to_string(),
+                            e.to_string(),
+                        );
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = LifelogError::SourceSetup("shell_history".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
         tracing::info!(active_sources = ?self.sources.keys(), "Sources started");
 
         if let Err(e) = self.report_state().await {
@@ -522,6 +590,55 @@ impl Collector {
                     let is_running = cam_ds.is_running();
                     let fs = format!("Camera source running state: {}", is_running);
                     source_states.push(fs.to_string());
+                }
+            }
+        }
+
+        if let Some(running_src_trait) = self.sources.get("clipboard") {
+            if let Some(running_clip_src) =
+                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ClipboardConfig>>()
+            {
+                let guard = running_clip_src.instance.lock().await;
+                if let Some(clip_ds) = guard.as_any().downcast_ref::<ClipboardDataSource>() {
+                    let buf_size = match clip_ds.buffer.get_uncommitted_size().await {
+                        Ok(s) => s as usize,
+                        Err(e) => {
+                            tracing::error!("Failed to get buffer size: {}", e);
+                            0
+                        }
+                    };
+                    buffer_states.push(format!("Clipboard source buffer length: {}", buf_size));
+                    total += buf_size;
+                    source_states.push(format!(
+                        "Clipboard source running state: {}",
+                        clip_ds.is_running()
+                    ));
+                }
+            }
+        }
+
+        if let Some(running_src_trait) = self.sources.get("shell_history") {
+            if let Some(running_shell_src) = (running_src_trait as &dyn Any)
+                .downcast_ref::<RunningSource<ShellHistoryConfig>>()
+            {
+                let guard = running_shell_src.instance.lock().await;
+                if let Some(shell_ds) = guard.as_any().downcast_ref::<ShellHistoryDataSource>() {
+                    let buf_size = match shell_ds.buffer.get_uncommitted_size().await {
+                        Ok(s) => s as usize,
+                        Err(e) => {
+                            tracing::error!("Failed to get buffer size: {}", e);
+                            0
+                        }
+                    };
+                    buffer_states.push(format!(
+                        "Shell history source buffer length: {}",
+                        buf_size
+                    ));
+                    total += buf_size;
+                    source_states.push(format!(
+                        "Shell history source running state: {}",
+                        shell_ds.is_running()
+                    ));
                 }
             }
         }
