@@ -390,6 +390,8 @@ This must be expressible and must return:
 
 - audio chunks (interval records) or audio segments clipped to correlated windows (defined explicitly by query).
 
+Implementation note (as of 2026-02-10): verified end-to-end via LLQL JSON integration test (`server/tests/canonical_llql_example.rs`).
+
 ### 10.3 Replay Queries
 
 Replay is a query mode that returns ordered steps:
