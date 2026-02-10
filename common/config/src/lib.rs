@@ -11,9 +11,9 @@ pub use server_config::*;
 // Re-export all config types from lifelog_types
 pub use lifelog_types::{
     AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, ClipboardConfig,
-    CollectorConfig, GeoConfig, HyprlandConfig, InputLoggerConfig, MicrophoneConfig, NetworkConfig,
-    ProcessesConfig, ScreenConfig, ShellHistoryConfig, SystemConfig, SystemPerformanceConfig,
-    TextUploadConfig, WeatherConfig, WifiConfig,
+    CollectorConfig, GeoConfig, HyprlandConfig, InputLoggerConfig, MicrophoneConfig, MouseConfig,
+    NetworkConfig, ProcessesConfig, ScreenConfig, ShellHistoryConfig, SystemConfig,
+    SystemPerformanceConfig, TextUploadConfig, WeatherConfig, WifiConfig,
 };
 
 pub fn load_config() -> CollectorConfig {
@@ -181,6 +181,13 @@ pub fn create_default_config() -> CollectorConfig {
             output_dir: lifelog_dir.join("shell_history").display().to_string(),
             history_file: home_dir.join(".zsh_history").display().to_string(),
             shell_type: "auto".to_string(),
+        }),
+        mouse: Some(MouseConfig {
+            enabled: false,
+            // Minimum capture interval for cursor snapshots. This is intentionally conservative to
+            // avoid huge volumes of events.
+            interval: 0.25,
+            output_dir: lifelog_dir.join("mouse").display().to_string(),
         }),
     }
 }

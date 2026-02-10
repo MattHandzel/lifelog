@@ -114,6 +114,7 @@ message CollectorConfig {
   WifiConfig wifi = 12;
   ClipboardConfig clipboard = 13;
   ShellHistoryConfig shell_history = 14;
+  MouseConfig mouse = 15;
 }
 
 message CollectorState {

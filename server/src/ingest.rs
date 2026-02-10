@@ -201,6 +201,13 @@ impl IngestBackend for SurrealIngestBackend {
                     DataModality::Browser
                 );
             }
+            "mouse" => {
+                ingest_frame!(
+                    lifelog_types::MouseFrame,
+                    lifelog_types::MouseRecord,
+                    DataModality::Mouse
+                );
+            }
             "processes" => {
                 ingest_frame!(
                     lifelog_types::ProcessFrame,

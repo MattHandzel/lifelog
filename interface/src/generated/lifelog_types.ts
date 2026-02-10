@@ -147,6 +147,7 @@ export interface CollectorConfig {
   wifi?: WifiConfig | undefined;
   clipboard?: ClipboardConfig | undefined;
   shellHistory?: ShellHistoryConfig | undefined;
+  mouse?: MouseConfig | undefined;
 }
 
 export interface CollectorState {

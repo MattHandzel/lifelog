@@ -277,6 +277,26 @@ mod helpers {
     }
 
     #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct MouseRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub x: f64,
+        pub y: f64,
+        pub button: i32,
+        pub pressed: bool,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
+    }
+
+    #[cfg(feature = "surrealdb")]
     impl ToRecord for ScreenFrame {
         type Record = ScreenRecord;
         fn to_record(&self) -> Self::Record {
@@ -458,6 +478,25 @@ mod helpers {
                 command: self.command.clone(),
                 working_dir: self.working_dir.clone(),
                 exit_code: self.exit_code,
+                t_ingest: None,
+                t_canonical: None,
+                t_end: None,
+                time_quality: None,
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for MouseFrame {
+        type Record = MouseRecord;
+        fn to_record(&self) -> Self::Record {
+            MouseRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                x: self.x,
+                y: self.y,
+                button: self.button,
+                pressed: self.pressed,
                 t_ingest: None,
                 t_canonical: None,
                 t_end: None,
@@ -881,6 +920,32 @@ mod tests {
         let record = frame.to_record();
         assert_eq!(record.url, "http://test");
         assert_eq!(record.visit_count, 5);
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[test]
+    fn test_mouse_to_record() {
+        let ts_pb = Some(::pbjson_types::Timestamp {
+            seconds: 12345,
+            nanos: 0,
+        });
+        let frame = MouseFrame {
+            uuid: lifelog_core::Uuid::new_v4().to_string(),
+            timestamp: ts_pb,
+            x: 12.5,
+            y: 99.25,
+            button: mouse_frame::MouseButton::Left as i32,
+            pressed: true,
+            t_device: ts_pb,
+            t_canonical: ts_pb,
+            t_end: ts_pb,
+            ..Default::default()
+        };
+        let record = frame.to_record();
+        assert_eq!(record.x, 12.5);
+        assert_eq!(record.y, 99.25);
+        assert_eq!(record.button, mouse_frame::MouseButton::Left as i32);
+        assert!(record.pressed);
     }
 
     #[test]

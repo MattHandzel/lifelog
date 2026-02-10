@@ -4,6 +4,7 @@ use crate::modules::browser_history::BrowserHistorySource;
 use crate::modules::camera::CameraDataSource;
 use crate::modules::clipboard::ClipboardDataSource;
 use crate::modules::hyprland::HyprlandDataSource;
+use crate::modules::mouse::MouseDataSource;
 use crate::modules::processes::ProcessDataSource;
 use crate::modules::screen::ScreenDataSource;
 use crate::modules::shell_history::ShellHistoryDataSource;
@@ -22,7 +23,7 @@ use tokio::time::Duration;
 
 use config::{
     BrowserHistoryConfig, CameraConfig, ClipboardConfig, HyprlandConfig, MicrophoneConfig,
-    ProcessesConfig, ScreenConfig, ShellHistoryConfig, WeatherConfig,
+    MouseConfig, ProcessesConfig, ScreenConfig, ShellHistoryConfig, WeatherConfig,
 };
 use lifelog_core::*;
 use lifelog_types::CollectorState;
@@ -527,6 +528,32 @@ impl Collector {
                 },
                 Err(e) => {
                     let err = LifelogError::SourceSetup("shell_history".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
+        if config.mouse.as_ref().map(|m| m.enabled).unwrap_or(false) {
+            let config_clone = Arc::clone(&self.config);
+            match MouseDataSource::new(config_clone.mouse.clone().unwrap()) {
+                Ok(mouse_source) => match mouse_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<MouseConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(mouse_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("mouse".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err = LifelogError::SourceSetup("mouse".to_string(), e.to_string());
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = LifelogError::SourceSetup("mouse".to_string(), e.to_string());
                     tracing::error!("{}", err);
                     setup_errors.push(err);
                 }
