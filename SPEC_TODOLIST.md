@@ -115,7 +115,7 @@ Retrieve audio during times when:
   - OCR text contains "3Blue1Brown"
 ```
 
-**Current status: NOT YET.** Basic `DURING` exists, but the canonical example needs predicate evaluation across multiple streams (browser + OCR) and interval assembly/intersection. This requires:
+**Current status: PARTIAL.** The backend supports multi-term `DURING(...)` via interval assembly + intersection, and LLQL JSON can express the canonical example. Remaining gaps: UI/DSL authoring, and end-to-end verification with real Audio capture + OCR-derived stream data. This requires:
 1. Query browser stream for records where URL contains "youtube" → get time windows
 2. Query OCR stream for records where text contains "3Blue1Brown" → get time windows
 3. Intersect the two time window sets
