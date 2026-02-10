@@ -22,10 +22,12 @@ import ScreenDashboard from "./ScreenDashboard";
 import CameraDashboard from "./CameraDashboard";
 import MicrophoneDashboard from "./MicrophoneDashboard";
 import TimelineDashboard from "./TimelineDashboard";
+import ReplayDashboard from "./ReplayDashboard";
 import PlaceholderDashboard from "./PlaceholderDashboard";
 
 type ModuleType =
   | "timeline"
+  | "replay"
   | "text_upload"
   | "processes"
   | "screen"
@@ -99,6 +101,15 @@ export default function FeatureTabs(): JSX.Element {
       component: <TimelineDashboard collectorId={null} />,
       implemented: true,
       description: "Browse your lifelog events by time",
+      category: "data"
+    },
+    {
+      id: "replay",
+      label: "Replay",
+      icon: ChevronRightIcon,
+      component: <ReplayDashboard />,
+      implemented: true,
+      description: "Step through a time window with aligned context",
       category: "data"
     },
     {
