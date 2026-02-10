@@ -44,6 +44,8 @@ Last updated: 2026-02-10
 
 - `[x]` Remove hardcoded DB credentials (`server/src/server.rs`) (now requires `LIFELOG_DB_USER`/`LIFELOG_DB_PASS`)
 - `[ ]` Security: TLS enforcement + pairing + auth on RPCs
+- `[x]` Collector: config hot-reload on `UpdateConfig` command (Spec §7.2)
+  - Applies JSON-encoded `CollectorConfig` payload and restarts sources without tearing down the ControlStream
 - `[~]` Collector: audio, clipboard, shell, mouse, window activity modules (plus safe defaults)
   - `[x]` Clipboard capture module (polls `wl-paste`/`xclip`/`xsel`; WAL-buffered; server ingest + retrieval wired)
   - `[x]` Shell history capture module (tails history file; zsh extended + bash `HISTTIMEFORMAT` parsing; WAL-buffered; server ingest + retrieval wired)

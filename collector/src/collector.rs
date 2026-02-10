@@ -70,11 +70,20 @@ impl<C: Send + Sync + Debug + Clone + 'static> RunningSourceTrait for RunningSou
         let guard = self.instance.lock().await;
         guard.get_buffered_source()
     }
+
+    async fn stop_source(&self) {
+        {
+            let mut guard = self.instance.lock().await;
+            let _ = guard.stop().await;
+        }
+        self.handle.join.abort();
+    }
 }
 
 #[async_trait]
 trait RunningSourceTrait: Send + Sync + 'static + Debug {
     async fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>>;
+    async fn stop_source(&self);
 }
 
 #[derive(Clone)]
@@ -227,6 +236,24 @@ impl Collector {
                                 // reconnect anyway.
                                 let _ = control_tx_for_commands.send(clock_msg).await;
                             }
+                        } else if command.r#type == lifelog_types::CommandType::UpdateConfig as i32
+                        {
+                            // Current contract: payload is JSON-encoded `CollectorConfig`.
+                            // (This is intentionally transitional; Spec §16.3 removes string payloads.)
+                            match serde_json::from_str::<config::CollectorConfig>(
+                                command.payload.trim(),
+                            ) {
+                                Ok(new_cfg) => {
+                                    tracing::info!("Applying UpdateConfig (hot reload)");
+                                    let mut coll = handle.collector.write().await;
+                                    if let Err(e) = coll.apply_config(new_cfg).await {
+                                        tracing::error!(error = %e, "UpdateConfig apply failed");
+                                    }
+                                }
+                                Err(e) => {
+                                    tracing::error!(error = %e, "UpdateConfig payload parse failed");
+                                }
+                            }
                         }
                     }
                     Err(e) => {
@@ -247,7 +274,7 @@ impl Collector {
 
     pub async fn start(&mut self) -> Result<(), LifelogError> {
         let config = Arc::clone(&self.config);
-        self.sources.clear();
+        self.stop_sources().await;
         let mut setup_errors: Vec<LifelogError> = Vec::new();
 
         if config.screen.as_ref().map(|s| s.enabled).unwrap_or(false) {
@@ -749,7 +776,23 @@ impl Collector {
         }
     }
 
-    pub fn stop(&mut self) {
+    async fn stop_sources(&mut self) {
+        let sources = std::mem::take(&mut self.sources);
+        for (name, src) in sources {
+            tracing::info!(source = %name, "Stopping source");
+            src.stop_source().await;
+        }
+    }
+
+    pub async fn apply_config(
+        &mut self,
+        config: config::CollectorConfig,
+    ) -> Result<(), LifelogError> {
+        self.config = Arc::new(config);
+        self.start().await
+    }
+
+    pub async fn stop(&mut self) {
         tracing::info!("Stopping Collector and sources");
 
         if let Some(handle) = self.task.take() {
@@ -757,10 +800,7 @@ impl Collector {
             tracing::info!("Aborted internal Collector task");
         }
 
-        for (name, _handle) in self.sources.drain() {
-            tracing::info!(source = %name, "Stopping source");
-        }
-        self.sources.clear();
+        self.stop_sources().await;
 
         self.control_tx = None;
         tracing::info!("Collector stopped");
@@ -768,7 +808,7 @@ impl Collector {
 
     pub async fn restart(&mut self) -> Result<(), LifelogError> {
         tracing::info!("Restarting Collector");
-        self.stop();
+        self.stop().await;
         tokio::time::sleep(Duration::from_secs(1)).await;
         self.start().await
     }
