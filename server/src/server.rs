@@ -338,6 +338,17 @@ impl Server {
         // LLQL (JSON) escape hatch: allow the UI to execute typed cross-modal queries
         // without changing the protobuf. Use `Query.text = ["llql:{...json...}"]`.
         if let Some(ast_query) = crate::query::llql::try_parse_llql(&query_msg.text)? {
+            let default_window_ms = self.config.default_correlation_window_ms;
+            let default_window =
+                chrono::Duration::milliseconds(i64::try_from(default_window_ms).unwrap_or(30_000));
+
+            let ast_query = crate::query::ast::Query {
+                target: ast_query.target,
+                filter: ast_query
+                    .filter
+                    .with_default_temporal_windows(default_window),
+            };
+
             let plan = crate::query::planner::Planner::plan(&ast_query, &scoped_origins);
             return crate::query::executor::execute(&self.db, plan)
                 .await

@@ -69,10 +69,103 @@ pub enum Expression {
     },
 }
 
+impl Expression {
+    /// Replace any zero windows on temporal operators with the provided global default.
+    ///
+    /// Callers can construct queries that omit explicit windows by setting the operator window to
+    /// `Duration::zero()` (LLQL supports omitting the field).
+    pub fn with_default_temporal_windows(self, default_window: Duration) -> Self {
+        match self {
+            Expression::And(a, b) => Expression::And(
+                Box::new(a.with_default_temporal_windows(default_window)),
+                Box::new(b.with_default_temporal_windows(default_window)),
+            ),
+            Expression::Or(a, b) => Expression::Or(
+                Box::new(a.with_default_temporal_windows(default_window)),
+                Box::new(b.with_default_temporal_windows(default_window)),
+            ),
+            Expression::Not(e) => {
+                Expression::Not(Box::new(e.with_default_temporal_windows(default_window)))
+            }
+
+            Expression::Within {
+                stream,
+                predicate,
+                window,
+            } => Expression::Within {
+                stream,
+                predicate: Box::new(predicate.with_default_temporal_windows(default_window)),
+                window: if window <= Duration::zero() {
+                    default_window
+                } else {
+                    window
+                },
+            },
+
+            Expression::During {
+                stream,
+                predicate,
+                window,
+            } => Expression::During {
+                stream,
+                predicate: Box::new(predicate.with_default_temporal_windows(default_window)),
+                window: if window <= Duration::zero() {
+                    default_window
+                } else {
+                    window
+                },
+            },
+
+            Expression::Overlaps {
+                stream,
+                predicate,
+                window,
+            } => Expression::Overlaps {
+                stream,
+                predicate: Box::new(predicate.with_default_temporal_windows(default_window)),
+                window: if window <= Duration::zero() {
+                    default_window
+                } else {
+                    window
+                },
+            },
+
+            other => other,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Value {
     String(String),
     Int(i64),
     Float(f64),
     Bool(bool),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_temporal_windows_replaces_zero() {
+        let q = Query {
+            target: StreamSelector::All,
+            filter: Expression::Within {
+                stream: StreamSelector::Modality("Browser".to_string()),
+                predicate: Box::new(Expression::Contains(
+                    "url".to_string(),
+                    "youtube".to_string(),
+                )),
+                window: Duration::zero(),
+            },
+        };
+
+        let default_window = Duration::seconds(30);
+        let out = q.filter.with_default_temporal_windows(default_window);
+        match out {
+            Expression::Within { window, .. } => assert_eq!(window, default_window),
+            _ => panic!("expected Within"),
+        }
+    }
 }
