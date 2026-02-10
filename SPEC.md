@@ -370,6 +370,7 @@ Implementation note (as of 2026-02-10):
 - Backend query engine supports `WITHIN(...)` via a two-stage plan (source timestamps -> target time-window filter).
 - Backend query engine supports `DURING(...)` via a two-stage plan (source intervals -> target time-window filter), including conjunction of multiple `DURING(...)` terms by intersecting interval sets.
 - Current limitation: temporal joins are only supported under conjunctions (`AND`), not under `OR`/`NOT`. `OVERLAPS(...)` is still unimplemented.
+- Interim API bridge: the backend accepts **LLQL JSON** embedded in `Query.text` via a `llql:` / `llql-json:` prefix, which is parsed into the typed AST and executed (enables cross-modal queries without a protobuf change).
 
 ### 10.2 Canonical Example (Must Work)
 
