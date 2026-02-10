@@ -98,17 +98,20 @@ enum LlqlExpr {
     Within {
         stream: LlqlSelector,
         predicate: Box<LlqlExpr>,
-        window: String,
+        #[serde(default)]
+        window: Option<String>,
     },
     During {
         stream: LlqlSelector,
         predicate: Box<LlqlExpr>,
-        window: String,
+        #[serde(default)]
+        window: Option<String>,
     },
     Overlaps {
         stream: LlqlSelector,
         predicate: Box<LlqlExpr>,
-        window: String,
+        #[serde(default)]
+        window: Option<String>,
     },
 }
 
@@ -164,7 +167,11 @@ impl LlqlExpr {
             } => Ok(ast::Expression::Within {
                 stream: stream.into_ast(),
                 predicate: Box::new(predicate.try_into_ast()?),
-                window: parse_duration(&window)?,
+                window: window
+                    .as_deref()
+                    .map(parse_duration)
+                    .transpose()?
+                    .unwrap_or_else(chrono::Duration::zero),
             }),
             LlqlExpr::During {
                 stream,
@@ -173,7 +180,11 @@ impl LlqlExpr {
             } => Ok(ast::Expression::During {
                 stream: stream.into_ast(),
                 predicate: Box::new(predicate.try_into_ast()?),
-                window: parse_duration(&window)?,
+                window: window
+                    .as_deref()
+                    .map(parse_duration)
+                    .transpose()?
+                    .unwrap_or_else(chrono::Duration::zero),
             }),
             LlqlExpr::Overlaps {
                 stream,
@@ -182,7 +193,11 @@ impl LlqlExpr {
             } => Ok(ast::Expression::Overlaps {
                 stream: stream.into_ast(),
                 predicate: Box::new(predicate.try_into_ast()?),
-                window: parse_duration(&window)?,
+                window: window
+                    .as_deref()
+                    .map(parse_duration)
+                    .transpose()?
+                    .unwrap_or_else(chrono::Duration::zero),
             }),
         }
     }
@@ -309,5 +324,28 @@ mod tests {
 
         assert_eq!(q.target, ast::StreamSelector::Modality("Audio".to_string()));
         assert!(matches!(q.filter, ast::Expression::And(_, _)));
+    }
+
+    #[test]
+    fn llql_window_is_optional_and_defaults_to_zero() {
+        let input = r#"llql:{
+          "target": {"type":"modality","modality":"Audio"},
+          "filter": {
+            "op":"during",
+            "stream": {"type":"modality","modality":"Browser"},
+            "predicate": {"op":"contains","field":"url","text":"youtube"}
+          }
+        }"#;
+
+        let parsed = try_parse_llql(&[input.to_string()]);
+        let q = if let Ok(Some(q)) = parsed {
+            q
+        } else {
+            panic!("expected query");
+        };
+        match q.filter {
+            ast::Expression::During { window, .. } => assert_eq!(window, Duration::zero()),
+            other => panic!("unexpected filter: {other:?}"),
+        }
     }
 }

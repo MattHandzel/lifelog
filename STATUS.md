@@ -28,6 +28,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 - **Replay Backend**: Added a `Replay` gRPC RPC that returns ordered screen-granularity steps plus aligned context keys (UI integration pending).
 - **Canonical Time Wire Fields**: Added `t_device`/`t_ingest`/`t_canonical`/`t_end`/`time_quality` to frame protos and populated them in server `GetData` responses; OCR derived frames now propagate canonical time metadata from source frames.
 - **Clock Skew Estimation Wired**: Added periodic clock sync over `ControlStream` so collectors report `(device_now, backend_now)` samples; server computes per-collector skew estimates and applies them at ingest to populate `t_canonical` and `time_quality`.
+- **Default Correlation Window**: Added `ServerConfig.default_correlation_window_ms` and wired temporal operators to fall back to it when a query omits a per-predicate window (LLQL supports omitting `window`).
 - **Query Resource Limits**: Added default resource bounds to query execution: `LIMIT 1000` on UUID-returning queries and a `10s` SurrealDB query timeout.
 - **Performance Baselines**: Established throughput and latency benchmarks via `performance_suite.rs`.
 - **Improved Test Coverage**: Added unit tests for `DiskBuffer`, `TimeInterval`, `ReplayStep`, and config validation.

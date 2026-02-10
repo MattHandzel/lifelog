@@ -11,6 +11,9 @@ Last updated: 2026-02-10
   - Server periodically sends `ClockSync` over `ControlStream`
   - Collector replies with `ClockSample { device_now, backend_now }`
   - Server maintains per-collector skew estimates and applies them at ingest (`t_canonical`, `time_quality`)
+- `[x]` Default correlation window config (Spec §4.3)
+  - Added `ServerConfig.default_correlation_window_ms`
+  - LLQL JSON may omit `window` and rely on the server default (per-term non-zero window overrides)
 - `[x]` Query resource limits (Spec §10.1)
   - Default `LIMIT 1000` on UUID-returning queries
   - Default `10s` SurrealDB query timeout in the query executor

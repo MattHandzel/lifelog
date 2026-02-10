@@ -20,6 +20,11 @@ export enum CommandType {
   PauseCapture = 1,
   ResumeCapture = 2,
   UpdateConfig = 3,
+  /**
+   * ClockSync - Server sends its current time; collector should respond with a ClockSample including both
+   * backend_now (from this command) and device_now (its own clock).
+   */
+  ClockSync = 4,
   UNRECOGNIZED = -1,
 }
 
@@ -105,6 +110,37 @@ export interface QueryResponse {
   keys: LifelogDataKey[];
 }
 
+/** Replay query mode: returns ordered steps over a time window. */
+export interface ReplayRequest {
+  /**
+   * Which screen stream to use for step granularity (e.g. "laptop:Screen").
+   * If omitted, the server may choose a default.
+   */
+  screenOrigin: string;
+  /** Replay window [start, end). */
+  window?:
+    | Timerange
+    | undefined;
+  /** Additional streams to align to each step (e.g. Browser/Ocr/Clipboard/Audio). */
+  contextOrigins: string[];
+  /** Safety bounds. */
+  maxSteps: number;
+  maxContextPerStep: number;
+  /** Expand each step interval by ±pad when selecting context records. */
+  contextPadMs: number;
+}
+
+export interface ReplayStep {
+  start?: Date | undefined;
+  end?: Date | undefined;
+  screenKey?: LifelogDataKey | undefined;
+  contextKeys: LifelogDataKey[];
+}
+
+export interface ReplayResponse {
+  steps: ReplayStep[];
+}
+
 export interface GetStateRequest {
 }
 
@@ -162,10 +198,16 @@ export interface SuggestUploadRequest {
   backlogSize: number;
 }
 
+export interface ClockSample {
+  deviceNow?: Date | undefined;
+  backendNow?: Date | undefined;
+}
+
 export interface ControlMessage {
   collectorId: string;
   register?: RegisterCollectorRequest | undefined;
   state?: ReportStateRequest | undefined;
   heartbeat?: string | undefined;
   suggestUpload?: SuggestUploadRequest | undefined;
+  clockSample?: ClockSample | undefined;
 }

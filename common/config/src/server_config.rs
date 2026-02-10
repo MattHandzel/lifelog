@@ -32,6 +32,7 @@ pub fn default_server_config() -> ServerConfig {
         database_name: default_database_name(),
         server_name: default_server_name(),
         cas_path: default_cas_path(),
+        default_correlation_window_ms: 30_000,
     }
 }
 

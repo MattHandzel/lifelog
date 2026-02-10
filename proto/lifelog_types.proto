@@ -454,6 +454,9 @@ message ServerConfig {
   string database_name = 4;
   string server_name = 5;
   string cas_path = 6;
+  // Spec §4.3: global default correlation window (Δt_default) used when query predicates omit
+  // an explicit temporal window.
+  uint64 default_correlation_window_ms = 7;
 }
 
 message ServerState {

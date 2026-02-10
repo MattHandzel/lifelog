@@ -6,6 +6,17 @@
 
 /* eslint-disable */
 
+/**
+ * Canonical time quality classification used for timeline ordering and correlation.
+ * This mirrors `lifelog_core::time_skew::TimeQuality`.
+ */
+export enum TimeQuality {
+  Unknown = 0,
+  Good = 1,
+  Degraded = 2,
+  UNRECOGNIZED = -1,
+}
+
 export enum BrowserHistoryType {
   Chrome = 0,
   Firefox = 1,
@@ -22,6 +33,10 @@ export enum DataModality {
   ShellHistory = 6,
   WindowActivity = 7,
   Mouse = 8,
+  Processes = 9,
+  Camera = 10,
+  Weather = 11,
+  Hyprland = 12,
   UNRECOGNIZED = -1,
 }
 
@@ -74,6 +89,12 @@ export interface BrowserFrame {
   url: string;
   title: string;
   visitCount: number;
+  /** Time model (Spec §4.2). `timestamp` remains the legacy device timestamp. */
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export interface BrowserHistoryConfig {
@@ -105,6 +126,8 @@ export interface CollectorConfig {
   microphone?: MicrophoneConfig | undefined;
   processes?: ProcessesConfig | undefined;
   hyprland?: HyprlandConfig | undefined;
+  weather?: WeatherConfig | undefined;
+  wifi?: WifiConfig | undefined;
 }
 
 export interface CollectorState {
@@ -134,6 +157,77 @@ export interface HyprlandConfig {
   logWorkspace: boolean;
   logActiveMonitor: boolean;
   logDevices: boolean;
+}
+
+export interface HyprMonitor {
+  id: number;
+  name: string;
+  description: string;
+  width: number;
+  height: number;
+  refreshRate: number;
+  x: number;
+  y: number;
+  workspaceId: number;
+  workspaceName: string;
+  scale: number;
+  focused: boolean;
+}
+
+export interface HyprWorkspace {
+  id: number;
+  name: string;
+  monitor: string;
+  monitorId: number;
+  windows: number;
+  fullscreen: boolean;
+  lastWindow: string;
+  lastWindowTitle: string;
+}
+
+export interface HyprClient {
+  address: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  workspaceId: number;
+  workspaceName: string;
+  floating: boolean;
+  fullscreen: string;
+  monitor: number;
+  title: string;
+  class: string;
+  pid: number;
+  pinned: boolean;
+  mapped: boolean;
+}
+
+export interface HyprDevice {
+  type: string;
+  name: string;
+  address: string;
+}
+
+export interface HyprCursor {
+  x: number;
+  y: number;
+}
+
+export interface HyprlandFrame {
+  uuid: string;
+  timestamp?: Date | undefined;
+  monitors: HyprMonitor[];
+  workspaces: HyprWorkspace[];
+  activeWorkspace?: HyprWorkspace | undefined;
+  clients: HyprClient[];
+  devices: HyprDevice[];
+  cursor?: HyprCursor | undefined;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export interface InputLoggerConfig {
@@ -183,12 +277,42 @@ export interface OcrFrame {
   uuid: string;
   timestamp?: Date | undefined;
   text: string;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export interface ProcessesConfig {
   enabled: boolean;
   interval: number;
   outputDir: string;
+}
+
+export interface ProcessInfo {
+  pid: number;
+  ppid: number;
+  name: string;
+  exe: string;
+  cmdline: string;
+  status: string;
+  cpuUsage: number;
+  memoryUsage: number;
+  threads: number;
+  user: string;
+  startTime: number;
+}
+
+export interface ProcessFrame {
+  uuid: string;
+  timestamp?: Date | undefined;
+  processes: ProcessInfo[];
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export interface ScreenConfig {
@@ -206,6 +330,40 @@ export interface ScreenFrame {
   height: number;
   imageBytes: Uint8Array;
   mimeType: string;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
+}
+
+export interface CameraFrame {
+  uuid: string;
+  timestamp?: Date | undefined;
+  width: number;
+  height: number;
+  imageBytes: Uint8Array;
+  mimeType: string;
+  device: string;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
+}
+
+export interface WeatherFrame {
+  uuid: string;
+  timestamp?: Date | undefined;
+  temperature: number;
+  humidity: number;
+  pressure: number;
+  conditions: string;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export interface AudioFrame {
@@ -216,6 +374,11 @@ export interface AudioFrame {
   sampleRate: number;
   channels: number;
   durationSecs: number;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export interface KeystrokeFrame {
@@ -224,6 +387,11 @@ export interface KeystrokeFrame {
   text: string;
   application: string;
   windowTitle: string;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export interface ClipboardFrame {
@@ -232,6 +400,11 @@ export interface ClipboardFrame {
   text: string;
   binaryData: Uint8Array;
   mimeType: string;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export interface ShellHistoryFrame {
@@ -240,6 +413,11 @@ export interface ShellHistoryFrame {
   command: string;
   workingDir: string;
   exitCode: number;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export interface WindowActivityFrame {
@@ -249,6 +427,11 @@ export interface WindowActivityFrame {
   windowTitle: string;
   focused: boolean;
   durationSecs: number;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export interface MouseFrame {
@@ -258,6 +441,11 @@ export interface MouseFrame {
   y: number;
   button: MouseFrame_MouseButton;
   pressed: boolean;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
 }
 
 export enum MouseFrame_MouseButton {
@@ -275,6 +463,11 @@ export interface ServerConfig {
   databaseName: string;
   serverName: string;
   casPath: string;
+  /**
+   * Spec §4.3: global default correlation window (Δt_default) used when query predicates omit
+   * an explicit temporal window.
+   */
+  defaultCorrelationWindowMs: number;
 }
 
 export interface ServerState {
@@ -359,4 +552,8 @@ export interface LifelogData {
   shellhistoryframe?: ShellHistoryFrame | undefined;
   windowactivityframe?: WindowActivityFrame | undefined;
   mouseframe?: MouseFrame | undefined;
+  processframe?: ProcessFrame | undefined;
+  cameraframe?: CameraFrame | undefined;
+  weatherframe?: WeatherFrame | undefined;
+  hyprlandframe?: HyprlandFrame | undefined;
 }
