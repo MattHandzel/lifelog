@@ -11,9 +11,10 @@ pub use server_config::*;
 // Re-export all config types from lifelog_types
 pub use lifelog_types::{
     AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, ClipboardConfig,
-    CollectorConfig, GeoConfig, HyprlandConfig, InputLoggerConfig, MicrophoneConfig, MouseConfig,
-    NetworkConfig, ProcessesConfig, ScreenConfig, ShellHistoryConfig, SystemConfig,
-    SystemPerformanceConfig, TextUploadConfig, WeatherConfig, WifiConfig, WindowActivityConfig,
+    CollectorConfig, GeoConfig, HyprlandConfig, InputLoggerConfig, KeyboardConfig,
+    MicrophoneConfig, MouseConfig, NetworkConfig, ProcessesConfig, ScreenConfig,
+    ShellHistoryConfig, SystemConfig, SystemPerformanceConfig, TextUploadConfig, WeatherConfig,
+    WifiConfig, WindowActivityConfig,
 };
 
 pub fn load_config() -> CollectorConfig {
@@ -194,6 +195,11 @@ pub fn create_default_config() -> CollectorConfig {
             interval: 1.0,
             output_dir: lifelog_dir.join("window_activity").display().to_string(),
             backend: "auto".to_string(),
+        }),
+        keyboard: Some(KeyboardConfig {
+            enabled: false,
+            interval: 1.0,
+            output_dir: lifelog_dir.join("keystrokes").display().to_string(),
         }),
     }
 }

@@ -9,6 +9,7 @@ pub mod hyprland;
 pub mod input_logger;
 pub mod logger;
 // pub mod microphone; // needs to be updated
+pub mod keystrokes;
 pub mod mouse;
 pub mod processes;
 pub mod screen;

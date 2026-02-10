@@ -4,6 +4,7 @@ use crate::modules::browser_history::BrowserHistorySource;
 use crate::modules::camera::CameraDataSource;
 use crate::modules::clipboard::ClipboardDataSource;
 use crate::modules::hyprland::HyprlandDataSource;
+use crate::modules::keystrokes::KeystrokesDataSource;
 use crate::modules::mouse::MouseDataSource;
 use crate::modules::processes::ProcessDataSource;
 use crate::modules::screen::ScreenDataSource;
@@ -23,9 +24,9 @@ use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
 use config::{
-    BrowserHistoryConfig, CameraConfig, ClipboardConfig, HyprlandConfig, MicrophoneConfig,
-    MouseConfig, ProcessesConfig, ScreenConfig, ShellHistoryConfig, WeatherConfig,
-    WindowActivityConfig,
+    BrowserHistoryConfig, CameraConfig, ClipboardConfig, HyprlandConfig, KeyboardConfig,
+    MicrophoneConfig, MouseConfig, ProcessesConfig, ScreenConfig, ShellHistoryConfig,
+    WeatherConfig, WindowActivityConfig,
 };
 use lifelog_core::*;
 use lifelog_types::CollectorState;
@@ -415,6 +416,33 @@ impl Collector {
                 },
                 Err(e) => {
                     let err = LifelogError::SourceSetup("audio".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
+        if config.keyboard.as_ref().map(|k| k.enabled).unwrap_or(false) {
+            let config_clone = Arc::clone(&self.config);
+            match KeystrokesDataSource::new(config_clone.keyboard.clone().unwrap()) {
+                Ok(keys_source) => match keys_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<KeyboardConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(keys_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("keystrokes".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err =
+                            LifelogError::SourceSetup("keystrokes".to_string(), e.to_string());
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = LifelogError::SourceSetup("keystrokes".to_string(), e.to_string());
                     tracing::error!("{}", err);
                     setup_errors.push(err);
                 }

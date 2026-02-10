@@ -208,6 +208,13 @@ impl IngestBackend for SurrealIngestBackend {
                     DataModality::Mouse
                 );
             }
+            "keystrokes" | "keyboard" => {
+                ingest_frame!(
+                    lifelog_types::KeystrokeFrame,
+                    lifelog_types::KeystrokeRecord,
+                    DataModality::Keystrokes
+                );
+            }
             "processes" => {
                 ingest_frame!(
                     lifelog_types::ProcessFrame,
@@ -469,6 +476,8 @@ impl IngestBackend for SurrealIngestBackend {
             lower_stream_id.as_str(),
             "screen"
                 | "browser"
+                | "keystrokes"
+                | "keyboard"
                 | "processes"
                 | "camera"
                 | "audio"

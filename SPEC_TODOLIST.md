@@ -52,8 +52,8 @@ Priority tiers:
 
 | # | Module | Status | Proto exists? | Notes |
 |---|--------|--------|---------------|-------|
-| 2.7 | Desktop microphone audio | `[ ]` | Yes (`AudioFrame`) | Fixed-interval chunking. High storage cost. |
-| 2.8 | Keystrokes | `[ ]` | Yes (`KeystrokeFrame`) | **High risk** (Spec §12.4). Needs security controls before deployment. |
+| 2.7 | Desktop microphone audio | `[x]` | Yes (`AudioFrame`) | Implemented via `collector/src/modules/audio.rs` (WAV chunks via `cpal`), uploaded as CAS blobs by the server ingest path (`server/src/ingest.rs`). High storage cost. |
+| 2.8 | Keystrokes | `[x]` | Yes (`KeystrokeFrame`) | Implemented as a collector data source (`collector/src/modules/keystrokes.rs`) using `rdev` key-press events (key identity only). Server ingest now persists keystrokes (`server/src/ingest.rs`). **High risk** (Spec §12.4): keep disabled by default until security controls land. |
 | 2.9 | Mouse events | `[x]` | Yes (`MouseFrame`) | Activity indicators + timestamps (cursor-position sampling; stream_id `mouse`) |
 | 2.10 | Clipboard history | `[x]` | Yes (`ClipboardFrame`) | Text + timestamps; binary optional |
 | 2.11 | Shell history | `[x]` | Yes (`ShellHistoryFrame`) | Commands + timestamps + working dir |

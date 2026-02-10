@@ -195,6 +195,25 @@ mod helpers {
 
     #[cfg(feature = "surrealdb")]
     #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct KeystrokeRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub text: String,
+        pub application: String,
+        pub window_title: String,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
     pub struct WeatherRecord {
         pub uuid: String,
         pub timestamp: surrealdb::sql::Datetime,
@@ -400,6 +419,24 @@ mod helpers {
                 sample_rate: self.sample_rate,
                 channels: self.channels,
                 duration_secs: self.duration_secs,
+                t_ingest: None,
+                t_canonical: None,
+                t_end: None,
+                time_quality: None,
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for KeystrokeFrame {
+        type Record = KeystrokeRecord;
+        fn to_record(&self) -> Self::Record {
+            KeystrokeRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                text: self.text.clone(),
+                application: self.application.clone(),
+                window_title: self.window_title.clone(),
                 t_ingest: None,
                 t_canonical: None,
                 t_end: None,
