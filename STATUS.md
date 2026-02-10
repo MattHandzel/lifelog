@@ -24,6 +24,7 @@ Phase 5: Polish & Architectural Cleanup (COMPLETED). Starting next logical featu
 - **Robust Transformation Pipeline**: Verified OCR transformation end-to-end, including watermark persistence and idempotent processing.
 - **Cross-Modal Search**: Successfully implemented and verified unified search across different data sources (Screen, Browser).
 - **Cross-Modal Correlation**: Added `DURING(...)` support as a two-stage query plan (source intervals -> target time-window filter) alongside `WITHIN(...)`.
+- **DURING Enhancements**: `DURING(...)` now supports an explicit window expansion for point sources and conjunction of multiple `DURING(...)` terms via interval intersection.
 - **Performance Baselines**: Established throughput and latency benchmarks via `performance_suite.rs`.
 - **Improved Test Coverage**: Added unit tests for `DiskBuffer`, `TimeInterval`, `ReplayStep`, and config validation.
 

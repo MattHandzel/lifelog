@@ -100,7 +100,7 @@ This is the **core differentiator** of the product and the biggest gap.
 | 5.2 | `Contains`, `Eq`, `TimeRange` operators compile to SQL | `[x]` | `planner.rs` generates SurrealDB SQL |
 | 5.3 | Origin resolution from catalog | `[x]` | Planner resolves `StreamSelector` → `DataOrigin` list |
 | 5.4 | **Implement `WITHIN(A, B, ±Δt)` operator** | `[~]` | Implemented as a two-stage plan (source timestamps -> target time-window filter). Current limits: one WITHIN term, AND-only, no nested temporal ops inside predicate. |
-| 5.5 | **Implement `DURING(A, predicate)` operator** | `[~]` | Implemented as a two-stage plan (source intervals -> target time-window filter). Current limits: one DURING term, AND-only, predicate applies to a single source stream; canonical multi-stream DURING remains. |
+| 5.5 | **Implement `DURING(A, predicate)` operator** | `[~]` | Implemented as a two-stage plan (source intervals -> target time-window filter) with a configurable expansion window for point sources. Supports multiple `DURING(...)` terms under `AND` by intersecting interval sets. Still missing: `OVERLAPS(...)` and robust point→interval semantics (beyond window expansion). |
 | 5.6 | **Implement `OVERLAPS(intervalA, intervalB)` operator** | `[ ]` | Not in AST yet. Requires interval semantics. |
 | 5.7 | **Implement replay queries** | `[ ]` | No replay mode. Must return ordered steps: screen frames + aligned context from other streams (Spec §10.3). |
 | 5.8 | Replay semantics: point record `t_i` → interval `[t_i, t_{i+1})` | `[ ]` | Spec §10.3.1 — needed for frame-stepping UI |
