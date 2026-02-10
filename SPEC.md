@@ -125,6 +125,7 @@ Examples:
   - `t_ingest` (raw),
   - `t_canonical = t_device + skew_estimate_at_ingest` (used for query/UI).
 - Wire format: all modality frame messages include optional time fields (`t_device`, `t_ingest`, `t_canonical`, `t_end`, `time_quality`) in addition to the legacy `timestamp` field. `timestamp` is treated as the device-reported time for backward compatibility.
+- Wire format: all modality frame messages include an explicit `record_type` (`Point` vs `Interval`) so clients can interpret correlation semantics without inferring from duration fields.
 - If skew cannot be estimated reliably (collector offline, inconsistent samples), the backend must mark records with a `time_quality` level so the UI can surface “time may be off”.
 
 ### 4.3 Correlation Operators
