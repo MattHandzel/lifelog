@@ -111,6 +111,14 @@ impl ServerHandle {
         server.process_query(query).await
     }
 
+    pub async fn process_replay(
+        &self,
+        req: lifelog_types::ReplayRequest,
+    ) -> Result<lifelog_types::ReplayResponse, LifelogError> {
+        let server = self.server.read().await;
+        server.process_replay(req).await
+    }
+
     pub async fn register_collector(&self, collector: RegisteredCollector) {
         let server = self.server.write().await;
         server.registered_collectors.write().await.push(collector);
@@ -402,6 +410,213 @@ impl Server {
         }
 
         Ok(keys)
+    }
+
+    async fn process_replay(
+        &self,
+        req: lifelog_types::ReplayRequest,
+    ) -> Result<lifelog_types::ReplayResponse, LifelogError> {
+        let window = req.window.ok_or(LifelogError::Validation {
+            field: "window".to_string(),
+            reason: "must be provided".to_string(),
+        })?;
+
+        let start_pb = window.start.ok_or(LifelogError::Validation {
+            field: "window.start".to_string(),
+            reason: "must be provided".to_string(),
+        })?;
+        let end_pb = window.end.ok_or(LifelogError::Validation {
+            field: "window.end".to_string(),
+            reason: "must be provided".to_string(),
+        })?;
+
+        let start = chrono::DateTime::from_timestamp(start_pb.seconds, start_pb.nanos as u32)
+            .unwrap_or(chrono::DateTime::<Utc>::MIN_UTC);
+        let end = chrono::DateTime::from_timestamp(end_pb.seconds, end_pb.nanos as u32)
+            .unwrap_or(chrono::DateTime::<Utc>::MAX_UTC);
+
+        if start >= end {
+            return Err(LifelogError::Validation {
+                field: "window".to_string(),
+                reason: "start must be < end".to_string(),
+            });
+        }
+
+        let max_steps = if req.max_steps == 0 {
+            500usize
+        } else {
+            req.max_steps as usize
+        };
+        let max_context_per_step = if req.max_context_per_step == 0 {
+            50usize
+        } else {
+            req.max_context_per_step as usize
+        };
+
+        let pad_ms = req.context_pad_ms.min(5 * 60 * 1000); // hard cap at 5 minutes
+        let pad = chrono::Duration::milliseconds(pad_ms as i64);
+
+        let available_origins = get_origins_from_db(&self.db).await?;
+
+        let screen_origin = if req.screen_origin.trim().is_empty() {
+            available_origins
+                .iter()
+                .find(|o| o.modality_name == "Screen")
+                .cloned()
+                .ok_or_else(|| LifelogError::Validation {
+                    field: "screen_origin".to_string(),
+                    reason: "no Screen origins available".to_string(),
+                })?
+        } else {
+            available_origins
+                .iter()
+                .find(|o| {
+                    o.get_table_name() == req.screen_origin
+                        || o.to_string() == req.screen_origin
+                        || o.modality_name == req.screen_origin
+                })
+                .cloned()
+                .or_else(|| DataOrigin::tryfrom_string(req.screen_origin.clone()).ok())
+                .ok_or_else(|| LifelogError::Validation {
+                    field: "screen_origin".to_string(),
+                    reason: format!("unknown origin '{}'", req.screen_origin),
+                })?
+        };
+
+        // Phase 1: load screen frames in the window.
+        #[derive(serde::Deserialize, Debug)]
+        struct ScreenRow {
+            uuid: String,
+            t_canonical: Option<surrealdb::sql::Datetime>,
+        }
+
+        let screen_table = screen_origin.get_table_name();
+        let sql = format!(
+            "SELECT uuid, t_canonical FROM `{}` WHERE t_canonical >= d'{}' AND t_canonical < d'{}' ORDER BY t_canonical ASC LIMIT {};",
+            screen_table,
+            start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+            end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+            max_steps
+        );
+        let mut resp = self
+            .db
+            .query(sql)
+            .await
+            .map_err(|e| LifelogError::Database(format!("replay screen query failed: {e}")))?;
+        let rows: Vec<ScreenRow> = resp
+            .take(0)
+            .map_err(|e| LifelogError::Database(format!("replay screen take failed: {e}")))?;
+
+        let screen_frames: Vec<(String, chrono::DateTime<Utc>)> = rows
+            .into_iter()
+            .filter_map(|r| Some((r.uuid, r.t_canonical?.0)))
+            .collect();
+
+        let mut steps =
+            crate::replay::build_replay_steps_for_screen(screen_frames, screen_origin.clone(), end);
+
+        if steps.is_empty() || req.context_origins.is_empty() {
+            let proto_steps = steps
+                .into_iter()
+                .filter_map(|s| {
+                    Some(lifelog_types::ReplayStep {
+                        start: lifelog_types::to_pb_ts(s.start),
+                        end: lifelog_types::to_pb_ts(s.end),
+                        screen_key: Some(lifelog_types::LifelogDataKey::from(s.screen_key)),
+                        context_keys: Vec::new(),
+                    })
+                })
+                .collect();
+            return Ok(lifelog_types::ReplayResponse { steps: proto_steps });
+        }
+
+        // Phase 2: load context records once per origin (bounded), then assign to steps.
+        #[derive(serde::Deserialize, Debug)]
+        struct CtxRow {
+            uuid: String,
+            t_canonical: Option<surrealdb::sql::Datetime>,
+            t_end: Option<surrealdb::sql::Datetime>,
+        }
+
+        let mut ctx_records: Vec<crate::replay::IntervalKey> = Vec::new();
+
+        // Per-origin bound: cap by (steps * per_step), but clamp to keep the query bounded.
+        let per_origin_limit = (max_steps * max_context_per_step).min(10_000);
+
+        let window_start = start - pad;
+        let window_end = end + pad;
+
+        for s in &req.context_origins {
+            let resolved: Vec<DataOrigin> = if s.trim().is_empty() {
+                Vec::new()
+            } else if s == "*" {
+                available_origins.clone()
+            } else {
+                let mut out = Vec::new();
+                for o in &available_origins {
+                    if o.get_table_name() == *s || o.to_string() == *s || o.modality_name == *s {
+                        out.push(o.clone());
+                    }
+                }
+                if out.is_empty() {
+                    if let Ok(o) = DataOrigin::tryfrom_string(s.clone()) {
+                        out.push(o);
+                    }
+                }
+                out
+            };
+
+            for origin in resolved {
+                let table = origin.get_table_name();
+                let sql = format!(
+                    "SELECT uuid, t_canonical, t_end FROM `{}` WHERE t_canonical <= d'{}' AND t_end >= d'{}' ORDER BY t_canonical ASC LIMIT {};",
+                    table,
+                    window_end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                    window_start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                    per_origin_limit
+                );
+                let mut resp = self.db.query(sql).await.map_err(|e| {
+                    LifelogError::Database(format!("replay context query failed for {table}: {e}"))
+                })?;
+                let rows: Vec<CtxRow> = resp.take(0).map_err(|e| {
+                    LifelogError::Database(format!("replay context take failed for {table}: {e}"))
+                })?;
+
+                for r in rows {
+                    let Some(t0) = r.t_canonical else { continue };
+                    let start = t0.0;
+                    let end = r.t_end.map(|dt| dt.0).unwrap_or(start);
+                    if let Ok(uuid) = r.uuid.parse() {
+                        ctx_records.push(crate::replay::IntervalKey {
+                            key: LifelogFrameKey {
+                                uuid,
+                                origin: origin.clone(),
+                            },
+                            start,
+                            end,
+                        });
+                    }
+                }
+            }
+        }
+
+        crate::replay::assign_context_keys(&mut steps, ctx_records, pad, max_context_per_step);
+
+        let proto_steps = steps
+            .into_iter()
+            .map(|s| lifelog_types::ReplayStep {
+                start: lifelog_types::to_pb_ts(s.start),
+                end: lifelog_types::to_pb_ts(s.end),
+                screen_key: Some(lifelog_types::LifelogDataKey::from(s.screen_key)),
+                context_keys: s
+                    .context_keys
+                    .into_iter()
+                    .map(lifelog_types::LifelogDataKey::from)
+                    .collect(),
+            })
+            .collect();
+
+        Ok(lifelog_types::ReplayResponse { steps: proto_steps })
     }
 
     async fn add_audit_log(&self, _action: &ServerAction) {

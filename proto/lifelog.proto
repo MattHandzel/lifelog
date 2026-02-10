@@ -92,6 +92,37 @@ message QueryResponse {
   repeated LifelogDataKey keys = 1; // TODO: Change this to be the query data type we define
 }
 
+// Replay query mode: returns ordered steps over a time window.
+message ReplayRequest {
+  // Which screen stream to use for step granularity (e.g. "laptop:Screen").
+  // If omitted, the server may choose a default.
+  string screen_origin = 1;
+
+  // Replay window [start, end).
+  Timerange window = 2;
+
+  // Additional streams to align to each step (e.g. Browser/Ocr/Clipboard/Audio).
+  repeated string context_origins = 3;
+
+  // Safety bounds.
+  uint32 max_steps = 4;
+  uint32 max_context_per_step = 5;
+
+  // Expand each step interval by ±pad when selecting context records.
+  uint64 context_pad_ms = 6;
+}
+
+message ReplayStep {
+  google.protobuf.Timestamp start = 1;
+  google.protobuf.Timestamp end = 2;
+  LifelogDataKey screen_key = 3;
+  repeated LifelogDataKey context_keys = 4;
+}
+
+message ReplayResponse {
+  repeated ReplayStep steps = 1;
+}
+
 message GetStateRequest {}
 message GetCollectorStateResponse {
   CollectorState state = 1;
@@ -310,6 +341,9 @@ service LifelogServerService {
 
   rpc Query(QueryRequest) returns (QueryResponse);
 
+  // Replay query mode: ordered steps with aligned context.
+  rpc Replay(ReplayRequest) returns (ReplayResponse);
+
 
 
 
@@ -349,7 +383,5 @@ service LifelogServerService {
 
 
 }
-
-
 
 
