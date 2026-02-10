@@ -28,11 +28,13 @@ Last updated: 2026-02-10
   - Implementation note: backend now supports executing this via LLQL JSON embedded in `Query.text` (`llql:`/`llql-json:`), assuming Audio/Browser/OCR streams exist.
   - Remaining: UI query authoring (templates/builder), and end-to-end validation with real ingest + OCR derived stream.
 - `[x]` Replay queries (Spec §10.3)
-  - Backend `Replay` RPC returns ordered steps with aligned context keys (UI integration pending)
+  - Backend `Replay` RPC returns ordered steps with aligned context keys
+  - Interface Replay view is wired to `Replay` (via Tauri gRPC client)
 
 ## P1 (v1 Requirements)
 
 - `[x]` Remove hardcoded DB credentials (`server/src/server.rs`) (now requires `LIFELOG_DB_USER`/`LIFELOG_DB_PASS`)
 - `[ ]` Security: TLS enforcement + pairing + auth on RPCs
 - `[ ]` Collector: audio, clipboard, shell, mouse, window activity modules (plus safe defaults)
-- `[ ]` UI: replay view + query builder/templates + previews
+- `[~]` UI: replay view + query builder/templates + previews
+  - `[x]` Replay view

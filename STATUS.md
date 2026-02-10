@@ -25,7 +25,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 - **DURING Enhancements**: `DURING(...)` now supports an explicit window expansion for point sources and conjunction of multiple `DURING(...)` terms via interval intersection.
 - **Interval Overlap Semantics**: Added `t_end` metadata and updated temporal joins so interval targets (notably Audio) use overlap semantics (`t_canonical`/`t_end`) instead of “start timestamp only”.
 - **OVERLAPS Operator**: Added `OVERLAPS(...)` to the typed query AST/LLQL and wired it through planner/executor (currently equivalent to `DURING(...)` execution).
-- **Replay Backend**: Added a `Replay` gRPC RPC that returns ordered screen-granularity steps plus aligned context keys (UI integration pending).
+- **Replay Backend + UI**: Added a `Replay` gRPC RPC that returns ordered screen-granularity steps plus aligned context keys, and wired an interface Replay view to it.
 - **Canonical Time Wire Fields**: Added `t_device`/`t_ingest`/`t_canonical`/`t_end`/`time_quality` to frame protos and populated them in server `GetData` responses; OCR derived frames now propagate canonical time metadata from source frames.
 - **Clock Skew Estimation Wired**: Added periodic clock sync over `ControlStream` so collectors report `(device_now, backend_now)` samples; server computes per-collector skew estimates and applies them at ingest to populate `t_canonical` and `time_quality`.
 - **Default Correlation Window**: Added `ServerConfig.default_correlation_window_ms` and wired temporal operators to fall back to it when a query omits a per-predicate window (LLQL supports omitting `window`).
@@ -35,7 +35,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 
 ## What's Next
 
-- **UI Integration**: Add query builder/templates for LLQL and wire Replay view to call `Replay`.
+- **UI Integration**: Add query builder/templates for LLQL (and add richer previews in search/replay).
 - **Canonical Query (Spec §10.2)**: Validate end-to-end with real ingest + OCR-derived stream + Audio capture.
 - **Security**: Add pairing + auth, and enforce TLS.
 - **New Modalities**: Implement missing v1 collectors (clipboard, shell, mouse, window activity), then gate keystrokes behind security controls.
