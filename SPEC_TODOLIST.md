@@ -55,8 +55,8 @@ Priority tiers:
 | 2.7 | Desktop microphone audio | `[ ]` | Yes (`AudioFrame`) | Fixed-interval chunking. High storage cost. |
 | 2.8 | Keystrokes | `[ ]` | Yes (`KeystrokeFrame`) | **High risk** (Spec §12.4). Needs security controls before deployment. |
 | 2.9 | Mouse events | `[ ]` | Yes (`MouseFrame`) | Activity indicators + timestamps |
-| 2.10 | Clipboard history | `[ ]` | Yes (`ClipboardFrame`) | Text + timestamps; binary optional |
-| 2.11 | Shell history | `[ ]` | Yes (`ShellHistoryFrame`) | Commands + timestamps + working dir |
+| 2.10 | Clipboard history | `[x]` | Yes (`ClipboardFrame`) | Text + timestamps; binary optional |
+| 2.11 | Shell history | `[x]` | Yes (`ShellHistoryFrame`) | Commands + timestamps + working dir |
 | 2.12 | App/window activity | `[~]` | Yes (`WindowActivityFrame`) | Hyprland covers Wayland; need X11/generic fallback |
 
 ---

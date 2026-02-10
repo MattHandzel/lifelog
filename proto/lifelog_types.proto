@@ -83,6 +83,14 @@ message CameraConfig {
   string timestamp_format = 8;
 }
 
+message ClipboardConfig {
+  bool enabled = 1;
+  double interval = 2;
+  string output_dir = 3;
+  // Hard cap to avoid accidentally storing huge clipboard payloads.
+  uint32 max_text_bytes = 4;
+}
+
 message CollectorConfig {
   string id = 1;
   string host = 2;
@@ -96,6 +104,8 @@ message CollectorConfig {
   HyprlandConfig hyprland = 10;
   WeatherConfig weather = 11;
   WifiConfig wifi = 12;
+  ClipboardConfig clipboard = 13;
+  ShellHistoryConfig shell_history = 14;
 }
 
 message CollectorState {
@@ -402,6 +412,16 @@ message ShellHistoryFrame {
   google.protobuf.Timestamp t_canonical = 8;
   google.protobuf.Timestamp t_end = 9;
   TimeQuality time_quality = 10;
+}
+
+message ShellHistoryConfig {
+  bool enabled = 1;
+  double interval = 2;
+  string output_dir = 3;
+  // Path to the shell history file (e.g. ~/.zsh_history or ~/.bash_history).
+  string history_file = 4;
+  // "auto" (default), "zsh", or "bash" (best-effort parsing).
+  string shell_type = 5;
 }
 
 message WindowActivityFrame {

@@ -73,6 +73,9 @@ Collectors must produce at least these streams:
 - Clipboard history (text + timestamps; binary clipboard optional).
 - Shell history (commands + timestamps + working directory if feasible).
 
+Implementation note: in this repo these are configured via `CollectorConfig.clipboard` and
+`CollectorConfig.shell_history` (both default to disabled).
+
 ### 3.2 Secondary Devices (v1-ready but not required day 1)
 
 - Phone: optional capture streams; must at least be a UI client (web UI).

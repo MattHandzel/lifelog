@@ -236,6 +236,44 @@ mod helpers {
     }
 
     #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct ClipboardRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub text: String,
+        pub binary_data: Vec<u8>,
+        pub mime_type: String,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct ShellHistoryRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub command: String,
+        pub working_dir: String,
+        pub exit_code: i32,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
+    }
+
+    #[cfg(feature = "surrealdb")]
     impl ToRecord for ScreenFrame {
         type Record = ScreenRecord;
         fn to_record(&self) -> Self::Record {
@@ -379,6 +417,42 @@ mod helpers {
                 clients: self.clients.clone(),
                 devices: self.devices.clone(),
                 cursor: self.cursor,
+                t_ingest: None,
+                t_canonical: None,
+                t_end: None,
+                time_quality: None,
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for ClipboardFrame {
+        type Record = ClipboardRecord;
+        fn to_record(&self) -> Self::Record {
+            ClipboardRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                text: self.text.clone(),
+                binary_data: self.binary_data.clone(),
+                mime_type: self.mime_type.clone(),
+                t_ingest: None,
+                t_canonical: None,
+                t_end: None,
+                time_quality: None,
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for ShellHistoryFrame {
+        type Record = ShellHistoryRecord;
+        fn to_record(&self) -> Self::Record {
+            ShellHistoryRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                command: self.command.clone(),
+                working_dir: self.working_dir.clone(),
+                exit_code: self.exit_code,
                 t_ingest: None,
                 t_canonical: None,
                 t_end: None,

@@ -342,6 +342,20 @@ impl IngestBackend for SurrealIngestBackend {
                     DataModality::Hyprland
                 );
             }
+            "clipboard" => {
+                ingest_frame!(
+                    lifelog_types::ClipboardFrame,
+                    lifelog_types::ClipboardRecord,
+                    DataModality::Clipboard
+                );
+            }
+            "shell_history" | "shellhistory" => {
+                ingest_frame!(
+                    lifelog_types::ShellHistoryFrame,
+                    lifelog_types::ShellHistoryRecord,
+                    DataModality::ShellHistory
+                );
+            }
             _ => {
                 tracing::debug!("No specific ingestion logic for stream_id: {}", stream_id);
             }
@@ -353,7 +367,16 @@ impl IngestBackend for SurrealIngestBackend {
         // (unknown stream_id) — those are stored as raw chunks only.
         let known_stream = matches!(
             lower_stream_id.as_str(),
-            "screen" | "browser" | "processes" | "camera" | "audio" | "weather" | "hyprland"
+            "screen"
+                | "browser"
+                | "processes"
+                | "camera"
+                | "audio"
+                | "weather"
+                | "hyprland"
+                | "clipboard"
+                | "shell_history"
+                | "shellhistory"
         );
         if known_stream && !indexed {
             return Err(format!(
