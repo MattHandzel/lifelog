@@ -107,6 +107,21 @@
           pkgs.lib.optionalString pkgs.stdenv.isLinux
           "${pkgs.alsa-lib}/lib/pkgconfig";
 
+        # Dev builds produced by `cargo build/test` are not patched with Nix RPATHs.
+        # Set LD_LIBRARY_PATH so running workspace binaries (and subprocesses spawned by tests)
+        # can find required system libraries like X11 and ALSA.
+        LD_LIBRARY_PATH =
+          pkgs.lib.optionalString pkgs.stdenv.isLinux
+          (pkgs.lib.makeLibraryPath [
+            pkgs.alsa-lib
+            pkgs.libv4l
+            pkgs.libxkbcommon
+            pkgs.xorg.libX11
+            pkgs.xorg.libXi
+            pkgs.xorg.libXtst
+            pkgs.stdenv.cc.cc.lib
+          ]);
+
         RUSTC_WRAPPER = "sccache";
 
         packages = with pkgs;
