@@ -42,9 +42,15 @@ pub async fn execute(
         }
         ExecutionPlan::MultiQuery(plans) => {
             let mut all_keys = Vec::new();
+            let mut seen = BTreeSet::new();
             for subplan in plans {
                 let keys = Box::pin(execute(db, subplan)).await?;
-                all_keys.extend(keys);
+                for k in keys {
+                    let key = format!("{}:{}", k.origin.get_table_name(), k.uuid);
+                    if seen.insert(key) {
+                        all_keys.push(k);
+                    }
+                }
             }
             Ok(all_keys)
         }

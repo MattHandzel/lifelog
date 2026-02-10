@@ -61,86 +61,149 @@ impl Planner {
             .into_iter()
             .map(|origin| {
                 let table = origin.get_table_name();
-                match Self::compile_conjunctive(&query.filter) {
-                    Ok((sql_terms, temporal_terms)) => {
-                        let target_base_where = if sql_terms.is_empty() {
-                            "true".to_string()
-                        } else {
-                            sql_terms.join(" AND ")
-                        };
+                // If the query has temporal operators under boolean ORs, plan by converting the
+                // predicate to a bounded DNF (OR-of-ANDs) and unioning the resulting conjunctive plans.
+                //
+                // This allows queries like: `(DURING(...) OR DURING(...)) AND leaf_predicate`.
+                //
+                // NOTE: NOT over temporal operators remains unsupported (would require set difference).
+                if Self::contains_temporal_ops(&query.filter) && Self::contains_or(&query.filter) {
+                    const MAX_DNF_CONJUNCTIONS: usize = 16;
+                    let conjs = match Self::to_bounded_dnf_conjunctions(
+                        &query.filter,
+                        MAX_DNF_CONJUNCTIONS,
+                    ) {
+                        Ok(v) => v,
+                        Err(msg) => return ExecutionPlan::Unsupported(msg),
+                    };
 
-                        if temporal_terms.is_empty() {
-                            let sql = format!(
-                                "SELECT uuid FROM `{}` WHERE {} LIMIT {};",
-                                table, target_base_where, DEFAULT_MAX_TARGET_UUIDS
-                            );
-                            return ExecutionPlan::TableQuery { table, origin, sql };
-                        };
-
-                        // Temporal terms: build one interval set per term, then intersect at execution time.
-                        //
-                        // Note: `WITHIN(...)` is treated as a point-interval term; if the source stream is
-                        // interval-valued (has `t_end`), the whole interval is expanded by `window` and used.
-                        let mut during_terms = Vec::new();
-                        for t in temporal_terms {
-                            let term = match t {
-                                TemporalTerm::Within(d)
-                                | TemporalTerm::During(d)
-                                | TemporalTerm::Overlaps(d) => d,
-                            };
-
-                            let source_origins =
-                                Self::resolve_selector(&term.stream, available_origins);
-                            if source_origins.is_empty() {
-                                let sql = format!("SELECT uuid FROM `{}` WHERE false;", table);
-                                return ExecutionPlan::TableQuery { table, origin, sql };
+                    let mut subplans = Vec::new();
+                    for conj in conjs {
+                        match Self::compile_conjunctive(&conj) {
+                            Ok((sql_terms, temporal_terms)) => {
+                                subplans.push(Self::plan_conjunctive_for_origin(
+                                    &table,
+                                    &origin,
+                                    sql_terms,
+                                    temporal_terms,
+                                    available_origins,
+                                    DEFAULT_MAX_SOURCE_INTERVALS,
+                                    DEFAULT_MAX_TIME_CLAUSES,
+                                    DEFAULT_MAX_TARGET_UUIDS,
+                                ))
                             }
-
-                            if Self::contains_temporal_ops(&term.predicate) {
-                                return ExecutionPlan::Unsupported(
-                                    "Nested temporal operators inside temporal predicates are not supported yet"
-                                        .to_string(),
-                                );
-                            }
-
-                            let source_where = Self::compile_expression_sql(&term.predicate);
-                            let source_plans = source_origins
-                                .into_iter()
-                                .map(|source_origin| {
-                                    let source_table = source_origin.get_table_name();
-                                    let sql = format!(
-                                        "SELECT t_canonical, t_end FROM `{}` WHERE {} ORDER BY t_canonical DESC LIMIT {};",
-                                        source_table, source_where, DEFAULT_MAX_SOURCE_INTERVALS
-                                    );
-                                    DuringSourcePlan {
-                                        source_table,
-                                        source_origin,
-                                        sql,
-                                    }
-                                })
-                                .collect();
-
-                            during_terms.push(DuringTermPlan {
-                                source_plans,
-                                window: term.window,
-                            });
-                        }
-
-                        ExecutionPlan::DuringQuery {
-                            target_table: table,
-                            target_origin: origin,
-                            target_base_where,
-                            during_terms,
-                            max_source_intervals: DEFAULT_MAX_SOURCE_INTERVALS,
-                            max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
+                            Err(msg) => return ExecutionPlan::Unsupported(msg),
                         }
                     }
+
+                    return Self::multi(subplans);
+                }
+
+                match Self::compile_conjunctive(&query.filter) {
+                    Ok((sql_terms, temporal_terms)) => Self::plan_conjunctive_for_origin(
+                        &table,
+                        &origin,
+                        sql_terms,
+                        temporal_terms,
+                        available_origins,
+                        DEFAULT_MAX_SOURCE_INTERVALS,
+                        DEFAULT_MAX_TIME_CLAUSES,
+                        DEFAULT_MAX_TARGET_UUIDS,
+                    ),
                     Err(msg) => ExecutionPlan::Unsupported(msg),
                 }
             })
             .collect();
 
-        ExecutionPlan::MultiQuery(plans)
+        Self::multi(plans)
+    }
+
+    fn plan_conjunctive_for_origin(
+        table: &str,
+        origin: &DataOrigin,
+        sql_terms: Vec<String>,
+        temporal_terms: Vec<TemporalTerm>,
+        available_origins: &[DataOrigin],
+        max_source_intervals: usize,
+        max_time_clauses: usize,
+        max_target_uuids: usize,
+    ) -> ExecutionPlan {
+        let target_base_where = if sql_terms.is_empty() {
+            "true".to_string()
+        } else {
+            sql_terms.join(" AND ")
+        };
+
+        if temporal_terms.is_empty() {
+            let sql = format!(
+                "SELECT uuid FROM `{}` WHERE {} LIMIT {};",
+                table, target_base_where, max_target_uuids
+            );
+            return ExecutionPlan::TableQuery {
+                table: table.to_string(),
+                origin: origin.clone(),
+                sql,
+            };
+        }
+
+        // Temporal terms: build one interval set per term, then intersect at execution time.
+        //
+        // Note: `WITHIN(...)` is treated as a point-interval term; if the source stream is
+        // interval-valued (has `t_end`), the whole interval is expanded by `window` and used.
+        let mut during_terms = Vec::new();
+        for t in temporal_terms {
+            let term = match t {
+                TemporalTerm::Within(d) | TemporalTerm::During(d) | TemporalTerm::Overlaps(d) => d,
+            };
+
+            let source_origins = Self::resolve_selector(&term.stream, available_origins);
+            if source_origins.is_empty() {
+                let sql = format!("SELECT uuid FROM `{}` WHERE false;", table);
+                return ExecutionPlan::TableQuery {
+                    table: table.to_string(),
+                    origin: origin.clone(),
+                    sql,
+                };
+            }
+
+            if Self::contains_temporal_ops(&term.predicate) {
+                return ExecutionPlan::Unsupported(
+                    "Nested temporal operators inside temporal predicates are not supported yet"
+                        .to_string(),
+                );
+            }
+
+            let source_where = Self::compile_expression_sql(&term.predicate);
+            let source_plans = source_origins
+                .into_iter()
+                .map(|source_origin| {
+                    let source_table = source_origin.get_table_name();
+                    let sql = format!(
+                        "SELECT t_canonical, t_end FROM `{}` WHERE {} ORDER BY t_canonical DESC LIMIT {};",
+                        source_table, source_where, max_source_intervals
+                    );
+                    DuringSourcePlan {
+                        source_table,
+                        source_origin,
+                        sql,
+                    }
+                })
+                .collect();
+
+            during_terms.push(DuringTermPlan {
+                source_plans,
+                window: term.window,
+            });
+        }
+
+        ExecutionPlan::DuringQuery {
+            target_table: table.to_string(),
+            target_origin: origin.clone(),
+            target_base_where,
+            during_terms,
+            max_source_intervals,
+            max_time_clauses,
+        }
     }
 
     /// Compiles an expression that contains *no* temporal join operators (`WITHIN`, `DURING`) to SQL.
@@ -249,6 +312,17 @@ impl Planner {
         Ok((sql_terms, temporal_terms))
     }
 
+    fn multi(plans: Vec<ExecutionPlan>) -> ExecutionPlan {
+        let mut flat = Vec::new();
+        for p in plans {
+            match p {
+                ExecutionPlan::MultiQuery(inner) => flat.extend(inner),
+                other => flat.push(other),
+            }
+        }
+        ExecutionPlan::MultiQuery(flat)
+    }
+
     fn contains_temporal_ops(expr: &Expression) -> bool {
         match expr {
             Expression::Within { .. } | Expression::During { .. } | Expression::Overlaps { .. } => {
@@ -260,6 +334,82 @@ impl Planner {
             Expression::Not(inner) => Self::contains_temporal_ops(inner),
             _ => false,
         }
+    }
+
+    fn contains_or(expr: &Expression) -> bool {
+        match expr {
+            Expression::Or(..) => true,
+            Expression::And(l, r) => Self::contains_or(l) || Self::contains_or(r),
+            Expression::Not(inner) => Self::contains_or(inner),
+            Expression::Within { predicate, .. }
+            | Expression::During { predicate, .. }
+            | Expression::Overlaps { predicate, .. } => Self::contains_or(predicate),
+            _ => false,
+        }
+    }
+
+    /// Convert an expression into a bounded disjunctive-normal-form (DNF) representation, returning a
+    /// set of conjunction expressions whose union is equivalent to the input.
+    ///
+    /// This is intentionally minimal: it only distributes AND over OR. NOT is treated as an atom.
+    fn to_bounded_dnf_conjunctions(
+        expr: &Expression,
+        max_conjunctions: usize,
+    ) -> Result<Vec<Expression>, String> {
+        fn dnf(expr: &Expression, max: usize) -> Result<Vec<Vec<Expression>>, String> {
+            match expr {
+                Expression::And(l, r) => {
+                    let left = dnf(l, max)?;
+                    let right = dnf(r, max)?;
+                    let mut out = Vec::new();
+                    for lc in left {
+                        for rc in &right {
+                            let mut conj = lc.clone();
+                            conj.extend(rc.clone());
+                            out.push(conj);
+                            if out.len() > max {
+                                return Err(format!(
+                                    "Query boolean expansion too large (DNF conjunctions > {max}); simplify the query"
+                                ));
+                            }
+                        }
+                    }
+                    Ok(out)
+                }
+                Expression::Or(l, r) => {
+                    let mut out = dnf(l, max)?;
+                    let right = dnf(r, max)?;
+                    out.extend(right);
+                    if out.len() > max {
+                        return Err(format!(
+                            "Query boolean expansion too large (DNF conjunctions > {max}); simplify the query"
+                        ));
+                    }
+                    Ok(out)
+                }
+                _ => Ok(vec![vec![expr.clone()]]),
+            }
+        }
+
+        fn atoms_to_expr(atoms: Vec<Expression>) -> Expression {
+            if atoms.is_empty() {
+                // Equivalent to a tautology. This keeps planning simple without adding a new AST variant.
+                return Expression::TimeRange(
+                    chrono::DateTime::<chrono::Utc>::MIN_UTC,
+                    chrono::DateTime::<chrono::Utc>::MAX_UTC,
+                );
+            }
+
+            let mut iter = atoms.into_iter();
+            let mut acc = iter.next().expect("non-empty atoms");
+            for a in iter {
+                acc = Expression::And(Box::new(acc), Box::new(a));
+            }
+            acc
+        }
+
+        let conjs = dnf(expr, max_conjunctions)?;
+        Ok(conjs.into_iter().map(atoms_to_expr).collect())
     }
 
     fn resolve_selector(
@@ -399,5 +549,41 @@ mod tests {
                 panic!("Expected TableQuery");
             }
         }
+    }
+
+    #[test]
+    fn plans_temporal_or_via_dnf_union() {
+        let origins = vec![
+            DataOrigin::new(DataOriginType::DeviceId("laptop".into()), "Audio".into()),
+            DataOrigin::new(DataOriginType::DeviceId("laptop".into()), "Browser".into()),
+            DataOrigin::new(DataOriginType::DeviceId("laptop".into()), "Ocr".into()),
+        ];
+
+        let query = Query {
+            target: StreamSelector::Modality("Audio".into()),
+            filter: Expression::Or(
+                Box::new(Expression::During {
+                    stream: StreamSelector::Modality("Browser".into()),
+                    predicate: Box::new(Expression::Contains("url".into(), "youtube".into())),
+                    window: chrono::Duration::seconds(30),
+                }),
+                Box::new(Expression::During {
+                    stream: StreamSelector::Modality("Ocr".into()),
+                    predicate: Box::new(Expression::Contains("text".into(), "3Blue1Brown".into())),
+                    window: chrono::Duration::seconds(30),
+                }),
+            ),
+        };
+
+        let plan = Planner::plan(&query, &origins);
+        let ExecutionPlan::MultiQuery(plans) = plan else {
+            panic!("expected MultiQuery");
+        };
+
+        // OR should become a union of 2 conjunctive plans for the single target origin.
+        assert_eq!(plans.len(), 2);
+        assert!(plans
+            .iter()
+            .all(|p| matches!(p, ExecutionPlan::DuringQuery { .. })));
     }
 }
