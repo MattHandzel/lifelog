@@ -18,7 +18,7 @@ Last updated: 2026-02-10
   - Default `LIMIT 1000` on UUID-returning queries
   - Default `10s` SurrealDB query timeout in the query executor
 - `[~]` Query correlation operators
-  - `[~]` `WITHIN(...)` implemented (two-stage plan; AND-only; single term)
+  - `[~]` `WITHIN(...)` implemented (two-stage plan; AND-only; supports multiple terms; can mix with `DURING`/`OVERLAPS` via interval intersection)
   - `[~]` `DURING(...)` implemented (two-stage plan; AND-only; supports multiple terms via interval intersection; window expansion for point sources)
   - `[x]` `OVERLAPS(...)` implemented (AST + planner + executor; currently planned/executed like `DURING(...)`)
   - `[x]` Interval-target overlap semantics (`t_canonical`/`t_end`) wired so `DURING(Audio, pointPredicate)` includes overlapping chunks

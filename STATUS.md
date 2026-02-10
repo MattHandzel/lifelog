@@ -8,7 +8,6 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 
 - `just check`
 - `just test` (nextest; integration tests requiring SurrealDB remain `#[ignore]`)
-- `nix develop --command cargo test -p lifelog-server --test canonical_llql_example -- --include-ignored`
 
 ## How To Verify (Target)
 
@@ -34,6 +33,8 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 - **Query Resource Limits**: Added default resource bounds to query execution: `LIMIT 1000` on UUID-returning queries and a `10s` SurrealDB query timeout.
 - **Timeline Query Mode**: Timeline UI now submits `Query.text` as a string array and supports an LLQL mode (`llql:` / `llql-json:`) for cross-modal queries.
 - **Canonical LLQL Example Verified**: Added an ignored integration test that seeds Browser/OCR/Audio and runs the Spec §10.2 canonical query end-to-end via LLQL JSON.
+- **Temporal Conjunction Queries**: Temporal correlation operators can now be mixed under `AND` (including multiple `WITHIN(...)` terms) by intersecting interval sets at execution time.
+- **Schema DDL Validation**: Startup migrations and table schema creation now call `.check()` so SurrealDB DDL/index errors surface immediately.
 - **Performance Baselines**: Established throughput and latency benchmarks via `performance_suite.rs`.
 - **Improved Test Coverage**: Added unit tests for `DiskBuffer`, `TimeInterval`, `ReplayStep`, and config validation.
 

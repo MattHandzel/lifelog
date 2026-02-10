@@ -371,10 +371,11 @@ v1 requires a query language that compiles deterministically to a typed query pl
   - bounded resource usage (timeouts/limits).
 
 Implementation note (as of 2026-02-10):
-- Backend query engine supports `WITHIN(...)` via a two-stage plan (source timestamps -> target time-window filter).
-- Backend query engine supports `DURING(...)` via a two-stage plan (source intervals -> target time-window filter), including conjunction of multiple `DURING(...)` terms by intersecting interval sets.
-- Backend query engine supports `OVERLAPS(...)` (currently planned/executed like `DURING(...)`), and interval-target semantics now use `t_end` overlap (`t_canonical <= end AND t_end >= start`) to correctly include Audio chunks that start before a matched point/interval.
-- Current limitation: temporal joins are only supported under conjunctions (`AND`), not under `OR`/`NOT`.
+- Backend query engine supports `WITHIN(...)`/`DURING(...)`/`OVERLAPS(...)` via a two-stage plan:
+  - Phase 1: query source stream(s) for candidate intervals (`t_canonical`, `t_end`) matching the source predicate.
+  - Phase 2: intersect all temporal-term interval sets (for conjunctions) and query the target stream for interval overlap (`t_canonical <= end AND t_end >= start`).
+- Conjunctions may include multiple temporal terms (including multiple `WITHIN(...)`) and may mix `WITHIN` with `DURING`/`OVERLAPS`.
+- Current limitation: temporal joins are only supported under conjunctions (`AND`), not under `OR`/`NOT`, and temporal operators are not supported inside temporal predicates.
 - Interim API bridge: the backend accepts **LLQL JSON** embedded in `Query.text` via a `llql:` / `llql-json:` prefix, which is parsed into the typed AST and executed (enables cross-modal queries without a protobuf change).
 - Interface support: the Timeline UI has an LLQL mode that submits `llql:` / `llql-json:` queries via `Query.text`.
 - Replay now has a dedicated RPC (`Replay`) that returns ordered steps with aligned context keys, and the interface has a Replay view wired to it.
