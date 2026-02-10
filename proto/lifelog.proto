@@ -177,6 +177,10 @@ enum CommandType {
 
   UpdateConfig = 3;
 
+  // Server sends its current time; collector should respond with a ClockSample including both
+  // backend_now (from this command) and device_now (its own clock).
+  ClockSync = 4;
+
 }
 
 
@@ -215,6 +219,7 @@ message SuggestUploadRequest {
 
 message ClockSample {
   google.protobuf.Timestamp device_now = 1;
+  google.protobuf.Timestamp backend_now = 2;
 }
 
 
@@ -383,5 +388,4 @@ service LifelogServerService {
 
 
 }
-
 

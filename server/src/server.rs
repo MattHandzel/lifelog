@@ -143,9 +143,14 @@ impl ServerHandle {
             .retain(|c| c.id != id);
     }
 
-    pub async fn handle_clock_sample(&self, collector_id: &str, device_now: chrono::DateTime<Utc>) {
+    pub async fn handle_clock_sample(
+        &self,
+        collector_id: &str,
+        device_now: chrono::DateTime<Utc>,
+        backend_now: Option<chrono::DateTime<Utc>>,
+    ) {
         let server = self.server.read().await;
-        let backend_now = Utc::now();
+        let backend_now = backend_now.unwrap_or_else(Utc::now);
 
         const MAX_SKEW_SAMPLES: usize = 20;
 
