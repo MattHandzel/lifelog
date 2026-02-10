@@ -57,10 +57,22 @@ impl Planner {
         const DEFAULT_MAX_TIME_CLAUSES: usize = 50;
         const DEFAULT_MAX_TARGET_UUIDS: usize = 1_000;
 
+        let plan_ctx = PlanContext {
+            available_origins,
+            max_source_intervals: DEFAULT_MAX_SOURCE_INTERVALS,
+            max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
+            max_target_uuids: DEFAULT_MAX_TARGET_UUIDS,
+        };
+
         let plans = origins
             .into_iter()
             .map(|origin| {
                 let table = origin.get_table_name();
+                let origin_ctx = OriginPlanContext {
+                    plan: &plan_ctx,
+                    table: &table,
+                    origin: &origin,
+                };
                 // If the query has temporal operators under boolean ORs, plan by converting the
                 // predicate to a bounded DNF (OR-of-ANDs) and unioning the resulting conjunctive plans.
                 //
@@ -82,14 +94,9 @@ impl Planner {
                         match Self::compile_conjunctive(&conj) {
                             Ok((sql_terms, temporal_terms)) => {
                                 subplans.push(Self::plan_conjunctive_for_origin(
-                                    &table,
-                                    &origin,
+                                    &origin_ctx,
                                     sql_terms,
                                     temporal_terms,
-                                    available_origins,
-                                    DEFAULT_MAX_SOURCE_INTERVALS,
-                                    DEFAULT_MAX_TIME_CLAUSES,
-                                    DEFAULT_MAX_TARGET_UUIDS,
                                 ))
                             }
                             Err(msg) => return ExecutionPlan::Unsupported(msg),
@@ -100,16 +107,9 @@ impl Planner {
                 }
 
                 match Self::compile_conjunctive(&query.filter) {
-                    Ok((sql_terms, temporal_terms)) => Self::plan_conjunctive_for_origin(
-                        &table,
-                        &origin,
-                        sql_terms,
-                        temporal_terms,
-                        available_origins,
-                        DEFAULT_MAX_SOURCE_INTERVALS,
-                        DEFAULT_MAX_TIME_CLAUSES,
-                        DEFAULT_MAX_TARGET_UUIDS,
-                    ),
+                    Ok((sql_terms, temporal_terms)) => {
+                        Self::plan_conjunctive_for_origin(&origin_ctx, sql_terms, temporal_terms)
+                    }
                     Err(msg) => ExecutionPlan::Unsupported(msg),
                 }
             })
@@ -119,14 +119,9 @@ impl Planner {
     }
 
     fn plan_conjunctive_for_origin(
-        table: &str,
-        origin: &DataOrigin,
+        ctx: &OriginPlanContext<'_>,
         sql_terms: Vec<String>,
         temporal_terms: Vec<TemporalTerm>,
-        available_origins: &[DataOrigin],
-        max_source_intervals: usize,
-        max_time_clauses: usize,
-        max_target_uuids: usize,
     ) -> ExecutionPlan {
         let target_base_where = if sql_terms.is_empty() {
             "true".to_string()
@@ -137,11 +132,11 @@ impl Planner {
         if temporal_terms.is_empty() {
             let sql = format!(
                 "SELECT uuid FROM `{}` WHERE {} LIMIT {};",
-                table, target_base_where, max_target_uuids
+                ctx.table, target_base_where, ctx.plan.max_target_uuids
             );
             return ExecutionPlan::TableQuery {
-                table: table.to_string(),
-                origin: origin.clone(),
+                table: ctx.table.to_string(),
+                origin: ctx.origin.clone(),
                 sql,
             };
         }
@@ -156,12 +151,12 @@ impl Planner {
                 TemporalTerm::Within(d) | TemporalTerm::During(d) | TemporalTerm::Overlaps(d) => d,
             };
 
-            let source_origins = Self::resolve_selector(&term.stream, available_origins);
+            let source_origins = Self::resolve_selector(&term.stream, ctx.plan.available_origins);
             if source_origins.is_empty() {
-                let sql = format!("SELECT uuid FROM `{}` WHERE false;", table);
+                let sql = format!("SELECT uuid FROM `{}` WHERE false;", ctx.table);
                 return ExecutionPlan::TableQuery {
-                    table: table.to_string(),
-                    origin: origin.clone(),
+                    table: ctx.table.to_string(),
+                    origin: ctx.origin.clone(),
                     sql,
                 };
             }
@@ -180,7 +175,7 @@ impl Planner {
                     let source_table = source_origin.get_table_name();
                     let sql = format!(
                         "SELECT t_canonical, t_end FROM `{}` WHERE {} ORDER BY t_canonical DESC LIMIT {};",
-                        source_table, source_where, max_source_intervals
+                        source_table, source_where, ctx.plan.max_source_intervals
                     );
                     DuringSourcePlan {
                         source_table,
@@ -197,12 +192,12 @@ impl Planner {
         }
 
         ExecutionPlan::DuringQuery {
-            target_table: table.to_string(),
-            target_origin: origin.clone(),
+            target_table: ctx.table.to_string(),
+            target_origin: ctx.origin.clone(),
             target_base_where,
             during_terms,
-            max_source_intervals,
-            max_time_clauses,
+            max_source_intervals: ctx.plan.max_source_intervals,
+            max_time_clauses: ctx.plan.max_time_clauses,
         }
     }
 
@@ -401,7 +396,12 @@ impl Planner {
             }
 
             let mut iter = atoms.into_iter();
-            let mut acc = iter.next().expect("non-empty atoms");
+            let Some(mut acc) = iter.next() else {
+                return Expression::TimeRange(
+                    chrono::DateTime::<chrono::Utc>::MIN_UTC,
+                    chrono::DateTime::<chrono::Utc>::MAX_UTC,
+                );
+            };
             for a in iter {
                 acc = Expression::And(Box::new(acc), Box::new(a));
             }
@@ -466,6 +466,19 @@ impl Planner {
     fn quote_string(s: &str) -> String {
         format!("'{}'", s.replace('\'', "\\'"))
     }
+}
+
+struct PlanContext<'a> {
+    available_origins: &'a [DataOrigin],
+    max_source_intervals: usize,
+    max_time_clauses: usize,
+    max_target_uuids: usize,
+}
+
+struct OriginPlanContext<'a> {
+    plan: &'a PlanContext<'a>,
+    table: &'a str,
+    origin: &'a DataOrigin,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -552,6 +565,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::panic)]
     fn plans_temporal_or_via_dnf_union() {
         let origins = vec![
             DataOrigin::new(DataOriginType::DeviceId("laptop".into()), "Audio".into()),
