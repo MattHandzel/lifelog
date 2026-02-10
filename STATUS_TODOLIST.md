@@ -14,6 +14,12 @@ Last updated: 2026-02-10
 - `[x]` Default correlation window config (Spec §4.3)
   - Added `ServerConfig.default_correlation_window_ms`
   - LLQL JSON may omit `window` and rely on the server default (per-term non-zero window overrides)
+- `[x]` Point vs interval semantics on frames (Spec §4.1)
+  - Frame protos include `record_type` (`Point` vs `Interval`)
+  - Server sets `record_type` in `GetData` responses (Audio/WindowActivity = interval; others = point)
+- `[x]` Blobs stored in CAS, not inline (Spec §6 / §8)
+  - Screen/Camera/Audio blobs stored in CAS (`blob_hash` + `blob_size`)
+  - Clipboard binary payloads (when present) are stored in CAS; SurrealDB stores only the reference
 - `[x]` Query resource limits (Spec §10.1)
   - Default `LIMIT 1000` on UUID-returning queries
   - Default `10s` SurrealDB query timeout in the query executor
