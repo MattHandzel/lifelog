@@ -30,8 +30,8 @@ Priority tiers:
 | 1.4 | Server computes & stores `skew_estimate` per collector | `[x]` | `ServerHandle::handle_clock_sample` stores recent samples and updates `skew_estimates` (`server/src/server.rs`, `common/lifelog-core/src/time_skew.rs`). |
 | 1.5 | Server computes `t_canonical = t_device + skew` at ingest time | `[x]` | Ingest applies per-collector skew estimate and persists `t_ingest`/`t_canonical`/`t_end`/`time_quality` (`server/src/ingest.rs`). |
 | 1.6 | Add point vs interval semantics to proto (explicit `record_type` field) | `[ ]` | Some frames have `duration_secs`, but no formal model |
-| 1.7 | Define global default correlation window `Δt_default` in config | `[ ]` | Spec §4.3 requires this |
-| 1.8 | Support per-predicate `Δt` overrides in query AST | `[ ]` | AST has `Within` operator but no window config |
+| 1.7 | Define global default correlation window `Δt_default` in config | `[x]` | Added `ServerConfig.default_correlation_window_ms` and wired it so temporal operators use it when their window is omitted/zero (LLQL JSON supports omitting `window`). |
+| 1.8 | Support per-predicate `Δt` overrides in query AST | `[x]` | `WITHIN`/`DURING`/`OVERLAPS` carry an explicit per-term `window`; non-zero overrides the global default. |
 
 ---
 

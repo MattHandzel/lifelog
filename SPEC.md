@@ -134,6 +134,8 @@ Queries must support correlation across streams using explicit operators:
 
 v1 must define a global default correlation window `Δt_default` (configurable), and allow per-predicate overrides.
 
+Implementation note: this repo represents `Δt_default` as `ServerConfig.default_correlation_window_ms`. Temporal operators (`WITHIN`/`DURING`/`OVERLAPS`) use the per-term window when provided, otherwise they fall back to `Δt_default`.
+
 ---
 
 ## 5. System Architecture (Backend-first, distributed)
