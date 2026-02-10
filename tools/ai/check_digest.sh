@@ -20,8 +20,11 @@ exit_code=$?
 set -e
 
 line_count=$(wc -l < "$tmp" | tr -d ' ')
-err_count=$(grep -ciE '^error' "$tmp" 2>/dev/null || echo 0)
-warn_count=$(grep -ciE '^warning' "$tmp" 2>/dev/null || echo 0)
+# grep -c prints "0" but exits 1 when there are no matches; don't append a second "0".
+err_count=$(grep -ciE '^error' "$tmp" 2>/dev/null || true)
+warn_count=$(grep -ciE '^warning' "$tmp" 2>/dev/null || true)
+err_count=${err_count:-0}
+warn_count=${warn_count:-0}
 
 echo "[check] cmd=$*"
 echo "[check] exit_code=$exit_code lines=$line_count errors=$err_count warnings=$warn_count"
