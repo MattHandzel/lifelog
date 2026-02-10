@@ -7,6 +7,9 @@ Last updated: 2026-02-10
 - `[x]` Time model wire fields on frames (Spec §4.2.1)
   - Frame protos include `t_device`/`t_ingest`/`t_canonical`/`t_end`/`time_quality`
   - Server populates these fields in `GetData` responses for ingested modalities
+- `[x]` Query resource limits (Spec §10.1)
+  - Default `LIMIT 1000` on UUID-returning queries
+  - Default `10s` SurrealDB query timeout in the query executor
 - `[~]` Query correlation operators
   - `[~]` `WITHIN(...)` implemented (two-stage plan; AND-only; single term)
   - `[~]` `DURING(...)` implemented (two-stage plan; AND-only; supports multiple terms via interval intersection; window expansion for point sources)

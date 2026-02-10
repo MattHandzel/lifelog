@@ -104,7 +104,7 @@ This is the **core differentiator** of the product and the biggest gap.
 | 5.6 | **Implement `OVERLAPS(intervalA, intervalB)` operator** | `[x]` | Implemented in AST + LLQL + planner + executor (currently planned/executed like `DURING(...)`). |
 | 5.7 | **Implement replay queries** | `[~]` | Backend now exposes a `Replay` RPC returning ordered steps (screen-granularity) with aligned context keys. UI integration pending. |
 | 5.8 | Replay semantics: point record `t_i` → interval `[t_i, t_{i+1})` | `[~]` | Implemented via `lifelog-core` replay step assembly; last-step end currently uses replay window end. |
-| 5.9 | Query resource limits (timeouts, max results) | `[ ]` | Spec §10.1: "bounded resource usage" |
+| 5.9 | Query resource limits (timeouts, max results) | `[x]` | Added default server-side limits: `LIMIT 1000` on UUID-returning queries and a `10s` SurrealDB query timeout in the query executor (Spec §10.1). |
 | 5.10 | User-facing query syntax (DSL or templates) | `[~]` | **LLQL JSON** supported via `Query.text` prefix (`llql:`/`llql-json:`) → typed AST (WITHIN/DURING). Still missing: “nice” human DSL, templates, and UI builder. |
 
 ### The Canonical Example That Must Work (Spec §10.2)
