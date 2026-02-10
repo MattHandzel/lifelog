@@ -117,14 +117,19 @@ impl DataSource for CameraDataSource {
             while RUNNING.load(Ordering::SeqCst) {
                 match camera.capture() {
                     Ok(frame) => {
+                        let timestamp = to_pb_ts(Utc::now());
                         let pb_frame = CameraFrame {
                             uuid: Uuid::new_v4().to_string(),
-                            timestamp: to_pb_ts(Utc::now()),
+                            timestamp,
                             width: frame.resolution.0,
                             height: frame.resolution.1,
                             image_bytes: frame.to_vec(),
                             mime_type: "image/jpeg".to_string(),
                             device: self.config.device.clone(),
+                            t_device: timestamp,
+                            t_canonical: timestamp,
+                            t_end: timestamp,
+                            ..Default::default()
                         };
 
                         let mut buf = Vec::new();
@@ -161,14 +166,19 @@ impl DataSource for CameraDataSource {
                         Ok(out) if out.status.success() => {
                             if let Ok(data) = fs::read(&temp_path) {
                                 if !data.is_empty() {
+                                    let timestamp = to_pb_ts(Utc::now());
                                     let pb_frame = CameraFrame {
                                         uuid: Uuid::new_v4().to_string(),
-                                        timestamp: to_pb_ts(Utc::now()),
+                                        timestamp,
                                         width: 0, // Unknown without decoding
                                         height: 0,
                                         image_bytes: data,
                                         mime_type: "image/jpeg".to_string(),
                                         device: "imagesnap".to_string(),
+                                        t_device: timestamp,
+                                        t_canonical: timestamp,
+                                        t_end: timestamp,
+                                        ..Default::default()
                                     };
 
                                     let mut buf = Vec::new();

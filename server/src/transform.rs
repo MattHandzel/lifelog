@@ -7,6 +7,14 @@ use utils::cas::FsCas;
 
 use crate::data_retrieval::get_data_by_key;
 
+fn time_quality_str(q: i32) -> &'static str {
+    match lifelog_types::TimeQuality::try_from(q).unwrap_or(lifelog_types::TimeQuality::Unknown) {
+        lifelog_types::TimeQuality::Good => "good",
+        lifelog_types::TimeQuality::Degraded => "degraded",
+        lifelog_types::TimeQuality::Unknown => "unknown",
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum LifelogTransform {
     OcrTransform(OcrTransform),
@@ -65,6 +73,12 @@ pub(crate) async fn transform_data_single(
                         payload
                     {
                         let image: LifelogImage = screen_frame.clone().into();
+                        let src_t_canonical = screen_frame.t_canonical.or(screen_frame.timestamp);
+                        let src_t_end = screen_frame
+                            .t_end
+                            .or(screen_frame.t_canonical)
+                            .or(screen_frame.timestamp);
+                        let src_quality = time_quality_str(screen_frame.time_quality).to_string();
                         if let Ok(mut result) = t.apply(image) {
                             result.uuid = key.uuid.to_string();
                             let destination = t.destination();
@@ -73,9 +87,9 @@ pub(crate) async fn transform_data_single(
                             let mut record = result.to_record();
                             let now: surrealdb::sql::Datetime = chrono::Utc::now().into();
                             record.t_ingest = Some(now);
-                            record.t_canonical = Some(record.timestamp.clone());
-                            record.t_end = record.t_canonical.clone();
-                            record.time_quality = Some("derived".to_string());
+                            record.t_canonical = Some(lifelog_types::to_dt(src_t_canonical).into());
+                            record.t_end = Some(lifelog_types::to_dt(src_t_end).into());
+                            record.time_quality = Some(src_quality);
 
                             // Ensure destination table exists
                             let _ = crate::schema::ensure_table_schema(db, &destination).await;

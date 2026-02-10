@@ -539,16 +539,21 @@ mod helpers {
             let uuid = CoreUuid::new_v4().to_string();
             let timestamp = Utc::now();
             let image: Vec<u8> = vec![0; (width * height) as usize];
+            let ts_pb = Some(::pbjson_types::Timestamp {
+                seconds: timestamp.timestamp(),
+                nanos: timestamp.timestamp_subsec_nanos() as i32,
+            });
             ScreenFrame {
                 uuid,
-                timestamp: Some(::pbjson_types::Timestamp {
-                    seconds: timestamp.timestamp(),
-                    nanos: timestamp.timestamp_subsec_nanos() as i32,
-                }),
+                timestamp: ts_pb,
                 width,
                 height,
                 image_bytes: image,
                 mime_type: "image/png".to_string(),
+                t_device: ts_pb,
+                t_canonical: ts_pb,
+                t_end: ts_pb,
+                ..Default::default()
             }
         }
     }
@@ -753,16 +758,21 @@ mod tests {
     #[cfg(feature = "surrealdb")]
     #[test]
     fn test_screen_to_record() {
+        let ts_pb = Some(::pbjson_types::Timestamp {
+            seconds: 12345,
+            nanos: 0,
+        });
         let frame = ScreenFrame {
             uuid: lifelog_core::Uuid::new_v4().to_string(),
-            timestamp: Some(::pbjson_types::Timestamp {
-                seconds: 12345,
-                nanos: 0,
-            }),
+            timestamp: ts_pb,
             width: 1920,
             height: 1080,
             image_bytes: vec![1, 2, 3],
             mime_type: "image/png".to_string(),
+            t_device: ts_pb,
+            t_canonical: ts_pb,
+            t_end: ts_pb,
+            ..Default::default()
         };
         let record = frame.to_record();
         assert_eq!(record.uuid, frame.uuid);
@@ -774,15 +784,20 @@ mod tests {
     #[cfg(feature = "surrealdb")]
     #[test]
     fn test_browser_to_record() {
+        let ts_pb = Some(::pbjson_types::Timestamp {
+            seconds: 12345,
+            nanos: 0,
+        });
         let frame = BrowserFrame {
             uuid: lifelog_core::Uuid::new_v4().to_string(),
-            timestamp: Some(::pbjson_types::Timestamp {
-                seconds: 12345,
-                nanos: 0,
-            }),
+            timestamp: ts_pb,
             url: "http://test".to_string(),
             title: "title".to_string(),
             visit_count: 5,
+            t_device: ts_pb,
+            t_canonical: ts_pb,
+            t_end: ts_pb,
+            ..Default::default()
         };
         let record = frame.to_record();
         assert_eq!(record.url, "http://test");

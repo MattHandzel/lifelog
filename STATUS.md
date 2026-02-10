@@ -25,6 +25,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 - **Interval Overlap Semantics**: Added `t_end` metadata and updated temporal joins so interval targets (notably Audio) use overlap semantics (`t_canonical`/`t_end`) instead of “start timestamp only”.
 - **OVERLAPS Operator**: Added `OVERLAPS(...)` to the typed query AST/LLQL and wired it through planner/executor (currently equivalent to `DURING(...)` execution).
 - **Replay Backend**: Added a `Replay` gRPC RPC that returns ordered screen-granularity steps plus aligned context keys (UI integration pending).
+- **Canonical Time Wire Fields**: Added `t_device`/`t_ingest`/`t_canonical`/`t_end`/`time_quality` to frame protos and populated them in server `GetData` responses; OCR derived frames now propagate canonical time metadata from source frames.
 - **Performance Baselines**: Established throughput and latency benchmarks via `performance_suite.rs`.
 - **Improved Test Coverage**: Added unit tests for `DiskBuffer`, `TimeInterval`, `ReplayStep`, and config validation.
 

@@ -24,13 +24,18 @@ async fn test_cross_modal_query() {
         stream_id: "screen".to_string(),
         session_id,
     };
+    let screen_ts = lifelog_types::to_pb_ts(Utc::now());
     let screen_frame = ScreenFrame {
         uuid: lifelog_core::Uuid::new_v4().to_string(),
-        timestamp: Some(lifelog_types::to_pb_ts(Utc::now()).unwrap()),
+        timestamp: screen_ts,
         width: 100,
         height: 100,
         image_bytes: vec![0; 10], // Dummy image
         mime_type: "image/jpeg".to_string(),
+        t_device: screen_ts,
+        t_canonical: screen_ts,
+        t_end: screen_ts,
+        ..Default::default()
     };
     let mut screen_buf = Vec::new();
     screen_frame.encode(&mut screen_buf).unwrap();
@@ -51,12 +56,17 @@ async fn test_cross_modal_query() {
         stream_id: "browser".to_string(),
         session_id,
     };
+    let browser_ts = lifelog_types::to_pb_ts(Utc::now());
     let browser_frame = BrowserFrame {
         uuid: lifelog_core::Uuid::new_v4().to_string(),
-        timestamp: Some(lifelog_types::to_pb_ts(Utc::now()).unwrap()),
+        timestamp: browser_ts,
         url: "https://example.com/rust-lang".to_string(),
         title: "Rust Programming Language".to_string(),
         visit_count: 1,
+        t_device: browser_ts,
+        t_canonical: browser_ts,
+        t_end: browser_ts,
+        ..Default::default()
     };
     let mut browser_buf = Vec::new();
     browser_frame.encode(&mut browser_buf).unwrap();

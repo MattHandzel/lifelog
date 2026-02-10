@@ -29,13 +29,18 @@ async fn test_ocr_transformation_pipeline() {
     };
 
     // Create a small white image with some text would be ideal, but even a blank one should trigger the pipeline
+    let frame_ts = lifelog_types::to_pb_ts(Utc::now());
     let frame = ScreenFrame {
         uuid: lifelog_core::Uuid::new_v4().to_string(),
-        timestamp: Some(lifelog_types::to_pb_ts(Utc::now()).unwrap()),
+        timestamp: frame_ts,
         width: 100,
         height: 100,
         image_bytes: vec![0xFF; 100 * 100 * 3], // White square
         mime_type: "image/jpeg".to_string(),
+        t_device: frame_ts,
+        t_canonical: frame_ts,
+        t_end: frame_ts,
+        ..Default::default()
     };
 
     let mut buf = Vec::new();

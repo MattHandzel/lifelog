@@ -156,13 +156,18 @@ impl DataSource for ScreenDataSource {
 
                     let (width, height) = img.dimensions();
 
+                    let timestamp = to_pb_ts(ts);
                     let captured = ScreenFrame {
                         uuid: Uuid::new_v4().to_string(), //use v6
                         width,
                         height,
                         image_bytes: image_data_bytes,
-                        timestamp: to_pb_ts(ts),
+                        timestamp,
                         mime_type: "image/png".to_string(),
+                        t_device: timestamp,
+                        t_canonical: timestamp,
+                        t_end: timestamp,
+                        ..Default::default()
                     };
 
                     let mut buf = Vec::new();

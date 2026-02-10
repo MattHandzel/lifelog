@@ -1,6 +1,6 @@
 # SPEC_TODOLIST.md — Gap Analysis: Current Repo vs v1 Spec
 
-Generated 2026-02-08. Cross-referenced against `SPEC.md`, codebase exploration, and memory files.
+Generated 2026-02-08; updated 2026-02-10. Cross-referenced against `SPEC.md`, codebase exploration, and memory files.
 
 **Overall completion: ~50%.** Foundations are solid; core differentiators (cross-modal queries, replay, security) are incomplete.
 
@@ -24,8 +24,8 @@ Priority tiers:
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| 1.1 | Add `t_device`, `t_ingest`, `t_canonical` fields to proto records | `[ ]` | Currently only `timestamp` exists |
-| 1.2 | Add `time_quality` enum to proto (Good/Degraded/Unknown) | `[ ]` | Algorithm exists in `time_skew.rs`, not in proto |
+| 1.1 | Add `t_device`, `t_ingest`, `t_canonical` fields to proto records | `[x]` | Frame protos now include `t_device`/`t_ingest`/`t_canonical` (plus `t_end`); server populates them in `GetData` responses. |
+| 1.2 | Add `time_quality` enum to proto (Good/Degraded/Unknown) | `[x]` | Added `TimeQuality` enum to proto; server maps stored quality strings (`good`/`degraded`/`unknown`) into the enum for responses. |
 | 1.3 | Collector reports `(device_now, backend_now)` samples in `ControlMessage` | `[ ]` | Needed for skew estimation |
 | 1.4 | Server computes & stores `skew_estimate` per collector | `[ ]` | `time_skew.rs` has the algorithm, not integrated |
 | 1.5 | Server computes `t_canonical = t_device + skew` at ingest time | `[ ]` | `ingest.rs` stores raw timestamp only |

@@ -223,10 +223,15 @@ impl DataSource for ProcessDataSource {
             match Self::get_process_info(&users_cache) {
                 Ok(processes) => {
                     if !processes.is_empty() {
+                        let timestamp = to_pb_ts(Utc::now());
                         let frame = ProcessFrame {
                             uuid: Uuid::new_v4().to_string(),
-                            timestamp: to_pb_ts(Utc::now()),
+                            timestamp,
+                            t_device: timestamp,
+                            t_canonical: timestamp,
+                            t_end: timestamp,
                             processes,
+                            ..Default::default()
                         };
 
                         let mut buf = Vec::new();
