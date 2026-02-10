@@ -327,7 +327,7 @@ mod tests {
     }
 
     #[test]
-    fn llql_window_is_optional_and_defaults_to_zero() {
+    fn llql_window_is_optional_and_defaults_to_zero() -> Result<(), Box<dyn std::error::Error>> {
         let input = r#"llql:{
           "target": {"type":"modality","modality":"Audio"},
           "filter": {
@@ -338,14 +338,14 @@ mod tests {
         }"#;
 
         let parsed = try_parse_llql(&[input.to_string()]);
-        let q = if let Ok(Some(q)) = parsed {
-            q
-        } else {
-            panic!("expected query");
-        };
+        let q = parsed?.ok_or("expected query")?;
+
         match q.filter {
-            ast::Expression::During { window, .. } => assert_eq!(window, Duration::zero()),
-            other => panic!("unexpected filter: {other:?}"),
+            ast::Expression::During { window, .. } => {
+                assert_eq!(window, Duration::zero());
+                Ok(())
+            }
+            _ => Err("expected During".into()),
         }
     }
 }

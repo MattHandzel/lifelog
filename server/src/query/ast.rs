@@ -163,9 +163,9 @@ mod tests {
 
         let default_window = Duration::seconds(30);
         let out = q.filter.with_default_temporal_windows(default_window);
-        match out {
-            Expression::Within { window, .. } => assert_eq!(window, default_window),
-            _ => panic!("expected Within"),
-        }
+        assert!(matches!(
+            out,
+            Expression::Within { window, .. } if window == default_window
+        ));
     }
 }
