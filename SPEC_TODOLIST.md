@@ -29,7 +29,7 @@ Priority tiers:
 | 1.3 | Collector reports `(device_now, backend_now)` samples in `ControlMessage` | `[x]` | Implemented clock sync: server sends `ClockSync` command with `backend_now`, collector responds with `ClockSample { device_now, backend_now }` (`collector/src/collector.rs`, `server/src/grpc_service.rs`, `proto/lifelog.proto`). |
 | 1.4 | Server computes & stores `skew_estimate` per collector | `[x]` | `ServerHandle::handle_clock_sample` stores recent samples and updates `skew_estimates` (`server/src/server.rs`, `common/lifelog-core/src/time_skew.rs`). |
 | 1.5 | Server computes `t_canonical = t_device + skew` at ingest time | `[x]` | Ingest applies per-collector skew estimate and persists `t_ingest`/`t_canonical`/`t_end`/`time_quality` (`server/src/ingest.rs`). |
-| 1.6 | Add point vs interval semantics to proto (explicit `record_type` field) | `[ ]` | Some frames have `duration_secs`, but no formal model |
+| 1.6 | Add point vs interval semantics to proto (explicit `record_type` field) | `[x]` | Added `RecordType` enum + `record_type` field to frame protos; server populates it in `GetData` responses (Audio/WindowActivity = interval; others = point). |
 | 1.7 | Define global default correlation window `Δt_default` in config | `[x]` | Added `ServerConfig.default_correlation_window_ms` and wired it so temporal operators use it when their window is omitted/zero (LLQL JSON supports omitting `window`). |
 | 1.8 | Support per-predicate `Δt` overrides in query AST | `[x]` | `WITHIN`/`DURING`/`OVERLAPS` carry an explicit per-term `window`; non-zero overrides the global default. |
 
@@ -79,7 +79,7 @@ Priority tiers:
 
 | # | Task | Priority | Status | Notes |
 |---|------|----------|--------|-------|
-| 4.1 | Separate blobs to CAS (don't store inline in SurrealDB) | P0 | `[~]` | Screen/Camera/Audio blobs are stored in CAS with `blob_hash` + `blob_size`. Clipboard `binary_data` is still stored inline (needs CAS ref if used). |
+| 4.1 | Separate blobs to CAS (don't store inline in SurrealDB) | P0 | `[x]` | Screen/Camera/Audio blobs stored in CAS with `blob_hash` + `blob_size`. Clipboard binary payloads (when present) are now stored in CAS; SurrealDB stores only the CAS reference. |
 | 4.2 | Define & create text search indexes | P0 | `[x]` | `schema.rs` defines `lifelog_text` analyzer + BM25 search indexes for OCR text, browser URL/title, clipboard text, shell commands, and keystrokes. |
 | 4.3 | Durable ACK = metadata + blobs + indexes all persisted | P0 | `[~]` | ACK fires after metadata write. Must wait for text index update too (Spec §6.2.1). |
 | 4.4 | Idempotent chunk writes with dedup key | P1 | `[x]` | `(collector_id, stream_id, session_id, offset)` used |

@@ -22,6 +22,13 @@ enum TimeQuality {
   Degraded = 2;
 }
 
+// Explicit point vs interval semantics for correlation (Spec §4).
+enum RecordType {
+  RecordTypeUnknown = 0;
+  Point = 1;
+  Interval = 2;
+}
+
 message StreamIdentity {
   string collector_id = 1;
   string stream_id = 2;
@@ -58,6 +65,7 @@ message BrowserFrame {
   google.protobuf.Timestamp t_canonical = 8;
   google.protobuf.Timestamp t_end = 9;
   TimeQuality time_quality = 10;
+  RecordType record_type = 11;
 }
 
 message BrowserHistoryConfig {
@@ -222,6 +230,7 @@ message HyprlandFrame {
   google.protobuf.Timestamp t_canonical = 11;
   google.protobuf.Timestamp t_end = 12;
   TimeQuality time_quality = 13;
+  RecordType record_type = 14;
 }
 
 message InputLoggerConfig {
@@ -276,6 +285,7 @@ message OcrFrame {
   google.protobuf.Timestamp t_canonical = 6;
   google.protobuf.Timestamp t_end = 7;
   TimeQuality time_quality = 8;
+  RecordType record_type = 9;
 }
 
 message ProcessesConfig {
@@ -307,6 +317,7 @@ message ProcessFrame {
   google.protobuf.Timestamp t_canonical = 6;
   google.protobuf.Timestamp t_end = 7;
   TimeQuality time_quality = 8;
+  RecordType record_type = 9;
 }
 
 message ScreenConfig {
@@ -329,6 +340,7 @@ message ScreenFrame {
   google.protobuf.Timestamp t_canonical = 9;
   google.protobuf.Timestamp t_end = 10;
   TimeQuality time_quality = 11;
+  RecordType record_type = 12;
 }
 
 message CameraFrame {
@@ -344,6 +356,7 @@ message CameraFrame {
   google.protobuf.Timestamp t_canonical = 10;
   google.protobuf.Timestamp t_end = 11;
   TimeQuality time_quality = 12;
+  RecordType record_type = 13;
 }
 
 message WeatherFrame {
@@ -358,6 +371,7 @@ message WeatherFrame {
   google.protobuf.Timestamp t_canonical = 9;
   google.protobuf.Timestamp t_end = 10;
   TimeQuality time_quality = 11;
+  RecordType record_type = 12;
 }
 
 message AudioFrame {
@@ -373,6 +387,7 @@ message AudioFrame {
   google.protobuf.Timestamp t_canonical = 10;
   google.protobuf.Timestamp t_end = 11;
   TimeQuality time_quality = 12;
+  RecordType record_type = 13;
 }
 
 message KeystrokeFrame {
@@ -386,6 +401,7 @@ message KeystrokeFrame {
   google.protobuf.Timestamp t_canonical = 8;
   google.protobuf.Timestamp t_end = 9;
   TimeQuality time_quality = 10;
+  RecordType record_type = 11;
 }
 
 message ClipboardFrame {
@@ -399,6 +415,7 @@ message ClipboardFrame {
   google.protobuf.Timestamp t_canonical = 8;
   google.protobuf.Timestamp t_end = 9;
   TimeQuality time_quality = 10;
+  RecordType record_type = 11;
 }
 
 message ShellHistoryFrame {
@@ -412,6 +429,7 @@ message ShellHistoryFrame {
   google.protobuf.Timestamp t_canonical = 8;
   google.protobuf.Timestamp t_end = 9;
   TimeQuality time_quality = 10;
+  RecordType record_type = 11;
 }
 
 message ShellHistoryConfig {
@@ -436,6 +454,7 @@ message WindowActivityFrame {
   google.protobuf.Timestamp t_canonical = 9;
   google.protobuf.Timestamp t_end = 10;
   TimeQuality time_quality = 11;
+  RecordType record_type = 12;
 }
 
 message MouseFrame {
@@ -456,6 +475,7 @@ message MouseFrame {
   google.protobuf.Timestamp t_canonical = 9;
   google.protobuf.Timestamp t_end = 10;
   TimeQuality time_quality = 11;
+  RecordType record_type = 12;
 }
 
 enum ServerActionType {

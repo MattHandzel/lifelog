@@ -74,6 +74,7 @@ pub(crate) async fn get_data_by_key(
                     .and_then(|t| lifelog_types::to_pb_ts(t.0)),
                 time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
                     as i32,
+                record_type: lifelog_types::RecordType::Point as i32,
             };
 
             Ok(lifelog_types::LifelogData {
@@ -105,6 +106,7 @@ pub(crate) async fn get_data_by_key(
                     .and_then(|t| lifelog_types::to_pb_ts(t.0)),
                 time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
                     as i32,
+                record_type: lifelog_types::RecordType::Point as i32,
             };
 
             Ok(lifelog_types::LifelogData {
@@ -134,6 +136,7 @@ pub(crate) async fn get_data_by_key(
                     .and_then(|t| lifelog_types::to_pb_ts(t.0)),
                 time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
                     as i32,
+                record_type: lifelog_types::RecordType::Point as i32,
             };
 
             Ok(lifelog_types::LifelogData {
@@ -171,6 +174,7 @@ pub(crate) async fn get_data_by_key(
                     .and_then(|t| lifelog_types::to_pb_ts(t.0)),
                 time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
                     as i32,
+                record_type: lifelog_types::RecordType::Interval as i32,
             };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Audioframe(frame)),
@@ -183,6 +187,7 @@ pub(crate) async fn get_data_by_key(
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
             frame.uuid = key.uuid.to_string();
+            frame.record_type = lifelog_types::RecordType::Point as i32;
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Keystrokeframe(frame)),
             })
@@ -194,11 +199,22 @@ pub(crate) async fn get_data_by_key(
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
 
+            let binary_data = if !frame_record.blob_hash.is_empty() {
+                cas.get(&frame_record.blob_hash).map_err(|e| {
+                    LifelogError::Database(format!(
+                        "CAS read for {}: {}",
+                        frame_record.blob_hash, e
+                    ))
+                })?
+            } else {
+                frame_record.binary_data
+            };
+
             let frame = lifelog_types::ClipboardFrame {
                 uuid: frame_record.uuid,
                 timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
                 text: frame_record.text,
-                binary_data: frame_record.binary_data,
+                binary_data,
                 mime_type: frame_record.mime_type,
                 t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
                 t_ingest: frame_record
@@ -212,6 +228,7 @@ pub(crate) async fn get_data_by_key(
                     .and_then(|t| lifelog_types::to_pb_ts(t.0)),
                 time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
                     as i32,
+                record_type: lifelog_types::RecordType::Point as i32,
             };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Clipboardframe(frame)),
@@ -242,6 +259,7 @@ pub(crate) async fn get_data_by_key(
                     .and_then(|t| lifelog_types::to_pb_ts(t.0)),
                 time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
                     as i32,
+                record_type: lifelog_types::RecordType::Point as i32,
             };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Shellhistoryframe(
@@ -256,6 +274,7 @@ pub(crate) async fn get_data_by_key(
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
             frame.uuid = key.uuid.to_string();
+            frame.record_type = lifelog_types::RecordType::Interval as i32;
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Windowactivityframe(
                     frame,
@@ -269,6 +288,7 @@ pub(crate) async fn get_data_by_key(
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
             frame.uuid = key.uuid.to_string();
+            frame.record_type = lifelog_types::RecordType::Point as i32;
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Mouseframe(frame)),
             })
@@ -296,6 +316,7 @@ pub(crate) async fn get_data_by_key(
                     .and_then(|t| lifelog_types::to_pb_ts(t.0)),
                 time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
                     as i32,
+                record_type: lifelog_types::RecordType::Point as i32,
             };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Processframe(frame)),
@@ -332,6 +353,7 @@ pub(crate) async fn get_data_by_key(
                     .and_then(|t| lifelog_types::to_pb_ts(t.0)),
                 time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
                     as i32,
+                record_type: lifelog_types::RecordType::Point as i32,
             };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Cameraframe(frame)),
@@ -363,6 +385,7 @@ pub(crate) async fn get_data_by_key(
                     .and_then(|t| lifelog_types::to_pb_ts(t.0)),
                 time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
                     as i32,
+                record_type: lifelog_types::RecordType::Point as i32,
             };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Weatherframe(frame)),
@@ -396,6 +419,7 @@ pub(crate) async fn get_data_by_key(
                     .and_then(|t| lifelog_types::to_pb_ts(t.0)),
                 time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
                     as i32,
+                record_type: lifelog_types::RecordType::Point as i32,
             };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Hyprlandframe(frame)),

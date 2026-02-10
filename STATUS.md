@@ -17,6 +17,8 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 
 ## What Changed Last
 
+- **Record Type Semantics**: Added explicit `record_type` (`Point` vs `Interval`) to frame protos and populated it in `GetData` responses.
+- **Clipboard Binary CAS Storage**: Clipboard frames with binary payloads now store the payload in CAS and persist only the CAS reference in SurrealDB; `GetData` hydrates from CAS when needed.
 - **Unified Error Hierarchy**: Migrated all local error types to a single `LifelogError` enum in `lifelog-core` for consistent error handling and reporting.
 - **Unified Trait Model**: Finalized `DataType`, `Modality`, and `ToRecord` traits. `ToRecord` ensures SurrealDB 2.x compatibility for complex types like `datetime` and `bytes`.
 - **Explicit Catalog**: Replaced `INFO FOR DB` table discovery with a dedicated `catalog` table for robust and efficient origin discovery during queries.
