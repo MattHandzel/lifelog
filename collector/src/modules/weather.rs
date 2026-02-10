@@ -113,9 +113,10 @@ impl DataSource for WeatherDataSource {
                             (json["main"].as_object(), json["weather"].as_array())
                         {
                             if let Some(weather) = weather_arr.first().and_then(|w| w.as_object()) {
+                                let timestamp = to_pb_ts(Utc::now());
                                 let frame = WeatherFrame {
                                     uuid: Uuid::new_v4().to_string(),
-                                    timestamp: to_pb_ts(Utc::now()),
+                                    timestamp,
                                     temperature: main["temp"].as_f64().unwrap_or(0.0),
                                     humidity: main["humidity"].as_f64().unwrap_or(0.0),
                                     pressure: main["pressure"].as_f64().unwrap_or(0.0),
@@ -123,6 +124,10 @@ impl DataSource for WeatherDataSource {
                                         .as_str()
                                         .unwrap_or("Unknown")
                                         .to_string(),
+                                    t_device: timestamp,
+                                    t_canonical: timestamp,
+                                    t_end: timestamp,
+                                    ..Default::default()
                                 };
 
                                 let mut buf = Vec::new();

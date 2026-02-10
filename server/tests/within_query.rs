@@ -30,25 +30,35 @@ async fn test_within_returns_target_records_near_source_matches() {
     };
 
     let close_screen_uuid = lifelog_core::Uuid::new_v4().to_string();
+    let close_ts = lifelog_types::to_pb_ts(base);
     let close_screen = ScreenFrame {
         uuid: close_screen_uuid.clone(),
-        timestamp: Some(lifelog_types::to_pb_ts(base).unwrap()),
+        timestamp: close_ts,
         width: 100,
         height: 100,
         image_bytes: vec![0; 10],
         mime_type: "image/jpeg".to_string(),
+        t_device: close_ts,
+        t_canonical: close_ts,
+        t_end: close_ts,
+        ..Default::default()
     };
     let mut close_screen_buf = Vec::new();
     close_screen.encode(&mut close_screen_buf).unwrap();
 
     let far_screen_uuid = lifelog_core::Uuid::new_v4().to_string();
+    let far_ts = lifelog_types::to_pb_ts(base + Duration::seconds(120));
     let far_screen = ScreenFrame {
         uuid: far_screen_uuid.clone(),
-        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(120)).unwrap()),
+        timestamp: far_ts,
         width: 100,
         height: 100,
         image_bytes: vec![0; 10],
         mime_type: "image/jpeg".to_string(),
+        t_device: far_ts,
+        t_canonical: far_ts,
+        t_end: far_ts,
+        ..Default::default()
     };
     let mut far_screen_buf = Vec::new();
     far_screen.encode(&mut far_screen_buf).unwrap();
@@ -90,12 +100,17 @@ async fn test_within_returns_target_records_near_source_matches() {
         stream_id: "browser".to_string(),
         session_id,
     };
+    let browser_ts = lifelog_types::to_pb_ts(base + Duration::seconds(2));
     let browser = BrowserFrame {
         uuid: lifelog_core::Uuid::new_v4().to_string(),
-        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(2)).unwrap()),
+        timestamp: browser_ts,
         url: "https://example.com/rust-lang".to_string(),
         title: "Rust Programming Language".to_string(),
         visit_count: 1,
+        t_device: browser_ts,
+        t_canonical: browser_ts,
+        t_end: browser_ts,
+        ..Default::default()
     };
     let mut browser_buf = Vec::new();
     browser.encode(&mut browser_buf).unwrap();

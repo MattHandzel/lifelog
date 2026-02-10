@@ -78,20 +78,25 @@ impl BrowserHistorySource {
 
         let history_iter = stmt
             .query_map([last_query_chrome_micros, now_chrome_micros], |row| {
+                let timestamp = {
+                    let visit_time_chrome_micros: i64 = row.get(2)?;
+                    let unix_micros = visit_time_chrome_micros - WINDOWS_EPOCH_MICROS;
+                    let unix_secs = unix_micros / 1_000_000;
+                    let unix_nanos = (unix_micros % 1_000_000) * 1_000;
+                    let ts = ::chrono::DateTime::from_timestamp(unix_secs, unix_nanos as u32)
+                        .unwrap_or_default();
+                    to_pb_ts(ts)
+                };
                 Ok(BrowserFrame {
                     uuid: Uuid::new_v4().to_string(), //use v6
                     url: row.get::<_, String>(0)?,
                     title: row.get::<_, String>(1)?,
-                    timestamp: {
-                        let visit_time_chrome_micros: i64 = row.get(2)?;
-                        let unix_micros = visit_time_chrome_micros - WINDOWS_EPOCH_MICROS;
-                        let unix_secs = unix_micros / 1_000_000;
-                        let unix_nanos = (unix_micros % 1_000_000) * 1_000;
-                        let ts = ::chrono::DateTime::from_timestamp(unix_secs, unix_nanos as u32)
-                            .unwrap_or_default();
-                        to_pb_ts(ts)
-                    },
+                    timestamp,
                     visit_count: row.get::<_, u32>(3)?,
+                    t_device: timestamp,
+                    t_canonical: timestamp,
+                    t_end: timestamp,
+                    ..Default::default()
                 })
             })
             .map_err(|e| LifelogError::Sqlite(e.to_string()))?;

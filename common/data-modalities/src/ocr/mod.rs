@@ -51,13 +51,18 @@ impl Transform for OcrTransform {
             Ok(image) => image,
             Err(_e) => {
                 tracing::warn!("Failed to create rusty_tesseract::Image from dynamic_image");
+                let ts = Some(::pbjson_types::Timestamp {
+                    seconds: input.timestamp.timestamp(),
+                    nanos: input.timestamp.timestamp_subsec_nanos() as i32,
+                });
                 return Ok(OcrFrame {
                     text: String::new(),
                     uuid: input.uuid.to_string(),
-                    timestamp: Some(::pbjson_types::Timestamp {
-                        seconds: input.timestamp.timestamp(),
-                        nanos: input.timestamp.timestamp_subsec_nanos() as i32,
-                    }),
+                    timestamp: ts,
+                    t_device: ts,
+                    t_canonical: ts,
+                    t_end: ts,
+                    ..Default::default()
                 });
             }
         };
@@ -74,13 +79,19 @@ impl Transform for OcrTransform {
             }
         };
 
+        let ts = Some(::pbjson_types::Timestamp {
+            seconds: input.timestamp.timestamp(),
+            nanos: input.timestamp.timestamp_subsec_nanos() as i32,
+        });
+
         Ok(OcrFrame {
             text: data_output,
             uuid: input.uuid.to_string(),
-            timestamp: Some(::pbjson_types::Timestamp {
-                seconds: input.timestamp.timestamp(),
-                nanos: input.timestamp.timestamp_subsec_nanos() as i32,
-            }),
+            timestamp: ts,
+            t_device: ts,
+            t_canonical: ts,
+            t_end: ts,
+            ..Default::default()
         })
     }
 

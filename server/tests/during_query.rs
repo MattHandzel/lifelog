@@ -30,25 +30,35 @@ async fn test_during_returns_target_records_inside_source_intervals() {
     };
 
     let in_uuid = lifelog_core::Uuid::new_v4().to_string();
+    let in_ts = lifelog_types::to_pb_ts(base + Duration::seconds(5));
     let in_screen = ScreenFrame {
         uuid: in_uuid.clone(),
-        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(5)).unwrap()),
+        timestamp: in_ts,
         width: 100,
         height: 100,
         image_bytes: vec![0; 10],
         mime_type: "image/jpeg".to_string(),
+        t_device: in_ts,
+        t_canonical: in_ts,
+        t_end: in_ts,
+        ..Default::default()
     };
     let mut in_buf = Vec::new();
     in_screen.encode(&mut in_buf).unwrap();
 
     let out_uuid = lifelog_core::Uuid::new_v4().to_string();
+    let out_ts = lifelog_types::to_pb_ts(base + Duration::seconds(30));
     let out_screen = ScreenFrame {
         uuid: out_uuid.clone(),
-        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(30)).unwrap()),
+        timestamp: out_ts,
         width: 100,
         height: 100,
         image_bytes: vec![0; 10],
         mime_type: "image/jpeg".to_string(),
+        t_device: out_ts,
+        t_canonical: out_ts,
+        t_end: out_ts,
+        ..Default::default()
     };
     let mut out_buf = Vec::new();
     out_screen.encode(&mut out_buf).unwrap();
@@ -88,26 +98,38 @@ async fn test_during_returns_target_records_inside_source_intervals() {
         session_id,
     };
 
+    let pcm_ts = lifelog_types::to_pb_ts(base);
+    let pcm_end = lifelog_types::to_pb_ts(base + Duration::seconds(10));
     let pcm = AudioFrame {
         uuid: lifelog_core::Uuid::new_v4().to_string(),
-        timestamp: Some(lifelog_types::to_pb_ts(base).unwrap()),
+        timestamp: pcm_ts,
         audio_bytes: vec![1; 10],
         codec: "pcm".to_string(),
         sample_rate: 48000,
         channels: 1,
         duration_secs: 10.0,
+        t_device: pcm_ts,
+        t_canonical: pcm_ts,
+        t_end: pcm_end,
+        ..Default::default()
     };
     let mut pcm_buf = Vec::new();
     pcm.encode(&mut pcm_buf).unwrap();
 
+    let aac_ts = lifelog_types::to_pb_ts(base + Duration::seconds(120));
+    let aac_end = lifelog_types::to_pb_ts(base + Duration::seconds(130));
     let aac = AudioFrame {
         uuid: lifelog_core::Uuid::new_v4().to_string(),
-        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(120)).unwrap()),
+        timestamp: aac_ts,
         audio_bytes: vec![2; 10],
         codec: "aac".to_string(),
         sample_rate: 48000,
         channels: 1,
         duration_secs: 10.0,
+        t_device: aac_ts,
+        t_canonical: aac_ts,
+        t_end: aac_end,
+        ..Default::default()
     };
     let mut aac_buf = Vec::new();
     aac.encode(&mut aac_buf).unwrap();
@@ -215,25 +237,35 @@ async fn test_during_conjunction_intersects_intervals() {
     };
 
     let outside_uuid = lifelog_core::Uuid::new_v4().to_string();
+    let outside_ts = lifelog_types::to_pb_ts(base + Duration::seconds(2));
     let outside_screen = ScreenFrame {
         uuid: outside_uuid.clone(),
-        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(2)).unwrap()),
+        timestamp: outside_ts,
         width: 100,
         height: 100,
         image_bytes: vec![0; 10],
         mime_type: "image/jpeg".to_string(),
+        t_device: outside_ts,
+        t_canonical: outside_ts,
+        t_end: outside_ts,
+        ..Default::default()
     };
     let mut outside_buf = Vec::new();
     outside_screen.encode(&mut outside_buf).unwrap();
 
     let inside_uuid = lifelog_core::Uuid::new_v4().to_string();
+    let inside_ts = lifelog_types::to_pb_ts(base + Duration::seconds(7));
     let inside_screen = ScreenFrame {
         uuid: inside_uuid.clone(),
-        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(7)).unwrap()),
+        timestamp: inside_ts,
         width: 100,
         height: 100,
         image_bytes: vec![0; 10],
         mime_type: "image/jpeg".to_string(),
+        t_device: inside_ts,
+        t_canonical: inside_ts,
+        t_end: inside_ts,
+        ..Default::default()
     };
     let mut inside_buf = Vec::new();
     inside_screen.encode(&mut inside_buf).unwrap();
@@ -276,26 +308,38 @@ async fn test_during_conjunction_intersects_intervals() {
         session_id,
     };
 
+    let pcm_ts = lifelog_types::to_pb_ts(base);
+    let pcm_end = lifelog_types::to_pb_ts(base + Duration::seconds(10));
     let pcm = AudioFrame {
         uuid: lifelog_core::Uuid::new_v4().to_string(),
-        timestamp: Some(lifelog_types::to_pb_ts(base).unwrap()),
+        timestamp: pcm_ts,
         audio_bytes: vec![1; 10],
         codec: "pcm".to_string(),
         sample_rate: 48000,
         channels: 1,
         duration_secs: 10.0,
+        t_device: pcm_ts,
+        t_canonical: pcm_ts,
+        t_end: pcm_end,
+        ..Default::default()
     };
     let mut pcm_buf = Vec::new();
     pcm.encode(&mut pcm_buf).unwrap();
 
+    let aac_ts = lifelog_types::to_pb_ts(base + Duration::seconds(5));
+    let aac_end = lifelog_types::to_pb_ts(base + Duration::seconds(15));
     let aac = AudioFrame {
         uuid: lifelog_core::Uuid::new_v4().to_string(),
-        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(5)).unwrap()),
+        timestamp: aac_ts,
         audio_bytes: vec![2; 10],
         codec: "aac".to_string(),
         sample_rate: 48000,
         channels: 1,
         duration_secs: 10.0,
+        t_device: aac_ts,
+        t_canonical: aac_ts,
+        t_end: aac_end,
+        ..Default::default()
     };
     let mut aac_buf = Vec::new();
     aac.encode(&mut aac_buf).unwrap();
@@ -414,14 +458,20 @@ async fn test_during_interval_target_overlaps_point_sources() {
         session_id,
     };
     let audio_uuid = lifelog_core::Uuid::new_v4().to_string();
+    let audio_ts = lifelog_types::to_pb_ts(base);
+    let audio_end = lifelog_types::to_pb_ts(base + Duration::seconds(10));
     let audio = AudioFrame {
         uuid: audio_uuid.clone(),
-        timestamp: Some(lifelog_types::to_pb_ts(base).unwrap()),
+        timestamp: audio_ts,
         audio_bytes: vec![1; 10],
         codec: "pcm".to_string(),
         sample_rate: 48000,
         channels: 1,
         duration_secs: 10.0,
+        t_device: audio_ts,
+        t_canonical: audio_ts,
+        t_end: audio_end,
+        ..Default::default()
     };
     let mut audio_buf = Vec::new();
     audio.encode(&mut audio_buf).unwrap();
@@ -446,13 +496,18 @@ async fn test_during_interval_target_overlaps_point_sources() {
         stream_id: "screen".to_string(),
         session_id,
     };
+    let screen_ts = lifelog_types::to_pb_ts(base + Duration::seconds(5));
     let screen = ScreenFrame {
         uuid: lifelog_core::Uuid::new_v4().to_string(),
-        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(5)).unwrap()),
+        timestamp: screen_ts,
         width: 123,
         height: 100,
         image_bytes: vec![0; 10],
         mime_type: "image/jpeg".to_string(),
+        t_device: screen_ts,
+        t_canonical: screen_ts,
+        t_end: screen_ts,
+        ..Default::default()
     };
     let mut screen_buf = Vec::new();
     screen.encode(&mut screen_buf).unwrap();

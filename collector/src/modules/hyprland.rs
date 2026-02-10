@@ -39,9 +39,13 @@ impl HyprlandDataSource {
     }
 
     async fn capture_frame(&self) -> Result<HyprlandFrame, LifelogError> {
+        let timestamp = to_pb_ts(Utc::now());
         let mut frame = HyprlandFrame {
             uuid: Uuid::new_v4().to_string(),
-            timestamp: to_pb_ts(Utc::now()),
+            timestamp,
+            t_device: timestamp,
+            t_canonical: timestamp,
+            t_end: timestamp,
             ..Default::default()
         };
 

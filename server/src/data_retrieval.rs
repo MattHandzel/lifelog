@@ -5,6 +5,14 @@ use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
 use utils::cas::FsCas;
 
+fn time_quality_from_opt_str(s: Option<&str>) -> lifelog_types::TimeQuality {
+    match s.unwrap_or_default() {
+        "good" => lifelog_types::TimeQuality::Good,
+        "degraded" => lifelog_types::TimeQuality::Degraded,
+        _ => lifelog_types::TimeQuality::Unknown,
+    }
+}
+
 /// Validates a table name contains only safe characters (alphanumeric,
 /// underscore, colon, hyphen). Prevents SQL injection via table names.
 fn validate_table_name(name: String) -> Result<String, LifelogError> {
@@ -54,6 +62,18 @@ pub(crate) async fn get_data_by_key(
                 height: frame_record.height,
                 image_bytes,
                 mime_type: frame_record.mime_type,
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
             };
 
             Ok(lifelog_types::LifelogData {
@@ -73,6 +93,18 @@ pub(crate) async fn get_data_by_key(
                 url: frame_record.url,
                 title: frame_record.title,
                 visit_count: frame_record.visit_count,
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
             };
 
             Ok(lifelog_types::LifelogData {
@@ -90,6 +122,18 @@ pub(crate) async fn get_data_by_key(
                 uuid: frame_record.uuid,
                 timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
                 text: frame_record.text,
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
             };
 
             Ok(lifelog_types::LifelogData {
@@ -115,6 +159,18 @@ pub(crate) async fn get_data_by_key(
                 sample_rate: frame_record.sample_rate,
                 channels: frame_record.channels,
                 duration_secs: frame_record.duration_secs,
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
             };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Audioframe(frame)),
@@ -180,12 +236,29 @@ pub(crate) async fn get_data_by_key(
             })
         }
         DataModality::Processes => {
-            let mut frame: lifelog_types::ProcessFrame = db
+            let frame_record: lifelog_types::ProcessRecord = db
                 .select((&table, &*id))
                 .await
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
-            frame.uuid = key.uuid.to_string();
+
+            let frame = lifelog_types::ProcessFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                processes: frame_record.processes,
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
+            };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Processframe(frame)),
             })
@@ -209,29 +282,83 @@ pub(crate) async fn get_data_by_key(
                 image_bytes,
                 mime_type: frame_record.mime_type,
                 device: frame_record.device,
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
             };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Cameraframe(frame)),
             })
         }
         DataModality::Weather => {
-            let mut frame: lifelog_types::WeatherFrame = db
+            let frame_record: lifelog_types::WeatherRecord = db
                 .select((&table, &*id))
                 .await
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
-            frame.uuid = key.uuid.to_string();
+
+            let frame = lifelog_types::WeatherFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                temperature: frame_record.temperature,
+                humidity: frame_record.humidity,
+                pressure: frame_record.pressure,
+                conditions: frame_record.conditions,
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
+            };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Weatherframe(frame)),
             })
         }
         DataModality::Hyprland => {
-            let mut frame: lifelog_types::HyprlandFrame = db
+            let frame_record: lifelog_types::HyprlandRecord = db
                 .select((&table, &*id))
                 .await
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
-            frame.uuid = key.uuid.to_string();
+
+            let frame = lifelog_types::HyprlandFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                monitors: frame_record.monitors,
+                workspaces: frame_record.workspaces,
+                active_workspace: frame_record.active_workspace,
+                clients: frame_record.clients,
+                devices: frame_record.devices,
+                cursor: frame_record.cursor,
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
+            };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Hyprlandframe(frame)),
             })

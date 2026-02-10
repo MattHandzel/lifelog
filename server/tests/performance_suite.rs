@@ -25,12 +25,17 @@ async fn test_performance_suite_smoke() {
     // 1. Measure Ingest Throughput
     let start_ingest = Instant::now();
     for i in 0..num_records {
+        let ts = lifelog_types::to_pb_ts(Utc::now());
         let browser_frame = BrowserFrame {
             uuid: lifelog_core::Uuid::new_v4().to_string(),
-            timestamp: Some(lifelog_types::to_pb_ts(Utc::now()).unwrap()),
+            timestamp: ts,
             url: format!("https://example.com/page-{}", i),
             title: format!("Rust Performance Testing Page {}", i),
             visit_count: 1,
+            t_device: ts,
+            t_canonical: ts,
+            t_end: ts,
+            ..Default::default()
         };
         let mut buf = Vec::new();
         browser_frame.encode(&mut buf).unwrap();

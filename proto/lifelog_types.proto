@@ -14,6 +14,14 @@ message Timerange {
   google.protobuf.Timestamp end = 2;
 }
 
+// Canonical time quality classification used for timeline ordering and correlation.
+// This mirrors `lifelog_core::time_skew::TimeQuality`.
+enum TimeQuality {
+  Unknown = 0;
+  Good = 1;
+  Degraded = 2;
+}
+
 message StreamIdentity {
   string collector_id = 1;
   string stream_id = 2;
@@ -44,6 +52,12 @@ message BrowserFrame {
   string url = 3;
   string title = 4;
   uint32 visit_count = 5;
+  // Time model (Spec §4.2). `timestamp` remains the legacy device timestamp.
+  google.protobuf.Timestamp t_device = 6;
+  google.protobuf.Timestamp t_ingest = 7;
+  google.protobuf.Timestamp t_canonical = 8;
+  google.protobuf.Timestamp t_end = 9;
+  TimeQuality time_quality = 10;
 }
 
 message BrowserHistoryConfig {
@@ -193,6 +207,11 @@ message HyprlandFrame {
   repeated HyprClient clients = 6;
   repeated HyprDevice devices = 7;
   HyprCursor cursor = 8;
+  google.protobuf.Timestamp t_device = 9;
+  google.protobuf.Timestamp t_ingest = 10;
+  google.protobuf.Timestamp t_canonical = 11;
+  google.protobuf.Timestamp t_end = 12;
+  TimeQuality time_quality = 13;
 }
 
 message InputLoggerConfig {
@@ -242,6 +261,11 @@ message OcrFrame {
   string uuid = 1;
   google.protobuf.Timestamp timestamp = 2;
   string text = 3;
+  google.protobuf.Timestamp t_device = 4;
+  google.protobuf.Timestamp t_ingest = 5;
+  google.protobuf.Timestamp t_canonical = 6;
+  google.protobuf.Timestamp t_end = 7;
+  TimeQuality time_quality = 8;
 }
 
 message ProcessesConfig {
@@ -268,6 +292,11 @@ message ProcessFrame {
   string uuid = 1;
   google.protobuf.Timestamp timestamp = 2;
   repeated ProcessInfo processes = 3;
+  google.protobuf.Timestamp t_device = 4;
+  google.protobuf.Timestamp t_ingest = 5;
+  google.protobuf.Timestamp t_canonical = 6;
+  google.protobuf.Timestamp t_end = 7;
+  TimeQuality time_quality = 8;
 }
 
 message ScreenConfig {
@@ -285,6 +314,11 @@ message ScreenFrame {
   uint32 height = 4;
   bytes image_bytes = 5;
   string mime_type = 6;
+  google.protobuf.Timestamp t_device = 7;
+  google.protobuf.Timestamp t_ingest = 8;
+  google.protobuf.Timestamp t_canonical = 9;
+  google.protobuf.Timestamp t_end = 10;
+  TimeQuality time_quality = 11;
 }
 
 message CameraFrame {
@@ -295,6 +329,11 @@ message CameraFrame {
   bytes image_bytes = 5;
   string mime_type = 6;
   string device = 7;
+  google.protobuf.Timestamp t_device = 8;
+  google.protobuf.Timestamp t_ingest = 9;
+  google.protobuf.Timestamp t_canonical = 10;
+  google.protobuf.Timestamp t_end = 11;
+  TimeQuality time_quality = 12;
 }
 
 message WeatherFrame {
@@ -304,6 +343,11 @@ message WeatherFrame {
   double humidity = 4;
   double pressure = 5;
   string conditions = 6;
+  google.protobuf.Timestamp t_device = 7;
+  google.protobuf.Timestamp t_ingest = 8;
+  google.protobuf.Timestamp t_canonical = 9;
+  google.protobuf.Timestamp t_end = 10;
+  TimeQuality time_quality = 11;
 }
 
 message AudioFrame {
@@ -314,6 +358,11 @@ message AudioFrame {
   uint32 sample_rate = 5;
   uint32 channels = 6;
   float duration_secs = 7;
+  google.protobuf.Timestamp t_device = 8;
+  google.protobuf.Timestamp t_ingest = 9;
+  google.protobuf.Timestamp t_canonical = 10;
+  google.protobuf.Timestamp t_end = 11;
+  TimeQuality time_quality = 12;
 }
 
 message KeystrokeFrame {
@@ -322,6 +371,11 @@ message KeystrokeFrame {
   string text = 3;
   string application = 4;
   string window_title = 5;
+  google.protobuf.Timestamp t_device = 6;
+  google.protobuf.Timestamp t_ingest = 7;
+  google.protobuf.Timestamp t_canonical = 8;
+  google.protobuf.Timestamp t_end = 9;
+  TimeQuality time_quality = 10;
 }
 
 message ClipboardFrame {
@@ -330,6 +384,11 @@ message ClipboardFrame {
   string text = 3;
   bytes binary_data = 4;
   string mime_type = 5;
+  google.protobuf.Timestamp t_device = 6;
+  google.protobuf.Timestamp t_ingest = 7;
+  google.protobuf.Timestamp t_canonical = 8;
+  google.protobuf.Timestamp t_end = 9;
+  TimeQuality time_quality = 10;
 }
 
 message ShellHistoryFrame {
@@ -338,6 +397,11 @@ message ShellHistoryFrame {
   string command = 3;
   string working_dir = 4;
   int32 exit_code = 5;
+  google.protobuf.Timestamp t_device = 6;
+  google.protobuf.Timestamp t_ingest = 7;
+  google.protobuf.Timestamp t_canonical = 8;
+  google.protobuf.Timestamp t_end = 9;
+  TimeQuality time_quality = 10;
 }
 
 message WindowActivityFrame {
@@ -347,6 +411,11 @@ message WindowActivityFrame {
   string window_title = 4;
   bool focused = 5;
   float duration_secs = 6;
+  google.protobuf.Timestamp t_device = 7;
+  google.protobuf.Timestamp t_ingest = 8;
+  google.protobuf.Timestamp t_canonical = 9;
+  google.protobuf.Timestamp t_end = 10;
+  TimeQuality time_quality = 11;
 }
 
 message MouseFrame {
@@ -362,6 +431,11 @@ message MouseFrame {
   }
   MouseButton button = 5;
   bool pressed = 6;
+  google.protobuf.Timestamp t_device = 7;
+  google.protobuf.Timestamp t_ingest = 8;
+  google.protobuf.Timestamp t_canonical = 9;
+  google.protobuf.Timestamp t_end = 10;
+  TimeQuality time_quality = 11;
 }
 
 enum ServerActionType {
