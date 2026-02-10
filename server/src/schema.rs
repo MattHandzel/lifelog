@@ -192,8 +192,10 @@ static SCHEMAS: &[TableSchema] = &[
         fields_ddl: r#"
             DEFINE FIELD uuid           ON `{table}` TYPE string;
             DEFINE FIELD timestamp      ON `{table}` TYPE datetime;
-            DEFINE FIELD activity_level ON `{table}` TYPE int;
-            DEFINE FIELD button_mask    ON `{table}` TYPE int;
+            DEFINE FIELD x              ON `{table}` TYPE float;
+            DEFINE FIELD y              ON `{table}` TYPE float;
+            DEFINE FIELD button         ON `{table}` TYPE int;
+            DEFINE FIELD pressed        ON `{table}` TYPE bool;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
