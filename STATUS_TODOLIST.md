@@ -46,12 +46,12 @@ Last updated: 2026-02-10
 - `[ ]` Security: TLS enforcement + pairing + auth on RPCs
 - `[x]` Collector: config hot-reload on `UpdateConfig` command (Spec §7.2)
   - Applies JSON-encoded `CollectorConfig` payload and restarts sources without tearing down the ControlStream
-- `[~]` Collector: audio, clipboard, shell, mouse, window activity modules (plus safe defaults)
+- `[x]` Collector: audio, clipboard, shell, mouse, window activity modules (plus safe defaults)
   - `[x]` Clipboard capture module (polls `wl-paste`/`xclip`/`xsel`; WAL-buffered; server ingest + retrieval wired)
   - `[x]` Shell history capture module (tails history file; zsh extended + bash `HISTTIMEFORMAT` parsing; WAL-buffered; server ingest + retrieval wired)
   - `[x]` Audio capture module (CPAL -> WAV bytes; WAL-buffered as `AudioFrame`; stream_id `audio`)
   - `[x]` Mouse activity module (samples cursor position; WAL-buffered as `MouseFrame`; stream_id `mouse`)
-  - `[~]` Window activity module (Hyprland-only; generic fallback missing)
+  - `[x]` Window activity module (WAL-buffered as `WindowActivityFrame`; stream_id `window_activity`; `"auto"` selects Hyprland `hyprctl` or X11 `xdotool`/`xprop`)
 - `[~]` UI: replay view + query builder/templates + previews
   - `[x]` Replay view
   - `[~]` Query authoring (LLQL mode in Timeline; templates/builder still missing)

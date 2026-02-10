@@ -75,7 +75,8 @@ Collectors must produce at least these streams:
 
 Implementation note: in this repo these are configured via `CollectorConfig.microphone` (stream_id `audio`),
 `CollectorConfig.clipboard`, `CollectorConfig.shell_history`, and `CollectorConfig.mouse` (stream_id `mouse`).
-Clipboard/shell/mouse default to disabled.
+Clipboard/shell/mouse default to disabled. Window activity is configured via `CollectorConfig.window_activity`
+(stream_id `window_activity`), with backend selection `"auto"` (default), `"hyprctl"`, or `"x11"`.
 
 ### 3.2 Secondary Devices (v1-ready but not required day 1)
 
