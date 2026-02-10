@@ -5,11 +5,11 @@ use futures_core::Stream;
 use lifelog_types::lifelog_server_service_server::LifelogServerService;
 use lifelog_types::*;
 use std::pin::Pin;
+use std::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
 use tonic::{Request, Response, Status, Streaming};
 use utils::ingest::ChunkIngester;
-use std::time::Duration;
 
 pub struct GRPCServerLifelogServerService {
     pub server: ServerHandle,
@@ -58,7 +58,8 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                                 // This exercises the command channel and allows collectors to report
                                 // (device_now, backend_now) pairs.
                                 tokio::spawn(async move {
-                                    let mut interval = tokio::time::interval(Duration::from_secs(30));
+                                    let mut interval =
+                                        tokio::time::interval(Duration::from_secs(30));
                                     loop {
                                         interval.tick().await;
                                         let backend_now = Utc::now().to_rfc3339();
@@ -88,7 +89,11 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                                         ts.nanos as u32,
                                     ) {
                                         server_handle
-                                            .handle_clock_sample(&collector_id, device_now, backend_now)
+                                            .handle_clock_sample(
+                                                &collector_id,
+                                                device_now,
+                                                backend_now,
+                                            )
                                             .await;
                                     }
                                 }

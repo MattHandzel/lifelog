@@ -205,9 +205,7 @@ impl Collector {
                         if command.r#type == lifelog_types::CommandType::BeginUploadSession as i32 {
                             let coll = handle.collector.write().await;
                             let _ = coll.upload_trigger.try_send(());
-                        } else if command.r#type
-                            == lifelog_types::CommandType::ClockSync as i32
-                        {
+                        } else if command.r#type == lifelog_types::CommandType::ClockSync as i32 {
                             // Server sends its current time as RFC3339 in payload; echo it back as
                             // backend_now so server can estimate clock skew.
                             if let Ok(parsed) =
