@@ -17,7 +17,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 
 ## What Changed Last
 
-- **Durable ACK Gating**: `UploadChunks` now only advances `Ack.acked_offset` when the backend marks the chunk as indexed/queryable (`upload_chunks.indexed=true`).
+- **Durable ACK Gating**: `UploadChunks` only advances `Ack.acked_offset` when the backend marks the chunk as indexed/queryable (`upload_chunks.indexed=true`). Screen ingestion records store `frame_uuid` in `upload_chunks` and pin ACK until the OCR-derived record for that UUID has been persisted.
 - **Record Type Semantics**: Added explicit `record_type` (`Point` vs `Interval`) to frame protos and populated it in `GetData` responses.
 - **Clipboard Binary CAS Storage**: Clipboard frames with binary payloads now store the payload in CAS and persist only the CAS reference in SurrealDB; `GetData` hydrates from CAS when needed.
 - **Unified Error Hierarchy**: Migrated all local error types to a single `LifelogError` enum in `lifelog-core` for consistent error handling and reporting.

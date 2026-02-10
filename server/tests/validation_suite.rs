@@ -12,6 +12,7 @@
 
 mod harness;
 use harness::TestContext;
+use prost::Message;
 
 #[tokio::test]
 #[ignore = "integration test: requires SurrealDB"]
@@ -109,7 +110,7 @@ async fn it_081_ack_implies_queryable() {
     let mut client = ctx.client();
 
     let collector_id = "test-collector-81";
-    let stream_id = "test-stream-81";
+    let stream_id = "screen";
     let session_id = 9999u64;
 
     let stream_identity = Some(lifelog_types::StreamIdentity {
@@ -118,16 +119,33 @@ async fn it_081_ack_implies_queryable() {
         session_id,
     });
 
-    let data = b"chunk1";
-    let hash = utils::cas::sha256_hex(data);
+    // ScreenFrame is special: durable ACK is pinned until derived OCR output exists (or the chunk is
+    // otherwise marked queryable by an indexer). For this test we simulate the indexer by flipping
+    // `upload_chunks.indexed`.
+    let frame_ts = lifelog_types::to_pb_ts(lifelog_core::Utc::now());
+    let frame = lifelog_types::ScreenFrame {
+        uuid: lifelog_core::Uuid::new_v4().to_string(),
+        timestamp: frame_ts,
+        width: 2,
+        height: 2,
+        image_bytes: vec![0xFF; 2 * 2 * 3],
+        mime_type: "image/jpeg".to_string(),
+        t_device: frame_ts,
+        t_canonical: frame_ts,
+        t_end: frame_ts,
+        ..Default::default()
+    };
+    let mut data = Vec::new();
+    frame.encode(&mut data).expect("encode failed");
+    let hash = utils::cas::sha256_hex(&data);
     let chunk = lifelog_types::Chunk {
         stream: stream_identity.clone(),
         offset: 0,
-        data: data.to_vec(),
+        data,
         hash: hash.clone(),
     };
 
-    // 1. Upload chunk. Default backend has indexed=false.
+    // 1. Upload chunk. Screen ingest sets indexed=false until OCR runs.
     // Expect acked_offset = 0 (chunk received but not indexed).
     let stream = tokio_stream::iter(vec![chunk.clone()]);
     let response = client
@@ -190,6 +208,7 @@ async fn it_081_ack_implies_queryable() {
 
     // 3. Upload next chunk (or same chunk to probe ACK).
     // If we re-send the same chunk, apply_chunk is idempotent, and it should check indexing again.
+    let chunk_len = chunk.data.len() as u64;
     let stream = tokio_stream::iter(vec![chunk]);
     let response = client
         .upload_chunks(stream)
@@ -198,8 +217,7 @@ async fn it_081_ack_implies_queryable() {
         .into_inner();
 
     assert_eq!(
-        response.acked_offset,
-        data.len() as u64,
+        response.acked_offset, chunk_len,
         "ACK should advance after indexing is complete"
     );
 }
