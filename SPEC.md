@@ -73,8 +73,8 @@ Collectors must produce at least these streams:
 - Clipboard history (text + timestamps; binary clipboard optional).
 - Shell history (commands + timestamps + working directory if feasible).
 
-Implementation note: in this repo these are configured via `CollectorConfig.clipboard` and
-`CollectorConfig.shell_history` (both default to disabled).
+Implementation note: in this repo these are configured via `CollectorConfig.microphone` (stream_id `audio`),
+`CollectorConfig.clipboard`, and `CollectorConfig.shell_history` (clipboard/shell default to disabled).
 
 ### 3.2 Secondary Devices (v1-ready but not required day 1)
 
