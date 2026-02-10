@@ -161,8 +161,9 @@ impl ServerHandle {
 
 impl Server {
     pub async fn new(config: &ServerConfig) -> Result<Self, LifelogError> {
-        let db_endpoint = format!("ws://{}", config.database_endpoint);
-        let db = Surreal::new::<Ws>(db_endpoint)
+        // NOTE: `surrealdb::engine::remote::ws::Ws` expects an address like `127.0.0.1:8000`
+        // (tests use this form). Prefixing with `ws://` can hang depending on driver/version.
+        let db = Surreal::new::<Ws>(&config.database_endpoint)
             .await
             .map_err(|e| LifelogError::Database(e.to_string()))?;
 
@@ -174,7 +175,7 @@ impl Server {
         .map_err(|e| LifelogError::Database(e.to_string()))?;
 
         db.use_ns("lifelog")
-            .use_db("test_db")
+            .use_db(&config.database_name)
             .await
             .map_err(|e| LifelogError::Database(e.to_string()))?;
 
@@ -289,7 +290,7 @@ impl Server {
 
         let available_origins = get_origins_from_db(&self.db).await?;
         let target_origins: Vec<DataOrigin> = if query_msg.search_origins.is_empty() {
-            available_origins
+            available_origins.clone()
         } else {
             let mut resolved = Vec::new();
             for s in &query_msg.search_origins {
@@ -383,7 +384,8 @@ impl Server {
                 filter,
             };
 
-            let plan = crate::query::planner::Planner::plan(&query, &[origin.clone()]);
+            // Pass the full catalog so temporal operators like WITHIN can resolve other streams.
+            let plan = crate::query::planner::Planner::plan(&query, &available_origins);
             match crate::query::executor::execute(&self.db, plan).await {
                 Ok(res) => keys.extend(res),
                 Err(e) => tracing::error!("Query execution failed for {}: {}", table, e),

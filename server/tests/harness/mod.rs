@@ -15,7 +15,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tempfile::TempDir;
 use tokio::sync::RwLock;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 use tonic::transport::Channel;
 use utils::cas::FsCas;
 
@@ -75,7 +75,10 @@ impl TestContext {
             cas_path: cas_path.display().to_string(),
         };
 
-        let server = Server::new(&config).await.expect("Failed to create server");
+        let server = timeout(Duration::from_secs(30), Server::new(&config))
+            .await
+            .expect("Timed out creating server (check DB connectivity / schema init)")
+            .expect("Failed to create server");
         let server_handle = Arc::new(RwLock::new(server));
         let handle_clone = ServerHandle::new(server_handle.clone());
         let grpc_service = GRPCServerLifelogServerService {
@@ -100,14 +103,16 @@ impl TestContext {
                 .expect("Server failed");
         });
 
-        // Wait for server to be ready
-        sleep(Duration::from_secs(1)).await;
+        // Wait for server to be ready and fail fast if it never binds.
+        sleep(Duration::from_millis(250)).await;
 
-        let channel = Channel::from_shared(server_addr.clone())
-            .unwrap()
-            .connect()
-            .await
-            .expect("Failed to connect to server");
+        let channel = timeout(
+            Duration::from_secs(30),
+            Channel::from_shared(server_addr.clone()).unwrap().connect(),
+        )
+        .await
+        .expect("Timed out connecting to gRPC server (it may not have started)")
+        .expect("Failed to connect to server");
         let client = LifelogServerServiceClient::new(channel);
 
         Self {

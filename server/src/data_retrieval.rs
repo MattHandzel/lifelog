@@ -254,9 +254,9 @@ pub(crate) async fn get_keys_after_timestamp(
     limit: usize,
 ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
     let table = validate_table_name(origin.get_table_name())?;
-    let after_str = after.to_rfc3339();
+    let after_str = after.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true);
     // In SurrealDB 2.x, if we want to ORDER BY a field, it must be part of the selection.
-    let sql = format!("SELECT id, timestamp FROM `{table}` WHERE timestamp > '{after_str}' ORDER BY timestamp ASC LIMIT {limit}");
+    let sql = format!("SELECT id, timestamp FROM `{table}` WHERE timestamp > d'{after_str}' ORDER BY timestamp ASC LIMIT {limit}");
 
     let res: Vec<KeyResult> = db
         .query(sql)

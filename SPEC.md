@@ -366,6 +366,10 @@ v1 requires a query language that compiles deterministically to a typed query pl
   - no arbitrary code execution,
   - bounded resource usage (timeouts/limits).
 
+Implementation note (as of 2026-02-10):
+- Backend query engine supports `WITHIN(...)` via a two-stage plan (source timestamps -> target time-window filter).
+- Current limitation: `WITHIN(...)` is only supported under conjunctions (`AND`), not under `OR`/`NOT`, and `DURING(...)`/`OVERLAPS(...)` remain unimplemented.
+
 ### 10.2 Canonical Example (Must Work)
 
 Retrieve audio during times when:

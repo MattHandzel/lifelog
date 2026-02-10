@@ -1,5 +1,6 @@
 use super::ast::*;
 use lifelog_core::DataOrigin;
+use std::collections::VecDeque;
 
 #[derive(Debug, PartialEq)]
 pub enum ExecutionPlan {
@@ -11,87 +12,148 @@ pub enum ExecutionPlan {
     },
     /// Multiple queries to be executed.
     MultiQuery(Vec<ExecutionPlan>),
+    /// Two-stage temporal join for `WITHIN(...)`.
+    ///
+    /// Phase 1: query the `source_*` tables for candidate timestamps.
+    /// Phase 2: query the target table for UUIDs whose timestamps fall within `±window`
+    /// of any of those candidate timestamps, *in addition* to the target base predicate.
+    WithinQuery {
+        target_table: String,
+        target_origin: DataOrigin,
+        target_base_where: String,
+        source_plans: Vec<WithinSourcePlan>,
+        window: chrono::Duration,
+        max_source_timestamps: usize,
+        max_time_clauses: usize,
+    },
     /// Placeholder for multi-stage plans.
     #[allow(dead_code)]
     Unsupported(String),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct WithinSourcePlan {
+    pub source_table: String,
+    pub source_origin: DataOrigin,
+    pub sql: String,
 }
 
 pub struct Planner;
 
 impl Planner {
     pub fn plan(query: &Query, available_origins: &[DataOrigin]) -> ExecutionPlan {
-        let origins = match &query.target {
-            StreamSelector::All => available_origins.to_vec(),
-            StreamSelector::Modality(m) => available_origins
-                .iter()
-                .filter(|o| o.modality_name == *m)
-                .cloned()
-                .collect(),
-            StreamSelector::StreamId(id) => {
-                // Try to match exactly by table name first
-                if let Some(origin) = available_origins.iter().find(|o| o.get_table_name() == *id) {
-                    vec![origin.clone()]
-                } else {
-                    // Fallback: search for origins that match this as a suffix or exact modality
-                    let matches: Vec<_> = available_origins
-                        .iter()
-                        .filter(|o| {
-                            o.get_table_name() == *id
-                                || o.modality_name == *id
-                                || o.get_table_name().ends_with(&format!(":{}", id))
-                        })
-                        .cloned()
-                        .collect();
-
-                    if matches.is_empty() {
-                        // Final fallback: try to parse it
-                        if let Ok(origin) = lifelog_core::DataOrigin::tryfrom_string(id.clone()) {
-                            vec![origin]
-                        } else {
-                            vec![]
-                        }
-                    } else {
-                        matches
-                    }
-                }
-            }
-        };
+        let origins = Self::resolve_selector(&query.target, available_origins);
 
         if origins.is_empty() {
             return ExecutionPlan::MultiQuery(vec![]);
         }
 
+        const DEFAULT_MAX_SOURCE_TIMESTAMPS: usize = 200;
+        const DEFAULT_MAX_TIME_CLAUSES: usize = 50;
+
         let plans = origins
             .into_iter()
             .map(|origin| {
                 let table = origin.get_table_name();
-                let where_clause = Self::compile_expression(&query.filter);
-                let sql = format!("SELECT uuid FROM `{}` WHERE {};", table, where_clause);
-                ExecutionPlan::TableQuery { table, origin, sql }
+                match Self::compile_conjunctive(&query.filter) {
+                    Ok((sql_terms, within_terms)) => {
+                        let target_base_where = if sql_terms.is_empty() {
+                            "true".to_string()
+                        } else {
+                            sql_terms.join(" AND ")
+                        };
+
+                        if within_terms.is_empty() {
+                            let sql = format!("SELECT uuid FROM `{}` WHERE {};", table, target_base_where);
+                            return ExecutionPlan::TableQuery { table, origin, sql };
+                        }
+
+                        if within_terms.len() > 1 {
+                            return ExecutionPlan::Unsupported(
+                                "Multiple WITHIN terms are not supported yet".to_string(),
+                            );
+                        }
+
+                        let Some(within) = within_terms.into_iter().next() else {
+                            let sql =
+                                format!("SELECT uuid FROM `{}` WHERE {};", table, target_base_where);
+                            return ExecutionPlan::TableQuery { table, origin, sql };
+                        };
+
+                        // Resolve source streams for the WITHIN clause.
+                        let source_origins = Self::resolve_selector(&within.stream, available_origins);
+                        if source_origins.is_empty() {
+                            // Nothing can satisfy the WITHIN predicate.
+                            let sql = format!("SELECT uuid FROM `{}` WHERE false;", table);
+                            return ExecutionPlan::TableQuery {
+                                table,
+                                origin,
+                                sql,
+                            };
+                        }
+
+                        // Source predicate must be SQL-compilable (no nested temporal ops for now).
+                        if Self::contains_temporal_ops(&within.predicate) {
+                            return ExecutionPlan::Unsupported(
+                                "Nested temporal operators inside WITHIN predicate are not supported yet"
+                                    .to_string(),
+                            );
+                        }
+
+                        let source_where = Self::compile_expression_sql(&within.predicate);
+                        let source_plans = source_origins
+                            .into_iter()
+                            .map(|source_origin| {
+                                let source_table = source_origin.get_table_name();
+                                let sql = format!(
+                                    "SELECT timestamp FROM `{}` WHERE {} ORDER BY timestamp DESC LIMIT {};",
+                                    source_table, source_where, DEFAULT_MAX_SOURCE_TIMESTAMPS
+                                );
+                                WithinSourcePlan {
+                                    source_table,
+                                    source_origin,
+                                    sql,
+                                }
+                            })
+                            .collect();
+
+                        ExecutionPlan::WithinQuery {
+                            target_table: table,
+                            target_origin: origin,
+                            target_base_where,
+                            source_plans,
+                            window: within.window,
+                            max_source_timestamps: DEFAULT_MAX_SOURCE_TIMESTAMPS,
+                            max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
+                        }
+                    }
+                    Err(msg) => ExecutionPlan::Unsupported(msg),
+                }
             })
             .collect();
 
         ExecutionPlan::MultiQuery(plans)
     }
 
-    pub fn compile_expression(expr: &Expression) -> String {
+    /// Compiles an expression that contains *no* temporal join operators (`WITHIN`, `DURING`) to SQL.
+    pub fn compile_expression_sql(expr: &Expression) -> String {
         match expr {
             Expression::And(left, right) => {
                 format!(
                     "({}) AND ({})",
-                    Self::compile_expression(left),
-                    Self::compile_expression(right)
+                    Self::compile_expression_sql(left),
+                    Self::compile_expression_sql(right)
                 )
             }
             Expression::Or(left, right) => {
                 format!(
                     "({}) OR ({})",
-                    Self::compile_expression(left),
-                    Self::compile_expression(right)
+                    Self::compile_expression_sql(left),
+                    Self::compile_expression_sql(right)
                 )
             }
             Expression::Not(inner) => {
-                format!("!({})", Self::compile_expression(inner))
+                format!("!({})", Self::compile_expression_sql(inner))
             }
             Expression::Eq(field, value) => {
                 format!("{} = {}", field, Self::compile_value(value))
@@ -103,16 +165,111 @@ impl Planner {
             Expression::TimeRange(start, end) => {
                 // SurrealDB datetime format
                 format!(
-                    "timestamp >= '{}' AND timestamp < '{}'",
-                    start.to_rfc3339(),
-                    end.to_rfc3339()
+                    "timestamp >= d'{}' AND timestamp < d'{}'",
+                    start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                    end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
                 )
             }
-            Expression::Within { .. } => {
-                "false /* WITHIN operator requires multi-stage planning */".to_string()
+            Expression::Within { .. } => "false /* WITHIN handled at plan level */".to_string(),
+            Expression::During { .. } => "false /* DURING not implemented */".to_string(),
+        }
+    }
+
+    /// Attempts to decompose `expr` into a conjunction of SQL-compilable terms plus
+    /// one or more top-level `WITHIN(...)` terms.
+    ///
+    /// Current limitation (intentional): `WITHIN` cannot appear under `OR` / `NOT`.
+    fn compile_conjunctive(expr: &Expression) -> Result<(Vec<String>, Vec<WithinTerm>), String> {
+        let mut sql_terms: Vec<String> = Vec::new();
+        let mut within_terms: Vec<WithinTerm> = Vec::new();
+
+        // Flatten nested ANDs iteratively to keep stack shallow.
+        let mut queue: VecDeque<&Expression> = VecDeque::new();
+        queue.push_back(expr);
+
+        while let Some(node) = queue.pop_front() {
+            match node {
+                Expression::And(l, r) => {
+                    queue.push_back(l);
+                    queue.push_back(r);
+                }
+                Expression::Within {
+                    stream,
+                    predicate,
+                    window,
+                } => within_terms.push(WithinTerm {
+                    stream: stream.clone(),
+                    predicate: (**predicate).clone(),
+                    window: *window,
+                }),
+                Expression::During { .. } => {
+                    return Err("DURING is not supported yet".to_string());
+                }
+                Expression::Or(..) | Expression::Not(..) => {
+                    if Self::contains_temporal_ops(node) {
+                        return Err(
+                            "WITHIN is only supported under conjunctions (AND), not OR/NOT"
+                                .to_string(),
+                        );
+                    }
+                    sql_terms.push(Self::compile_expression_sql(node));
+                }
+                _ => sql_terms.push(Self::compile_expression_sql(node)),
             }
-            Expression::During { .. } => {
-                "false /* DURING operator requires multi-stage planning */".to_string()
+        }
+
+        Ok((sql_terms, within_terms))
+    }
+
+    fn contains_temporal_ops(expr: &Expression) -> bool {
+        match expr {
+            Expression::Within { .. } | Expression::During { .. } => true,
+            Expression::And(l, r) | Expression::Or(l, r) => {
+                Self::contains_temporal_ops(l) || Self::contains_temporal_ops(r)
+            }
+            Expression::Not(inner) => Self::contains_temporal_ops(inner),
+            _ => false,
+        }
+    }
+
+    fn resolve_selector(
+        selector: &StreamSelector,
+        available_origins: &[DataOrigin],
+    ) -> Vec<DataOrigin> {
+        match selector {
+            StreamSelector::All => available_origins.to_vec(),
+            StreamSelector::Modality(m) => available_origins
+                .iter()
+                .filter(|o| o.modality_name == *m)
+                .cloned()
+                .collect(),
+            StreamSelector::StreamId(id) => {
+                // Try to match exactly by table name first.
+                if let Some(origin) = available_origins.iter().find(|o| o.get_table_name() == *id) {
+                    vec![origin.clone()]
+                } else {
+                    // Fallback: search for origins that match this as a suffix or exact modality.
+                    let matches: Vec<_> = available_origins
+                        .iter()
+                        .filter(|o| {
+                            o.get_table_name() == *id
+                                || o.modality_name == *id
+                                || o.get_table_name().ends_with(&format!(":{}", id))
+                        })
+                        .cloned()
+                        .collect();
+
+                    if matches.is_empty() {
+                        // Final fallback: try to parse it.
+                        if let Ok(origin) = lifelog_core::DataOrigin::tryfrom_string(id.clone()) {
+                            vec![origin]
+                        } else {
+                            vec![]
+                        }
+                    } else {
+                        matches
+                    }
+                }
             }
         }
     }
@@ -129,6 +286,13 @@ impl Planner {
     fn quote_string(s: &str) -> String {
         format!("'{}'", s.replace('\'', "\\'"))
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct WithinTerm {
+    stream: StreamSelector,
+    predicate: Expression,
+    window: chrono::Duration,
 }
 
 #[cfg(test)]

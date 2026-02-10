@@ -7,7 +7,7 @@ pub(crate) mod data_retrieval;
 pub mod db;
 pub mod grpc_service;
 pub(crate) mod ingest;
-pub(crate) mod query;
+pub mod query;
 pub(crate) mod schema;
 pub(crate) mod sync;
 pub(crate) mod transform;
