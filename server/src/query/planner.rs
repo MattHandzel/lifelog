@@ -26,6 +26,19 @@ pub enum ExecutionPlan {
         max_source_timestamps: usize,
         max_time_clauses: usize,
     },
+    /// Two-stage temporal join for `DURING(...)`.
+    ///
+    /// Phase 1: query the `source_*` tables for candidate intervals.
+    /// Phase 2: query the target table for UUIDs whose timestamps fall within any interval,
+    /// in addition to the target base predicate.
+    DuringQuery {
+        target_table: String,
+        target_origin: DataOrigin,
+        target_base_where: String,
+        source_plans: Vec<DuringSourcePlan>,
+        max_source_intervals: usize,
+        max_time_clauses: usize,
+    },
     /// Placeholder for multi-stage plans.
     #[allow(dead_code)]
     Unsupported(String),
@@ -33,6 +46,13 @@ pub enum ExecutionPlan {
 
 #[derive(Debug, PartialEq)]
 pub struct WithinSourcePlan {
+    pub source_table: String,
+    pub source_origin: DataOrigin,
+    pub sql: String,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct DuringSourcePlan {
     pub source_table: String,
     pub source_origin: DataOrigin,
     pub sql: String,
@@ -49,6 +69,7 @@ impl Planner {
         }
 
         const DEFAULT_MAX_SOURCE_TIMESTAMPS: usize = 200;
+        const DEFAULT_MAX_SOURCE_INTERVALS: usize = 200;
         const DEFAULT_MAX_TIME_CLAUSES: usize = 50;
 
         let plans = origins
@@ -56,75 +77,107 @@ impl Planner {
             .map(|origin| {
                 let table = origin.get_table_name();
                 match Self::compile_conjunctive(&query.filter) {
-                    Ok((sql_terms, within_terms)) => {
+                    Ok((sql_terms, temporal_terms)) => {
                         let target_base_where = if sql_terms.is_empty() {
                             "true".to_string()
                         } else {
                             sql_terms.join(" AND ")
                         };
 
-                        if within_terms.is_empty() {
+                        let Some(temporal) = temporal_terms else {
                             let sql = format!("SELECT uuid FROM `{}` WHERE {};", table, target_base_where);
-                            return ExecutionPlan::TableQuery { table, origin, sql };
-                        }
-
-                        if within_terms.len() > 1 {
-                            return ExecutionPlan::Unsupported(
-                                "Multiple WITHIN terms are not supported yet".to_string(),
-                            );
-                        }
-
-                        let Some(within) = within_terms.into_iter().next() else {
-                            let sql =
-                                format!("SELECT uuid FROM `{}` WHERE {};", table, target_base_where);
                             return ExecutionPlan::TableQuery { table, origin, sql };
                         };
 
-                        // Resolve source streams for the WITHIN clause.
-                        let source_origins = Self::resolve_selector(&within.stream, available_origins);
-                        if source_origins.is_empty() {
-                            // Nothing can satisfy the WITHIN predicate.
-                            let sql = format!("SELECT uuid FROM `{}` WHERE false;", table);
-                            return ExecutionPlan::TableQuery {
-                                table,
-                                origin,
-                                sql,
-                            };
-                        }
-
-                        // Source predicate must be SQL-compilable (no nested temporal ops for now).
-                        if Self::contains_temporal_ops(&within.predicate) {
-                            return ExecutionPlan::Unsupported(
-                                "Nested temporal operators inside WITHIN predicate are not supported yet"
-                                    .to_string(),
-                            );
-                        }
-
-                        let source_where = Self::compile_expression_sql(&within.predicate);
-                        let source_plans = source_origins
-                            .into_iter()
-                            .map(|source_origin| {
-                                let source_table = source_origin.get_table_name();
-                                let sql = format!(
-                                    "SELECT timestamp FROM `{}` WHERE {} ORDER BY timestamp DESC LIMIT {};",
-                                    source_table, source_where, DEFAULT_MAX_SOURCE_TIMESTAMPS
-                                );
-                                WithinSourcePlan {
-                                    source_table,
-                                    source_origin,
-                                    sql,
+                        match temporal {
+                            TemporalTerm::Within(within) => {
+                                // Resolve source streams for the WITHIN clause.
+                                let source_origins =
+                                    Self::resolve_selector(&within.stream, available_origins);
+                                if source_origins.is_empty() {
+                                    // Nothing can satisfy the WITHIN predicate.
+                                    let sql = format!("SELECT uuid FROM `{}` WHERE false;", table);
+                                    return ExecutionPlan::TableQuery { table, origin, sql };
                                 }
-                            })
-                            .collect();
 
-                        ExecutionPlan::WithinQuery {
-                            target_table: table,
-                            target_origin: origin,
-                            target_base_where,
-                            source_plans,
-                            window: within.window,
-                            max_source_timestamps: DEFAULT_MAX_SOURCE_TIMESTAMPS,
-                            max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
+                                // Source predicate must be SQL-compilable (no nested temporal ops for now).
+                                if Self::contains_temporal_ops(&within.predicate) {
+                                    return ExecutionPlan::Unsupported(
+                                        "Nested temporal operators inside WITHIN predicate are not supported yet"
+                                            .to_string(),
+                                    );
+                                }
+
+                                let source_where = Self::compile_expression_sql(&within.predicate);
+                                let source_plans = source_origins
+                                    .into_iter()
+                                    .map(|source_origin| {
+                                        let source_table = source_origin.get_table_name();
+                                        let sql = format!(
+                                            "SELECT timestamp FROM `{}` WHERE {} ORDER BY timestamp DESC LIMIT {};",
+                                            source_table, source_where, DEFAULT_MAX_SOURCE_TIMESTAMPS
+                                        );
+                                        WithinSourcePlan {
+                                            source_table,
+                                            source_origin,
+                                            sql,
+                                        }
+                                    })
+                                    .collect();
+
+                                ExecutionPlan::WithinQuery {
+                                    target_table: table,
+                                    target_origin: origin,
+                                    target_base_where,
+                                    source_plans,
+                                    window: within.window,
+                                    max_source_timestamps: DEFAULT_MAX_SOURCE_TIMESTAMPS,
+                                    max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
+                                }
+                            }
+                            TemporalTerm::During(during) => {
+                                let source_origins =
+                                    Self::resolve_selector(&during.stream, available_origins);
+                                if source_origins.is_empty() {
+                                    let sql = format!("SELECT uuid FROM `{}` WHERE false;", table);
+                                    return ExecutionPlan::TableQuery { table, origin, sql };
+                                }
+
+                                if Self::contains_temporal_ops(&during.predicate) {
+                                    return ExecutionPlan::Unsupported(
+                                        "Nested temporal operators inside DURING predicate are not supported yet"
+                                            .to_string(),
+                                    );
+                                }
+
+                                let source_where = Self::compile_expression_sql(&during.predicate);
+                                let source_plans = source_origins
+                                    .into_iter()
+                                    .map(|source_origin| {
+                                        let source_table = source_origin.get_table_name();
+                                        // `duration_secs` may not exist for all modalities.
+                                        // Missing fields deserialize as NULL, which the executor treats as 0.
+                                        let sql = format!(
+                                            "SELECT timestamp, duration_secs FROM `{}` WHERE {} ORDER BY timestamp DESC LIMIT {};",
+                                            source_table, source_where, DEFAULT_MAX_SOURCE_INTERVALS
+                                        );
+                                        DuringSourcePlan {
+                                            source_table,
+                                            source_origin,
+                                            sql,
+                                        }
+                                    })
+                                    .collect();
+
+                                ExecutionPlan::DuringQuery {
+                                    target_table: table,
+                                    target_origin: origin,
+                                    target_base_where,
+                                    source_plans,
+                                    max_source_intervals: DEFAULT_MAX_SOURCE_INTERVALS,
+                                    max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
+                                }
+                            }
                         }
                     }
                     Err(msg) => ExecutionPlan::Unsupported(msg),
@@ -171,17 +224,19 @@ impl Planner {
                 )
             }
             Expression::Within { .. } => "false /* WITHIN handled at plan level */".to_string(),
-            Expression::During { .. } => "false /* DURING not implemented */".to_string(),
+            Expression::During { .. } => "false /* DURING handled at plan level */".to_string(),
         }
     }
 
     /// Attempts to decompose `expr` into a conjunction of SQL-compilable terms plus
-    /// one or more top-level `WITHIN(...)` terms.
+    /// at most one top-level temporal join term (`WITHIN(...)` or `DURING(...)`).
     ///
     /// Current limitation (intentional): `WITHIN` cannot appear under `OR` / `NOT`.
-    fn compile_conjunctive(expr: &Expression) -> Result<(Vec<String>, Vec<WithinTerm>), String> {
+    fn compile_conjunctive(
+        expr: &Expression,
+    ) -> Result<(Vec<String>, Option<TemporalTerm>), String> {
         let mut sql_terms: Vec<String> = Vec::new();
-        let mut within_terms: Vec<WithinTerm> = Vec::new();
+        let mut temporal_terms: Vec<TemporalTerm> = Vec::new();
 
         // Flatten nested ANDs iteratively to keep stack shallow.
         let mut queue: VecDeque<&Expression> = VecDeque::new();
@@ -197,18 +252,21 @@ impl Planner {
                     stream,
                     predicate,
                     window,
-                } => within_terms.push(WithinTerm {
+                } => temporal_terms.push(TemporalTerm::Within(WithinTerm {
                     stream: stream.clone(),
                     predicate: (**predicate).clone(),
                     window: *window,
-                }),
-                Expression::During { .. } => {
-                    return Err("DURING is not supported yet".to_string());
+                })),
+                Expression::During { stream, predicate } => {
+                    temporal_terms.push(TemporalTerm::During(DuringTerm {
+                        stream: stream.clone(),
+                        predicate: (**predicate).clone(),
+                    }));
                 }
                 Expression::Or(..) | Expression::Not(..) => {
                     if Self::contains_temporal_ops(node) {
                         return Err(
-                            "WITHIN is only supported under conjunctions (AND), not OR/NOT"
+                            "Temporal joins (WITHIN/DURING) are only supported under conjunctions (AND), not OR/NOT"
                                 .to_string(),
                         );
                     }
@@ -218,7 +276,13 @@ impl Planner {
             }
         }
 
-        Ok((sql_terms, within_terms))
+        if temporal_terms.is_empty() {
+            return Ok((sql_terms, None));
+        }
+        if temporal_terms.len() > 1 {
+            return Err("Multiple temporal join terms are not supported yet".to_string());
+        }
+        Ok((sql_terms, temporal_terms.into_iter().next()))
     }
 
     fn contains_temporal_ops(expr: &Expression) -> bool {
@@ -293,6 +357,18 @@ struct WithinTerm {
     stream: StreamSelector,
     predicate: Expression,
     window: chrono::Duration,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct DuringTerm {
+    stream: StreamSelector,
+    predicate: Expression,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum TemporalTerm {
+    Within(WithinTerm),
+    During(DuringTerm),
 }
 
 #[cfg(test)]
