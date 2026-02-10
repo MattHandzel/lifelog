@@ -1,4 +1,5 @@
 // Export all modules
+pub mod audio;
 pub mod browser_history;
 pub mod camera;
 pub mod clipboard;
