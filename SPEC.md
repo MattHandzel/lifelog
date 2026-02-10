@@ -214,6 +214,9 @@ v1 treats ACK as “fully queryable”. Therefore, ACK requires completion of:
   - clipboard text,
   - shell command text,
   - keystroke captured text (if enabled; see Section 12.4).
+- **Required derived transforms** needed to satisfy the above baseline indexes.
+  - In v1, this specifically means Screen ingestion is not ACKed as queryable until the OCR-derived
+    record for the same frame UUID has been persisted (so the OCR text index can be relied on).
 
 Vector/embedding indexes are explicitly not baseline for ACK in v1.
 
