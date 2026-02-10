@@ -50,7 +50,7 @@ Last updated: 2026-02-10
   - `[x]` Clipboard capture module (polls `wl-paste`/`xclip`/`xsel`; WAL-buffered; server ingest + retrieval wired)
   - `[x]` Shell history capture module (tails history file; zsh extended + bash `HISTTIMEFORMAT` parsing; WAL-buffered; server ingest + retrieval wired)
   - `[x]` Audio capture module (CPAL -> WAV bytes; WAL-buffered as `AudioFrame`; stream_id `audio`)
-  - `[ ]` Mouse events module
+  - `[x]` Mouse activity module (samples cursor position; WAL-buffered as `MouseFrame`; stream_id `mouse`)
   - `[~]` Window activity module (Hyprland-only; generic fallback missing)
 - `[~]` UI: replay view + query builder/templates + previews
   - `[x]` Replay view
