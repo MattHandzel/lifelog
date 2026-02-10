@@ -100,10 +100,10 @@ This is the **core differentiator** of the product and the biggest gap.
 | 5.2 | `Contains`, `Eq`, `TimeRange` operators compile to SQL | `[x]` | `planner.rs` generates SurrealDB SQL |
 | 5.3 | Origin resolution from catalog | `[x]` | Planner resolves `StreamSelector` → `DataOrigin` list |
 | 5.4 | **Implement `WITHIN(A, B, ±Δt)` operator** | `[~]` | Implemented as a two-stage plan (source timestamps -> target time-window filter). Current limits: one WITHIN term, AND-only, no nested temporal ops inside predicate. |
-| 5.5 | **Implement `DURING(A, predicate)` operator** | `[~]` | Implemented as a two-stage plan (source intervals -> target time-window filter) with a configurable expansion window for point sources. Supports multiple `DURING(...)` terms under `AND` by intersecting interval sets. Still missing: `OVERLAPS(...)` and robust point→interval semantics (beyond window expansion). |
-| 5.6 | **Implement `OVERLAPS(intervalA, intervalB)` operator** | `[ ]` | Not in AST yet. Requires interval semantics. |
-| 5.7 | **Implement replay queries** | `[ ]` | No replay mode. Must return ordered steps: screen frames + aligned context from other streams (Spec §10.3). |
-| 5.8 | Replay semantics: point record `t_i` → interval `[t_i, t_{i+1})` | `[ ]` | Spec §10.3.1 — needed for frame-stepping UI |
+| 5.5 | **Implement `DURING(A, predicate)` operator** | `[~]` | Implemented as a two-stage plan (source intervals -> target time-window filter) with configurable expansion window for point sources. Supports multiple `DURING(...)` terms under `AND` by intersecting interval sets. Now uses interval-target overlap semantics via `t_end` so `DURING(Audio, pointPredicate)` includes overlapping chunks. |
+| 5.6 | **Implement `OVERLAPS(intervalA, intervalB)` operator** | `[x]` | Implemented in AST + LLQL + planner + executor (currently planned/executed like `DURING(...)`). |
+| 5.7 | **Implement replay queries** | `[~]` | Backend now exposes a `Replay` RPC returning ordered steps (screen-granularity) with aligned context keys. UI integration pending. |
+| 5.8 | Replay semantics: point record `t_i` → interval `[t_i, t_{i+1})` | `[~]` | Implemented via `lifelog-core` replay step assembly; last-step end currently uses replay window end. |
 | 5.9 | Query resource limits (timeouts, max results) | `[ ]` | Spec §10.1: "bounded resource usage" |
 | 5.10 | User-facing query syntax (DSL or templates) | `[~]` | **LLQL JSON** supported via `Query.text` prefix (`llql:`/`llql-json:`) → typed AST (WITHIN/DURING). Still missing: “nice” human DSL, templates, and UI builder. |
 

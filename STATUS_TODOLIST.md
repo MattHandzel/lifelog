@@ -7,14 +7,15 @@ Last updated: 2026-02-10
 - `[~]` Query correlation operators
   - `[~]` `WITHIN(...)` implemented (two-stage plan; AND-only; single term)
   - `[~]` `DURING(...)` implemented (two-stage plan; AND-only; supports multiple terms via interval intersection; window expansion for point sources)
-  - `[ ]` `OVERLAPS(...)` (AST + planner + executor)
+  - `[x]` `OVERLAPS(...)` implemented (AST + planner + executor; currently planned/executed like `DURING(...)`)
+  - `[x]` Interval-target overlap semantics (`t_canonical`/`t_end`) wired so `DURING(Audio, pointPredicate)` includes overlapping chunks
 - `[~]` Canonical cross-modal example (Spec §10.2)
   - `DURING(audio, browser URL contains "youtube" AND OCR contains "3Blue1Brown")`
   - Needs multi-stream predicate evaluation + interval intersection + audio overlap semantics
   - Implementation note: backend now supports executing this via LLQL JSON embedded in `Query.text` (`llql:`/`llql-json:`), assuming Audio/Browser/OCR streams exist.
   - Remaining: UI query authoring (templates/builder), and end-to-end validation with real ingest + OCR derived stream.
-- `[ ]` Replay queries (Spec §10.3)
-  - Backend query mode returning ordered replay steps with aligned context
+- `[x]` Replay queries (Spec §10.3)
+  - Backend `Replay` RPC returns ordered steps with aligned context keys (UI integration pending)
 
 ## P1 (v1 Requirements)
 

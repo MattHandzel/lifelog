@@ -89,6 +89,9 @@ mod helpers {
         pub t_ingest: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub time_quality: Option<String>,
     }
@@ -105,6 +108,9 @@ mod helpers {
         pub t_ingest: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub time_quality: Option<String>,
     }
@@ -119,6 +125,9 @@ mod helpers {
         pub t_ingest: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub time_quality: Option<String>,
     }
@@ -133,6 +142,9 @@ mod helpers {
         pub t_ingest: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub time_quality: Option<String>,
     }
@@ -152,6 +164,9 @@ mod helpers {
         pub t_ingest: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub time_quality: Option<String>,
     }
@@ -171,6 +186,9 @@ mod helpers {
         pub t_ingest: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For audio chunks, this is `t_canonical + duration`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub time_quality: Option<String>,
     }
@@ -188,6 +206,9 @@ mod helpers {
         pub t_ingest: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub time_quality: Option<String>,
     }
@@ -207,6 +228,9 @@ mod helpers {
         pub t_ingest: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For point records, this equals `t_canonical`.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
         #[serde(default)]
         pub time_quality: Option<String>,
     }
@@ -225,6 +249,7 @@ mod helpers {
                 mime_type: self.mime_type.clone(),
                 t_ingest: None,
                 t_canonical: None,
+                t_end: None,
                 time_quality: None,
             }
         }
@@ -242,6 +267,7 @@ mod helpers {
                 visit_count: self.visit_count,
                 t_ingest: None,
                 t_canonical: None,
+                t_end: None,
                 time_quality: None,
             }
         }
@@ -257,6 +283,7 @@ mod helpers {
                 text: self.text.clone(),
                 t_ingest: None,
                 t_canonical: None,
+                t_end: None,
                 time_quality: None,
             }
         }
@@ -272,6 +299,7 @@ mod helpers {
                 processes: self.processes.clone(),
                 t_ingest: None,
                 t_canonical: None,
+                t_end: None,
                 time_quality: None,
             }
         }
@@ -292,6 +320,7 @@ mod helpers {
                 device: self.device.clone(),
                 t_ingest: None,
                 t_canonical: None,
+                t_end: None,
                 time_quality: None,
             }
         }
@@ -312,6 +341,7 @@ mod helpers {
                 duration_secs: self.duration_secs,
                 t_ingest: None,
                 t_canonical: None,
+                t_end: None,
                 time_quality: None,
             }
         }
@@ -330,6 +360,7 @@ mod helpers {
                 conditions: self.conditions.clone(),
                 t_ingest: None,
                 t_canonical: None,
+                t_end: None,
                 time_quality: None,
             }
         }
@@ -350,6 +381,7 @@ mod helpers {
                 cursor: self.cursor,
                 t_ingest: None,
                 t_canonical: None,
+                t_end: None,
                 time_quality: None,
             }
         }

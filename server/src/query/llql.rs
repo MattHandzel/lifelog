@@ -105,6 +105,11 @@ enum LlqlExpr {
         predicate: Box<LlqlExpr>,
         window: String,
     },
+    Overlaps {
+        stream: LlqlSelector,
+        predicate: Box<LlqlExpr>,
+        window: String,
+    },
 }
 
 impl LlqlExpr {
@@ -166,6 +171,15 @@ impl LlqlExpr {
                 predicate,
                 window,
             } => Ok(ast::Expression::During {
+                stream: stream.into_ast(),
+                predicate: Box::new(predicate.try_into_ast()?),
+                window: parse_duration(&window)?,
+            }),
+            LlqlExpr::Overlaps {
+                stream,
+                predicate,
+                window,
+            } => Ok(ast::Expression::Overlaps {
                 stream: stream.into_ast(),
                 predicate: Box::new(predicate.try_into_ast()?),
                 window: parse_duration(&window)?,

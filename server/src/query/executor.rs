@@ -54,7 +54,7 @@ pub async fn execute(
         } => {
             #[derive(serde::Deserialize, Debug)]
             struct TsResult {
-                timestamp: surrealdb::sql::Datetime,
+                t_canonical: Option<surrealdb::sql::Datetime>,
             }
 
             let mut timestamps = Vec::new();
@@ -67,7 +67,11 @@ pub async fn execute(
                     rows = %rows.len(),
                     "WITHIN source query returned timestamps"
                 );
-                timestamps.extend(rows.into_iter().map(|r| r.timestamp.0));
+                for r in rows {
+                    if let Some(dt) = r.t_canonical {
+                        timestamps.push(dt.0);
+                    }
+                }
                 if timestamps.len() >= max_source_timestamps {
                     timestamps.truncate(max_source_timestamps);
                     break;
@@ -114,7 +118,7 @@ pub async fn execute(
             let mut clauses = Vec::with_capacity(merged.len());
             for (start, end) in merged {
                 clauses.push(format!(
-                    "(timestamp >= d'{}' AND timestamp <= d'{}')",
+                    "(t_canonical >= d'{}' AND t_canonical <= d'{}')",
                     start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
                     end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
                 ));
@@ -168,9 +172,8 @@ pub async fn execute(
         } => {
             #[derive(serde::Deserialize, Debug)]
             struct IntervalRow {
-                timestamp: surrealdb::sql::Datetime,
-                // Optional: many modalities won't have it.
-                duration_secs: Option<f64>,
+                t_canonical: Option<surrealdb::sql::Datetime>,
+                t_end: Option<surrealdb::sql::Datetime>,
             }
 
             fn merge_intervals(
@@ -260,14 +263,11 @@ pub async fn execute(
                     );
 
                     for r in rows {
-                        let mut start = r.timestamp.0;
-                        let dur = r.duration_secs.unwrap_or(0.0);
-                        let dur_ms = if dur.is_finite() && dur > 0.0 {
-                            (dur * 1000.0).round() as i64
-                        } else {
-                            0
+                        let Some(t0) = r.t_canonical else {
+                            continue;
                         };
-                        let mut end = start + chrono::Duration::milliseconds(dur_ms);
+                        let mut start = t0.0;
+                        let mut end = r.t_end.map(|dt| dt.0).unwrap_or(start);
 
                         // Apply expansion window. For point source records, this becomes ±window.
                         start -= term.window;
@@ -311,9 +311,10 @@ pub async fn execute(
             let mut clauses = Vec::with_capacity(intersection.len());
             for (start, end) in intersection {
                 clauses.push(format!(
-                    "(timestamp >= d'{}' AND timestamp <= d'{}')",
-                    start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
-                    end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
+                    // Interval overlap: [t_canonical, t_end] overlaps [start, end]
+                    "(t_canonical <= d'{}' AND t_end >= d'{}')",
+                    end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                    start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
                 ));
             }
             let time_where = clauses.join(" OR ");

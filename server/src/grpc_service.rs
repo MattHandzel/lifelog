@@ -127,6 +127,22 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         Ok(Response::new(response))
     }
 
+    async fn replay(
+        &self,
+        request: Request<ReplayRequest>,
+    ) -> Result<Response<ReplayResponse>, Status> {
+        let req = request.into_inner();
+        tracing::info!(req = ?req, "Received replay request");
+
+        let resp = self
+            .server
+            .process_replay(req)
+            .await
+            .map_err(|e| Status::internal(format!("Failed to process replay: {}", e)))?;
+
+        Ok(Response::new(resp))
+    }
+
     async fn get_data(
         &self,
         request: Request<GetDataRequest>,

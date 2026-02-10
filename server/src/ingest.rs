@@ -77,6 +77,8 @@ impl IngestBackend for SurrealIngestBackend {
 
                         record.t_ingest = Some(now.clone());
                         record.t_canonical = Some(t_canonical_dt.into());
+                        // Default interval end for point records.
+                        record.t_end = Some(t_canonical_dt.into());
                         record.time_quality = Some(quality_str);
 
                         match db
@@ -150,6 +152,8 @@ impl IngestBackend for SurrealIngestBackend {
 
                         record.t_ingest = Some(now.clone());
                         record.t_canonical = Some(t_canonical_dt.into());
+                        // Default interval end for point records.
+                        record.t_end = Some(t_canonical_dt.into());
                         record.time_quality = Some(quality_str);
 
                         match db
@@ -227,6 +231,8 @@ impl IngestBackend for SurrealIngestBackend {
 
                         record.t_ingest = Some(now.clone());
                         record.t_canonical = Some(t_canonical_dt.into());
+                        // Default interval end for point records.
+                        record.t_end = Some(t_canonical_dt.into());
                         record.time_quality = Some(quality_str);
 
                         match db
@@ -290,6 +296,15 @@ impl IngestBackend for SurrealIngestBackend {
 
                         record.t_ingest = Some(now.clone());
                         record.t_canonical = Some(t_canonical_dt.into());
+                        // Audio is an interval record. Compute canonical end time from duration_secs.
+                        let dur_ms =
+                            if record.duration_secs.is_finite() && record.duration_secs > 0.0 {
+                                (record.duration_secs as f64 * 1000.0).round() as i64
+                            } else {
+                                0
+                            };
+                        let t_end_dt = t_canonical_dt + chrono::Duration::milliseconds(dur_ms);
+                        record.t_end = Some(t_end_dt.into());
                         record.time_quality = Some(quality_str);
 
                         match db
