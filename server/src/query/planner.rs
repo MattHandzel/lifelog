@@ -77,6 +77,7 @@ impl Planner {
         const DEFAULT_MAX_SOURCE_TIMESTAMPS: usize = 200;
         const DEFAULT_MAX_SOURCE_INTERVALS: usize = 200;
         const DEFAULT_MAX_TIME_CLAUSES: usize = 50;
+        const DEFAULT_MAX_TARGET_UUIDS: usize = 1_000;
 
         let plans = origins
             .into_iter()
@@ -91,7 +92,10 @@ impl Planner {
                         };
 
                         if temporal_terms.is_empty() {
-                            let sql = format!("SELECT uuid FROM `{}` WHERE {};", table, target_base_where);
+                            let sql = format!(
+                                "SELECT uuid FROM `{}` WHERE {} LIMIT {};",
+                                table, target_base_where, DEFAULT_MAX_TARGET_UUIDS
+                            );
                             return ExecutionPlan::TableQuery { table, origin, sql };
                         };
 

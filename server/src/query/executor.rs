@@ -1,8 +1,13 @@
 use super::planner::ExecutionPlan;
 use lifelog_core::LifelogFrameKey;
 use std::collections::BTreeSet;
+use std::time::Duration;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
+use tokio::time::timeout;
+
+const DEFAULT_DB_QUERY_TIMEOUT: Duration = Duration::from_secs(10);
+const DEFAULT_MAX_TARGET_UUIDS: usize = 1_000;
 
 pub async fn execute(
     db: &Surreal<Client>,
@@ -12,7 +17,7 @@ pub async fn execute(
         ExecutionPlan::TableQuery { table, origin, sql } => {
             tracing::debug!(sql = %sql, table = %table, "Executing table query");
 
-            let mut response = db.query(sql).await?;
+            let mut response = timeout(DEFAULT_DB_QUERY_TIMEOUT, db.query(sql)).await??;
 
             #[derive(serde::Deserialize, Debug)]
             struct UuidResult {
@@ -60,7 +65,8 @@ pub async fn execute(
             let mut timestamps = Vec::new();
             for sp in &source_plans {
                 tracing::debug!(source_table = %sp.source_table, "Executing WITHIN source query");
-                let mut resp = db.query(sp.sql.clone()).await?;
+                let mut resp =
+                    timeout(DEFAULT_DB_QUERY_TIMEOUT, db.query(sp.sql.clone())).await??;
                 let rows: Vec<TsResult> = resp.take(0)?;
                 tracing::debug!(
                     source_table = %sp.source_table,
@@ -126,8 +132,8 @@ pub async fn execute(
             let time_where = clauses.join(" OR ");
 
             let sql = format!(
-                "SELECT uuid FROM `{}` WHERE ({}) AND ({});",
-                target_table, target_base_where, time_where
+                "SELECT uuid FROM `{}` WHERE ({}) AND ({}) LIMIT {};",
+                target_table, target_base_where, time_where, DEFAULT_MAX_TARGET_UUIDS
             );
 
             tracing::info!(
@@ -138,7 +144,7 @@ pub async fn execute(
                 "Executing WITHIN target query"
             );
 
-            let mut response = db.query(sql).await?;
+            let mut response = timeout(DEFAULT_DB_QUERY_TIMEOUT, db.query(sql)).await??;
 
             #[derive(serde::Deserialize, Debug)]
             struct UuidResult {
@@ -254,7 +260,8 @@ pub async fn execute(
                         source_table = %sp.source_table,
                         "Executing DURING source query"
                     );
-                    let mut resp = db.query(sp.sql.clone()).await?;
+                    let mut resp =
+                        timeout(DEFAULT_DB_QUERY_TIMEOUT, db.query(sp.sql.clone())).await??;
                     let rows: Vec<IntervalRow> = resp.take(0)?;
                     tracing::debug!(
                         source_table = %sp.source_table,
@@ -320,8 +327,8 @@ pub async fn execute(
             let time_where = clauses.join(" OR ");
 
             let sql = format!(
-                "SELECT uuid FROM `{}` WHERE ({}) AND ({});",
-                target_table, target_base_where, time_where
+                "SELECT uuid FROM `{}` WHERE ({}) AND ({}) LIMIT {};",
+                target_table, target_base_where, time_where, DEFAULT_MAX_TARGET_UUIDS
             );
 
             tracing::info!(
@@ -332,7 +339,7 @@ pub async fn execute(
                 "Executing DURING target query"
             );
 
-            let mut response = db.query(sql).await?;
+            let mut response = timeout(DEFAULT_DB_QUERY_TIMEOUT, db.query(sql)).await??;
 
             #[derive(serde::Deserialize, Debug)]
             struct UuidResult {
