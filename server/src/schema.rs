@@ -344,7 +344,8 @@ pub(crate) async fn ensure_table_schema(
     "#
     );
 
-    db.query(ddl.clone()).await?;
+    // Important: `query(...)` can succeed while individual statements fail; `check()` surfaces DDL errors.
+    db.query(ddl).await?.check()?;
     CREATED_TABLES.insert(table.to_owned());
     tracing::info!(table = %table, "Ensured table schema");
 
@@ -401,6 +402,8 @@ pub(crate) async fn run_startup_migrations(db: &Surreal<Client>) -> Result<(), L
     // Create text analyzer first (must exist before table search indexes)
     db.query(TEXT_ANALYZER_DDL)
         .await
+        .map_err(|e| LifelogError::Database(format!("text analyzer: {}", e)))?
+        .check()
         .map_err(|e| LifelogError::Database(format!("text analyzer: {}", e)))?;
 
     // Ensure upload_chunks table

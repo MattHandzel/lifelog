@@ -12,21 +12,7 @@ pub enum ExecutionPlan {
     },
     /// Multiple queries to be executed.
     MultiQuery(Vec<ExecutionPlan>),
-    /// Two-stage temporal join for `WITHIN(...)`.
-    ///
-    /// Phase 1: query the `source_*` tables for candidate timestamps.
-    /// Phase 2: query the target table for UUIDs whose timestamps fall within `±window`
-    /// of any of those candidate timestamps, *in addition* to the target base predicate.
-    WithinQuery {
-        target_table: String,
-        target_origin: DataOrigin,
-        target_base_where: String,
-        source_plans: Vec<WithinSourcePlan>,
-        window: chrono::Duration,
-        max_source_timestamps: usize,
-        max_time_clauses: usize,
-    },
-    /// Two-stage temporal join for `DURING(...)`.
+    /// Two-stage temporal join for `DURING(...)` / `OVERLAPS(...)` / `WITHIN(...)`.
     ///
     /// Phase 1: query the `source_*` tables for candidate intervals.
     /// Phase 2: query the target table for UUIDs whose timestamps fall within any interval,
@@ -42,13 +28,6 @@ pub enum ExecutionPlan {
     /// Placeholder for multi-stage plans.
     #[allow(dead_code)]
     Unsupported(String),
-}
-
-#[derive(Debug, PartialEq)]
-pub struct WithinSourcePlan {
-    pub source_table: String,
-    pub source_origin: DataOrigin,
-    pub sql: String,
 }
 
 #[derive(Debug, PartialEq)]
@@ -74,7 +53,6 @@ impl Planner {
             return ExecutionPlan::MultiQuery(vec![]);
         }
 
-        const DEFAULT_MAX_SOURCE_TIMESTAMPS: usize = 200;
         const DEFAULT_MAX_SOURCE_INTERVALS: usize = 200;
         const DEFAULT_MAX_TIME_CLAUSES: usize = 50;
         const DEFAULT_MAX_TARGET_UUIDS: usize = 1_000;
@@ -99,139 +77,62 @@ impl Planner {
                             return ExecutionPlan::TableQuery { table, origin, sql };
                         };
 
-                        let has_within = temporal_terms
-                            .iter()
-                            .any(|t| matches!(t, TemporalTerm::Within(_)));
-                        let has_interval_terms = temporal_terms.iter().any(|t| {
-                            matches!(t, TemporalTerm::During(_) | TemporalTerm::Overlaps(_))
-                        });
+                        // Temporal terms: build one interval set per term, then intersect at execution time.
+                        //
+                        // Note: `WITHIN(...)` is treated as a point-interval term; if the source stream is
+                        // interval-valued (has `t_end`), the whole interval is expanded by `window` and used.
+                        let mut during_terms = Vec::new();
+                        for t in temporal_terms {
+                            let term = match t {
+                                TemporalTerm::Within(d)
+                                | TemporalTerm::During(d)
+                                | TemporalTerm::Overlaps(d) => d,
+                            };
 
-                        if has_within && has_interval_terms {
-                            return ExecutionPlan::Unsupported(
-                                "Mixing WITHIN and DURING in a single query is not supported yet"
-                                    .to_string(),
-                            );
+                            let source_origins =
+                                Self::resolve_selector(&term.stream, available_origins);
+                            if source_origins.is_empty() {
+                                let sql = format!("SELECT uuid FROM `{}` WHERE false;", table);
+                                return ExecutionPlan::TableQuery { table, origin, sql };
+                            }
+
+                            if Self::contains_temporal_ops(&term.predicate) {
+                                return ExecutionPlan::Unsupported(
+                                    "Nested temporal operators inside temporal predicates are not supported yet"
+                                        .to_string(),
+                                );
+                            }
+
+                            let source_where = Self::compile_expression_sql(&term.predicate);
+                            let source_plans = source_origins
+                                .into_iter()
+                                .map(|source_origin| {
+                                    let source_table = source_origin.get_table_name();
+                                    let sql = format!(
+                                        "SELECT t_canonical, t_end FROM `{}` WHERE {} ORDER BY t_canonical DESC LIMIT {};",
+                                        source_table, source_where, DEFAULT_MAX_SOURCE_INTERVALS
+                                    );
+                                    DuringSourcePlan {
+                                        source_table,
+                                        source_origin,
+                                        sql,
+                                    }
+                                })
+                                .collect();
+
+                            during_terms.push(DuringTermPlan {
+                                source_plans,
+                                window: term.window,
+                            });
                         }
 
-                        if has_within {
-                            if temporal_terms.len() != 1 {
-                                return ExecutionPlan::Unsupported(
-                                    "Multiple WITHIN terms are not supported yet".to_string(),
-                                );
-                            }
-                            let Some(term) = temporal_terms.into_iter().next() else {
-                                return ExecutionPlan::Unsupported(
-                                    "missing temporal term".to_string(),
-                                );
-                            };
-                            let TemporalTerm::Within(within) = term else {
-                                return ExecutionPlan::Unsupported(
-                                    "invalid temporal term".to_string(),
-                                );
-                            };
-
-                                // Resolve source streams for the WITHIN clause.
-                                let source_origins =
-                                    Self::resolve_selector(&within.stream, available_origins);
-                                if source_origins.is_empty() {
-                                    // Nothing can satisfy the WITHIN predicate.
-                                    let sql = format!("SELECT uuid FROM `{}` WHERE false;", table);
-                                    return ExecutionPlan::TableQuery { table, origin, sql };
-                                }
-
-                                // Source predicate must be SQL-compilable (no nested temporal ops for now).
-                                if Self::contains_temporal_ops(&within.predicate) {
-                                    return ExecutionPlan::Unsupported(
-                                        "Nested temporal operators inside WITHIN predicate are not supported yet"
-                                            .to_string(),
-                                    );
-                                }
-
-                                let source_where = Self::compile_expression_sql(&within.predicate);
-                                let source_plans = source_origins
-                                    .into_iter()
-                                    .map(|source_origin| {
-                                        let source_table = source_origin.get_table_name();
-                                        let sql = format!(
-                                            "SELECT t_canonical FROM `{}` WHERE {} ORDER BY t_canonical DESC LIMIT {};",
-                                            source_table, source_where, DEFAULT_MAX_SOURCE_TIMESTAMPS
-                                        );
-                                        WithinSourcePlan {
-                                            source_table,
-                                            source_origin,
-                                            sql,
-                                        }
-                                    })
-                                    .collect();
-
-                                ExecutionPlan::WithinQuery {
-                                    target_table: table,
-                                    target_origin: origin,
-                                    target_base_where,
-                                    source_plans,
-                                    window: within.window,
-                                    max_source_timestamps: DEFAULT_MAX_SOURCE_TIMESTAMPS,
-                                    max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
-                                }
-                        } else {
-                            // DURING/OVERLAPS terms: build one interval set per term, then intersect at execution time.
-                            let mut during_terms = Vec::new();
-                            for t in temporal_terms {
-                                let during = match t {
-                                    TemporalTerm::During(d) | TemporalTerm::Overlaps(d) => d,
-                                    TemporalTerm::Within(_) => {
-                                        return ExecutionPlan::Unsupported(
-                                            "invalid temporal term".to_string(),
-                                        )
-                                    }
-                                };
-
-                                let source_origins =
-                                    Self::resolve_selector(&during.stream, available_origins);
-                                if source_origins.is_empty() {
-                                    let sql = format!("SELECT uuid FROM `{}` WHERE false;", table);
-                                    return ExecutionPlan::TableQuery { table, origin, sql };
-                                }
-
-                                if Self::contains_temporal_ops(&during.predicate) {
-                                    return ExecutionPlan::Unsupported(
-                                        "Nested temporal operators inside DURING predicate are not supported yet"
-                                            .to_string(),
-                                    );
-                                }
-
-                                let source_where =
-                                    Self::compile_expression_sql(&during.predicate);
-                                let source_plans = source_origins
-                                    .into_iter()
-                                    .map(|source_origin| {
-                                        let source_table = source_origin.get_table_name();
-                                        let sql = format!(
-                                            "SELECT t_canonical, t_end FROM `{}` WHERE {} ORDER BY t_canonical DESC LIMIT {};",
-                                            source_table, source_where, DEFAULT_MAX_SOURCE_INTERVALS
-                                        );
-                                        DuringSourcePlan {
-                                            source_table,
-                                            source_origin,
-                                            sql,
-                                        }
-                                    })
-                                    .collect();
-
-                                during_terms.push(DuringTermPlan {
-                                    source_plans,
-                                    window: during.window,
-                                });
-                            }
-
-                            ExecutionPlan::DuringQuery {
-                                target_table: table,
-                                target_origin: origin,
-                                target_base_where,
-                                during_terms,
-                                max_source_intervals: DEFAULT_MAX_SOURCE_INTERVALS,
-                                max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
-                            }
+                        ExecutionPlan::DuringQuery {
+                            target_table: table,
+                            target_origin: origin,
+                            target_base_where,
+                            during_terms,
+                            max_source_intervals: DEFAULT_MAX_SOURCE_INTERVALS,
+                            max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
                         }
                     }
                     Err(msg) => ExecutionPlan::Unsupported(msg),
@@ -305,7 +206,7 @@ impl Planner {
                     stream,
                     predicate,
                     window,
-                } => temporal_terms.push(TemporalTerm::Within(WithinTerm {
+                } => temporal_terms.push(TemporalTerm::Within(DuringTerm {
                     stream: stream.clone(),
                     predicate: (**predicate).clone(),
                     window: *window,
@@ -418,13 +319,6 @@ impl Planner {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-struct WithinTerm {
-    stream: StreamSelector,
-    predicate: Expression,
-    window: chrono::Duration,
-}
-
-#[derive(Debug, Clone, PartialEq)]
 struct DuringTerm {
     stream: StreamSelector,
     predicate: Expression,
@@ -433,7 +327,7 @@ struct DuringTerm {
 
 #[derive(Debug, Clone, PartialEq)]
 enum TemporalTerm {
-    Within(WithinTerm),
+    Within(DuringTerm),
     During(DuringTerm),
     Overlaps(DuringTerm),
 }
