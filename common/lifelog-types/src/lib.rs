@@ -242,6 +242,9 @@ mod helpers {
         pub timestamp: surrealdb::sql::Datetime,
         pub text: String,
         pub binary_data: Vec<u8>,
+        /// Optional large clipboard payload stored in CAS; if empty, use `binary_data`.
+        pub blob_hash: String,
+        pub blob_size: u64,
         pub mime_type: String,
         #[serde(default)]
         pub t_ingest: Option<surrealdb::sql::Datetime>,
@@ -434,6 +437,8 @@ mod helpers {
                 timestamp: to_dt(self.timestamp).into(),
                 text: self.text.clone(),
                 binary_data: self.binary_data.clone(),
+                blob_hash: String::new(),
+                blob_size: self.binary_data.len() as u64,
                 mime_type: self.mime_type.clone(),
                 t_ingest: None,
                 t_canonical: None,

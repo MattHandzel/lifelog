@@ -343,11 +343,79 @@ impl IngestBackend for SurrealIngestBackend {
                 );
             }
             "clipboard" => {
-                ingest_frame!(
-                    lifelog_types::ClipboardFrame,
-                    lifelog_types::ClipboardRecord,
-                    DataModality::Clipboard
-                );
+                if let Ok(frame) = lifelog_types::ClipboardFrame::decode(payload) {
+                    let origin = DataOrigin::new(
+                        DataOriginType::DeviceId(collector_id.to_string()),
+                        DataModality::Clipboard.as_str_name().to_string(),
+                    );
+
+                    if ensure_table_schema(&db, &origin).await.is_ok() {
+                        let table = origin.get_table_name();
+                        let id = frame.uuid.clone();
+                        let mut record = frame.to_record();
+                        let now: surrealdb::sql::Datetime = Utc::now().into();
+
+                        // If the clipboard includes a binary payload, store it in CAS and keep
+                        // only a reference in SurrealDB. (Spec §6 / §8: blobs in CAS.)
+                        if !frame.binary_data.is_empty() {
+                            let blob_hash = match self.cas.put(&frame.binary_data) {
+                                Ok(h) => h,
+                                Err(e) => {
+                                    tracing::error!("CAS put failed for clipboard blob: {}", e);
+                                    return Err(e.to_string());
+                                }
+                            };
+                            record.blob_hash = blob_hash;
+                            record.blob_size = frame.binary_data.len() as u64;
+                            record.binary_data.clear();
+                        }
+
+                        // Get skew estimate for this collector
+                        let skew_est = self.skew_estimates.read().await.get(collector_id).copied();
+
+                        // Apply skew estimate to t_canonical
+                        let t_device_dt: chrono::DateTime<chrono::Utc> = record.timestamp.0;
+                        let (t_canonical_dt, quality_str) = match skew_est {
+                            Some(est) => (
+                                est.apply(t_device_dt),
+                                est.time_quality.as_str().to_string(),
+                            ),
+                            None => (t_device_dt, "unknown".to_string()),
+                        };
+
+                        record.t_ingest = Some(now.clone());
+                        record.t_canonical = Some(t_canonical_dt.into());
+                        // Default interval end for point records.
+                        record.t_end = Some(t_canonical_dt.into());
+                        record.time_quality = Some(quality_str);
+
+                        match db
+                            .upsert::<Option<lifelog_types::ClipboardRecord>>((&table, &id))
+                            .content(record)
+                            .await
+                        {
+                            Ok(result) => {
+                                if result.is_some() {
+                                    indexed = true;
+                                } else {
+                                    tracing::warn!(
+                                        "Frame ingestion returned no results for {} in table {}",
+                                        id,
+                                        table
+                                    );
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    id = %id,
+                                    error = %e,
+                                    "Clipboard frame ingestion failed for table {}",
+                                    table
+                                );
+                            }
+                        }
+                    }
+                }
             }
             "shell_history" | "shellhistory" => {
                 ingest_frame!(

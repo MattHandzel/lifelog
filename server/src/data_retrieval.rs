@@ -194,11 +194,22 @@ pub(crate) async fn get_data_by_key(
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
 
+            let binary_data = if !frame_record.blob_hash.is_empty() {
+                cas.get(&frame_record.blob_hash).map_err(|e| {
+                    LifelogError::Database(format!(
+                        "CAS read for {}: {}",
+                        frame_record.blob_hash, e
+                    ))
+                })?
+            } else {
+                frame_record.binary_data
+            };
+
             let frame = lifelog_types::ClipboardFrame {
                 uuid: frame_record.uuid,
                 timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
                 text: frame_record.text,
-                binary_data: frame_record.binary_data,
+                binary_data,
                 mime_type: frame_record.mime_type,
                 t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
                 t_ingest: frame_record

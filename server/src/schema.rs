@@ -131,6 +131,8 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
             DEFINE FIELD text        ON `{table}` TYPE string;
             DEFINE FIELD binary_data ON `{table}` TYPE bytes;
+            DEFINE FIELD blob_hash   ON `{table}` TYPE string;
+            DEFINE FIELD blob_size   ON `{table}` TYPE int;
             DEFINE FIELD mime_type   ON `{table}` TYPE string;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
