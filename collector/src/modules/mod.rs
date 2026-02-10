@@ -16,3 +16,4 @@ pub mod shell_history;
 pub mod text_upload;
 pub mod wayland_input_logger;
 pub mod weather;
+pub mod window_activity;
