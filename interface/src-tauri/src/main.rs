@@ -754,6 +754,14 @@ struct TimelineEntry {
     timestamp: Option<i64>,
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ReplayStepWrapper {
+    start: Option<i64>,
+    end: Option<i64>,
+    screen_key: Option<LifelogDataKeyWrapper>,
+    context_keys: Vec<LifelogDataKeyWrapper>,
+}
+
 #[tauri::command]
 async fn query_timeline(
     state: tauri::State<'_, GrpcClientState>,
@@ -828,6 +836,112 @@ async fn query_timeline(
     }
 }
 
+async fn replay_async(
+    grpc_client: &mut lifelog::LifelogServerServiceClient<Channel>,
+    screen_origin: Option<String>,
+    context_origins: Option<Vec<String>>,
+    start_time: i64,
+    end_time: i64,
+    max_steps: Option<u32>,
+    max_context_per_step: Option<u32>,
+    context_pad_ms: Option<u32>,
+) -> Result<Vec<ReplayStepWrapper>, String> {
+    if start_time >= end_time {
+        return Err("Replay window invalid: start_time must be < end_time".to_string());
+    }
+
+    let window = lifelog::Timerange {
+        start: Some(prost_types::Timestamp {
+            seconds: start_time,
+            nanos: 0,
+        }),
+        end: Some(prost_types::Timestamp {
+            seconds: end_time,
+            nanos: 0,
+        }),
+    };
+
+    let req = lifelog::ReplayRequest {
+        screen_origin: screen_origin.unwrap_or_default(),
+        window: Some(window),
+        context_origins: context_origins.unwrap_or_default(),
+        max_steps: max_steps.unwrap_or(0),
+        max_context_per_step: max_context_per_step.unwrap_or(0),
+        context_pad_ms: context_pad_ms.unwrap_or(0),
+    };
+
+    let request = tonic::Request::new(req);
+
+    const REPLAY_TIMEOUT_SECONDS: u64 = 20;
+    match timeout(
+        Duration::from_secs(REPLAY_TIMEOUT_SECONDS),
+        grpc_client.replay(request),
+    )
+    .await
+    {
+        Ok(inner) => match inner {
+            Ok(response) => {
+                let steps = response.into_inner().steps;
+                let wrapped = steps
+                    .into_iter()
+                    .map(|s| ReplayStepWrapper {
+                        start: s.start.map(|ts| ts.seconds),
+                        end: s.end.map(|ts| ts.seconds),
+                        screen_key: s.screen_key.map(LifelogDataKeyWrapper::from),
+                        context_keys: s
+                            .context_keys
+                            .into_iter()
+                            .map(LifelogDataKeyWrapper::from)
+                            .collect(),
+                    })
+                    .collect();
+                Ok(wrapped)
+            }
+            Err(e) => Err(format!("Replay failed: {}", e)),
+        },
+        Err(_) => Err(format!(
+            "Replay timed out after {} seconds",
+            REPLAY_TIMEOUT_SECONDS
+        )),
+    }
+}
+
+#[tauri::command]
+async fn replay(
+    state: tauri::State<'_, GrpcClientState>,
+    screen_origin: Option<String>,
+    context_origins: Option<Vec<String>>,
+    start_time: i64,
+    end_time: i64,
+    max_steps: Option<u32>,
+    max_context_per_step: Option<u32>,
+    context_pad_ms: Option<u32>,
+) -> Result<Vec<ReplayStepWrapper>, String> {
+    let mut client_guard = state.client.lock().await;
+    let client = match client_guard.as_mut() {
+        Some(c) => c,
+        None => match create_grpc_channel(GRPC_SERVER_ADDRESS).await {
+            Ok(channel) => {
+                *client_guard = Some(lifelog::LifelogServerServiceClient::new(channel));
+                client_guard.as_mut().unwrap()
+            }
+            Err(e) => return Err(format!("gRPC connection failed: {}", e)),
+        },
+    };
+
+    replay_async(
+        client,
+        screen_origin,
+        context_origins,
+        start_time,
+        end_time,
+        max_steps,
+        max_context_per_step,
+        context_pad_ms,
+    )
+    .await
+}
+
 #[tauri::command]
 async fn select_file_dialog(
     _app_handle: tauri::AppHandle,
@@ -883,7 +997,8 @@ async fn main() {
             query_screenshot_keys,
             get_screenshots_data,
             get_collector_ids,
-            query_timeline
+            query_timeline,
+            replay
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
