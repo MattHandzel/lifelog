@@ -32,7 +32,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 
 - **UI Integration**: Add query builder/templates for LLQL and wire Replay view to call `Replay`.
 - **Canonical Query (Spec §10.2)**: Validate end-to-end with real ingest + OCR-derived stream + Audio capture.
-- **Security**: Remove hardcoded DB credentials, add pairing + auth, and enforce TLS.
+- **Security**: Add pairing + auth, and enforce TLS.
 - **New Modalities**: Implement missing v1 collectors (clipboard, shell, mouse, window activity), then gate keystrokes behind security controls.
 
 ## Blockers
