@@ -14,6 +14,8 @@ use utils::buffer::DiskBuffer;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
+type ShellEvent = (chrono::DateTime<Utc>, String);
+
 #[derive(Debug, Clone)]
 pub struct ShellHistoryDataSource {
     config: ShellHistoryConfig,
@@ -66,7 +68,7 @@ impl ShellHistoryDataSource {
         Some((Utc.timestamp_opt(epoch, 0).single()?, cmd.to_string()))
     }
 
-    fn parse_bash_histtime(lines: &[String]) -> Vec<(chrono::DateTime<Utc>, String)> {
+    fn parse_bash_histtime(lines: &[String]) -> Vec<ShellEvent> {
         // Format:
         //   # 1700000000
         //   command
@@ -98,10 +100,7 @@ impl ShellHistoryDataSource {
         }
     }
 
-    fn read_new_history(
-        &self,
-        from_offset: u64,
-    ) -> Result<(u64, Vec<(chrono::DateTime<Utc>, String)>), LifelogError> {
+    fn read_new_history(&self, from_offset: u64) -> Result<(u64, Vec<ShellEvent>), LifelogError> {
         let path = self.config.history_file.clone();
         if path.is_empty() {
             return Ok((from_offset, Vec::new()));

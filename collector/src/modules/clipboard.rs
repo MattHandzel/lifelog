@@ -60,9 +60,7 @@ impl ClipboardDataSource {
             if s.is_empty() {
                 continue;
             }
-            if self.config.max_text_bytes > 0
-                && s.as_bytes().len() > self.config.max_text_bytes as usize
-            {
+            if self.config.max_text_bytes > 0 && s.len() > self.config.max_text_bytes as usize {
                 s.truncate(self.config.max_text_bytes as usize);
             }
             return Ok(s);
