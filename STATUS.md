@@ -30,6 +30,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 - **Clock Skew Estimation Wired**: Added periodic clock sync over `ControlStream` so collectors report `(device_now, backend_now)` samples; server computes per-collector skew estimates and applies them at ingest to populate `t_canonical` and `time_quality`.
 - **Default Correlation Window**: Added `ServerConfig.default_correlation_window_ms` and wired temporal operators to fall back to it when a query omits a per-predicate window (LLQL supports omitting `window`).
 - **Query Resource Limits**: Added default resource bounds to query execution: `LIMIT 1000` on UUID-returning queries and a `10s` SurrealDB query timeout.
+- **Timeline Query Mode**: Timeline UI now submits `Query.text` as a string array and supports an LLQL mode (`llql:` / `llql-json:`) for cross-modal queries.
 - **Performance Baselines**: Established throughput and latency benchmarks via `performance_suite.rs`.
 - **Improved Test Coverage**: Added unit tests for `DiskBuffer`, `TimeInterval`, `ReplayStep`, and config validation.
 

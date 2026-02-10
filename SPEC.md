@@ -376,6 +376,7 @@ Implementation note (as of 2026-02-10):
 - Backend query engine supports `OVERLAPS(...)` (currently planned/executed like `DURING(...)`), and interval-target semantics now use `t_end` overlap (`t_canonical <= end AND t_end >= start`) to correctly include Audio chunks that start before a matched point/interval.
 - Current limitation: temporal joins are only supported under conjunctions (`AND`), not under `OR`/`NOT`.
 - Interim API bridge: the backend accepts **LLQL JSON** embedded in `Query.text` via a `llql:` / `llql-json:` prefix, which is parsed into the typed AST and executed (enables cross-modal queries without a protobuf change).
+- Interface support: the Timeline UI has an LLQL mode that submits `llql:` / `llql-json:` queries via `Query.text`.
 - Replay now has a dedicated RPC (`Replay`) that returns ordered steps with aligned context keys, and the interface has a Replay view wired to it.
 
 ### 10.2 Canonical Example (Must Work)

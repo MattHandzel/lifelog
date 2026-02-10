@@ -26,7 +26,8 @@ Last updated: 2026-02-10
   - `DURING(audio, browser URL contains "youtube" AND OCR contains "3Blue1Brown")`
   - Needs multi-stream predicate evaluation + interval intersection + audio overlap semantics
   - Implementation note: backend now supports executing this via LLQL JSON embedded in `Query.text` (`llql:`/`llql-json:`), assuming Audio/Browser/OCR streams exist.
-  - Remaining: UI query authoring (templates/builder), and end-to-end validation with real ingest + OCR derived stream.
+  - Progress: Timeline UI supports an LLQL mode to submit `llql:` / `llql-json:` queries.
+  - Remaining: templates/builder UX, and end-to-end validation with real ingest + OCR derived stream.
 - `[x]` Replay queries (Spec §10.3)
   - Backend `Replay` RPC returns ordered steps with aligned context keys
   - Interface Replay view is wired to `Replay` (via Tauri gRPC client)
@@ -38,3 +39,4 @@ Last updated: 2026-02-10
 - `[ ]` Collector: audio, clipboard, shell, mouse, window activity modules (plus safe defaults)
 - `[~]` UI: replay view + query builder/templates + previews
   - `[x]` Replay view
+  - `[~]` Query authoring (LLQL mode in Timeline; templates/builder still missing)
