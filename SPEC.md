@@ -116,6 +116,7 @@ Examples:
 #### 4.2.1 Clock Skew Model (Required)
 
 - Backend maintains an estimated clock skew per collector: `skew_estimate = backend_now - device_now` sampled over time.
+- Mechanism: backend periodically sends a clock-sync command over the control channel containing `backend_now`; collector replies with a clock sample containing both `backend_now` (echoed) and `device_now` (local).
 - Backend stores, per record:
   - `t_device` (raw),
   - `t_ingest` (raw),
