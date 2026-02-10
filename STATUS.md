@@ -43,7 +43,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 - **UI Integration**: Add query builder/templates for LLQL (and add richer previews in search/replay).
 - **Canonical Query (Spec §10.2)**: Extend validation to real ingest + OCR transform + Audio capture on a live collector (beyond the integration test seed data).
 - **Security**: Add pairing + auth, and enforce TLS.
-- **New Modalities**: Implement missing v1 collectors (clipboard, shell, mouse, window activity), then gate keystrokes behind security controls.
+- **New Modalities**: Implement missing v1 collectors (audio, mouse, window activity fallback), then gate keystrokes behind security controls.
 
 ## Blockers
 
