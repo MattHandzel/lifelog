@@ -110,7 +110,7 @@ impl WindowActivityDataSource {
         let out = Command::new("hyprctl")
             .args(["activewindow", "-j"])
             .output()
-            .map_err(|e| LifelogError::Io(e))?;
+            .map_err(LifelogError::Io)?;
         if !out.status.success() {
             return Err(LifelogError::Validation {
                 field: "window_activity.hyprctl".to_string(),
@@ -156,7 +156,7 @@ impl WindowActivityDataSource {
         let class_out = Command::new("xdotool")
             .args(["getactivewindow", "getwindowclassname"])
             .output()
-            .map_err(|e| LifelogError::Io(e))?;
+            .map_err(LifelogError::Io)?;
         if !class_out.status.success() {
             return Err(LifelogError::Validation {
                 field: "window_activity.xdotool".to_string(),
@@ -167,7 +167,7 @@ impl WindowActivityDataSource {
         let title_out = Command::new("xdotool")
             .args(["getactivewindow", "getwindowname"])
             .output()
-            .map_err(|e| LifelogError::Io(e))?;
+            .map_err(LifelogError::Io)?;
         if !title_out.status.success() {
             return Err(LifelogError::Validation {
                 field: "window_activity.xdotool".to_string(),
@@ -197,7 +197,7 @@ impl WindowActivityDataSource {
         let win_out = Command::new("xprop")
             .args(["-root", "_NET_ACTIVE_WINDOW"])
             .output()
-            .map_err(|e| LifelogError::Io(e))?;
+            .map_err(LifelogError::Io)?;
         if !win_out.status.success() {
             return Err(LifelogError::Validation {
                 field: "window_activity.xprop".to_string(),
@@ -219,7 +219,7 @@ impl WindowActivityDataSource {
         let props_out = Command::new("xprop")
             .args(["-id", &win_id, "WM_CLASS", "_NET_WM_NAME"])
             .output()
-            .map_err(|e| LifelogError::Io(e))?;
+            .map_err(LifelogError::Io)?;
         if !props_out.status.success() {
             return Err(LifelogError::Validation {
                 field: "window_activity.xprop".to_string(),
