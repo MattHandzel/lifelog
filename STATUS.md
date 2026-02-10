@@ -20,6 +20,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 - **Temporal OR Planning**: Query planner now supports `OR` over temporal operators (`WITHIN`/`DURING`/`OVERLAPS`) by converting boolean filters to a bounded DNF and unioning the resulting conjunctive plans.
 - **Union Deduplication**: Query executor now deduplicates UUID results across subplans in `MultiQuery` execution (important for OR/union queries).
 - **Collector Audio Source**: Collector now has an `AudioDataSource` that records fixed-duration chunks via CPAL, encodes them as WAV `AudioFrame`s, and WAL-buffers them for upload on stream_id `audio`.
+- **Collector Mouse Source**: Collector now has a `MouseDataSource` that samples cursor position and WAL-buffers `MouseFrame`s for upload on stream_id `mouse`; server ingest + `GetData` retrieval support the `Mouse` modality end-to-end.
 - **Durable ACK Gating**: `UploadChunks` only advances `Ack.acked_offset` when the backend marks the chunk as indexed/queryable (`upload_chunks.indexed=true`). Screen ingestion records store `frame_uuid` in `upload_chunks` and pin ACK until the OCR-derived record for that UUID has been persisted.
 - **Collector Config Hot-Reload**: Collector now applies `UpdateConfig` commands by parsing the JSON payload into `CollectorConfig` and restarting sources in-process (without dropping the ControlStream).
 - **Record Type Semantics**: Added explicit `record_type` (`Point` vs `Interval`) to frame protos and populated it in `GetData` responses.
@@ -50,7 +51,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 - **UI Integration**: Add query builder/templates for LLQL (and add richer previews in search/replay).
 - **Canonical Query (Spec §10.2)**: Extend validation to real ingest + OCR transform + Audio capture on a live collector (beyond the integration test seed data).
 - **Security**: Add pairing + auth, and enforce TLS.
-- **New Modalities**: Implement missing v1 collectors (mouse, window activity fallback), then gate keystrokes behind security controls.
+- **New Modalities**: Implement missing v1 collectors (window activity fallback), then gate keystrokes behind security controls.
 
 ## Blockers
 
