@@ -247,13 +247,22 @@ mod tests {
 
     #[test]
     fn parses_duration_units() {
-        assert_eq!(
-            parse_duration("250ms").unwrap(),
-            Duration::milliseconds(250)
-        );
-        assert_eq!(parse_duration("30s").unwrap(), Duration::seconds(30));
-        assert_eq!(parse_duration("5m").unwrap(), Duration::minutes(5));
-        assert_eq!(parse_duration("1h").unwrap(), Duration::hours(1));
+        assert!(matches!(
+            parse_duration("250ms"),
+            Ok(d) if d == Duration::milliseconds(250)
+        ));
+        assert!(matches!(
+            parse_duration("30s"),
+            Ok(d) if d == Duration::seconds(30)
+        ));
+        assert!(matches!(
+            parse_duration("5m"),
+            Ok(d) if d == Duration::minutes(5)
+        ));
+        assert!(matches!(
+            parse_duration("1h"),
+            Ok(d) if d == Duration::hours(1)
+        ));
         assert!(parse_duration("10").is_err());
     }
 
@@ -280,14 +289,11 @@ mod tests {
           }
         }"#;
 
-        let q = try_parse_llql(&[input.to_string()])
-            .unwrap()
-            .expect("expected llql to be parsed");
+        let parsed = try_parse_llql(&[input.to_string()]);
+        assert!(matches!(parsed, Ok(Some(_))));
+        let q = if let Ok(Some(q)) = parsed { q } else { return };
 
         assert_eq!(q.target, ast::StreamSelector::Modality("Audio".to_string()));
-        match q.filter {
-            ast::Expression::And(_, _) => {}
-            other => panic!("expected And expr, got: {other:?}"),
-        }
+        assert!(matches!(q.filter, ast::Expression::And(_, _)));
     }
 }
