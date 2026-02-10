@@ -17,6 +17,14 @@ export enum TimeQuality {
   UNRECOGNIZED = -1,
 }
 
+/** Explicit point vs interval semantics for correlation (Spec §4). */
+export enum RecordType {
+  RecordTypeUnknown = 0,
+  Point = 1,
+  Interval = 2,
+  UNRECOGNIZED = -1,
+}
+
 export enum BrowserHistoryType {
   Chrome = 0,
   Firefox = 1,
@@ -95,6 +103,7 @@ export interface BrowserFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface BrowserHistoryConfig {
@@ -115,6 +124,14 @@ export interface CameraConfig {
   timestampFormat: string;
 }
 
+export interface ClipboardConfig {
+  enabled: boolean;
+  interval: number;
+  outputDir: string;
+  /** Hard cap to avoid accidentally storing huge clipboard payloads. */
+  maxTextBytes: number;
+}
+
 export interface CollectorConfig {
   id: string;
   host: string;
@@ -128,6 +145,8 @@ export interface CollectorConfig {
   hyprland?: HyprlandConfig | undefined;
   weather?: WeatherConfig | undefined;
   wifi?: WifiConfig | undefined;
+  clipboard?: ClipboardConfig | undefined;
+  shellHistory?: ShellHistoryConfig | undefined;
 }
 
 export interface CollectorState {
@@ -228,6 +247,7 @@ export interface HyprlandFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface InputLoggerConfig {
@@ -282,6 +302,7 @@ export interface OcrFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface ProcessesConfig {
@@ -313,6 +334,7 @@ export interface ProcessFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface ScreenConfig {
@@ -335,6 +357,7 @@ export interface ScreenFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface CameraFrame {
@@ -350,6 +373,7 @@ export interface CameraFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface WeatherFrame {
@@ -364,6 +388,7 @@ export interface WeatherFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface AudioFrame {
@@ -379,6 +404,7 @@ export interface AudioFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface KeystrokeFrame {
@@ -392,6 +418,7 @@ export interface KeystrokeFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface ClipboardFrame {
@@ -405,6 +432,7 @@ export interface ClipboardFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface ShellHistoryFrame {
@@ -418,6 +446,17 @@ export interface ShellHistoryFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
+}
+
+export interface ShellHistoryConfig {
+  enabled: boolean;
+  interval: number;
+  outputDir: string;
+  /** Path to the shell history file (e.g. ~/.zsh_history or ~/.bash_history). */
+  historyFile: string;
+  /** "auto" (default), "zsh", or "bash" (best-effort parsing). */
+  shellType: string;
 }
 
 export interface WindowActivityFrame {
@@ -432,6 +471,7 @@ export interface WindowActivityFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export interface MouseFrame {
@@ -446,6 +486,7 @@ export interface MouseFrame {
   tCanonical?: Date | undefined;
   tEnd?: Date | undefined;
   timeQuality: TimeQuality;
+  recordType: RecordType;
 }
 
 export enum MouseFrame_MouseButton {
