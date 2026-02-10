@@ -16,6 +16,14 @@
       pkgs = import nixpkgs {
         inherit system;
         overlays = [(import rust-overlay)];
+        config = {
+          # SurrealDB is BSL-licensed and marked unfree in nixpkgs.
+          # We allowlist it so `nix develop` and e2e tests can run a real DB.
+          allowUnfreePredicate = pkg:
+            builtins.elem (nixpkgs.lib.getName pkg) [
+              "surrealdb"
+            ];
+        };
       };
 
       commonDeps = {
@@ -100,6 +108,12 @@
       pkgs = import nixpkgs {
         inherit system;
         overlays = [(import rust-overlay)];
+        config = {
+          allowUnfreePredicate = pkg:
+            builtins.elem (nixpkgs.lib.getName pkg) [
+              "surrealdb"
+            ];
+        };
       };
     in {
       default = pkgs.mkShell {
@@ -137,6 +151,7 @@
             sccache
             cargo-nextest
             bacon
+            surrealdb
           ]
           ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             linuxPackages.v4l2loopback
