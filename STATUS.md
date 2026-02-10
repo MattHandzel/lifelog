@@ -31,7 +31,7 @@ Phase 5: Polish & Architectural Cleanup (COMPLETED). Starting next logical featu
 ## What's Next
 
 - **IT-100 (Blob Separation)**: Ensure large payloads are strictly stored in CAS while metadata remains in SurrealDB.
-- **Canonical Query (Spec §10.2)**: Implement multi-stream `DURING(audio, browser+OCR predicate)` by assembling and intersecting time windows across streams.
+- **Canonical Query (Spec §10.2)**: Wire the UI to author and send typed cross-modal queries (LLQL/templates), then verify end-to-end with real Audio/Browser/OCR streams.
 - **UI Connectivity**: Verify frontend can consume the refactored `Query`/`GetData` API.
 - **New Modalities**: Re-enable and modernize `Hyprland` and `Microphone` capture modules.
 - **Security Audit**: Implement REQ-026 (Pairing) and REQ-025 (TLS Enforcement).

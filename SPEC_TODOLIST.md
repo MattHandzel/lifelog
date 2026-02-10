@@ -105,7 +105,7 @@ This is the **core differentiator** of the product and the biggest gap.
 | 5.7 | **Implement replay queries** | `[ ]` | No replay mode. Must return ordered steps: screen frames + aligned context from other streams (Spec §10.3). |
 | 5.8 | Replay semantics: point record `t_i` → interval `[t_i, t_{i+1})` | `[ ]` | Spec §10.3.1 — needed for frame-stepping UI |
 | 5.9 | Query resource limits (timeouts, max results) | `[ ]` | Spec §10.1: "bounded resource usage" |
-| 5.10 | User-facing query syntax (DSL or templates) | `[ ]` | AST exists internally but no parser from user text input |
+| 5.10 | User-facing query syntax (DSL or templates) | `[~]` | **LLQL JSON** supported via `Query.text` prefix (`llql:`/`llql-json:`) → typed AST (WITHIN/DURING). Still missing: “nice” human DSL, templates, and UI builder. |
 
 ### The Canonical Example That Must Work (Spec §10.2)
 

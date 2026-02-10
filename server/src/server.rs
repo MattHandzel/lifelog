@@ -289,7 +289,7 @@ impl Server {
         let mut keys: Vec<LifelogFrameKey> = vec![];
 
         let available_origins = get_origins_from_db(&self.db).await?;
-        let target_origins: Vec<DataOrigin> = if query_msg.search_origins.is_empty() {
+        let scoped_origins: Vec<DataOrigin> = if query_msg.search_origins.is_empty() {
             available_origins.clone()
         } else {
             let mut resolved = Vec::new();
@@ -313,7 +313,16 @@ impl Server {
             resolved
         };
 
-        for origin in target_origins {
+        // LLQL (JSON) escape hatch: allow the UI to execute typed cross-modal queries
+        // without changing the protobuf. Use `Query.text = ["llql:{...json...}"]`.
+        if let Some(ast_query) = crate::query::llql::try_parse_llql(&query_msg.text)? {
+            let plan = crate::query::planner::Planner::plan(&ast_query, &scoped_origins);
+            return crate::query::executor::execute(&self.db, plan)
+                .await
+                .map_err(|e| LifelogError::Database(format!("query execution failed: {e}")));
+        }
+
+        for origin in scoped_origins {
             let table = origin.get_table_name();
             let modality = origin.modality_name.clone();
 
