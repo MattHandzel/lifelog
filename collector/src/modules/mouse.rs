@@ -98,7 +98,9 @@ impl DataSource for MouseDataSource {
             match self.get_cursor_pos() {
                 Some((x, y)) => {
                     warned = false;
-                    let changed = last_pos.map(|(lx, ly)| (lx != x) || (ly != y)).unwrap_or(true);
+                    let changed = last_pos
+                        .map(|(lx, ly)| (lx != x) || (ly != y))
+                        .unwrap_or(true);
                     if changed {
                         let ts = to_pb_ts(Utc::now());
                         let frame = MouseFrame {

@@ -11,8 +11,8 @@ pub use server_config::*;
 // Re-export all config types from lifelog_types
 pub use lifelog_types::{
     AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, ClipboardConfig,
-    CollectorConfig, GeoConfig, HyprlandConfig, InputLoggerConfig, MicrophoneConfig, NetworkConfig,
-    MouseConfig, ProcessesConfig, ScreenConfig, ShellHistoryConfig, SystemConfig,
+    CollectorConfig, GeoConfig, HyprlandConfig, InputLoggerConfig, MicrophoneConfig, MouseConfig,
+    NetworkConfig, ProcessesConfig, ScreenConfig, ShellHistoryConfig, SystemConfig,
     SystemPerformanceConfig, TextUploadConfig, WeatherConfig, WifiConfig,
 };
 
