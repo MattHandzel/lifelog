@@ -8,11 +8,13 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 
 - `just check`
 - `just test` (nextest; integration tests requiring SurrealDB remain `#[ignore]`)
+- `nix develop --command cargo test -p lifelog-server --test canonical_llql_example -- --include-ignored`
 
 ## How To Verify (Target)
 
 - `just validate`
 - `nix develop --command cargo test -p lifelog-server --test ocr_pipeline -- --include-ignored`
+- `nix develop --command cargo test -p lifelog-server --test canonical_llql_example -- --include-ignored`
 
 ## What Changed Last
 
@@ -31,13 +33,14 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 - **Default Correlation Window**: Added `ServerConfig.default_correlation_window_ms` and wired temporal operators to fall back to it when a query omits a per-predicate window (LLQL supports omitting `window`).
 - **Query Resource Limits**: Added default resource bounds to query execution: `LIMIT 1000` on UUID-returning queries and a `10s` SurrealDB query timeout.
 - **Timeline Query Mode**: Timeline UI now submits `Query.text` as a string array and supports an LLQL mode (`llql:` / `llql-json:`) for cross-modal queries.
+- **Canonical LLQL Example Verified**: Added an ignored integration test that seeds Browser/OCR/Audio and runs the Spec §10.2 canonical query end-to-end via LLQL JSON.
 - **Performance Baselines**: Established throughput and latency benchmarks via `performance_suite.rs`.
 - **Improved Test Coverage**: Added unit tests for `DiskBuffer`, `TimeInterval`, `ReplayStep`, and config validation.
 
 ## What's Next
 
 - **UI Integration**: Add query builder/templates for LLQL (and add richer previews in search/replay).
-- **Canonical Query (Spec §10.2)**: Validate end-to-end with real ingest + OCR-derived stream + Audio capture.
+- **Canonical Query (Spec §10.2)**: Extend validation to real ingest + OCR transform + Audio capture on a live collector (beyond the integration test seed data).
 - **Security**: Add pairing + auth, and enforce TLS.
 - **New Modalities**: Implement missing v1 collectors (clipboard, shell, mouse, window activity), then gate keystrokes behind security controls.
 

@@ -22,12 +22,11 @@ Last updated: 2026-02-10
   - `[~]` `DURING(...)` implemented (two-stage plan; AND-only; supports multiple terms via interval intersection; window expansion for point sources)
   - `[x]` `OVERLAPS(...)` implemented (AST + planner + executor; currently planned/executed like `DURING(...)`)
   - `[x]` Interval-target overlap semantics (`t_canonical`/`t_end`) wired so `DURING(Audio, pointPredicate)` includes overlapping chunks
-- `[~]` Canonical cross-modal example (Spec §10.2)
+- `[x]` Canonical cross-modal example (Spec §10.2)
   - `DURING(audio, browser URL contains "youtube" AND OCR contains "3Blue1Brown")`
-  - Needs multi-stream predicate evaluation + interval intersection + audio overlap semantics
   - Implementation note: backend now supports executing this via LLQL JSON embedded in `Query.text` (`llql:`/`llql-json:`), assuming Audio/Browser/OCR streams exist.
-  - Progress: Timeline UI supports an LLQL mode to submit `llql:` / `llql-json:` queries.
-  - Remaining: templates/builder UX, and end-to-end validation with real ingest + OCR derived stream.
+  - Verified end-to-end via ignored integration test (`server/tests/canonical_llql_example.rs`) that seeds Browser/OCR/Audio and executes LLQL JSON through gRPC.
+  - Remaining (v1 UX): templates/builder UI, and validation with real collector ingest + OCR transform output.
 - `[x]` Replay queries (Spec §10.3)
   - Backend `Replay` RPC returns ordered steps with aligned context keys
   - Interface Replay view is wired to `Replay` (via Tauri gRPC client)
