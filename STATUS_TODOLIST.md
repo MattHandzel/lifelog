@@ -20,6 +20,9 @@ Last updated: 2026-02-10
 - `[x]` Blobs stored in CAS, not inline (Spec §6 / §8)
   - Screen/Camera/Audio blobs stored in CAS (`blob_hash` + `blob_size`)
   - Clipboard binary payloads (when present) are stored in CAS; SurrealDB stores only the reference
+- `[~]` Durable ACK implies queryable (Spec §6.2.1)
+  - `UploadChunks` ACK now advances only when the backend reports the chunk as indexed/queryable (`upload_chunks.indexed=true`)
+  - Remaining: include full-text index update and derived-index completion (OCR) in the ACK contract
 - `[x]` Query resource limits (Spec §10.1)
   - Default `LIMIT 1000` on UUID-returning queries
   - Default `10s` SurrealDB query timeout in the query executor

@@ -205,9 +205,26 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Ack>, Status> {
+        fn requires_indexing(stream_id: &str) -> bool {
+            matches!(
+                stream_id.to_lowercase().as_str(),
+                "screen"
+                    | "browser"
+                    | "processes"
+                    | "camera"
+                    | "audio"
+                    | "weather"
+                    | "hyprland"
+                    | "clipboard"
+                    | "shell_history"
+                    | "shellhistory"
+            )
+        }
+
         let mut stream = request.into_inner();
         let mut ingester: Option<ChunkIngester<SurrealIngestBackend>> = None;
         let mut last_stream: Option<lifelog_types::StreamIdentity> = None;
+        let mut stream_id_str: Option<String> = None;
         let mut last_acked_offset = 0;
 
         while let Some(chunk_result) = stream.next().await {
@@ -220,6 +237,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                     .as_ref()
                     .ok_or_else(|| Status::invalid_argument("missing stream identity"))?;
                 last_stream = Some(stream_id.clone());
+                stream_id_str = Some(stream_id.stream_id.clone());
 
                 let server = self.server.server.read().await;
                 let backend = SurrealIngestBackend {
@@ -243,7 +261,22 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                     .await
                 {
                     Ok(_) => {
-                        last_acked_offset = chunk.offset + chunk.data.len() as u64;
+                        // Spec §6.2.1: ACK implies "fully queryable" for modalities we index.
+                        // If indexing is not complete, keep ACK pinned to the last safe offset.
+                        let stream_name = stream_id_str.as_deref().unwrap_or_default();
+                        if requires_indexing(stream_name) {
+                            if ing.is_chunk_indexed(chunk.offset).await {
+                                last_acked_offset = chunk.offset + chunk.data.len() as u64;
+                            } else {
+                                tracing::warn!(
+                                    stream_id = %stream_name,
+                                    offset = chunk.offset,
+                                    "chunk persisted but not yet indexed; withholding ACK advance"
+                                );
+                            }
+                        } else {
+                            last_acked_offset = chunk.offset + chunk.data.len() as u64;
+                        }
                     }
                     Err(e) => {
                         tracing::error!("Ingest error: {}", e);
