@@ -55,3 +55,4 @@ Last updated: 2026-02-10
 - `[~]` UI: replay view + query builder/templates + previews
   - `[x]` Replay view
   - `[~]` Query authoring (LLQL mode in Timeline; templates/builder still missing)
+  - `[x]` Frontend build passes (`cd interface && npm run build`)

@@ -430,6 +430,8 @@ The interface is read-only in v1 (browsing, search, replay). It is served by the
 - desktop browser (primary),
 - phone browser (secondary).
 
+Implementation note: this repo’s UI is Vite + React + strict TypeScript; `npm run build` runs `tsc` first and must pass.
+
 ### 11.1 Core UI Features
 
 - Timeline navigation (jump by time, filter by modality/stream/device).

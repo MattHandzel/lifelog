@@ -46,6 +46,7 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 - **Performance Baselines**: Established throughput and latency benchmarks via `performance_suite.rs`.
 - **Improved Test Coverage**: Added unit tests for `DiskBuffer`, `TimeInterval`, `ReplayStep`, and config validation.
 - **Collector Window Activity Source**: Added a `WindowActivityDataSource` (stream_id `window_activity`) that emits interval frames and supports `"auto"` backend selection with Hyprland (`hyprctl`) and X11 (`xdotool`/`xprop`) fallbacks.
+- **Interface TypeScript Build Clean**: Fixed unused imports/types so `interface` passes `npm run build` (`tsc` + `vite build`).
 
 ## What's Next
 
