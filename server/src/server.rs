@@ -175,9 +175,18 @@ impl Server {
             .await
             .map_err(|e| LifelogError::Database(e.to_string()))?;
 
+        let db_user = std::env::var("LIFELOG_DB_USER").map_err(|_| LifelogError::Validation {
+            field: "LIFELOG_DB_USER".to_string(),
+            reason: "must be set (SurrealDB root username)".to_string(),
+        })?;
+        let db_pass = std::env::var("LIFELOG_DB_PASS").map_err(|_| LifelogError::Validation {
+            field: "LIFELOG_DB_PASS".to_string(),
+            reason: "must be set (SurrealDB root password)".to_string(),
+        })?;
+
         db.signin(Root {
-            username: "root",
-            password: "root",
+            username: &db_user,
+            password: &db_pass,
         })
         .await
         .map_err(|e| LifelogError::Database(e.to_string()))?;
