@@ -100,6 +100,15 @@ pub(crate) async fn transform_data_single(
                                 .content(record)
                                 .await;
 
+                            // Spec §6.2.1: durable ACK implies queryable, including derived outputs.
+                            // The ingest pipeline pins Screen chunk ACK until OCR for the same uuid exists.
+                            let _ = db
+                                .query(
+                                    "UPDATE upload_chunks SET indexed = true WHERE frame_uuid = $uuid AND (stream_id = 'screen' OR stream_id = 'Screen')",
+                                )
+                                .bind(("uuid", id.clone()))
+                                .await;
+
                             if let Some(ts) = screen_frame.timestamp {
                                 last_ts = Some(
                                     DateTime::<Utc>::from_timestamp(ts.seconds, ts.nanos as u32)

@@ -19,6 +19,11 @@ pub(crate) struct ChunkRecord {
     pub offset: u64,
     pub length: u64,
     pub hash: String,
+    /// UUID of the decoded frame payload (when the stream is a known modality).
+    #[serde(default)]
+    pub frame_uuid: Option<String>,
+    /// `true` means the chunk is fully queryable per Spec §6.2.1 (base record persisted and any
+    /// required async work such as derived transforms completed).
     pub indexed: bool,
 }
 
@@ -47,6 +52,10 @@ impl IngestBackend for SurrealIngestBackend {
         let db = self.db.clone();
         ensure_chunks_schema(&db).await.map_err(|e| e.to_string())?;
 
+        // `persisted_ok` means the typed record write succeeded (so the chunk isn't "lost").
+        // `indexed` means "fully queryable" (Spec §6.2.1).
+        let mut persisted_ok = false;
+        let mut frame_uuid: Option<String> = None;
         let mut indexed = false;
         let lower_stream_id = stream_id.to_lowercase();
 
@@ -62,6 +71,7 @@ impl IngestBackend for SurrealIngestBackend {
                     if ensure_table_schema(&db, &origin).await.is_ok() {
                         let table = origin.get_table_name();
                         let id = frame.uuid.clone();
+                        frame_uuid = Some(id.clone());
                         let mut record = frame.to_record();
                         let now: surrealdb::sql::Datetime = Utc::now().into();
 
@@ -88,6 +98,9 @@ impl IngestBackend for SurrealIngestBackend {
                         {
                             Ok(result) => {
                                 if result.is_some() {
+                                    persisted_ok = true;
+                                    // Most modalities are queryable as soon as the base record exists.
+                                    // (Derived transforms are handled separately.)
                                     indexed = true;
                                 } else {
                                     tracing::warn!(
@@ -132,6 +145,7 @@ impl IngestBackend for SurrealIngestBackend {
                     if ensure_table_schema(&db, &origin).await.is_ok() {
                         let table = origin.get_table_name();
                         let id = frame.uuid.clone();
+                        frame_uuid = Some(id.clone());
                         let mut record = frame.to_record();
                         record.blob_hash = blob_hash;
                         record.blob_size = frame.image_bytes.len() as u64;
@@ -163,7 +177,10 @@ impl IngestBackend for SurrealIngestBackend {
                         {
                             Ok(result) => {
                                 if result.is_some() {
-                                    indexed = true;
+                                    persisted_ok = true;
+                                    // Screen frames are not "fully queryable" until OCR (derived)
+                                    // records have been produced for this uuid.
+                                    indexed = false;
                                 }
                             }
                             Err(e) => {
@@ -211,6 +228,7 @@ impl IngestBackend for SurrealIngestBackend {
                     if ensure_table_schema(&db, &origin).await.is_ok() {
                         let table = origin.get_table_name();
                         let id = frame.uuid.clone();
+                        frame_uuid = Some(id.clone());
                         let mut record = frame.to_record();
                         record.blob_hash = blob_hash;
                         record.blob_size = frame.image_bytes.len() as u64;
@@ -242,6 +260,7 @@ impl IngestBackend for SurrealIngestBackend {
                         {
                             Ok(result) => {
                                 if result.is_some() {
+                                    persisted_ok = true;
                                     indexed = true;
                                 }
                             }
@@ -276,6 +295,7 @@ impl IngestBackend for SurrealIngestBackend {
                     if ensure_table_schema(&db, &origin).await.is_ok() {
                         let table = origin.get_table_name();
                         let id = frame.uuid.clone();
+                        frame_uuid = Some(id.clone());
                         let mut record = frame.to_record();
                         record.blob_hash = blob_hash;
                         record.blob_size = frame.audio_bytes.len() as u64;
@@ -314,6 +334,7 @@ impl IngestBackend for SurrealIngestBackend {
                         {
                             Ok(result) => {
                                 if result.is_some() {
+                                    persisted_ok = true;
                                     indexed = true;
                                 }
                             }
@@ -352,6 +373,7 @@ impl IngestBackend for SurrealIngestBackend {
                     if ensure_table_schema(&db, &origin).await.is_ok() {
                         let table = origin.get_table_name();
                         let id = frame.uuid.clone();
+                        frame_uuid = Some(id.clone());
                         let mut record = frame.to_record();
                         let now: surrealdb::sql::Datetime = Utc::now().into();
 
@@ -396,6 +418,7 @@ impl IngestBackend for SurrealIngestBackend {
                         {
                             Ok(result) => {
                                 if result.is_some() {
+                                    persisted_ok = true;
                                     indexed = true;
                                 } else {
                                     tracing::warn!(
@@ -426,11 +449,13 @@ impl IngestBackend for SurrealIngestBackend {
             }
             _ => {
                 tracing::debug!("No specific ingestion logic for stream_id: {}", stream_id);
+                // Unknown stream: we only store raw chunks, so treat it as immediately queryable
+                // (otherwise the ACK would never advance).
+                indexed = true;
             }
         }
 
-        // Spec §6.2.1: ACK implies "fully queryable". If we decoded a frame
-        // but failed to persist it (indexed=false), the collector must retry.
+        // If we decoded a frame but failed to persist it, the collector must retry.
         // Only skip indexing check when the stream type has no ingestion logic
         // (unknown stream_id) — those are stored as raw chunks only.
         let known_stream = matches!(
@@ -446,7 +471,7 @@ impl IngestBackend for SurrealIngestBackend {
                 | "shell_history"
                 | "shellhistory"
         );
-        if known_stream && !indexed {
+        if known_stream && !persisted_ok {
             return Err(format!(
                 "frame ingestion failed for stream '{}': metadata not persisted, ACK withheld",
                 stream_id
@@ -463,6 +488,7 @@ impl IngestBackend for SurrealIngestBackend {
             "offset": offset,
             "length": length,
             "hash": hash,
+            "frame_uuid": frame_uuid,
             "indexed": indexed,
         });
 
