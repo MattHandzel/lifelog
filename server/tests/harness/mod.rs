@@ -66,6 +66,11 @@ impl TestContext {
         // Wait for DB to be ready
         sleep(Duration::from_secs(5)).await;
 
+        // Integration tests run an ephemeral SurrealDB with root/root.
+        // The server requires these env vars (see server/src/server.rs).
+        std::env::set_var("LIFELOG_DB_USER", "root");
+        std::env::set_var("LIFELOG_DB_PASS", "root");
+
         let config = ServerConfig {
             host: "127.0.0.1".to_string(),
             port: server_port as u32,
