@@ -1,4 +1,5 @@
 use super::data_source::{BufferedSource, DataSource, DataSourceHandle};
+use crate::modules::audio::AudioDataSource;
 use crate::modules::browser_history::BrowserHistorySource;
 use crate::modules::camera::CameraDataSource;
 use crate::modules::clipboard::ClipboardDataSource;
@@ -20,8 +21,8 @@ use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
 use config::{
-    BrowserHistoryConfig, CameraConfig, ClipboardConfig, HyprlandConfig, ProcessesConfig,
-    ScreenConfig, ShellHistoryConfig, WeatherConfig,
+    BrowserHistoryConfig, CameraConfig, ClipboardConfig, HyprlandConfig, MicrophoneConfig,
+    ProcessesConfig, ScreenConfig, ShellHistoryConfig, WeatherConfig,
 };
 use lifelog_core::*;
 use lifelog_types::CollectorState;
@@ -380,6 +381,37 @@ impl Collector {
                 },
                 Err(e) => {
                     let err = LifelogError::SourceSetup("camera".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
+        if config
+            .microphone
+            .as_ref()
+            .map(|m| m.enabled)
+            .unwrap_or(false)
+        {
+            let config_clone = Arc::clone(&self.config);
+            match AudioDataSource::new(config_clone.microphone.clone().unwrap()) {
+                Ok(audio_source) => match audio_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<MicrophoneConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(audio_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("audio".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err = LifelogError::SourceSetup("audio".to_string(), e.to_string());
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = LifelogError::SourceSetup("audio".to_string(), e.to_string());
                     tracing::error!("{}", err);
                     setup_errors.push(err);
                 }
