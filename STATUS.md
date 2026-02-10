@@ -2,14 +2,11 @@
 
 ## Current Objective
 
-Phase 5: Polish & Architectural Cleanup (COMPLETED). Starting next logical feature set (e.g., UI refinement or new modalities).
+Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 
 ## Last Verified
 
-- `just validate` (fmt + check + clippy + test)
-- `ocr_pipeline` integration test
-- `cross_modal_query` integration test
-- `performance_suite` (established baselines)
+- `just validate` (fmt + check + clippy + unit tests; integration tests requiring SurrealDB remain `#[ignore]`)
 
 ## How To Verify (Target)
 
@@ -25,16 +22,18 @@ Phase 5: Polish & Architectural Cleanup (COMPLETED). Starting next logical featu
 - **Cross-Modal Search**: Successfully implemented and verified unified search across different data sources (Screen, Browser).
 - **Cross-Modal Correlation**: Added `DURING(...)` support as a two-stage query plan (source intervals -> target time-window filter) alongside `WITHIN(...)`.
 - **DURING Enhancements**: `DURING(...)` now supports an explicit window expansion for point sources and conjunction of multiple `DURING(...)` terms via interval intersection.
+- **Interval Overlap Semantics**: Added `t_end` metadata and updated temporal joins so interval targets (notably Audio) use overlap semantics (`t_canonical`/`t_end`) instead of “start timestamp only”.
+- **OVERLAPS Operator**: Added `OVERLAPS(...)` to the typed query AST/LLQL and wired it through planner/executor (currently equivalent to `DURING(...)` execution).
+- **Replay Backend**: Added a `Replay` gRPC RPC that returns ordered screen-granularity steps plus aligned context keys (UI integration pending).
 - **Performance Baselines**: Established throughput and latency benchmarks via `performance_suite.rs`.
 - **Improved Test Coverage**: Added unit tests for `DiskBuffer`, `TimeInterval`, `ReplayStep`, and config validation.
 
 ## What's Next
 
-- **IT-100 (Blob Separation)**: Ensure large payloads are strictly stored in CAS while metadata remains in SurrealDB.
-- **Canonical Query (Spec §10.2)**: Wire the UI to author and send typed cross-modal queries (LLQL/templates), then verify end-to-end with real Audio/Browser/OCR streams.
-- **UI Connectivity**: Verify frontend can consume the refactored `Query`/`GetData` API.
-- **New Modalities**: Re-enable and modernize `Hyprland` and `Microphone` capture modules.
-- **Security Audit**: Implement REQ-026 (Pairing) and REQ-025 (TLS Enforcement).
+- **UI Integration**: Add query builder/templates for LLQL and wire Replay view to call `Replay`.
+- **Canonical Query (Spec §10.2)**: Validate end-to-end with real ingest + OCR-derived stream + Audio capture.
+- **Security**: Remove hardcoded DB credentials, add pairing + auth, and enforce TLS.
+- **New Modalities**: Implement missing v1 collectors (clipboard, shell, mouse, window activity), then gate keystrokes behind security controls.
 
 ## Blockers
 

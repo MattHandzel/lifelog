@@ -518,13 +518,11 @@ impl Server {
         if steps.is_empty() || req.context_origins.is_empty() {
             let proto_steps = steps
                 .into_iter()
-                .filter_map(|s| {
-                    Some(lifelog_types::ReplayStep {
-                        start: lifelog_types::to_pb_ts(s.start),
-                        end: lifelog_types::to_pb_ts(s.end),
-                        screen_key: Some(lifelog_types::LifelogDataKey::from(s.screen_key)),
-                        context_keys: Vec::new(),
-                    })
+                .map(|s| lifelog_types::ReplayStep {
+                    start: lifelog_types::to_pb_ts(s.start),
+                    end: lifelog_types::to_pb_ts(s.end),
+                    screen_key: Some(lifelog_types::LifelogDataKey::from(s.screen_key)),
+                    context_keys: Vec::new(),
                 })
                 .collect();
             return Ok(lifelog_types::ReplayResponse { steps: proto_steps });
