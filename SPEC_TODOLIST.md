@@ -79,8 +79,8 @@ Priority tiers:
 
 | # | Task | Priority | Status | Notes |
 |---|------|----------|--------|-------|
-| 4.1 | Separate blobs to CAS (don't store inline in SurrealDB) | P0 | `[ ]` | `FsCas` exists in `utils/cas.rs` but blobs stored inline. Store hash+codec+size reference instead of raw bytes. |
-| 4.2 | Define & create text search indexes | P0 | `[ ]` | Spec §6.2.1: OCR text, browser URL/title, clipboard, shell, keystrokes. No `DEFINE ANALYZER` or `SEARCH INDEX` in `schema.rs`. |
+| 4.1 | Separate blobs to CAS (don't store inline in SurrealDB) | P0 | `[~]` | Screen/Camera/Audio blobs are stored in CAS with `blob_hash` + `blob_size`. Clipboard `binary_data` is still stored inline (needs CAS ref if used). |
+| 4.2 | Define & create text search indexes | P0 | `[x]` | `schema.rs` defines `lifelog_text` analyzer + BM25 search indexes for OCR text, browser URL/title, clipboard text, shell commands, and keystrokes. |
 | 4.3 | Durable ACK = metadata + blobs + indexes all persisted | P0 | `[~]` | ACK fires after metadata write. Must wait for text index update too (Spec §6.2.1). |
 | 4.4 | Idempotent chunk writes with dedup key | P1 | `[x]` | `(collector_id, stream_id, session_id, offset)` used |
 | 4.5 | Catalog table for origin registry | P1 | `[x]` | `catalog` table avoids `INFO FOR DB` |
@@ -99,8 +99,8 @@ This is the **core differentiator** of the product and the biggest gap.
 | 5.1 | Query AST with boolean logic + stream selectors | `[x]` | `server/src/query/ast.rs` — complete |
 | 5.2 | `Contains`, `Eq`, `TimeRange` operators compile to SQL | `[x]` | `planner.rs` generates SurrealDB SQL |
 | 5.3 | Origin resolution from catalog | `[x]` | Planner resolves `StreamSelector` → `DataOrigin` list |
-| 5.4 | **Implement `WITHIN(A, B, ±Δt)` operator** | `[ ]` | Currently compiles to `false`. Requires multi-stage plan: query B for matching timestamps, then query A within Δt of those timestamps. |
-| 5.5 | **Implement `DURING(A, predicate)` operator** | `[ ]` | Currently compiles to `false`. Requires: evaluate predicate over other streams → time windows → filter A. |
+| 5.4 | **Implement `WITHIN(A, B, ±Δt)` operator** | `[~]` | Implemented as a two-stage plan (source timestamps -> target time-window filter). Current limits: one WITHIN term, AND-only, no nested temporal ops inside predicate. |
+| 5.5 | **Implement `DURING(A, predicate)` operator** | `[~]` | Implemented as a two-stage plan (source intervals -> target time-window filter). Current limits: one DURING term, AND-only, predicate applies to a single source stream; canonical multi-stream DURING remains. |
 | 5.6 | **Implement `OVERLAPS(intervalA, intervalB)` operator** | `[ ]` | Not in AST yet. Requires interval semantics. |
 | 5.7 | **Implement replay queries** | `[ ]` | No replay mode. Must return ordered steps: screen frames + aligned context from other streams (Spec §10.3). |
 | 5.8 | Replay semantics: point record `t_i` → interval `[t_i, t_{i+1})` | `[ ]` | Spec §10.3.1 — needed for frame-stepping UI |
@@ -115,7 +115,7 @@ Retrieve audio during times when:
   - OCR text contains "3Blue1Brown"
 ```
 
-**Current status: CANNOT execute.** The `DURING` operator is stubbed. This requires:
+**Current status: NOT YET.** Basic `DURING` exists, but the canonical example needs predicate evaluation across multiple streams (browser + OCR) and interval assembly/intersection. This requires:
 1. Query browser stream for records where URL contains "youtube" → get time windows
 2. Query OCR stream for records where text contains "3Blue1Brown" → get time windows
 3. Intersect the two time window sets
