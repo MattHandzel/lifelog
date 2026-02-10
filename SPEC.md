@@ -253,7 +253,7 @@ Collectors -> Backend:
 
 Backend -> Collectors (via control channel):
 
-- `PushConfig`: deliver configuration updates; collector must acknowledge apply.
+- `UpdateConfig`: deliver configuration updates; collector must apply without restart and acknowledge apply.
 - `BeginUploadSession`: instruct collector to upload specific streams and time ranges.
 - `PauseCapture` / `ResumeCapture`: minimal safety rail.
 
