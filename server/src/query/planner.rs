@@ -98,11 +98,11 @@ impl Planner {
                         let has_within = temporal_terms
                             .iter()
                             .any(|t| matches!(t, TemporalTerm::Within(_)));
-                        let has_during = temporal_terms
-                            .iter()
-                            .any(|t| matches!(t, TemporalTerm::During(_)));
+                        let has_interval_terms = temporal_terms.iter().any(|t| {
+                            matches!(t, TemporalTerm::During(_) | TemporalTerm::Overlaps(_))
+                        });
 
-                        if has_within && has_during {
+                        if has_within && has_interval_terms {
                             return ExecutionPlan::Unsupported(
                                 "Mixing WITHIN and DURING in a single query is not supported yet"
                                     .to_string(),
@@ -149,7 +149,7 @@ impl Planner {
                                     .map(|source_origin| {
                                         let source_table = source_origin.get_table_name();
                                         let sql = format!(
-                                            "SELECT timestamp FROM `{}` WHERE {} ORDER BY timestamp DESC LIMIT {};",
+                                            "SELECT t_canonical FROM `{}` WHERE {} ORDER BY t_canonical DESC LIMIT {};",
                                             source_table, source_where, DEFAULT_MAX_SOURCE_TIMESTAMPS
                                         );
                                         WithinSourcePlan {
@@ -170,11 +170,16 @@ impl Planner {
                                     max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
                                 }
                         } else {
-                            // DURING terms: build one interval set per term, then intersect at execution time.
+                            // DURING/OVERLAPS terms: build one interval set per term, then intersect at execution time.
                             let mut during_terms = Vec::new();
                             for t in temporal_terms {
-                                let TemporalTerm::During(during) = t else {
-                                    return ExecutionPlan::Unsupported("invalid temporal term".to_string());
+                                let during = match t {
+                                    TemporalTerm::During(d) | TemporalTerm::Overlaps(d) => d,
+                                    TemporalTerm::Within(_) => {
+                                        return ExecutionPlan::Unsupported(
+                                            "invalid temporal term".to_string(),
+                                        )
+                                    }
                                 };
 
                                 let source_origins =
@@ -197,10 +202,8 @@ impl Planner {
                                     .into_iter()
                                     .map(|source_origin| {
                                         let source_table = source_origin.get_table_name();
-                                        // `duration_secs` may not exist for all modalities.
-                                        // Missing fields deserialize as NULL, which the executor treats as 0.
                                         let sql = format!(
-                                            "SELECT timestamp, duration_secs FROM `{}` WHERE {} ORDER BY timestamp DESC LIMIT {};",
+                                            "SELECT t_canonical, t_end FROM `{}` WHERE {} ORDER BY t_canonical DESC LIMIT {};",
                                             source_table, source_where, DEFAULT_MAX_SOURCE_INTERVALS
                                         );
                                         DuringSourcePlan {
@@ -265,13 +268,14 @@ impl Planner {
             Expression::TimeRange(start, end) => {
                 // SurrealDB datetime format
                 format!(
-                    "timestamp >= d'{}' AND timestamp < d'{}'",
+                    "t_canonical >= d'{}' AND t_canonical < d'{}'",
                     start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
                     end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
                 )
             }
             Expression::Within { .. } => "false /* WITHIN handled at plan level */".to_string(),
             Expression::During { .. } => "false /* DURING handled at plan level */".to_string(),
+            Expression::Overlaps { .. } => "false /* OVERLAPS handled at plan level */".to_string(),
         }
     }
 
@@ -313,10 +317,21 @@ impl Planner {
                         window: *window,
                     }));
                 }
+                Expression::Overlaps {
+                    stream,
+                    predicate,
+                    window,
+                } => {
+                    temporal_terms.push(TemporalTerm::Overlaps(DuringTerm {
+                        stream: stream.clone(),
+                        predicate: (**predicate).clone(),
+                        window: *window,
+                    }));
+                }
                 Expression::Or(..) | Expression::Not(..) => {
                     if Self::contains_temporal_ops(node) {
                         return Err(
-                            "Temporal joins (WITHIN/DURING) are only supported under conjunctions (AND), not OR/NOT"
+                            "Temporal joins (WITHIN/DURING/OVERLAPS) are only supported under conjunctions (AND), not OR/NOT"
                                 .to_string(),
                         );
                     }
@@ -331,7 +346,9 @@ impl Planner {
 
     fn contains_temporal_ops(expr: &Expression) -> bool {
         match expr {
-            Expression::Within { .. } | Expression::During { .. } => true,
+            Expression::Within { .. } | Expression::During { .. } | Expression::Overlaps { .. } => {
+                true
+            }
             Expression::And(l, r) | Expression::Or(l, r) => {
                 Self::contains_temporal_ops(l) || Self::contains_temporal_ops(r)
             }
@@ -414,6 +431,7 @@ struct DuringTerm {
 enum TemporalTerm {
     Within(WithinTerm),
     During(DuringTerm),
+    Overlaps(DuringTerm),
 }
 
 #[cfg(test)]

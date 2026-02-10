@@ -34,11 +34,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD mime_type   ON `{table}` TYPE string;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
         "#,
     },
     TableSchema {
@@ -51,11 +53,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD visit_count ON `{table}` TYPE int;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
             DEFINE INDEX `{table}_url_search` ON `{table}` FIELDS url SEARCH ANALYZER lifelog_text BM25;
             DEFINE INDEX `{table}_title_search` ON `{table}` FIELDS title SEARCH ANALYZER lifelog_text BM25;
         "#,
@@ -68,11 +72,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD text      ON `{table}` TYPE string;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
             DEFINE INDEX `{table}_text_search` ON `{table}` FIELDS text SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
@@ -89,11 +95,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD duration_secs ON `{table}` TYPE float;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
         "#,
     },
     TableSchema {
@@ -106,11 +114,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD window_title ON `{table}` TYPE string;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
             DEFINE INDEX `{table}_text_search` ON `{table}` FIELDS text SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
@@ -124,11 +134,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD mime_type   ON `{table}` TYPE string;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
             DEFINE INDEX `{table}_text_search` ON `{table}` FIELDS text SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
@@ -142,11 +154,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD exit_code   ON `{table}` TYPE int;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
             DEFINE INDEX `{table}_command_search` ON `{table}` FIELDS command SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
@@ -161,11 +175,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD duration_secs ON `{table}` TYPE float;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
             DEFINE INDEX `{table}_title_search` ON `{table}` FIELDS window_title SEARCH ANALYZER lifelog_text BM25;
         "#,
     },
@@ -178,11 +194,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD button_mask    ON `{table}` TYPE int;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
         "#,
     },
     TableSchema {
@@ -193,11 +211,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD processes   ON `{table}` TYPE array;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
         "#,
     },
     TableSchema {
@@ -213,11 +233,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD device      ON `{table}` TYPE string;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
         "#,
     },
     TableSchema {
@@ -231,11 +253,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD conditions  ON `{table}` TYPE string;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
         "#,
     },
     TableSchema {
@@ -251,11 +275,13 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD cursor            ON `{table}` TYPE option<object>;
             DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
             DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
             DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
         "#,
         indexes_ddl: r#"
             DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
             DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
         "#,
     },
 ];

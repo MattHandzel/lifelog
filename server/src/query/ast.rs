@@ -55,6 +55,18 @@ pub enum Expression {
         /// this acts as a ±window around the timestamp.
         window: Duration,
     },
+
+    /// `OVERLAPS(Target, Condition)`: Like `DURING`, but explicitly expresses interval overlap
+    /// semantics for interval targets (e.g. Audio chunks).
+    ///
+    /// The engine treats point targets as zero-length intervals.
+    Overlaps {
+        stream: StreamSelector,
+        predicate: Box<Expression>,
+        /// Expansion window applied to source intervals. For point source records (no duration),
+        /// this acts as a ±window around the timestamp.
+        window: Duration,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

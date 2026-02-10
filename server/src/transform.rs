@@ -74,6 +74,7 @@ pub(crate) async fn transform_data_single(
                             let now: surrealdb::sql::Datetime = chrono::Utc::now().into();
                             record.t_ingest = Some(now);
                             record.t_canonical = Some(record.timestamp.clone());
+                            record.t_end = record.t_canonical.clone();
                             record.time_quality = Some("derived".to_string());
 
                             // Ensure destination table exists
