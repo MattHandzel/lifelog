@@ -173,6 +173,7 @@ async fn test_during_returns_target_records_inside_source_intervals() {
                 "codec".to_string(),
                 ast::Value::String("pcm".to_string()),
             )),
+            window: Duration::seconds(0),
         },
     };
 
@@ -190,5 +191,205 @@ async fn test_during_returns_target_records_inside_source_intervals() {
     assert!(
         !keys_str.contains(&out_uuid),
         "Did not expect screen record outside pcm audio interval to match"
+    );
+}
+
+#[tokio::test]
+#[ignore = "integration test: requires SurrealDB"]
+async fn test_during_conjunction_intersects_intervals() {
+    let _ = tracing_subscriber::fmt::try_init();
+
+    let ctx = TestContext::new().await;
+    let mut client = ctx.client();
+
+    let collector_id = "test-collector";
+    let session_id = 1u64;
+
+    let base = Utc::now() - Duration::minutes(5);
+
+    // Screen points: one outside intersection, one inside intersection.
+    let screen_stream = lifelog_types::StreamIdentity {
+        collector_id: collector_id.to_string(),
+        stream_id: "screen".to_string(),
+        session_id,
+    };
+
+    let outside_uuid = lifelog_core::Uuid::new_v4().to_string();
+    let outside_screen = ScreenFrame {
+        uuid: outside_uuid.clone(),
+        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(2)).unwrap()),
+        width: 100,
+        height: 100,
+        image_bytes: vec![0; 10],
+        mime_type: "image/jpeg".to_string(),
+    };
+    let mut outside_buf = Vec::new();
+    outside_screen.encode(&mut outside_buf).unwrap();
+
+    let inside_uuid = lifelog_core::Uuid::new_v4().to_string();
+    let inside_screen = ScreenFrame {
+        uuid: inside_uuid.clone(),
+        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(7)).unwrap()),
+        width: 100,
+        height: 100,
+        image_bytes: vec![0; 10],
+        mime_type: "image/jpeg".to_string(),
+    };
+    let mut inside_buf = Vec::new();
+    inside_screen.encode(&mut inside_buf).unwrap();
+
+    let outside_chunk = lifelog_types::Chunk {
+        stream: Some(screen_stream.clone()),
+        offset: 0,
+        data: outside_buf,
+        hash: utils::cas::sha256_hex(&[]),
+    };
+    let outside_chunk = lifelog_types::Chunk {
+        hash: utils::cas::sha256_hex(&outside_chunk.data),
+        ..outside_chunk
+    };
+
+    let inside_offset = outside_chunk.data.len() as u64;
+    let inside_chunk = lifelog_types::Chunk {
+        stream: Some(screen_stream),
+        offset: inside_offset,
+        data: inside_buf,
+        hash: utils::cas::sha256_hex(&[]),
+    };
+    let inside_chunk = lifelog_types::Chunk {
+        hash: utils::cas::sha256_hex(&inside_chunk.data),
+        ..inside_chunk
+    };
+
+    client
+        .upload_chunks(tokio_stream::iter(vec![outside_chunk, inside_chunk]))
+        .await
+        .expect("Ingest screen failed");
+
+    // Audio intervals:
+    // - pcm: [base, base+10]
+    // - aac: [base+5, base+15]
+    // intersection: [base+5, base+10]
+    let audio_stream = lifelog_types::StreamIdentity {
+        collector_id: collector_id.to_string(),
+        stream_id: "audio".to_string(),
+        session_id,
+    };
+
+    let pcm = AudioFrame {
+        uuid: lifelog_core::Uuid::new_v4().to_string(),
+        timestamp: Some(lifelog_types::to_pb_ts(base).unwrap()),
+        audio_bytes: vec![1; 10],
+        codec: "pcm".to_string(),
+        sample_rate: 48000,
+        channels: 1,
+        duration_secs: 10.0,
+    };
+    let mut pcm_buf = Vec::new();
+    pcm.encode(&mut pcm_buf).unwrap();
+
+    let aac = AudioFrame {
+        uuid: lifelog_core::Uuid::new_v4().to_string(),
+        timestamp: Some(lifelog_types::to_pb_ts(base + Duration::seconds(5)).unwrap()),
+        audio_bytes: vec![2; 10],
+        codec: "aac".to_string(),
+        sample_rate: 48000,
+        channels: 1,
+        duration_secs: 10.0,
+    };
+    let mut aac_buf = Vec::new();
+    aac.encode(&mut aac_buf).unwrap();
+
+    let pcm_chunk = lifelog_types::Chunk {
+        stream: Some(audio_stream.clone()),
+        offset: 0,
+        data: pcm_buf,
+        hash: utils::cas::sha256_hex(&[]),
+    };
+    let pcm_chunk = lifelog_types::Chunk {
+        hash: utils::cas::sha256_hex(&pcm_chunk.data),
+        ..pcm_chunk
+    };
+
+    let aac_offset = pcm_chunk.data.len() as u64;
+    let aac_chunk = lifelog_types::Chunk {
+        stream: Some(audio_stream),
+        offset: aac_offset,
+        data: aac_buf,
+        hash: utils::cas::sha256_hex(&[]),
+    };
+    let aac_chunk = lifelog_types::Chunk {
+        hash: utils::cas::sha256_hex(&aac_chunk.data),
+        ..aac_chunk
+    };
+
+    client
+        .upload_chunks(tokio_stream::iter(vec![pcm_chunk, aac_chunk]))
+        .await
+        .expect("Ingest audio failed");
+
+    tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+
+    let db = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(&ctx.db_addr)
+        .await
+        .expect("DB Connect failed");
+    db.signin(surrealdb::opt::auth::Root {
+        username: "root",
+        password: "root",
+    })
+    .await
+    .expect("DB Signin failed");
+    db.use_ns("lifelog")
+        .use_db("test_db")
+        .await
+        .expect("DB Select failed");
+
+    let screen_origin = DataOrigin::new(
+        DataOriginType::DeviceId(collector_id.to_string()),
+        "Screen".to_string(),
+    );
+    let audio_origin = DataOrigin::new(
+        DataOriginType::DeviceId(collector_id.to_string()),
+        "Audio".to_string(),
+    );
+
+    let filter = ast::Expression::And(
+        Box::new(ast::Expression::During {
+            stream: ast::StreamSelector::StreamId(audio_origin.get_table_name()),
+            predicate: Box::new(ast::Expression::Eq(
+                "codec".to_string(),
+                ast::Value::String("pcm".to_string()),
+            )),
+            window: Duration::seconds(0),
+        }),
+        Box::new(ast::Expression::During {
+            stream: ast::StreamSelector::StreamId(audio_origin.get_table_name()),
+            predicate: Box::new(ast::Expression::Eq(
+                "codec".to_string(),
+                ast::Value::String("aac".to_string()),
+            )),
+            window: Duration::seconds(0),
+        }),
+    );
+
+    let query = ast::Query {
+        target: ast::StreamSelector::StreamId(screen_origin.get_table_name()),
+        filter,
+    };
+
+    let plan = planner::Planner::plan(&query, &[screen_origin.clone(), audio_origin.clone()]);
+    let keys = executor::execute(&db, plan)
+        .await
+        .expect("DURING conjunction query execution failed");
+
+    let keys_str: Vec<String> = keys.iter().map(|k| k.uuid.to_string()).collect();
+
+    assert!(
+        keys_str.contains(&inside_uuid),
+        "Expected screen record inside pcm∩aac intersection to match"
+    );
+    assert!(
+        !keys_str.contains(&outside_uuid),
+        "Did not expect screen record outside intersection to match"
     );
 }

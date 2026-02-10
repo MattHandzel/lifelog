@@ -51,6 +51,9 @@ pub enum Expression {
     During {
         stream: StreamSelector,
         predicate: Box<Expression>,
+        /// Expansion window applied to source intervals. For point source records (no duration),
+        /// this acts as a ±window around the timestamp.
+        window: Duration,
     },
 }
 
