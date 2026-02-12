@@ -2,6 +2,7 @@ pub mod assertions;
 pub mod device_client;
 pub mod event_gen;
 pub mod fault_layer;
+pub mod simulated_modalities;
 
 use config::ServerConfig;
 use fault_layer::{FaultController, FaultInjectionLayer};

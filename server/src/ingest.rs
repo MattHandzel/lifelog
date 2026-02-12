@@ -208,6 +208,68 @@ impl IngestBackend for SurrealIngestBackend {
                     DataModality::Mouse
                 );
             }
+            "window_activity" | "windowactivity" => {
+                if let Ok(frame) = lifelog_types::WindowActivityFrame::decode(payload) {
+                    let origin = DataOrigin::new(
+                        DataOriginType::DeviceId(collector_id.to_string()),
+                        DataModality::WindowActivity.as_str_name().to_string(),
+                    );
+
+                    if ensure_table_schema(&db, &origin).await.is_ok() {
+                        let table = origin.get_table_name();
+                        let id = frame.uuid.clone();
+                        frame_uuid = Some(id.clone());
+                        let mut record = frame.to_record();
+                        let now: surrealdb::sql::Datetime = Utc::now().into();
+
+                        // Get skew estimate for this collector
+                        let skew_est = self.skew_estimates.read().await.get(collector_id).copied();
+
+                        // Apply skew estimate to t_canonical
+                        let t_device_dt: chrono::DateTime<chrono::Utc> = record.timestamp.0;
+                        let (t_canonical_dt, quality_str) = match skew_est {
+                            Some(est) => (
+                                est.apply(t_device_dt),
+                                est.time_quality.as_str().to_string(),
+                            ),
+                            None => (t_device_dt, "unknown".to_string()),
+                        };
+
+                        record.t_ingest = Some(now.clone());
+                        record.t_canonical = Some(t_canonical_dt.into());
+                        // Interval end from duration_secs; fallback to point semantics.
+                        let dur_ms =
+                            if record.duration_secs.is_finite() && record.duration_secs > 0.0 {
+                                (record.duration_secs as f64 * 1000.0).round() as i64
+                            } else {
+                                0
+                            };
+                        let t_end_dt = t_canonical_dt + chrono::Duration::milliseconds(dur_ms);
+                        record.t_end = Some(t_end_dt.into());
+                        record.time_quality = Some(quality_str);
+
+                        match db
+                            .upsert::<Option<lifelog_types::WindowActivityRecord>>((&table, &id))
+                            .content(record)
+                            .await
+                        {
+                            Ok(result) => {
+                                if result.is_some() {
+                                    persisted_ok = true;
+                                    indexed = true;
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    id = %id,
+                                    error = %e,
+                                    "WindowActivity frame ingestion failed"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
             "keystrokes" | "keyboard" => {
                 ingest_frame!(
                     lifelog_types::KeystrokeFrame,
@@ -403,7 +465,9 @@ impl IngestBackend for SurrealIngestBackend {
                             };
                             record.blob_hash = blob_hash;
                             record.blob_size = frame.binary_data.len() as u64;
-                            record.binary_data.clear();
+                            // Keep raw bytes populated for type compatibility in SurrealDB bytes
+                            // field serialization; retrieval still prefers CAS when blob_hash is set.
+                            record.binary_data = frame.binary_data.clone();
                         }
 
                         // Get skew estimate for this collector
@@ -476,6 +540,8 @@ impl IngestBackend for SurrealIngestBackend {
             lower_stream_id.as_str(),
             "screen"
                 | "browser"
+                | "window_activity"
+                | "windowactivity"
                 | "keystrokes"
                 | "keyboard"
                 | "processes"

@@ -316,6 +316,26 @@ mod helpers {
     }
 
     #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct WindowActivityRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub application: String,
+        pub window_title: String,
+        pub focused: bool,
+        pub duration_secs: f32,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        /// Canonical end time for interval semantics. For interval records, this is the end time.
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
+    }
+
+    #[cfg(feature = "surrealdb")]
     impl ToRecord for ScreenFrame {
         type Record = ScreenRecord;
         fn to_record(&self) -> Self::Record {
@@ -534,6 +554,25 @@ mod helpers {
                 y: self.y,
                 button: self.button,
                 pressed: self.pressed,
+                t_ingest: None,
+                t_canonical: None,
+                t_end: None,
+                time_quality: None,
+            }
+        }
+    }
+
+    #[cfg(feature = "surrealdb")]
+    impl ToRecord for WindowActivityFrame {
+        type Record = WindowActivityRecord;
+        fn to_record(&self) -> Self::Record {
+            WindowActivityRecord {
+                uuid: self.uuid.clone(),
+                timestamp: to_dt(self.timestamp).into(),
+                application: self.application.clone(),
+                window_title: self.window_title.clone(),
+                focused: self.focused,
+                duration_secs: self.duration_secs,
                 t_ingest: None,
                 t_canonical: None,
                 t_end: None,

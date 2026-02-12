@@ -287,13 +287,33 @@ pub(crate) async fn get_data_by_key(
             })
         }
         DataModality::WindowActivity => {
-            let mut frame: lifelog_types::WindowActivityFrame = db
+            let frame_record: lifelog_types::WindowActivityRecord = db
                 .select((&table, &*id))
                 .await
                 .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
                 .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
-            frame.uuid = key.uuid.to_string();
-            frame.record_type = lifelog_types::RecordType::Interval as i32;
+
+            let frame = lifelog_types::WindowActivityFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                application: frame_record.application,
+                window_title: frame_record.window_title,
+                focused: frame_record.focused,
+                duration_secs: frame_record.duration_secs,
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
+                record_type: lifelog_types::RecordType::Interval as i32,
+            };
             Ok(lifelog_types::LifelogData {
                 payload: Some(lifelog_types::lifelog_data::Payload::Windowactivityframe(
                     frame,

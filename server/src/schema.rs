@@ -130,7 +130,7 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE FIELD uuid        ON `{table}` TYPE string;
             DEFINE FIELD timestamp   ON `{table}` TYPE datetime;
             DEFINE FIELD text        ON `{table}` TYPE string;
-            DEFINE FIELD binary_data ON `{table}` TYPE bytes;
+            DEFINE FIELD binary_data ON `{table}` TYPE array<int>;
             DEFINE FIELD blob_hash   ON `{table}` TYPE string;
             DEFINE FIELD blob_size   ON `{table}` TYPE int;
             DEFINE FIELD mime_type   ON `{table}` TYPE string;
