@@ -1,0 +1,52 @@
+id = "laptop"
+host = "127.0.0.1"
+port = 7190
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+[browser]
+enabled = true
+input_file = "~/.config/google-chrome/Default/History"
+output_file = "/home/matth/lifelog/browser"
+browser_type = "chrome"
+
+[screen]
+enabled = true
+interval = 10.0
+output_dir = "/home/matth/lifelog/screen"
+program = "gnome-screenshot"
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+[camera]
+enabled = false
+interval = 10.0
+output_dir = "/home/matth/lifelog_camera"
+device = "/dev/video0"
+resolution_x = 640
+resolution_y = 480
+fps = 30
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+[microphone]
+enabled = false
+output_dir = "/home/matth/lifelog/microphone"
+sample_rate = 44100
+chunk_duration_secs = 300
+timestamp_format = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+bits_per_sample = 16
+channels = 2
+capture_interval_secs = 300
+
+[processes]
+enabled = false
+interval = 60.0
+output_dir = "/home/matth/lifelog/processes"
+
+[hyprland]
+enabled = false
+interval = 1.0
+output_dir = "/home/matth/lifelog_hyprland"
+log_clients = true
+log_activewindow = true
+log_workspace = true
+log_active_monitor = true
+log_devices = true

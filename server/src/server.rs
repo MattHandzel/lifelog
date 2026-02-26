@@ -50,6 +50,10 @@ pub struct ServerHandle {
     pub server: Arc<RwLock<Server>>,
 }
 
+fn normalize_collector_id(id: &str) -> String {
+    id.replace(":", "")
+}
+
 impl ServerHandle {
     pub fn new(server: Arc<RwLock<Server>>) -> Self {
         ServerHandle { server }
@@ -270,8 +274,9 @@ impl Server {
 
     async fn contains_collector(&self, collector_name: String) -> bool {
         let collectors = self.registered_collectors.read().await;
+        let normalized = normalize_collector_id(&collector_name);
         for collector in collectors.iter() {
-            if collector.id == collector_name {
+            if normalize_collector_id(&collector.id) == normalized {
                 return true;
             }
         }
