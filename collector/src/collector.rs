@@ -34,6 +34,10 @@ struct RunningSource<C: Send + Sync + Debug + 'static> {
     handle: DataSourceHandle,
 }
 
+fn normalize_collector_id(id: &str) -> String {
+    id.replace(":", "")
+}
+
 impl<C: Send + Sync + Debug + 'static> fmt::Debug for RunningSource<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RunningSource")
@@ -366,12 +370,8 @@ impl Collector {
         }
 
         let dev_name = match mac_address_variable {
-            Some(s) => {
-                s
-            }
-            None => {
-                self.client_id.clone()
-            }
+            Some(s) => normalize_collector_id(&s),
+            None => normalize_collector_id(&self.client_id),
         };
 
         CollectorState {

@@ -331,6 +331,10 @@ static mut SYS: Option<sysinfo::System> = None;
 
 // const SERVER_COMMAND_CHANNEL_BUFFER_SIZE: usize = 100;
 
+fn normalize_collector_id(id: &str) -> String {
+    id.replace(":", "")
+}
+
 impl Server {
     pub async fn new(config: &ServerConfig) -> Result<Self, ServerError> {
         let db = Surreal::new::<Ws>(&config.database_endpoint).await.expect("Could not connect to the database, do you have it running? surreal start --user root --pass root --log debug rocksdb://~/lifelog/database --bind \"127.0.0.1:7183\"");
@@ -777,12 +781,13 @@ impl Server {
     // collector. Are there any problems with this?
     async fn contains_collector(&self, collector_name: String) -> bool {
         let collectors = self.registered_collectors.read().await;
+        let normalized = normalize_collector_id(&collector_name);
         println!(
             "Checking if collector {} is registered: {:?}",
             collector_name, collectors
         );
         for collector in collectors.iter() {
-            if collector.id == collector_name {
+            if normalize_collector_id(&collector.id) == normalized {
                 return true;
             }
         }
@@ -1259,18 +1264,30 @@ async fn sync_data_with_collectors(
     for collector in collectors.iter_mut() {
         // TODO: Parallelize this
         println!("Syncing data with collector: {:?}", collector);
-        // TODO: This code can fail here (notice the unwraps, I should handle it.
-        let mut stream = collector
-            .grpc_client
-            .get_data(GetDataRequest { keys: vec![] })
-            .await
-            .unwrap()
-            .into_inner();
+        let mut stream = match collector.grpc_client.get_data(GetDataRequest { keys: vec![] }).await {
+            Ok(response) => response.into_inner(),
+            Err(e) => {
+                eprintln!(
+                    "Failed to sync data from collector {} ({}): {}",
+                    collector.id, collector.address, e
+                );
+                continue;
+            }
+        };
         println!("Defined the stream here...");
         let mut data = vec![];
 
         while let Some(chunk) = stream.next().await {
-            data.push(chunk.unwrap().payload);
+            match chunk {
+                Ok(item) => data.push(item.payload),
+                Err(e) => {
+                    eprintln!(
+                        "Error while receiving data chunk stream from collector {}: {}",
+                        collector.id, e
+                    );
+                    break;
+                }
+            }
         }
         println!("Done receiving data");
         let mac = collector.mac.clone();
@@ -1278,7 +1295,10 @@ async fn sync_data_with_collectors(
         // TODO: REFACTOR THIS FUNCTION
         for chunk in data {
             // record id = random UUID
-            let chunk = chunk.unwrap();
+            let Some(chunk) = chunk else {
+                eprintln!("Collector {} sent data item without payload", collector.id);
+                continue;
+            };
 
             // TODO: this can be automated with a macro
             match chunk {

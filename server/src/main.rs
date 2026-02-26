@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use config::ServerConfig;
+use config::default_server_config;
 use lifelog_core::uuid::Uuid;
 use lifelog_proto::lifelog_server_service_server::LifelogServerServiceServer;
 use lifelog_server::server::GRPCServerLifelogServerService;
@@ -13,7 +13,7 @@ use tonic_reflection::server::Builder;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = ServerConfig::default();
+    let config = default_server_config();
     let server = LifelogServer::new(&config).await?;
 
     let addr = format!("{}:{}", config.host, config.port).parse()?;
