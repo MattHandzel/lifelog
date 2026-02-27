@@ -9,6 +9,7 @@ WorkingDirectory=%h/Projects/lifelog
 Environment=REPO_DIR=%h/Projects/lifelog
 Environment=COLLECTOR_BIN=%h/Projects/lifelog/target/debug/lifelog-collector
 Environment=SERVER_ADDR=http://100.118.206.104:7182
+Environment=LIFELOG_CONFIG_PATH=%h/Projects/lifelog/lifelog-config.toml
 Environment=RUST_LOG=info
 Environment=XDG_RUNTIME_DIR=/run/user/%U
 PassEnvironment=DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS

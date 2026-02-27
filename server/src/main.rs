@@ -14,7 +14,15 @@ use tonic_reflection::server::Builder;
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let mut config = config::default_server_config();
+    let mut config = config::load_server_config_from_unified().unwrap_or_else(|| {
+        panic!(
+            "Missing or invalid [server] in {}. No defaults are applied.",
+            std::env::var("LIFELOG_CONFIG_PATH")
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|_| config::default_lifelog_config_path())
+                .display()
+        )
+    });
     // Allow env var overrides for containerized deployments
     if let Ok(host) = std::env::var("LIFELOG_HOST") {
         config.host = host;

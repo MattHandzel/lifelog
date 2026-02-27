@@ -245,6 +245,35 @@ This spec is transport-agnostic, but v1 should use gRPC/Protobuf-style typed API
 - Each collector has a stable `collector_id` (device identity).
 - Enrollment must prevent arbitrary devices from registering (pairing model required; see Security).
 
+### 7.1.1 Unified Config Schema (Required)
+
+v1 configuration must be represented in a single `lifelog-config.toml` file and support any number
+of collectors/devices.
+
+Required shape:
+
+- `[server]` for backend runtime config.
+- `[collectors.<collector_id>]` for each collector profile.
+- `transforms = [...]` for backend transform pipeline definitions.
+- `[deviceAliases]` mapping canonical collector/device ids to display names.
+- Optional `[runtime]` to select active local collector profile (`collectorId`).
+
+Collectors must select their profile by:
+
+1. `LIFELOG_COLLECTOR_ID` (if set),
+2. else `runtime.collectorId`.
+
+If neither is set, startup must fail (no implicit/default profile selection).
+
+No legacy single-collector config shape is part of this requirement.
+
+### 7.1.2 Device Aliases (Required)
+
+- The system must support alias mapping for device identities (e.g. MAC-derived id -> `"laptop"`).
+- Alias mapping is configuration-driven through `[deviceAliases]`.
+- Storage and protocol identity remain canonical ids (`collector_id`); aliases are presentation metadata.
+- Interface surfaces must display alias when available and fall back to canonical id otherwise.
+
 ### 7.2 Control Plane APIs (minimum set)
 
 Collectors -> Backend:

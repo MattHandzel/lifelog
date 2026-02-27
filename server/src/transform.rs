@@ -1,5 +1,7 @@
 use data_modalities::ocr::OcrTransform;
-use lifelog_core::{DataOrigin, DateTime, LifelogFrameKey, LifelogImage, Transform, Utc};
+use lifelog_core::{
+    DataOrigin, DataOriginType, DateTime, LifelogFrameKey, LifelogImage, Transform, Utc,
+};
 use lifelog_types::ToRecord;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
@@ -39,6 +41,23 @@ impl LifelogTransform {
             LifelogTransform::OcrTransform(t) => t.destination(),
         }
     }
+
+    pub fn matches_origin(&self, key_origin: &DataOrigin) -> bool {
+        match self {
+            LifelogTransform::OcrTransform(t) => {
+                let src = t.source();
+                if src.modality_name != key_origin.modality_name {
+                    return false;
+                }
+
+                match &src.origin {
+                    // Wildcard source supports transforms over all collector IDs
+                    DataOriginType::DeviceId(device_id) if device_id == "*" => true,
+                    _ => src == *key_origin,
+                }
+            }
+        }
+    }
 }
 
 impl From<OcrTransform> for LifelogTransform {
@@ -67,7 +86,7 @@ pub(crate) async fn transform_data_single(
 
         match transform {
             LifelogTransform::OcrTransform(t) => {
-                if key.origin == t.source() {
+                if transform.matches_origin(&key.origin) {
                     let payload = data_to_transform.payload.as_ref();
                     if let Some(lifelog_types::lifelog_data::Payload::Screenframe(screen_frame)) =
                         payload

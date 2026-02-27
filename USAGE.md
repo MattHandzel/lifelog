@@ -30,7 +30,58 @@ Quick sanity check:
 just check
 ```
 
-## 3. Configure Server
+## 3. Configure Server and Collector (Unified File)
+
+Preferred config file:
+
+- `lifelog-config.toml` (repo root in dev runs)
+- or `~/.config/lifelog/lifelog-config.toml` (installed deployments)
+
+This file can include all server, collector, transform, and device-alias config.
+
+Required shape (strict; missing sections cause startup failure):
+
+```toml
+[runtime]
+collectorId = "laptop"
+
+[collectors.laptop]
+id = "laptop"
+host = "127.0.0.1"
+port = 7190
+timestampFormat = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+# Include full modality tables (not only `enabled`) for:
+# browser, screen, camera, microphone, processes, hyprland
+# See `lifelog-config.toml` in repo root for a complete example.
+
+[server]
+host = "0.0.0.0"
+port = 7182
+
+transforms = [
+  { id = "ocr", enabled = true, sourceOrigin = "*:screen", language = "eng" }
+]
+
+[deviceAliases]
+"44A3BB2C216C" = "laptop"
+```
+
+You can force a path with:
+
+```bash
+export LIFELOG_CONFIG_PATH=/path/to/lifelog-config.toml
+```
+
+For multi-device collector binaries, select the active collector config via:
+
+```bash
+export LIFELOG_COLLECTOR_ID=laptop
+```
+
+If `LIFELOG_COLLECTOR_ID` is unset, `runtime.collectorId` must be present. There is no fallback selection.
+
+The backend still supports these environment variables for runtime overrides/secrets:
 
 The current backend uses these environment variables:
 
@@ -77,10 +128,6 @@ This starts `lifelog-server-backend` (gRPC + gRPC-web).
 
 ## 6. Configure and Run Collector
 
-Collector config file path:
-
-- `~/.config/lifelog/config.toml` (auto-created on first run)
-
 Run collector:
 
 ```bash
@@ -95,7 +142,7 @@ nix develop --command cargo run -p lifelog-collector --bin lifelog-collector -- 
 
 ### 6.1 Enable Desktop Microphone and Keystrokes
 
-Edit `~/.config/lifelog/config.toml` and set:
+Edit the selected collector section in `lifelog-config.toml` and set:
 
 ```toml
 [microphone]
@@ -221,8 +268,8 @@ This section is for a split setup:
   - `scripts/run_collector_service.sh`
 - One-shot installer:
   - `scripts/install_persistent_services.sh`
-- Laptop collector config template:
-  - `deploy/config/collector.laptop.toml`
+- Unified laptop config template:
+  - `deploy/config/lifelog-config.laptop.toml`
 
 ### 11.2 Install / Enable
 
@@ -237,7 +284,9 @@ What this does:
   - Uses system-level units when writable, otherwise user-level units + linger
 - Installs local user collector service + validation timer
 - Enables linger (`loginctl enable-linger`) so user services survive reboot/login boundaries
-- Installs host-specific collector config to `~/.config/lifelog/config.toml`
+- Installs unified config to:
+  - `~/.config/lifelog/lifelog-config.toml`
+  - `<repo>/lifelog-config.toml`
 
 ### 11.3 Service Operations
 
@@ -292,7 +341,7 @@ ssh matth@server.matthandzel.com 'cd /home/matth/Projects/lifelog && printf "SEL
 - `ControlStream` reconnect/close events still occur; ingest can continue despite this.
 - `screen` capture depends on desktop session environment and available screenshot binary.
   - Current config uses `program = "grim"` (not `"grim -t png"`).
-  - If `screen` errors in service logs, set `[screen].enabled = false` in `~/.config/lifelog/config.toml` and keep `processes` enabled.
+  - If `screen` errors in service logs, set `[collectors.<collector_id>.screen].enabled = false` in `lifelog-config.toml` and keep `processes` enabled.
 
 ### 11.6 Deployment-Specific Values You Should Change Before Sharing
 
@@ -316,7 +365,7 @@ These values are intentionally specific to one environment and should be paramet
 - Local data/output paths and laptop id:
   - `id = "laptop"`
   - output directories under `/home/matth/lifelog/data/...`
-  - file: `deploy/config/collector.laptop.toml`
+  - file: `deploy/config/lifelog-config.laptop.toml`
 
 - Database credentials:
   - `LIFELOG_DB_USER=root`

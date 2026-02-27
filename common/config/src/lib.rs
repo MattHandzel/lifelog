@@ -1,5 +1,6 @@
 use std::env;
 use std::fs;
+use std::collections::HashMap;
 use std::path::PathBuf;
 use utils::replace_home_dir_in_path;
 
@@ -17,83 +18,187 @@ pub use lifelog_types::{
     WifiConfig, WindowActivityConfig,
 };
 
-pub fn load_config() -> CollectorConfig {
-    let home_dir = directories::BaseDirs::new()
+#[cfg(not(feature = "dev"))]
+fn home_dir() -> PathBuf {
+    directories::BaseDirs::new()
         .map(|d| d.home_dir().to_path_buf())
-        .unwrap_or_else(|| PathBuf::from("/tmp"));
-    let _lifelog_home_dir = env::var("LIFELOG_HOME_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| home_dir.clone());
+        .unwrap_or_else(|| PathBuf::from("/tmp"))
+}
 
+pub fn default_lifelog_config_path() -> PathBuf {
     #[cfg(feature = "dev")]
-    let config_path: PathBuf = "dev-config.toml".into();
-
-    #[cfg(not(feature = "dev"))]
-    let config_path: PathBuf = home_dir.join(".config/lifelog/config.toml");
-
-    tracing::info!(path = ?config_path, "Loading config file");
-
-    let config_str = if config_path.exists() {
-        fs::read_to_string(&config_path).unwrap_or_else(|_| String::new())
-    } else {
-        tracing::warn!(path = ?config_path, "Config file not found, creating default");
-        let default_config = create_default_config();
-        let config_str = toml::to_string(&default_config).unwrap_or_default();
-        if let Some(parent) = config_path.parent() {
-            let _ = fs::create_dir_all(parent);
-        }
-        let _ = fs::write(&config_path, &config_str);
-        config_str
-    };
-
-    if config_str.is_empty() {
-        return create_default_config();
+    {
+        "lifelog-config.toml".into()
     }
 
-    // The generated proto config structs do not guarantee `#[serde(default)]`, so missing
-    // fields can fail deserialization after we add new config options. To keep config files
-    // forwards/backwards compatible, we merge the user config on top of defaults at the TOML
-    // value level before deserializing into `CollectorConfig`.
-    let default_config = create_default_config();
-    let default_toml: toml::Value =
-        toml::from_str(&toml::to_string(&default_config).unwrap_or_else(|_| String::new()))
-            .unwrap_or(toml::Value::Table(Default::default()));
-
-    let user_toml: toml::Value = match toml::from_str(&replace_home_dir_in_path(config_str)) {
-        Ok(v) => v,
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to parse config file TOML, using defaults");
-            return default_config;
-        }
-    };
-
-    let mut merged = default_toml;
-    merge_toml(&mut merged, user_toml);
-
-    match toml::from_str::<CollectorConfig>(&toml::to_string(&merged).unwrap_or_default()) {
-        Ok(config) => config,
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to deserialize merged config, using defaults");
-            default_config
-        }
+    #[cfg(not(feature = "dev"))]
+    {
+        home_dir().join(".config/lifelog/lifelog-config.toml")
     }
 }
 
-fn merge_toml(base: &mut toml::Value, overlay: toml::Value) {
-    match (base, overlay) {
-        (toml::Value::Table(base_tbl), toml::Value::Table(overlay_tbl)) => {
-            for (k, v) in overlay_tbl {
-                match base_tbl.get_mut(&k) {
-                    Some(existing) => merge_toml(existing, v),
-                    None => {
-                        base_tbl.insert(k, v);
-                    }
-                }
+fn load_toml_from_path(path: &PathBuf) -> Option<toml::Value> {
+    if !path.exists() {
+        return None;
+    }
+    let raw = fs::read_to_string(path).ok()?;
+    let replaced = replace_home_dir_in_path(raw);
+    let value: toml::Value = toml::from_str(&replaced).ok()?;
+    Some(normalize_toml_keys(value))
+}
+
+fn collector_config_from_toml(
+    collector_id: &str,
+    collector_toml: toml::Value,
+) -> Option<CollectorConfig> {
+    let mut selected_tbl = collector_toml.as_table()?.clone();
+    for required in [
+        "host",
+        "port",
+        "timestampFormat",
+        "browser",
+        "screen",
+        "camera",
+        "microphone",
+        "processes",
+        "hyprland",
+    ] {
+        if !selected_tbl.contains_key(required) {
+            return None;
+        }
+    }
+    selected_tbl
+        .entry("id".to_string())
+        .or_insert(toml::Value::String(collector_id.to_string()));
+    toml::from_str::<CollectorConfig>(&toml::to_string(&toml::Value::Table(selected_tbl)).ok()?)
+        .ok()
+}
+
+fn collector_from_unified_root(root: &toml::Value) -> Option<CollectorConfig> {
+    // Required scalable config form:
+    // [collectors.<collector_id>]
+    let collectors = root.get("collectors")?.as_table()?;
+    if collectors.is_empty() {
+        return None;
+    }
+
+    let selected_id = env::var("LIFELOG_COLLECTOR_ID")
+        .ok()
+        .or_else(|| {
+            root.get("runtime")
+                .and_then(|v| v.get("collectorId"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        })?;
+
+    let selected = collectors.get(&selected_id)?.clone();
+    collector_config_from_toml(&selected_id, selected)
+}
+
+pub fn load_collector_config_from_unified() -> Option<CollectorConfig> {
+    let path = env::var("LIFELOG_CONFIG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| default_lifelog_config_path());
+    let root = load_toml_from_path(&path)?;
+    collector_from_unified_root(&root)
+}
+
+pub fn load_server_config_from_unified() -> Option<ServerConfig> {
+    let path = env::var("LIFELOG_CONFIG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| default_lifelog_config_path());
+    let root = load_toml_from_path(&path)?;
+    let server = root.get("server")?.clone();
+    toml::from_str::<ServerConfig>(&toml::to_string(&server).ok()?).ok()
+}
+
+pub fn load_device_aliases_from_unified() -> HashMap<String, String> {
+    let path = env::var("LIFELOG_CONFIG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| default_lifelog_config_path());
+    let Some(root) = load_toml_from_path(&path) else {
+        return HashMap::new();
+    };
+    let Some(value) = root.get("deviceAliases") else {
+        return HashMap::new();
+    };
+    toml::from_str::<HashMap<String, String>>(&toml::to_string(value).unwrap_or_default())
+        .unwrap_or_default()
+}
+
+pub fn load_collectors_from_unified() -> HashMap<String, CollectorConfig> {
+    let path = env::var("LIFELOG_CONFIG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| default_lifelog_config_path());
+    let Some(root) = load_toml_from_path(&path) else {
+        return HashMap::new();
+    };
+    let Some(collectors) = root.get("collectors").and_then(|v| v.as_table()) else {
+        return HashMap::new();
+    };
+
+    let mut out = HashMap::new();
+    for (collector_id, value) in collectors {
+        if let Some(cfg) = collector_config_from_toml(collector_id, value.clone()) {
+            out.insert(collector_id.clone(), cfg);
+        }
+    }
+    out
+}
+
+pub fn load_config() -> CollectorConfig {
+    let cfg = load_collector_config_from_unified().unwrap_or_else(|| {
+        panic!(
+            "Invalid or missing collector config in {}. No defaults are applied.",
+            env::var("LIFELOG_CONFIG_PATH")
+                .map(PathBuf::from)
+                .unwrap_or_else(|_| default_lifelog_config_path())
+                .display()
+        )
+    });
+    tracing::info!(
+        path = ?env::var("LIFELOG_CONFIG_PATH").ok().map(PathBuf::from).unwrap_or_else(default_lifelog_config_path),
+        "Loaded collector config from unified lifelog-config.toml"
+    );
+    cfg
+}
+
+fn snake_to_camel_key(key: &str) -> String {
+    let mut out = String::with_capacity(key.len());
+    let mut upper = false;
+    for ch in key.chars() {
+        if ch == '_' {
+            upper = true;
+            continue;
+        }
+        if upper {
+            out.extend(ch.to_uppercase());
+            upper = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    out
+}
+
+fn normalize_toml_keys(value: toml::Value) -> toml::Value {
+    match value {
+        toml::Value::Table(tbl) => {
+            let mut out = toml::map::Map::new();
+            for (key, val) in tbl {
+                let normalized_key = if key.contains('_') {
+                    snake_to_camel_key(&key)
+                } else {
+                    key
+                };
+                out.insert(normalized_key, normalize_toml_keys(val));
             }
+            toml::Value::Table(out)
         }
-        (base_slot, overlay_val) => {
-            *base_slot = overlay_val;
+        toml::Value::Array(items) => {
+            toml::Value::Array(items.into_iter().map(normalize_toml_keys).collect())
         }
+        other => other,
     }
 }
 
@@ -226,7 +331,10 @@ impl ConfigManager {
     }
 
     pub fn get_camera_config(&self) -> CameraConfig {
-        self.config.camera.clone().unwrap_or_default()
+        self.config
+            .camera
+            .clone()
+            .expect("Missing [collectors.<id>.camera] config")
     }
 
     pub fn set_camera_config(&mut self, camera_config: CameraConfig) {
@@ -234,17 +342,57 @@ impl ConfigManager {
     }
 
     pub fn save(&self) -> Result<(), std::io::Error> {
-        let home_dir = directories::BaseDirs::new()
-            .map(|d| d.home_dir().to_path_buf())
-            .unwrap_or_else(|| PathBuf::from("/tmp"));
+        let config_path = env::var("LIFELOG_CONFIG_PATH")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| default_lifelog_config_path());
 
-        #[cfg(feature = "dev")]
-        let config_path: PathBuf = "dev-config.toml".into();
+        let mut root = load_toml_from_path(&config_path).ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::NotFound,
+                format!(
+                    "Config file missing or invalid at {}. No defaults are applied.",
+                    config_path.display()
+                ),
+            )
+        })?;
 
-        #[cfg(not(feature = "dev"))]
-        let config_path: PathBuf = home_dir.join(".config/lifelog/config.toml");
+        let selected_id = env::var("LIFELOG_COLLECTOR_ID")
+            .ok()
+            .or_else(|| {
+                root.get("runtime")
+                    .and_then(|v| v.get("collectorId"))
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string())
+            })
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| self.config.id.clone());
 
-        let config_str = toml::to_string(&self.config)
+        let collector_val = toml::from_str::<toml::Value>(
+            &toml::to_string(&self.config)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?,
+        )
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+        if let Some(root_tbl) = root.as_table_mut() {
+            let runtime = root_tbl
+                .entry("runtime".to_string())
+                .or_insert(toml::Value::Table(Default::default()));
+            if let Some(runtime_tbl) = runtime.as_table_mut() {
+                runtime_tbl.insert(
+                    "collectorId".to_string(),
+                    toml::Value::String(selected_id.clone()),
+                );
+            }
+
+            let collectors = root_tbl
+                .entry("collectors".to_string())
+                .or_insert(toml::Value::Table(Default::default()));
+            if let Some(collectors_tbl) = collectors.as_table_mut() {
+                collectors_tbl.insert(selected_id, collector_val);
+            }
+        }
+
+        let config_str = toml::to_string_pretty(&root)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
         if let Some(parent) = config_path.parent() {
