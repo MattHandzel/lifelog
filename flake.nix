@@ -51,8 +51,8 @@
           gtk3
           atk
           glib
-          webkitgtk
-          libsoup
+          webkitgtk_4_1
+          libsoup_3
         ];
 
         nativeBuildInputs = with pkgs;
@@ -145,6 +145,7 @@
             })
             openssl
             sqlite
+            protobuf
             pkg-config
             cmake
             mold
@@ -168,6 +169,8 @@
             glib
             gtk3
             atk
+            webkitgtk_4_1
+            libsoup_3
 
             leptonica
             tesseract

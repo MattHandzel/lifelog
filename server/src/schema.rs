@@ -5,6 +5,11 @@ use surrealdb::Surreal;
 
 use crate::db::CREATED_TABLES;
 
+fn is_idempotent_ddl_error(err: &surrealdb::Error) -> bool {
+    let msg = err.to_string().to_lowercase();
+    msg.contains("already exists") || msg.contains("already defined")
+}
+
 /// Schema definition for a single modality table.
 pub(crate) struct TableSchema {
     /// Modality this schema applies to.
@@ -349,7 +354,14 @@ pub(crate) async fn ensure_table_schema(
     );
 
     // Important: `query(...)` can succeed while individual statements fail; `check()` surfaces DDL errors.
-    db.query(ddl).await?.check()?;
+    // Existing schemas can produce "already exists/defined" errors after restart; treat those as idempotent.
+    match db.query(ddl).await?.check() {
+        Ok(_) => {}
+        Err(err) if is_idempotent_ddl_error(&err) => {
+            tracing::debug!(table = %table, error = %err, "Schema already exists, continuing");
+        }
+        Err(err) => return Err(err),
+    }
     CREATED_TABLES.insert(table.to_owned());
     tracing::info!(table = %table, "Ensured table schema");
 
@@ -374,7 +386,13 @@ pub(crate) async fn ensure_chunks_schema(db: &Surreal<Client>) -> surrealdb::Res
     if CREATED_TABLES.contains("upload_chunks") {
         return Ok(());
     }
-    db.query(CHUNKS_DDL).await?.check()?;
+    match db.query(CHUNKS_DDL).await?.check() {
+        Ok(_) => {}
+        Err(err) if is_idempotent_ddl_error(&err) => {
+            tracing::debug!(error = %err, "upload_chunks already exists, continuing");
+        }
+        Err(err) => return Err(err),
+    }
     CREATED_TABLES.insert("upload_chunks".to_string());
     Ok(())
 }
@@ -384,7 +402,13 @@ pub(crate) async fn ensure_watermarks_schema(db: &Surreal<Client>) -> surrealdb:
     if CREATED_TABLES.contains("watermarks") {
         return Ok(());
     }
-    db.query(WATERMARKS_DDL).await?.check()?;
+    match db.query(WATERMARKS_DDL).await?.check() {
+        Ok(_) => {}
+        Err(err) if is_idempotent_ddl_error(&err) => {
+            tracing::debug!(error = %err, "watermarks already exists, continuing");
+        }
+        Err(err) => return Err(err),
+    }
     CREATED_TABLES.insert("watermarks".to_string());
     Ok(())
 }
@@ -394,7 +418,13 @@ pub(crate) async fn ensure_catalog_schema(db: &Surreal<Client>) -> surrealdb::Re
     if CREATED_TABLES.contains("catalog") {
         return Ok(());
     }
-    db.query(CATALOG_DDL).await?.check()?;
+    match db.query(CATALOG_DDL).await?.check() {
+        Ok(_) => {}
+        Err(err) if is_idempotent_ddl_error(&err) => {
+            tracing::debug!(error = %err, "catalog already exists, continuing");
+        }
+        Err(err) => return Err(err),
+    }
     CREATED_TABLES.insert("catalog".to_string());
     Ok(())
 }

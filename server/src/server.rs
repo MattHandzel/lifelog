@@ -1,9 +1,8 @@
 use crate::policy::*;
 use chrono::Utc;
 use config::ServerPolicyConfig;
-use config::{ServerConfig, SystemConfig};
+use config::{load_transform_specs, ServerConfig, SystemConfig};
 use lifelog_core::*;
-use lifelog_types::DataModality;
 use lifelog_types::*;
 use lifelog_types::{CollectorState, SystemState};
 use std::collections::HashMap;
@@ -234,18 +233,39 @@ impl Server {
             max_threads: UsageType::RealValue(10, lifelog_core::Unit::Count),
         };
 
-        let ocr_config = data_modalities::ocr::OcrConfig {
-            language: "eng".to_string(),
-            engine_path: None,
-        };
+        let mut transforms: Vec<LifelogTransform> = Vec::new();
+        for spec in load_transform_specs() {
+            if !spec.enabled {
+                continue;
+            }
 
-        let ocr_transform = data_modalities::ocr::OcrTransform::new(
-            DataOrigin::new(
-                DataOriginType::DeviceId("FF:FF:FF:FF:FF:FF".to_string()),
-                DataModality::Screen.as_str_name().to_string(),
-            ),
-            ocr_config,
-        );
+            match spec.id.as_str() {
+                "ocr" => {
+                    let source = match DataOrigin::tryfrom_string(spec.source_origin.clone()) {
+                        Ok(s) => s,
+                        Err(e) => {
+                            tracing::warn!(
+                                source_origin = %spec.source_origin,
+                                error = %e,
+                                "Skipping invalid OCR transform source_origin"
+                            );
+                            continue;
+                        }
+                    };
+
+                    let ocr_config = data_modalities::ocr::OcrConfig {
+                        language: spec.language.unwrap_or_else(|| "eng".to_string()),
+                        engine_path: None,
+                    };
+
+                    let ocr_transform = data_modalities::ocr::OcrTransform::new(source, ocr_config);
+                    transforms.push(ocr_transform.into());
+                }
+                other => {
+                    tracing::warn!(transform_id = %other, "Unknown transform id; skipping");
+                }
+            }
+        }
 
         Ok(Server {
             db,
@@ -254,7 +274,7 @@ impl Server {
             state: Arc::new(RwLock::new(system_state)),
             registered_collectors: Arc::new(RwLock::new(vec![])),
             policy: Arc::new(RwLock::new(ServerPolicy::new(policy_config))),
-            transforms: Arc::new(RwLock::new(vec![ocr_transform.into()])),
+            transforms: Arc::new(RwLock::new(transforms)),
             skew_estimates: Arc::new(RwLock::new(HashMap::new())),
             skew_samples: Arc::new(RwLock::new(HashMap::new())),
         })
