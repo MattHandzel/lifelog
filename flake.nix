@@ -172,10 +172,87 @@
             leptonica
             tesseract
           ];
+
+        # Tesseract needs these at runtime
+        TESSDATA_PREFIX = "${pkgs.tesseract}/share/tessdata";
       };
 
-      # Tesseract needs these at runtime
-      TESSDATA_PREFIX = "${pkgs.tesseract}/share/tessdata";
+      frontend = pkgs.mkShell {
+        PKG_CONFIG_PATH = pkgs.lib.optionalString pkgs.stdenv.isLinux (
+          pkgs.lib.concatStringsSep ":" [
+            "${pkgs.alsa-lib}/lib/pkgconfig"
+            "${pkgs.webkitgtk_4_1}/lib/pkgconfig"
+            "${pkgs.libsoup_3}/lib/pkgconfig"
+            "${pkgs.gtk3}/lib/pkgconfig"
+            "${pkgs.glib.dev}/lib/pkgconfig"
+            "${pkgs.openssl.dev}/lib/pkgconfig"
+          ]
+        );
+
+        LD_LIBRARY_PATH = pkgs.lib.optionalString pkgs.stdenv.isLinux (
+          pkgs.lib.makeLibraryPath [
+            pkgs.webkitgtk_4_1
+            pkgs.libsoup_3
+            pkgs.gtk3
+            pkgs.glib
+            pkgs.pango
+            pkgs.cairo
+            pkgs.gdk-pixbuf
+            pkgs.harfbuzz
+            pkgs.alsa-lib
+            pkgs.libv4l
+            pkgs.libxkbcommon
+            pkgs.xorg.libX11
+            pkgs.xorg.libXi
+            pkgs.xorg.libXtst
+            pkgs.openssl
+            pkgs.stdenv.cc.cc.lib
+          ]
+        );
+
+        RUSTC_WRAPPER = "sccache";
+        TESSDATA_PREFIX = "${pkgs.tesseract}/share/tessdata";
+
+        packages = with pkgs;
+          [
+            (rust-bin.stable.latest.default.override {
+              extensions = ["rust-src" "rust-analyzer"];
+            })
+            openssl
+            sqlite
+            pkg-config
+            cmake
+            mold
+            sccache
+            cargo-nextest
+            nodejs_22
+            nodePackages.npm
+            protobuf
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
+            webkitgtk_4_1
+            libsoup_3
+            gtk3
+            atk
+            glib
+            pango
+            cairo
+            gdk-pixbuf
+            harfbuzz
+            glib-networking
+            librsvg
+            xdotool
+            alsa-lib
+            linuxPackages.v4l2loopback
+            v4l-utils
+            libxkbcommon
+            xorg.libX11
+            xorg.libXtst
+            xorg.libXi
+            leptonica
+            tesseract
+          ];
+      };
     });
   };
 }
