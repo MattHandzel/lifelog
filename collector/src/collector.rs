@@ -5,6 +5,7 @@ use crate::modules::camera::CameraDataSource;
 use crate::modules::clipboard::ClipboardDataSource;
 use crate::modules::hyprland::HyprlandDataSource;
 use crate::modules::keystrokes::KeystrokesDataSource;
+use crate::modules::microphone::MicrophoneDataSource;
 use crate::modules::mouse::MouseDataSource;
 use crate::modules::processes::ProcessDataSource;
 use crate::modules::screen::ScreenDataSource;
@@ -420,6 +421,38 @@ impl Collector {
                 },
                 Err(e) => {
                     let err = LifelogError::SourceSetup("audio".to_string(), e.to_string());
+                    tracing::error!("{}", err);
+                    setup_errors.push(err);
+                }
+            }
+        }
+
+        if config
+            .microphone
+            .as_ref()
+            .map(|m| m.enabled)
+            .unwrap_or(false)
+        {
+            let config_clone = Arc::clone(&self.config);
+            match MicrophoneDataSource::new(config_clone.microphone.clone().unwrap()) {
+                Ok(mic_source) => match mic_source.start() {
+                    Ok(ds_handle) => {
+                        let running_src = RunningSource::<MicrophoneConfig> {
+                            instance: Arc::new(Mutex::new(Box::new(mic_source))),
+                            handle: ds_handle,
+                        };
+                        self.sources
+                            .insert("microphone".to_string(), Box::new(running_src));
+                    }
+                    Err(e) => {
+                        let err =
+                            LifelogError::SourceSetup("microphone".to_string(), e.to_string());
+                        tracing::error!("{}", err);
+                        setup_errors.push(err);
+                    }
+                },
+                Err(e) => {
+                    let err = LifelogError::SourceSetup("microphone".to_string(), e.to_string());
                     tracing::error!("{}", err);
                     setup_errors.push(err);
                 }

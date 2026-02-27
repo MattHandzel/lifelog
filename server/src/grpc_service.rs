@@ -303,4 +303,198 @@ impl LifelogServerService for GRPCServerLifelogServerService {
 
         Ok(Response::new(GetUploadOffsetResponse { offset }))
     }
+
+    async fn list_modalities(
+        &self,
+        _request: Request<ListModalitiesRequest>,
+    ) -> Result<Response<ListModalitiesResponse>, Status> {
+        use lifelog_types::{FieldDescriptor, ModalityDescriptor};
+
+        fn field(
+            name: &str,
+            ty: &str,
+            display: &str,
+            primary: bool,
+            searchable: bool,
+        ) -> FieldDescriptor {
+            FieldDescriptor {
+                name: name.to_string(),
+                ty: ty.to_string(),
+                display: display.to_string(),
+                primary,
+                searchable,
+            }
+        }
+
+        fn modality(
+            name: &str,
+            stream_id: &str,
+            category: &str,
+            fields: Vec<FieldDescriptor>,
+        ) -> ModalityDescriptor {
+            ModalityDescriptor {
+                name: name.to_string(),
+                stream_id: stream_id.to_string(),
+                category: category.to_string(),
+                fields,
+            }
+        }
+
+        let modalities = vec![
+            modality(
+                "Screen",
+                "screen",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Captured At", true, false),
+                    field("width", "i64", "Width", false, false),
+                    field("height", "i64", "Height", false, false),
+                    field("mime_type", "string", "Format", false, false),
+                    field("blob_size", "i64", "Size", false, false),
+                ],
+            ),
+            modality(
+                "Browser History",
+                "browser",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Visited At", true, false),
+                    field("url", "string", "URL", true, true),
+                    field("title", "string", "Title", true, true),
+                    field("visit_count", "i64", "Visit Count", false, false),
+                ],
+            ),
+            modality(
+                "OCR Text",
+                "ocr",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Extracted At", true, false),
+                    field("text", "string", "Text", true, true),
+                ],
+            ),
+            modality(
+                "Audio",
+                "audio",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Recorded At", true, false),
+                    field("duration_secs", "f64", "Duration (s)", true, false),
+                    field("codec", "string", "Codec", false, false),
+                    field("sample_rate", "i64", "Sample Rate", false, false),
+                    field("channels", "i64", "Channels", false, false),
+                ],
+            ),
+            modality(
+                "Microphone",
+                "microphone",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Recorded At", true, false),
+                    field("duration_secs", "f64", "Duration (s)", true, false),
+                    field("codec", "string", "Codec", false, false),
+                    field("sample_rate", "i64", "Sample Rate", false, false),
+                    field("channels", "i64", "Channels", false, false),
+                ],
+            ),
+            modality(
+                "Keystrokes",
+                "keystrokes",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Typed At", true, false),
+                    field("text", "string", "Text", true, true),
+                    field("application", "string", "Application", true, true),
+                    field("window_title", "string", "Window", false, true),
+                ],
+            ),
+            modality(
+                "Clipboard",
+                "clipboard",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Copied At", true, false),
+                    field("text", "string", "Content", true, true),
+                    field("mime_type", "string", "Format", false, false),
+                ],
+            ),
+            modality(
+                "Shell History",
+                "shell_history",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Run At", true, false),
+                    field("command", "string", "Command", true, true),
+                    field("working_dir", "string", "Directory", false, true),
+                    field("exit_code", "i64", "Exit Code", false, false),
+                ],
+            ),
+            modality(
+                "Window Activity",
+                "window_activity",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Active At", true, false),
+                    field("application", "string", "Application", true, true),
+                    field("window_title", "string", "Window", true, true),
+                    field("duration_secs", "f64", "Duration (s)", false, false),
+                ],
+            ),
+            modality(
+                "Mouse",
+                "mouse",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Captured At", true, false),
+                    field("x", "i64", "X", false, false),
+                    field("y", "i64", "Y", false, false),
+                    field("button", "string", "Button", false, false),
+                    field("pressed", "bool", "Pressed", false, false),
+                ],
+            ),
+            modality(
+                "Processes",
+                "processes",
+                "system",
+                vec![field("timestamp", "timestamp", "Sampled At", true, false)],
+            ),
+            modality(
+                "Camera",
+                "camera",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Captured At", true, false),
+                    field("width", "i64", "Width", false, false),
+                    field("height", "i64", "Height", false, false),
+                    field("device", "string", "Device", false, false),
+                    field("mime_type", "string", "Format", false, false),
+                ],
+            ),
+            modality(
+                "Weather",
+                "weather",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Recorded At", true, false),
+                    field("temperature", "f64", "Temperature (°C)", true, false),
+                    field("humidity", "f64", "Humidity (%)", false, false),
+                    field("pressure", "f64", "Pressure (hPa)", false, false),
+                    field("conditions", "string", "Conditions", true, false),
+                ],
+            ),
+            modality(
+                "Hyprland",
+                "hyprland",
+                "system",
+                vec![
+                    field("timestamp", "timestamp", "Sampled At", true, false),
+                    field("monitors", "array", "Monitors", false, false),
+                    field("workspaces", "array", "Workspaces", false, false),
+                    field("clients", "array", "Windows", false, false),
+                ],
+            ),
+        ];
+
+        Ok(Response::new(ListModalitiesResponse { modalities }))
+    }
 }
