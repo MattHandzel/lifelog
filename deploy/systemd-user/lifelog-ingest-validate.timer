@@ -1,0 +1,11 @@
+[Unit]
+Description=Run lifelog ingest validation every 10 minutes
+
+[Timer]
+OnBootSec=5m
+OnUnitActiveSec=10m
+Persistent=true
+Unit=lifelog-ingest-validate.service
+
+[Install]
+WantedBy=timers.target

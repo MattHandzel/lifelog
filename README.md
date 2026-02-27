@@ -28,6 +28,10 @@ Optionally, if you would like to only build a specific binary, you can run `carg
 
 If you are on NixOS I have graciously provided the `flake.nix` to include in your configuration. 😀
 
+## Persistent Deployment
+
+For boot-resilient split deployment (server on home server + collector on laptop), use the runbook in [USAGE.md](./USAGE.md), section `11. Persistent Distributed Deployment`.
+
 ## System Diagram
 
 ![System Diagram](./docs/Lifelog.drawio.svg)

@@ -197,3 +197,87 @@ sudo systemctl start lifelog-collector
   - Check `VITE_API_BASE_URL` and confirm server is running.
 - E2E tests are flaky when run concurrently:
   - Use the provided exclusive recipe (`just test-e2e-exclusive`) when needed.
+
+## 11. Persistent Distributed Deployment (Server + Laptop Collector)
+
+This section is for a split setup:
+- Server backend on home server (`matth@server.matthandzel.com`)
+- Collector on laptop
+- Transport over Tailscale (`http://100.118.206.104:7182`)
+
+### 11.1 Files Added for Persistence
+
+- Remote system services:
+  - `deploy/systemd/lifelog-surrealdb.service`
+  - `deploy/systemd/lifelog-server.service`
+- Local user services:
+  - `deploy/systemd-user/lifelog-collector.service`
+  - `deploy/systemd-user/lifelog-ingest-validate.service`
+  - `deploy/systemd-user/lifelog-ingest-validate.timer`
+- Collector wrapper:
+  - `scripts/run_collector_service.sh`
+- One-shot installer:
+  - `scripts/install_persistent_services.sh`
+- Laptop collector config template:
+  - `deploy/config/collector.laptop.toml`
+
+### 11.2 Install / Enable
+
+Run from repo root:
+
+```bash
+nix develop --command bash -lc 'scripts/install_persistent_services.sh'
+```
+
+What this does:
+- Installs and enables remote boot services (`lifelog-surrealdb`, `lifelog-server`)
+- Installs local user collector service + validation timer
+- Enables linger (`loginctl enable-linger`) so user services survive reboot/login boundaries
+- Installs host-specific collector config to `~/.config/lifelog/config.toml`
+
+### 11.3 Service Operations
+
+Remote server host:
+
+```bash
+ssh matth@server.matthandzel.com 'sudo systemctl status lifelog-surrealdb lifelog-server --no-pager'
+ssh matth@server.matthandzel.com 'sudo systemctl restart lifelog-surrealdb lifelog-server'
+ssh matth@server.matthandzel.com 'sudo journalctl -u lifelog-surrealdb -u lifelog-server -f'
+```
+
+Laptop collector (user service):
+
+```bash
+systemctl --user status lifelog-collector lifelog-ingest-validate.timer --no-pager
+systemctl --user restart lifelog-collector
+journalctl --user -u lifelog-collector -f
+journalctl --user -u lifelog-ingest-validate.service -n 100 --no-pager
+```
+
+### 11.4 Validation / Health Checks
+
+Manual end-to-end ingest validation:
+
+```bash
+DURATION_SECS=35 scripts/validate_remote_ingest.sh
+```
+
+Timer validation (non-invasive):
+- `lifelog-ingest-validate.timer` runs every 10 minutes.
+- It uses:
+  - `SKIP_COLLECTOR_RUN=1`
+  - `scripts/validate_remote_ingest.sh`
+- This checks remote `upload_chunks` growth for `stream_id=processes` without spawning a second collector process.
+
+Remote DB quick check:
+
+```bash
+ssh matth@server.matthandzel.com 'cd /home/matth/Projects/lifelog && printf "SELECT stream_id, count() AS n FROM upload_chunks GROUP BY stream_id;\n" | nix develop --command surreal sql --endpoint http://127.0.0.1:7183 --user root --pass root --namespace lifelog --database main --hide-welcome --json'
+```
+
+### 11.5 Known Limitations
+
+- `ControlStream` reconnect/close events still occur; ingest can continue despite this.
+- `screen` capture depends on desktop session environment and available screenshot binary.
+  - Current config uses `program = "grim"` (not `"grim -t png"`).
+  - If `screen` errors in service logs, set `[screen].enabled = false` in `~/.config/lifelog/config.toml` and keep `processes` enabled.

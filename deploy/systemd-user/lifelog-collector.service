@@ -1,0 +1,20 @@
+[Unit]
+Description=Lifelog Collector (user)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/lifelog
+Environment=REPO_DIR=%h/Projects/lifelog
+Environment=COLLECTOR_BIN=%h/Projects/lifelog/target/debug/lifelog-collector
+Environment=SERVER_ADDR=http://100.118.206.104:7182
+Environment=RUST_LOG=info
+Environment=XDG_RUNTIME_DIR=/run/user/%U
+PassEnvironment=DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS
+ExecStart=%h/Projects/lifelog/scripts/run_collector_service.sh
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

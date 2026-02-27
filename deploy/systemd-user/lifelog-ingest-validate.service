@@ -1,0 +1,9 @@
+[Unit]
+Description=Lifelog ingest validation (remote DB delta)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/Projects/lifelog
+Environment=DURATION_SECS=45
+Environment=SKIP_COLLECTOR_RUN=1
+ExecStart=/usr/bin/env bash -lc 'scripts/validate_remote_ingest.sh || { echo "ingest validation failed" >&2; exit 1; }'
