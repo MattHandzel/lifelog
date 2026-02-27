@@ -484,6 +484,43 @@ pub(crate) async fn get_data_by_key(
                 payload: Some(lifelog_types::lifelog_data::Payload::Hyprlandframe(frame)),
             })
         }
+        DataModality::Microphone => {
+            let frame_record: lifelog_types::AudioRecord = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+
+            let audio_bytes = cas.get(&frame_record.blob_hash).map_err(|e| {
+                LifelogError::Database(format!("CAS read for {}: {}", frame_record.blob_hash, e))
+            })?;
+
+            let frame = lifelog_types::AudioFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                audio_bytes,
+                codec: frame_record.codec,
+                sample_rate: frame_record.sample_rate,
+                channels: frame_record.channels,
+                duration_secs: frame_record.duration_secs,
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
+                record_type: lifelog_types::RecordType::Interval as i32,
+            };
+            Ok(lifelog_types::LifelogData {
+                payload: Some(lifelog_types::lifelog_data::Payload::Audioframe(frame)),
+            })
+        }
     }
 }
 

@@ -293,6 +293,28 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
         "#,
     },
+    TableSchema {
+        modality: DataModality::Microphone,
+        fields_ddl: r#"
+            DEFINE FIELD uuid          ON `{table}` TYPE string;
+            DEFINE FIELD timestamp     ON `{table}` TYPE datetime;
+            DEFINE FIELD blob_hash     ON `{table}` TYPE string;
+            DEFINE FIELD blob_size     ON `{table}` TYPE int;
+            DEFINE FIELD codec         ON `{table}` TYPE string;
+            DEFINE FIELD sample_rate   ON `{table}` TYPE int;
+            DEFINE FIELD channels      ON `{table}` TYPE int;
+            DEFINE FIELD duration_secs ON `{table}` TYPE float;
+            DEFINE FIELD t_ingest    ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end       ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality ON `{table}` TYPE option<string>;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
+        "#,
+    },
 ];
 
 /// Upload chunks metadata table schema.
