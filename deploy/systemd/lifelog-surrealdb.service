@@ -8,7 +8,7 @@ Type=simple
 User=matth
 WorkingDirectory=/home/matth/Projects/lifelog
 Environment=HOME=/home/matth
-ExecStartPre=/usr/bin/mkdir -p /home/matth/lifelog/surrealdb
+ExecStartPre=/usr/bin/env bash -lc 'mkdir -p /home/matth/lifelog/surrealdb'
 ExecStart=/usr/bin/env bash -lc 'exec nix develop --command surreal start --bind 127.0.0.1:7183 --user root --pass root file:/home/matth/lifelog/surrealdb/main.db'
 Restart=always
 RestartSec=5

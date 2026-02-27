@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=%h/Projects/lifelog
 Environment=HOME=%h
-ExecStartPre=/usr/bin/mkdir -p %h/lifelog/surrealdb
+ExecStartPre=/usr/bin/env bash -lc 'mkdir -p %h/lifelog/surrealdb'
 ExecStart=/usr/bin/env bash -lc 'exec nix develop --command surreal start --bind 127.0.0.1:7183 --user root --pass root file:%h/lifelog/surrealdb/main.db'
 Restart=always
 RestartSec=5
