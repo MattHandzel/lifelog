@@ -5,6 +5,7 @@ description = "UI Interface for Lifelog"
 authors = ["you"]
 edition = "2021"
 default-run = "lifelog-server-frontend"
+autobins = false
 
 [lints]
 workspace = true

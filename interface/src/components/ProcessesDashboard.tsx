@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import { Button } from './ui/button';
+import { FrameDataWrapper } from './ResultCard';
 import { Activity, History, RefreshCw, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
@@ -46,15 +48,82 @@ export default function ProcessesDashboard(): JSX.Element {
   }, [autoRefresh, activeTab]);
 
   async function loadProcesses(): Promise<void> {
-    console.warn('Processes: not yet implemented via gRPC');
-    setProcesses([]);
-    setIsLoading(false);
+    setIsLoading(true);
+    try {
+      const entries = await invoke<Array<{ uuid: string; origin: string; modality: string; timestamp: number | null }>>('query_timeline', {
+        textQuery: undefined,
+        collectorId: undefined,
+      });
+      const processEntries = entries.filter(e => e.modality === 'Processes');
+      if (processEntries.length === 0) {
+        setProcesses([]);
+        return;
+      }
+      const latest = processEntries.slice(0, 1);
+      const keys = latest.map(e => ({ uuid: e.uuid, origin: e.origin }));
+      const frames = await invoke<FrameDataWrapper[]>('get_frame_data', { keys });
+      const allProcs: Process[] = frames.flatMap(f =>
+        (f.processes ?? []).map(p => ({
+          pid: p.pid,
+          ppid: p.ppid,
+          name: p.name,
+          exe: p.exe || null,
+          cmdline: p.cmdline || null,
+          status: p.status,
+          cpu_usage: p.cpu_usage,
+          memory_usage: p.memory_usage,
+          threads: p.threads,
+          user: p.user || null,
+          start_time: p.start_time,
+          timestamp: f.timestamp ?? undefined,
+        }))
+      );
+      setProcesses(allProcs);
+    } catch (err) {
+      console.error('Failed to load processes:', err);
+      setProcesses([]);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function loadProcessHistory(): Promise<void> {
-    console.warn('Process history: not yet implemented via gRPC');
-    setProcessHistory([]);
-    setIsHistoryLoading(false);
+    setIsHistoryLoading(true);
+    try {
+      const entries = await invoke<Array<{ uuid: string; origin: string; modality: string; timestamp: number | null }>>('query_timeline', {
+        textQuery: undefined,
+        collectorId: undefined,
+      });
+      const processEntries = entries.filter(e => e.modality === 'Processes');
+      if (processEntries.length === 0) {
+        setProcessHistory([]);
+        return;
+      }
+      const keys = processEntries.map(e => ({ uuid: e.uuid, origin: e.origin }));
+      const frames = await invoke<FrameDataWrapper[]>('get_frame_data', { keys });
+      const allProcs: Process[] = frames.flatMap(f =>
+        (f.processes ?? []).map(p => ({
+          pid: p.pid,
+          ppid: p.ppid,
+          name: p.name,
+          exe: p.exe || null,
+          cmdline: p.cmdline || null,
+          status: p.status,
+          cpu_usage: p.cpu_usage,
+          memory_usage: p.memory_usage,
+          threads: p.threads,
+          user: p.user || null,
+          start_time: p.start_time,
+          timestamp: f.timestamp ?? undefined,
+        }))
+      );
+      setProcessHistory(allProcs);
+    } catch (err) {
+      console.error('Failed to load process history:', err);
+      setProcessHistory([]);
+    } finally {
+      setIsHistoryLoading(false);
+    }
   }
 
   function toggleSort(field: keyof Process): void {

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Play, RefreshCw, Clock, List, Monitor } from 'lucide-react';
+import { Play, RefreshCw, Clock, List, Monitor, Mic, FileText } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import { FrameDataWrapper } from './ResultCard';
 
 interface LifelogDataKeyWrapper {
   uuid: string;
@@ -57,6 +58,8 @@ export default function ReplayDashboard(): JSX.Element {
   const [steps, setSteps] = useState<ReplayStepWrapper[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number>(0);
   const [selectedScreenshot, setSelectedScreenshot] = useState<Screenshot | null>(null);
+  const [ocrFrames, setOcrFrames] = useState<FrameDataWrapper[]>([]);
+  const [audioFrames, setAudioFrames] = useState<FrameDataWrapper[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   // Default to "last 10 minutes".
@@ -123,9 +126,29 @@ export default function ReplayDashboard(): JSX.Element {
     }
   }
 
+  async function loadContextFramesForStep(step: ReplayStepWrapper | null): Promise<void> {
+    setOcrFrames([]);
+    setAudioFrames([]);
+    if (!step?.context_keys?.length) return;
+    const ocrKeys = step.context_keys.filter(k => k.origin.includes('Ocr'));
+    const audioKeys = step.context_keys.filter(k => k.origin.includes('Audio'));
+    try {
+      if (ocrKeys.length > 0) {
+        const frames = await invoke<FrameDataWrapper[]>('get_frame_data', { keys: ocrKeys });
+        setOcrFrames(frames);
+      }
+      if (audioKeys.length > 0) {
+        const frames = await invoke<FrameDataWrapper[]>('get_frame_data', { keys: audioKeys });
+        setAudioFrames(frames);
+      }
+    } catch (e) {
+      console.error('[ReplayDashboard] get_frame_data for context failed:', e);
+    }
+  }
+
   useEffect(() => {
-    // Auto-load the first step's screenshot once steps load.
     void loadScreenshotForStep(selectedStep);
+    void loadContextFramesForStep(selectedStep);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIdx, steps.length]);
 
@@ -326,6 +349,34 @@ export default function ReplayDashboard(): JSX.Element {
                 </div>
               )}
             </div>
+
+            {audioFrames.length > 0 && (
+              <div className="rounded-lg border border-[#232B3D] bg-[#1A1E2E] p-4 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-[#F9FAFB]">
+                  <Mic className="w-4 h-4 text-cyan-400" />
+                  Audio ({audioFrames.length})
+                </div>
+                {audioFrames.map(f => f.audio_data_url ? (
+                  <audio key={f.uuid} controls src={f.audio_data_url} className="w-full h-8" />
+                ) : null)}
+              </div>
+            )}
+
+            {ocrFrames.length > 0 && (
+              <div className="rounded-lg border border-[#232B3D] bg-[#1A1E2E] p-4 space-y-2">
+                <div className="flex items-center gap-2 text-sm font-medium text-[#F9FAFB]">
+                  <FileText className="w-4 h-4 text-blue-400" />
+                  OCR Text ({ocrFrames.length} frames)
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {ocrFrames.map(f => (
+                    <p key={f.uuid} className="text-xs text-[#D1D5DB] leading-relaxed whitespace-pre-wrap">
+                      {f.text}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="rounded-lg border border-[#232B3D] bg-[#1A1E2E] p-4">
               <div className="text-sm font-medium text-[#F9FAFB] mb-2">Context Keys</div>

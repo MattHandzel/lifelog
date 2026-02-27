@@ -1,6 +1,6 @@
+use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::collections::HashMap;
 use std::path::PathBuf;
 use utils::replace_home_dir_in_path;
 
@@ -82,14 +82,12 @@ fn collector_from_unified_root(root: &toml::Value) -> Option<CollectorConfig> {
         return None;
     }
 
-    let selected_id = env::var("LIFELOG_COLLECTOR_ID")
-        .ok()
-        .or_else(|| {
-            root.get("runtime")
-                .and_then(|v| v.get("collectorId"))
-                .and_then(|v| v.as_str())
-                .map(|s| s.to_string())
-        })?;
+    let selected_id = env::var("LIFELOG_COLLECTOR_ID").ok().or_else(|| {
+        root.get("runtime")
+            .and_then(|v| v.get("collectorId"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    })?;
 
     let selected = collectors.get(&selected_id)?.clone();
     collector_config_from_toml(&selected_id, selected)
