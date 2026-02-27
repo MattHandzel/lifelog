@@ -210,6 +210,9 @@ This section is for a split setup:
 - Remote system services:
   - `deploy/systemd/lifelog-surrealdb.service`
   - `deploy/systemd/lifelog-server.service`
+- Remote user-service fallback (for hosts where `/etc/systemd/system` is read-only):
+  - `deploy/systemd-user/lifelog-surrealdb.service`
+  - `deploy/systemd-user/lifelog-server.service`
 - Local user services:
   - `deploy/systemd-user/lifelog-collector.service`
   - `deploy/systemd-user/lifelog-ingest-validate.service`
@@ -231,6 +234,7 @@ nix develop --command bash -lc 'scripts/install_persistent_services.sh'
 
 What this does:
 - Installs and enables remote boot services (`lifelog-surrealdb`, `lifelog-server`)
+  - Uses system-level units when writable, otherwise user-level units + linger
 - Installs local user collector service + validation timer
 - Enables linger (`loginctl enable-linger`) so user services survive reboot/login boundaries
 - Installs host-specific collector config to `~/.config/lifelog/config.toml`
@@ -243,6 +247,14 @@ Remote server host:
 ssh matth@server.matthandzel.com 'sudo systemctl status lifelog-surrealdb lifelog-server --no-pager'
 ssh matth@server.matthandzel.com 'sudo systemctl restart lifelog-surrealdb lifelog-server'
 ssh matth@server.matthandzel.com 'sudo journalctl -u lifelog-surrealdb -u lifelog-server -f'
+```
+
+If using remote user-level fallback:
+
+```bash
+ssh matth@server.matthandzel.com 'systemctl --user status lifelog-surrealdb lifelog-server --no-pager'
+ssh matth@server.matthandzel.com 'systemctl --user restart lifelog-surrealdb lifelog-server'
+ssh matth@server.matthandzel.com 'journalctl --user -u lifelog-surrealdb -u lifelog-server -f'
 ```
 
 Laptop collector (user service):
@@ -281,3 +293,47 @@ ssh matth@server.matthandzel.com 'cd /home/matth/Projects/lifelog && printf "SEL
 - `screen` capture depends on desktop session environment and available screenshot binary.
   - Current config uses `program = "grim"` (not `"grim -t png"`).
   - If `screen` errors in service logs, set `[screen].enabled = false` in `~/.config/lifelog/config.toml` and keep `processes` enabled.
+
+### 11.6 Deployment-Specific Values You Should Change Before Sharing
+
+These values are intentionally specific to one environment and should be parameterized before wider rollout:
+
+- Remote identity and paths:
+  - `REMOTE_HOST=matth@server.matthandzel.com`
+  - `REMOTE_REPO=/home/matth/Projects/lifelog`
+  - service `WorkingDirectory` paths under `/home/matth/Projects/lifelog`
+  - files:
+    - `scripts/install_persistent_services.sh`
+    - `deploy/systemd/lifelog-server.service`
+    - `deploy/systemd/lifelog-surrealdb.service`
+    - `deploy/systemd-user/lifelog-server.service`
+    - `deploy/systemd-user/lifelog-surrealdb.service`
+
+- Collector endpoint:
+  - `SERVER_ADDR=http://100.118.206.104:7182`
+  - file: `deploy/systemd-user/lifelog-collector.service`
+
+- Local data/output paths and laptop id:
+  - `id = "laptop"`
+  - output directories under `/home/matth/lifelog/data/...`
+  - file: `deploy/config/collector.laptop.toml`
+
+- Database credentials:
+  - `LIFELOG_DB_USER=root`
+  - `LIFELOG_DB_PASS=root`
+  - change for any non-dev/shared deployment.
+
+- Service style fallback:
+  - Installer currently tries system services first, then falls back to user services if `/etc/systemd/system` is not writable.
+  - file: `scripts/install_persistent_services.sh`
+
+- Validation cadence defaults:
+  - `DURATION_SECS=45`
+  - timer every `10m`
+  - files:
+    - `deploy/systemd-user/lifelog-ingest-validate.service`
+    - `deploy/systemd-user/lifelog-ingest-validate.timer`
+
+- Collector runtime mode:
+  - Service currently runs `target/debug/lifelog-collector`.
+  - For production sharing, switch to a pinned release binary path and versioned build artifact.

@@ -5,7 +5,7 @@ REMOTE_HOST="${REMOTE_HOST:-matth@server.matthandzel.com}"
 REMOTE_REPO="${REMOTE_REPO:-/home/matth/Projects/lifelog}"
 
 echo "Installing remote system services on $REMOTE_HOST ..."
-ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && sudo cp deploy/systemd/lifelog-surrealdb.service /etc/systemd/system/lifelog-surrealdb.service && sudo cp deploy/systemd/lifelog-server.service /etc/systemd/system/lifelog-server.service && sudo systemctl daemon-reload && sudo systemctl enable --now lifelog-surrealdb.service lifelog-server.service"
+ssh "$REMOTE_HOST" "set -euo pipefail; cd '$REMOTE_REPO'; if sudo cp deploy/systemd/lifelog-surrealdb.service /etc/systemd/system/lifelog-surrealdb.service >/dev/null 2>&1; then sudo cp deploy/systemd/lifelog-server.service /etc/systemd/system/lifelog-server.service; sudo systemctl daemon-reload; sudo systemctl enable --now lifelog-surrealdb.service lifelog-server.service; else mkdir -p \"\$HOME/.config/systemd/user\"; cp deploy/systemd-user/lifelog-surrealdb.service \"\$HOME/.config/systemd/user/\"; cp deploy/systemd-user/lifelog-server.service \"\$HOME/.config/systemd/user/\"; systemctl --user daemon-reload; sudo loginctl enable-linger \"\$USER\"; systemctl --user enable --now lifelog-surrealdb.service lifelog-server.service; fi"
 
 echo "Installing local user services ..."
 mkdir -p "$HOME/.config/systemd/user"

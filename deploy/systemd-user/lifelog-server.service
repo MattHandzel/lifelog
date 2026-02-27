@@ -1,0 +1,20 @@
+[Unit]
+Description=Lifelog Server Backend (user)
+After=network-online.target lifelog-surrealdb.service
+Wants=network-online.target lifelog-surrealdb.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h/Projects/lifelog
+Environment=HOME=%h
+Environment=LIFELOG_HOST=0.0.0.0
+Environment=LIFELOG_DB_ENDPOINT=127.0.0.1:7183
+Environment=LIFELOG_DB_USER=root
+Environment=LIFELOG_DB_PASS=root
+Environment=RUST_LOG=info
+ExecStart=/usr/bin/env bash -lc 'exec nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
