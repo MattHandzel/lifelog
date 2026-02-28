@@ -7,7 +7,7 @@ use lifelog_types::{to_pb_ts, Ack, AudioFrame, Chunk, GetDataRequest, KeystrokeF
 use prost::Message;
 use std::process::{Command, Stdio};
 use std::time::Duration;
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout};
 
 use bin_e2e::{pick_unused_port, sha256_hex, wait_for_surreal_ws_ready, wait_for_tcp_listen};
 
@@ -60,6 +60,8 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
             // Server requires these for SurrealDB auth.
             .env("LIFELOG_DB_USER", "root")
             .env("LIFELOG_DB_PASS", "root")
+            // Security hardening: provide dummy auth.
+            .env("LIFELOG_AUTH_TOKEN", "smoke-test-token")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -93,10 +95,20 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
     }
 
     // Connect gRPC client.
-    let mut client = tokio::time::timeout(
-        Duration::from_secs(10),
-        LifelogServerServiceClient::connect(server_addr.clone()),
-    )
+    let mut client = timeout(Duration::from_secs(10), async {
+        let channel = tonic::transport::Endpoint::from_shared(server_addr.clone())?
+            .connect()
+            .await?;
+        Ok::<_, Box<dyn std::error::Error>>(LifelogServerServiceClient::with_interceptor(
+            channel,
+            move |mut req: tonic::Request<()>| {
+                let token = "Bearer smoke-test-token";
+                req.metadata_mut()
+                    .insert("authorization", token.parse().unwrap());
+                Ok(req)
+            },
+        ))
+    })
     .await
     .expect("timeout connecting to server")
     .expect("connect to server");

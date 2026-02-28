@@ -15,30 +15,30 @@ fn collector_binary_starts_with_all_modules_disabled() {
     let cfg_dir = home.join(".config/lifelog");
     fs::create_dir_all(&cfg_dir).expect("create config dir");
 
-    let cfg_path = cfg_dir.join("config.toml");
+    let cfg_path = cfg_dir.join("lifelog-config.toml");
     fs::write(
         &cfg_path,
         r#"
-# Minimal smoke config.
+[collectors.smoke-test]
 id = "smoke-test"
 host = "127.0.0.1"
 port = 7190
 timestamp_format = "%Y-%m-%d_%H-%M-%S"
 
-[screen]
+[collectors.smoke-test.screen]
 enabled = false
 interval = 20.0
 output_dir = "./out/screen"
 program = "gnome-screenshot"
 timestamp_format = "%Y-%m-%d_%H-%M-%S"
 
-[browser]
+[collectors.smoke-test.browser]
 enabled = false
 input_file = ""
 output_file = "./out/browser"
 browser_type = "chrome"
 
-[camera]
+[collectors.smoke-test.camera]
 enabled = false
 interval = 10.0
 output_dir = "./out/camera"
@@ -48,7 +48,7 @@ resolution_y = 480
 fps = 30
 timestamp_format = "%Y-%m-%d_%H-%M-%S"
 
-[microphone]
+[collectors.smoke-test.microphone]
 enabled = false
 output_dir = "./out/microphone"
 sample_rate = 44100
@@ -58,12 +58,12 @@ timestamp_format = "%Y-%m-%d_%H-%M-%S"
 bits_per_sample = 16
 channels = 1
 
-[processes]
+[collectors.smoke-test.processes]
 enabled = false
 interval = 60.0
 output_dir = "./out/processes"
 
-[hyprland]
+[collectors.smoke-test.hyprland]
 enabled = false
 interval = 1.0
 output_dir = "./out/hyprland"
@@ -73,7 +73,7 @@ log_workspace = true
 log_active_monitor = true
 log_devices = true
 
-[weather]
+[collectors.smoke-test.weather]
 enabled = false
 interval = 1800.0
 output_dir = "./out/weather"
@@ -81,37 +81,37 @@ api_key = ""
 latitude = 0.0
 longitude = 0.0
 
-[wifi]
+[collectors.smoke-test.wifi]
 enabled = false
 interval = 300.0
 output_dir = "./out/wifi"
 scan_command = ""
 
-[clipboard]
+[collectors.smoke-test.clipboard]
 enabled = false
 interval = 2.0
 output_dir = "./out/clipboard"
 max_text_bytes = 262144
 
-[shell_history]
+[collectors.smoke-test.shell_history]
 enabled = false
 interval = 2.0
 output_dir = "./out/shell_history"
 history_file = "./.zsh_history"
 shell_type = "auto"
 
-[mouse]
+[collectors.smoke-test.mouse]
 enabled = false
 interval = 0.25
 output_dir = "./out/mouse"
 
-[window_activity]
+[collectors.smoke-test.window_activity]
 enabled = false
 interval = 1.0
 output_dir = "./out/window_activity"
 backend = "auto"
 
-[keyboard]
+[collectors.smoke-test.keyboard]
 enabled = false
 interval = 1.0
 output_dir = "./out/keystrokes"
@@ -124,6 +124,8 @@ output_dir = "./out/keystrokes"
         .arg("--server-address")
         .arg("http://127.0.0.1:1")
         .env("HOME", home)
+        .env("LIFELOG_COLLECTOR_ID", "smoke-test")
+        .env("LIFELOG_AUTH_TOKEN", "dummy-token")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

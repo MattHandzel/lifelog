@@ -67,7 +67,30 @@ impl UploadManager {
             "UploadManager: Starting upload cycle for buffered sources"
         );
 
-        let mut client = LifelogServerServiceClient::connect(self.server_address.clone()).await?;
+        if std::env::var("LIFELOG_AUTH_TOKEN").is_err() {
+            tracing::warn!(
+                "LIFELOG_AUTH_TOKEN is not set. UploadManager will connect without authentication."
+            );
+        }
+
+        let mut endpoint = tonic::transport::Endpoint::from_shared(self.server_address.clone())
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
+            .connect_timeout(std::time::Duration::from_secs(10));
+
+        if self.server_address.starts_with("https://") {
+            let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
+            endpoint = endpoint
+                .tls_config(tls)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+        } else {
+            tracing::warn!("Server address is not https. Connection is plaintext!");
+        }
+
+        let channel = endpoint.connect().await?;
+        let mut client = LifelogServerServiceClient::with_interceptor(
+            channel,
+            crate::collector::auth_interceptor,
+        );
 
         for source in sources {
             let stream_id = source.stream_id();

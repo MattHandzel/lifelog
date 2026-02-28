@@ -10,8 +10,61 @@ use lifelog_types::FILE_DESCRIPTOR_SET;
 use tonic::transport::Server as TonicServer;
 use tonic_reflection::server::Builder;
 
+use clap::{Parser, Subcommand};
+
+#[derive(Parser)]
+#[command(author, version, about = "Lifelog Server Backend", long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Start the gRPC server (default)
+    Serve,
+    /// Generate a secure random token for authentication
+    GenerateToken,
+}
+
+fn check_auth(req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+    let auth_token = std::env::var("LIFELOG_AUTH_TOKEN").unwrap_or_default();
+    let enrollment_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN").unwrap_or_default();
+
+    if auth_token.is_empty() && enrollment_token.is_empty() {
+        return Ok(req);
+    }
+
+    match req.metadata().get("authorization") {
+        Some(t) => {
+            let token_str = t.to_str().unwrap_or_default();
+            if !auth_token.is_empty() && token_str == format!("Bearer {}", auth_token) {
+                return Ok(req);
+            }
+            if !enrollment_token.is_empty() && token_str == format!("Bearer {}", enrollment_token) {
+                return Ok(req);
+            }
+            tracing::warn!("Invalid authentication token provided");
+            Err(tonic::Status::unauthenticated("Invalid token"))
+        }
+        None => {
+            tracing::warn!("Unauthenticated connection attempt (no token provided)");
+            Err(tonic::Status::unauthenticated("No token provided"))
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli = Cli::parse();
+
+    if let Some(Commands::GenerateToken) = cli.command {
+        let token = Uuid::new_v4().to_string().replace("-", "");
+        println!("Generated LIFELOG_AUTH_TOKEN: {}", token);
+        println!("Generated LIFELOG_ENROLLMENT_TOKEN: {}", token);
+        return Ok(());
+    }
+
     tracing_subscriber::fmt::init();
 
     let mut config = config::load_server_config_from_unified().unwrap_or_else(|| {
@@ -76,15 +129,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let tls = tonic::transport::ServerTlsConfig::new().identity(identity);
         builder = builder.tls_config(tls)?;
         tracing::info!("TLS enabled");
+    } else {
+        tracing::warn!("LIFELOG_TLS_CERT_PATH or LIFELOG_TLS_KEY_PATH is not set. Server is running in plaintext!");
+    }
+
+    let auth_token = std::env::var("LIFELOG_AUTH_TOKEN").unwrap_or_default();
+    let enrollment_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN").unwrap_or_default();
+    if auth_token.is_empty() && enrollment_token.is_empty() {
+        tracing::warn!("LIFELOG_AUTH_TOKEN and LIFELOG_ENROLLMENT_TOKEN are not set. Server is unauthenticated!");
+        tracing::warn!(
+            "To generate a secure token, run: cargo run -p lifelog-server -- generate-token"
+        );
     }
 
     builder
         .add_service(reflection_service)
         .add_service(health_service)
-        .add_service(LifelogServerServiceServer::new(
+        .add_service(LifelogServerServiceServer::with_interceptor(
             GRPCServerLifelogServerService {
                 server: server_handle2,
             },
+            check_auth,
         ))
         .serve(addr)
         .await?;

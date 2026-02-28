@@ -54,6 +54,21 @@ fn normalize_collector_id(id: &str) -> String {
     id.replace(":", "")
 }
 
+pub fn auth_interceptor(mut req: Request<()>) -> Result<Request<()>, tonic::Status> {
+    if let Ok(token) = std::env::var("LIFELOG_AUTH_TOKEN") {
+        let token_str = format!("Bearer {}", token);
+        if let Ok(meta) = tonic::metadata::MetadataValue::try_from(&token_str) {
+            req.metadata_mut().insert("authorization", meta);
+        }
+    } else if let Ok(token) = std::env::var("LIFELOG_ENROLLMENT_TOKEN") {
+        let token_str = format!("Bearer {}", token);
+        if let Ok(meta) = tonic::metadata::MetadataValue::try_from(&token_str) {
+            req.metadata_mut().insert("authorization", meta);
+        }
+    }
+    Ok(req)
+}
+
 impl<C: Send + Sync + Debug + 'static> fmt::Debug for RunningSource<C> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RunningSource")
@@ -173,6 +188,12 @@ impl Collector {
     pub async fn handshake(&mut self, handle: CollectorHandle) -> Result<(), LifelogError> {
         tracing::info!(addr = %self.server_address, "Attempting gRPC ControlStream connection");
 
+        if std::env::var("LIFELOG_AUTH_TOKEN").is_err() {
+            tracing::warn!(
+                "LIFELOG_AUTH_TOKEN is not set. Collector will connect without authentication."
+            );
+        }
+
         let mut endpoint = Endpoint::from_shared(self.server_address.clone())
             .map_err(|e| LifelogError::Database(format!("Invalid server address: {}", e)))?
             .connect_timeout(Duration::from_secs(10));
@@ -183,10 +204,12 @@ impl Collector {
                 .tls_config(tls)
                 .map_err(|e| LifelogError::Database(format!("TLS config error: {}", e)))?;
             tracing::info!("TLS enabled for server connection");
+        } else {
+            tracing::warn!("Server address is not https. Connection is plaintext!");
         }
 
         let channel = endpoint.connect().await?;
-        let mut client = LifelogServerServiceClient::new(channel);
+        let mut client = LifelogServerServiceClient::with_interceptor(channel, auth_interceptor);
 
         let (tx, rx) = mpsc::channel::<ControlMessage>(128);
         self.control_tx = Some(tx.clone());

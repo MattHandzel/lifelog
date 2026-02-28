@@ -51,6 +51,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_addr = cli
         .server_address
         .unwrap_or_else(config::default_server_url);
+
     let client_id = config.id.clone();
 
     let (upload_mgr, upload_trigger) =
