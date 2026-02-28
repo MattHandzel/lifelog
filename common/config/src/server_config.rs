@@ -90,27 +90,20 @@ pub struct TransformSpec {
 ///
 /// Example:
 /// `[{"id":"ocr","enabled":true,"source_origin":"*:screen","language":"eng"}]`
-///
-/// Fallback default: OCR enabled for all screen origins.
 pub fn load_transform_specs() -> Vec<TransformSpec> {
-    let fallback = vec![TransformSpec {
-        id: "ocr".to_string(),
-        enabled: true,
-        source_origin: "*:screen".to_string(),
-        language: Some("eng".to_string()),
-    }];
+    let fallback: Vec<TransformSpec> = Vec::new();
 
     if let Ok(v) = std::env::var("LIFELOG_TRANSFORMS_JSON") {
         if !v.trim().is_empty() {
             return match serde_json::from_str::<Vec<TransformSpec>>(&v) {
                 Ok(specs) if !specs.is_empty() => specs,
-                Ok(_) => fallback,
+                Ok(_) => fallback.clone(),
                 Err(e) => {
                     tracing::warn!(
                         error = %e,
-                        "Failed to parse LIFELOG_TRANSFORMS_JSON; using fallback"
+                        "Failed to parse LIFELOG_TRANSFORMS_JSON; transforms disabled"
                     );
-                    fallback
+                    fallback.clone()
                 }
             };
         }
@@ -121,7 +114,7 @@ pub fn load_transform_specs() -> Vec<TransformSpec> {
         .unwrap_or_else(|_| crate::default_lifelog_config_path());
     let cfg_text = match std::fs::read_to_string(&path) {
         Ok(v) => v,
-        Err(_) => return fallback,
+        Err(_) => return fallback.clone(),
     };
     let parsed: toml::Value = match toml::from_str(&replace_home_dir_in_path(cfg_text)) {
         Ok(v) => v,
@@ -129,24 +122,24 @@ pub fn load_transform_specs() -> Vec<TransformSpec> {
             tracing::warn!(
                 error = %e,
                 path = ?path,
-                "Failed to parse lifelog-config.toml for transforms; using fallback"
+                "Failed to parse lifelog-config.toml for transforms; transforms disabled"
             );
-            return fallback;
+            return fallback.clone();
         }
     };
     let normalized = normalize_toml_keys(parsed);
     let Some(transforms_val) = normalized.get("transforms") else {
-        return fallback;
+        return fallback.clone();
     };
     let raw = toml::to_string(transforms_val).unwrap_or_default();
 
     match toml::from_str::<Vec<TransformSpec>>(&raw) {
         Ok(specs) if !specs.is_empty() => specs,
-        Ok(_) => fallback,
+        Ok(_) => fallback.clone(),
         Err(e) => {
             tracing::warn!(
                 error = %e,
-                "Failed to parse transforms in lifelog-config.toml; using fallback"
+                "Failed to parse transforms in lifelog-config.toml; transforms disabled"
             );
             fallback
         }
