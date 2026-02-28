@@ -497,4 +497,26 @@ impl LifelogServerService for GRPCServerLifelogServerService {
 
         Ok(Response::new(ListModalitiesResponse { modalities }))
     }
+
+    async fn pair_collector(
+        &self,
+        request: Request<PairCollectorRequest>,
+    ) -> Result<Response<PairCollectorResponse>, Status> {
+        let req = request.into_inner();
+        let expected_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN").unwrap_or_default();
+        if expected_token.is_empty() {
+            tracing::warn!("Server has no enrollment token configured");
+            return Err(Status::internal("Enrollment not configured on server"));
+        }
+
+        if req.enrollment_token != expected_token {
+            tracing::warn!("Invalid enrollment token attempt");
+            return Err(Status::permission_denied("Invalid enrollment token"));
+        }
+
+        let collector_id = lifelog_core::uuid::Uuid::new_v4().to_string();
+        tracing::info!(%collector_id, "Successfully paired new collector");
+
+        Ok(Response::new(PairCollectorResponse { collector_id }))
+    }
 }

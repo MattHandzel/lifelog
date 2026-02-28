@@ -293,6 +293,14 @@ message ListModalitiesResponse {
   repeated ModalityDescriptor modalities = 1;
 }
 
+message PairCollectorRequest {
+  string enrollment_token = 1;
+}
+
+message PairCollectorResponse {
+  string collector_id = 1;
+}
+
 // -----------------------------------------------------------------------------
 
 
@@ -412,6 +420,9 @@ service LifelogServerService {
 
   // Returns all registered modality descriptors, enabling schema-driven clients.
   rpc ListModalities(ListModalitiesRequest) returns (ListModalitiesResponse);
+
+  // Exchange an enrollment token for a permanent collector identity.
+  rpc PairCollector(PairCollectorRequest) returns (PairCollectorResponse);
 
 }
 

@@ -13,6 +13,9 @@ use tokio::sync::RwLock;
 async fn test_collector_with_multiple_modalities_uploads_to_server() {
     let _ = tracing_subscriber::fmt::try_init();
 
+    // Security hardening: provide dummy auth.
+    std::env::set_var("LIFELOG_AUTH_TOKEN", "test-token");
+
     let ctx = TestContext::new().await;
     let mut client = ctx.client();
 
