@@ -4,6 +4,22 @@ This document specifies the v1 system you are rebuilding: a local-first, multi-d
 
 This spec is written to minimize rework by pinning down: goals, invariants, data/time semantics, network contracts, query language requirements, storage boundaries, and reliability guarantees.
 
+## Status Snapshot (Implemented as of 2026-02-27)
+
+The following is confirmed implemented in this repository/runtime:
+
+- Unified config file: `lifelog-config.toml` with strict validation (no implicit defaults when required sections are missing).
+- Multi-collector scalable config shape (`[collectors.<collector_id>]`) with runtime collector selection.
+- Device alias mapping via `[deviceAliases]`.
+- Path expansion support for `~` / `$HOME` in config-loaded paths.
+- Persistent interface connection settings via `~/.config/lifelog/interface-config.toml`.
+- Server query resolution accepts both alias and MAC/canonical ids, with alias precedence when both match.
+- DB/table origins remain canonical collector identity (collector id), while aliases are query/presentation layer.
+- Screen ingest ACK/queryability is now conditional on OCR configuration:
+  - OCR enabled: screen ACK waits for OCR-derived completion.
+  - OCR disabled: screen records are indexed/queryable immediately.
+- Transform fallback is strict: no implicit OCR transform is auto-enabled if transform config is absent.
+
 ---
 
 ## 0. Definitions
@@ -217,8 +233,10 @@ v1 treats ACK as “fully queryable”. Therefore, ACK requires completion of:
   - shell command text,
   - keystroke captured text (if enabled; see Section 12.4).
 - **Required derived transforms** needed to satisfy the above baseline indexes.
-  - In v1, this specifically means Screen ingestion is not ACKed as queryable until the OCR-derived
-    record for the same frame UUID has been persisted (so the OCR text index can be relied on).
+  - In v1, this is conditional:
+    - if OCR transform is enabled for Screen, Screen ingestion is not ACKed as queryable until the OCR-derived
+      record for the same frame UUID has been persisted;
+    - if OCR transform is disabled, Screen records are ACKed/queryable after base persistence/indexing.
 
 Vector/embedding indexes are explicitly not baseline for ACK in v1.
 
@@ -273,6 +291,7 @@ No legacy single-collector config shape is part of this requirement.
 - Alias mapping is configuration-driven through `[deviceAliases]`.
 - Storage and protocol identity remain canonical ids (`collector_id`); aliases are presentation metadata.
 - Interface surfaces must display alias when available and fall back to canonical id otherwise.
+- Query resolution must accept both alias and canonical id; when both could match, alias resolution takes precedence.
 
 ### 7.2 Control Plane APIs (minimum set)
 

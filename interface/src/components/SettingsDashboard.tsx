@@ -1,189 +1,136 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 
-interface AppSettings {
-  theme: 'light' | 'dark';
-  autoRefresh: boolean;
-  refreshInterval: number;
-  logLevel: 'debug' | 'info' | 'warn' | 'error';
+interface InterfaceSettings {
+  grpcServerAddress: string;
+  configPath: string;
 }
 
-export default function SettingsDashboard() {
-  const [settings, setSettings] = useState<AppSettings>({
-    theme: 'dark',
-    autoRefresh: true,
-    refreshInterval: 30,
-    logLevel: 'info',
-  });
+export default function SettingsDashboard(): JSX.Element {
+  const [settings, setSettings] = useState<InterfaceSettings | null>(null);
+  const [serverAddressInput, setServerAddressInput] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    loadSettings();
+    void loadSettings();
   }, []);
 
-  const loadSettings = async () => {
+  async function loadSettings() {
     setIsLoading(true);
     setError(null);
-    
     try {
-      // Local settings load simulation
-      setTimeout(() => setIsLoading(false), 500);
+      const result = await invoke<InterfaceSettings>('get_interface_settings');
+      setSettings(result);
+      setServerAddressInput(result.grpcServerAddress);
     } catch (err) {
-      console.error('Failed to load settings:', err);
-      setError('Failed to load settings. Using defaults.');
+      console.error('Failed to load interface settings:', err);
+      setError(`Failed to load interface settings: ${String(err)}`);
+    } finally {
       setIsLoading(false);
     }
-  };
+  }
 
-  const saveSettings = async () => {
+  async function saveSettings() {
     setIsSaving(true);
     setError(null);
     setSuccessMessage(null);
-    
     try {
-      // Local settings save simulation
-      setSuccessMessage('Settings saved successfully');
-      setTimeout(() => {
-        setSuccessMessage(null);
-      }, 3000);
+      await invoke('set_interface_settings', {
+        grpcServerAddress: serverAddressInput.trim(),
+      });
+      await loadSettings();
+      setSuccessMessage('Saved. Server connection updated.');
     } catch (err) {
-      console.error('Failed to save settings:', err);
-      setError('Failed to save settings. Please try again.');
+      console.error('Failed to save interface settings:', err);
+      setError(`Failed to save settings: ${String(err)}`);
     } finally {
       setIsSaving(false);
     }
-  };
+  }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target as HTMLInputElement;
-    
-    setSettings(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' 
-        ? (e.target as HTMLInputElement).checked 
-        : type === 'number' 
-          ? parseInt(value, 10) 
-          : value
-    }));
-  };
+  async function testConnection() {
+    setIsTesting(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      await invoke('test_interface_server_connection', {
+        grpcServerAddress: serverAddressInput.trim(),
+      });
+      setSuccessMessage('Connection test succeeded.');
+    } catch (err) {
+      console.error('Connection test failed:', err);
+      setError(`Connection test failed: ${String(err)}`);
+    } finally {
+      setIsTesting(false);
+    }
+  }
 
   return (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
-      
+    <div className="p-8">
+      <h2 className="title mb-2">Settings</h2>
+      <p className="subtitle mb-8">Interface connection is independent from local collectors.</p>
+
       {isLoading ? (
-        <div className="flex justify-center my-8">
-          <div className="loading-spinner w-8 h-8"></div>
-        </div>
+        <div className="text-[#9CA3AF]">Loading settings...</div>
       ) : (
-        <div className="max-w-2xl mx-auto">
+        <div className="space-y-6">
           {error && (
-            <div className="bg-red-500 bg-opacity-10 border border-red-500 text-red-500 px-4 py-3 rounded mb-4">
+            <div className="bg-red-500/10 border border-red-500/50 text-red-300 px-4 py-3 rounded-lg">
               {error}
             </div>
           )}
-          
           {successMessage && (
-            <div className="bg-green-500 bg-opacity-10 border border-green-500 text-green-500 px-4 py-3 rounded mb-4">
+            <div className="bg-green-500/10 border border-green-500/50 text-green-300 px-4 py-3 rounded-lg">
               {successMessage}
             </div>
           )}
-          
-          <div className="card p-6 space-y-6">
-            <div>
-              <h2 className="text-lg font-medium mb-4">Appearance</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="form-label">Theme</label>
-                  <select 
-                    name="theme"
-                    value={settings.theme}
-                    onChange={handleChange}
-                    className="form-input"
-                  >
-                    <option value="light">Light</option>
-                    <option value="dark">Dark</option>
-                  </select>
-                </div>
-              </div>
+
+          <div className="card p-5 space-y-4">
+            <h3 className="font-medium text-[#F9FAFB]">Server Connection</h3>
+
+            <div className="space-y-2">
+              <label className="text-sm text-[#9CA3AF]">gRPC server address</label>
+              <input
+                className="w-full rounded-lg bg-[#0F111A] border border-[#2A3142] px-3 py-2 text-[#F9FAFB]"
+                value={serverAddressInput}
+                onChange={(e) => setServerAddressInput(e.target.value)}
+                placeholder="http://127.0.0.1:7182"
+              />
+              <p className="text-xs text-[#9CA3AF]">
+                Example: `http://127.0.0.1:27182` (SSH tunnel to remote server gRPC port 7182)
+              </p>
             </div>
-            
-            <div className="border-t border-gray-700 pt-6">
-              <h2 className="text-lg font-medium mb-4">Data Refresh</h2>
-              <div className="space-y-4">
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="autoRefresh"
-                    name="autoRefresh"
-                    checked={settings.autoRefresh}
-                    onChange={handleChange}
-                    className="h-4 w-4 rounded border-gray-600 text-blue-600 focus:ring-blue-500 bg-gray-700"
-                  />
-                  <label htmlFor="autoRefresh" className="ml-2 block text-sm text-gray-300">
-                    Enable auto-refresh
-                  </label>
-                </div>
-                
-                {settings.autoRefresh && (
-                  <div>
-                    <label className="form-label">Refresh Interval (seconds)</label>
-                    <input
-                      type="number"
-                      name="refreshInterval"
-                      value={settings.refreshInterval}
-                      onChange={handleChange}
-                      min="5"
-                      max="3600"
-                      className="form-input"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-            
-            <div className="border-t border-gray-700 pt-6">
-              <h2 className="text-lg font-medium mb-4">Logging</h2>
-              <div>
-                <label className="form-label">Log Level</label>
-                <select 
-                  name="logLevel"
-                  value={settings.logLevel}
-                  onChange={handleChange}
-                  className="form-input"
-                >
-                  <option value="debug">Debug</option>
-                  <option value="info">Info</option>
-                  <option value="warn">Warning</option>
-                  <option value="error">Error</option>
-                </select>
-              </div>
-            </div>
-            
-            <div className="border-t border-gray-700 pt-6 flex justify-end">
+
+            <div className="flex gap-3">
               <button
-                onClick={saveSettings}
-                disabled={isSaving}
-                className="btn btn-primary flex items-center"
+                onClick={() => void testConnection()}
+                disabled={isTesting}
+                className="btn btn-secondary"
               >
-                {isSaving ? (
-                  <>
-                    <span className="loading-spinner mr-2"></span>
-                    Saving...
-                  </>
-                ) : 'Save Settings'}
+                {isTesting ? 'Testing...' : 'Test Connection'}
+              </button>
+              <button
+                onClick={() => void saveSettings()}
+                disabled={isSaving}
+                className="btn btn-primary"
+              >
+                {isSaving ? 'Saving...' : 'Save'}
               </button>
             </div>
-          </div>
-          
-          <div className="mt-8 card p-6">
-            <h2 className="text-lg font-medium mb-4">About</h2>
-            <div>
-              <p className="text-gray-400">Lifelog Interface • Version 0.1.0</p>
-              <p className="text-gray-400 mt-2">A personal life data tracking application.</p>
+
+            <div className="text-xs text-[#9CA3AF]">
+              <div>Config file:</div>
+              <div className="break-all">{settings?.configPath ?? 'unknown'}</div>
             </div>
+          </div>
+
+          <div className="card p-5">
+            <h3 className="font-medium text-[#F9FAFB] mb-1">Version</h3>
+            <p className="text-sm text-[#9CA3AF]">Lifelog Interface • Version 0.1.0</p>
           </div>
         </div>
       )}

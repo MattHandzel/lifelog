@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Login } from './components/Login';
 import SearchDashboard from './components/SearchDashboard';
 import DevicesDashboard from './components/DevicesDashboard';
+import SettingsDashboard from './components/SettingsDashboard';
 import { LayoutDashboard, Settings, Search, Laptop, Shield } from "lucide-react";
 import FeatureTabs from "./components/FeatureTabs.tsx";
 import { cn } from "./lib/utils";
@@ -174,20 +175,7 @@ function AppLayout(): JSX.Element {
           {currentView === "dashboard" && <FeatureTabs />}
           {currentView === "search" && <SearchDashboard />}
           {currentView === "devices" && <DevicesDashboard />}
-          {currentView === "settings" && (
-            <div className="p-8">
-              <h2 className="title mb-4">Settings</h2>
-              <p className="subtitle mb-8">Manage your application preferences</p>
-              <div className="space-y-6">
-                <div className="card p-4">
-                  <div>
-                    <h3 className="font-medium text-[#F9FAFB]">Version</h3>
-                    <p className="text-sm text-[#9CA3AF]">Lifelog Interface • Version 0.1.0</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {currentView === "settings" && <SettingsDashboard />}
         </div>
         
         {/* Footer */}

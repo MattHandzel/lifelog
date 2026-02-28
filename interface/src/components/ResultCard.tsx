@@ -15,6 +15,47 @@ export interface SearchResult {
   metadata?: Record<string, unknown>;
 }
 
+export interface ProcessInfoWrapper {
+  pid: number;
+  ppid: number;
+  name: string;
+  exe: string;
+  cmdline: string;
+  status: string;
+  cpu_usage: number;
+  memory_usage: number;
+  threads: number;
+  user: string;
+  start_time: number;
+}
+
+export interface FrameDataWrapper {
+  uuid: string;
+  modality: string;
+  timestamp: number | null;
+  text: string | null;
+  url: string | null;
+  title: string | null;
+  visit_count: number | null;
+  command: string | null;
+  working_dir: string | null;
+  exit_code: number | null;
+  application: string | null;
+  window_title: string | null;
+  duration_secs: number | null;
+  audio_data_url: string | null;
+  codec: string | null;
+  sample_rate: number | null;
+  channels: number | null;
+  audio_duration_secs: number | null;
+  image_data_url: string | null;
+  width: number | null;
+  height: number | null;
+  mime_type: string | null;
+  camera_device: string | null;
+  processes: ProcessInfoWrapper[] | null;
+}
+
 function formatDate(timestamp: number): string {
   return new Date(timestamp).toLocaleString();
 }
@@ -152,33 +193,62 @@ function ModalityDetails({ result }: { result: SearchResult }): JSX.Element {
 }
 
 interface ResultCardProps {
-  result: SearchResult;
+  result?: SearchResult;
+  frame?: FrameDataWrapper;
 }
 
-export default function ResultCard({ result }: ResultCardProps): JSX.Element {
+function frameToResult(frame: FrameDataWrapper): SearchResult {
+  const modalityLower = frame.modality.toLowerCase();
+  const preview = frame.image_data_url ?? undefined;
+  return {
+    id: frame.uuid,
+    type: modalityLower === 'audio' || modalityLower === 'microphone' ? 'audio' : 'file',
+    name: frame.title ?? frame.text ?? frame.uuid,
+    path: frame.url ?? frame.command ?? frame.working_dir ?? frame.uuid,
+    timestamp: (frame.timestamp ?? 0) * 1000,
+    source: frame.modality,
+    modality: frame.modality,
+    preview,
+    duration: frame.audio_duration_secs ?? frame.duration_secs ?? undefined,
+    metadata: {
+      url: frame.url,
+      title: frame.title,
+      command: frame.command,
+      application: frame.application,
+      visit_count: frame.visit_count,
+      processes_count: frame.processes?.length ?? 0,
+    },
+  };
+}
+
+export default function ResultCard({ result, frame }: ResultCardProps): JSX.Element {
+  const effectiveResult = result ?? (frame ? frameToResult(frame) : null);
+  if (!effectiveResult) {
+    return <></>;
+  }
   return (
     <Card className="bg-[#1A1E2E] border-[#232B3D] overflow-hidden">
       <div className="relative">
-        <ModalityPreview result={result} />
+        <ModalityPreview result={effectiveResult} />
       </div>
       <CardContent className="p-4">
         <div className="flex items-start gap-3">
           <div className="mt-1 shrink-0">
-            <ModalityIcon modality={result.modality} />
+            <ModalityIcon modality={effectiveResult.modality} />
           </div>
           <div className="flex-1 min-w-0">
-            <h3 className="font-medium text-[#F9FAFB] truncate" title={result.name}>
-              {result.modality} · {result.name}
+            <h3 className="font-medium text-[#F9FAFB] truncate" title={effectiveResult.name}>
+              {effectiveResult.modality} · {effectiveResult.name}
             </h3>
             <div className="text-sm text-[#9CA3AF] mt-1 space-y-0.5">
-              <p className="truncate" title={result.source}>
-                {result.source}
+              <p className="truncate" title={effectiveResult.source}>
+                {effectiveResult.source}
               </p>
-              <p>{formatDate(result.timestamp)}</p>
-              {result.size != null && <p>{formatFileSize(result.size)}</p>}
+              <p>{formatDate(effectiveResult.timestamp)}</p>
+              {effectiveResult.size != null && <p>{formatFileSize(effectiveResult.size)}</p>}
             </div>
             <div className="mt-2">
-              <ModalityDetails result={result} />
+              <ModalityDetails result={effectiveResult} />
             </div>
           </div>
         </div>
