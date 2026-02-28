@@ -71,6 +71,14 @@ This is the lifelog interface, it will be an interface for the user to be able t
 
 Upon connection to the server, the user must authenticate before accessing the lifelog.
 
+Interface connectivity and configuration requirements:
+
+- The interface is fully separate from collectors. It only needs server connectivity.
+- The interface must not require local collector configuration in order to start.
+- After connecting to the server, the interface loads collectors and modality config from the server (`GetSystemConfig`), not from local collector config files.
+- The interface has its own persistent connection config file (for server endpoint and related interface settings).
+- The server endpoint must be editable from the interface UI and persisted to that interface config file.
+
 ## Adding A New Collector
 
 In a system with $$0-n$$ collectors and 1 server, if we want to add a new collector, we need to do the following:

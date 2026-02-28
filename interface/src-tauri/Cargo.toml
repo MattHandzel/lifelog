@@ -34,9 +34,9 @@ config = {path = "../../common/config", features = ["dev"] } # FIX: change this 
 
 serde_json = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-tauri = { version = "2.0.0-beta.7", features = ["macos-private-api"] }
-tauri-plugin-shell = "2.0.0-beta.3"
-tauri-plugin-dialog = "2.0.0-beta.2"
+tauri = { version = "2.5.0", features = ["macos-private-api"] }
+tauri-plugin-shell = "2.2.1"
+tauri-plugin-dialog = "2.2.1"
 rusqlite = { workspace = true, features = ["bundled"] }
 tokio = { workspace = true, features = ["full", "macros", "rt-multi-thread"] }
 chrono = { workspace = true, features = ["serde"] }
