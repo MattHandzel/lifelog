@@ -118,8 +118,8 @@ This is the **core differentiator** of the product and the biggest gap.
 | 5.4 | **Implement `WITHIN(A, B, ±Δt)` operator** | `[~]` | Implemented as a two-stage plan (source timestamps -> target time-window filter). Current limits: one WITHIN term, AND-only, no nested temporal ops inside predicate. |
 | 5.5 | **Implement `DURING(A, predicate)` operator** | `[~]` | Implemented as a two-stage plan (source intervals -> target time-window filter) with configurable expansion window for point sources. Supports multiple `DURING(...)` terms under `AND` by intersecting interval sets. Now uses interval-target overlap semantics via `t_end` so `DURING(Audio, pointPredicate)` includes overlapping chunks. |
 | 5.6 | **Implement `OVERLAPS(intervalA, intervalB)` operator** | `[x]` | Implemented in AST + LLQL + planner + executor (currently planned/executed like `DURING(...)`). |
-| 5.7 | **Implement replay queries** | `[~]` | Backend now exposes a `Replay` RPC returning ordered steps (screen-granularity) with aligned context keys. UI integration pending. |
-| 5.8 | Replay semantics: point record `t_i` → interval `[t_i, t_{i+1})` | `[~]` | Implemented via `lifelog-core` replay step assembly; last-step end currently uses replay window end. |
+| 5.7 | **Implement replay queries** | `[x]` | Backend now exposes a `Replay` RPC returning ordered steps (screen-granularity) with aligned context keys. Integrations tests added. |
+| 5.8 | Replay semantics: point record `t_i` → interval `[t_i, t_{i+1})` | `[x]` | Implemented via `lifelog-core` replay step assembly; last-step end currently uses replay window end. |
 | 5.9 | Query resource limits (timeouts, max results) | `[x]` | Added default server-side limits: `LIMIT 1000` on UUID-returning queries and a `10s` SurrealDB query timeout in the query executor (Spec §10.1). |
 | 5.10 | User-facing query syntax (DSL or templates) | `[~]` | **LLQL JSON** supported via `Query.text` prefix (`llql:`/`llql-json:`) → typed AST (WITHIN/DURING). Still missing: “nice” human DSL, templates, and UI builder. |
 
@@ -245,7 +245,7 @@ Retrieve audio during times when:
 |---|------|--------|-------|
 | 12.1 | Cross-modal query integration test | `[ ]` | `cross_modal_query.rs` exists but can't pass with stubbed operators |
 | 12.2 | Clock skew integration test (multi-device time correction) | `[ ]` | Skew algorithm tested in isolation, not end-to-end |
-| 12.3 | Replay query test | `[ ]` | No replay implementation to test |
+| 12.3 | Replay query test | `[x]` | Integration test added `server/tests/replay_query.rs` |
 | 12.4 | TLS end-to-end test | `[ ]` | TLS mechanism exists but no test |
 | 12.5 | Text search index test | `[ ]` | Index doesn't exist yet |
 | 12.6 | Blob CAS separation test | `[ ]` | CAS works in isolation, not tested with ingest pipeline |
