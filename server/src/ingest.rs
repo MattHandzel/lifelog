@@ -1,4 +1,5 @@
 use chrono::Utc;
+use config::load_transform_specs;
 use lifelog_core::{DataOrigin, DataOriginType};
 use lifelog_types::DataModality;
 use lifelog_types::ToRecord;
@@ -178,9 +179,12 @@ impl IngestBackend for SurrealIngestBackend {
                             Ok(result) => {
                                 if result.is_some() {
                                     persisted_ok = true;
-                                    // Screen frames are not "fully queryable" until OCR (derived)
-                                    // records have been produced for this uuid.
-                                    indexed = false;
+                                    // If OCR transforms are enabled, keep ACK pinned until the
+                                    // derived record is produced; otherwise screen is queryable now.
+                                    let ocr_enabled = load_transform_specs()
+                                        .iter()
+                                        .any(|spec| spec.enabled && spec.id.eq_ignore_ascii_case("ocr"));
+                                    indexed = !ocr_enabled;
                                 }
                             }
                             Err(e) => {
