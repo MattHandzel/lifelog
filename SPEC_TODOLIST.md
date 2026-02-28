@@ -1,8 +1,24 @@
 # SPEC_TODOLIST.md — Gap Analysis: Current Repo vs v1 Spec
 
-Generated 2026-02-08; updated 2026-02-10. Cross-referenced against `SPEC.md`, codebase exploration, and memory files.
+Generated 2026-02-08; updated 2026-02-27. Cross-referenced against `SPEC.md`, codebase exploration, and current deployed behavior.
 
-**Overall completion: ~50%.** Foundations are solid; core differentiators (cross-modal queries, replay, security) are incomplete.
+**Overall completion: ~70%.** Core ingestion/query foundations are in place; remaining major gaps are security hardening, replay polish, and observability depth.
+
+---
+
+## Recently Completed (2026-02-27)
+
+- `[x]` Unified strict config model in `lifelog-config.toml` (no implicit defaults for missing required sections).
+- `[x]` Multi-collector config shape and runtime collector selection.
+- `[x]` Device alias mapping spec + config support (`[deviceAliases]`).
+- `[x]` Path expansion support for `~` / `$HOME` in config-loaded paths.
+- `[x]` Persistent interface connection settings via `~/.config/lifelog/interface-config.toml`.
+- `[x]` Server query identity resolution supports alias or canonical/MAC-style ids, with alias precedence.
+- `[x]` Transform fallback tightened: no implicit default OCR transform when transforms are missing.
+- `[x]` Screen ingest queryability fix:
+  - OCR enabled -> keep ACK pinned until OCR-derived record exists.
+  - OCR disabled -> mark Screen chunk indexed/queryable immediately.
+- `[x]` Verified live server ingest flow: `screen` offsets advancing and fresh rows marked `indexed=true`.
 
 ---
 
@@ -81,7 +97,7 @@ Priority tiers:
 |---|------|----------|--------|-------|
 | 4.1 | Separate blobs to CAS (don't store inline in SurrealDB) | P0 | `[x]` | Screen/Camera/Audio blobs stored in CAS with `blob_hash` + `blob_size`. Clipboard binary payloads (when present) are now stored in CAS; SurrealDB stores only the CAS reference. |
 | 4.2 | Define & create text search indexes | P0 | `[x]` | `schema.rs` defines `lifelog_text` analyzer + BM25 search indexes for OCR text, browser URL/title, clipboard text, shell commands, and keystrokes. |
-| 4.3 | Durable ACK = metadata + blobs + indexes all persisted | P0 | `[~]` | `UploadChunks` ACK now only advances when the backend reports the chunk as indexed/queryable (`upload_chunks.indexed=true`). Remaining gap: full-text index update + derived-index completion (e.g. OCR) are not yet included in the ACK contract (Spec §6.2.1). |
+| 4.3 | Durable ACK = metadata + blobs + indexes all persisted | P0 | `[~]` | `UploadChunks` ACK advances only when backend reports chunk indexed/queryable (`upload_chunks.indexed=true`). Screen gating now correctly depends on OCR being enabled. Remaining gap: fully proving every baseline text index write is inside ACK boundary for all modalities. |
 | 4.4 | Idempotent chunk writes with dedup key | P1 | `[x]` | `(collector_id, stream_id, session_id, offset)` used |
 | 4.5 | Catalog table for origin registry | P1 | `[x]` | `catalog` table avoids `INFO FOR DB` |
 | 4.6 | Per-modality typed schema with time index | P1 | `[x]` | `schema.rs` creates SCHEMAFULL tables + `_ts_idx` |
@@ -146,7 +162,7 @@ Retrieve audio during times when:
 | 7.3 | Secure enrollment/pairing (not MAC-based) | `[ ]` | Currently MAC address ID. Need pre-shared token, QR, or mTLS cert issuance. |
 | 7.4 | Authentication on all RPCs | `[ ]` | All endpoints unauthenticated |
 | 7.5 | Authorization (who can query/config/data) | `[ ]` | Single-user system, but API should still verify caller |
-| 7.6 | Remove hardcoded DB credentials from source | `[ ]` | `root/root` in `server.rs` |
+| 7.6 | Remove hardcoded DB credentials from source | `[x]` | Server reads DB credentials from env vars (`LIFELOG_DB_USER` / `LIFELOG_DB_PASS`). |
 | 7.7 | Disable gRPC reflection in production | `[ ]` | Or gate behind auth |
 | 7.8 | At-rest encryption for sensitive data | `[ ]` | OS full-disk encryption at minimum; app-level recommended |
 | 7.9 | Per-stream disable (config-driven) | `[x]` | Works via config |
