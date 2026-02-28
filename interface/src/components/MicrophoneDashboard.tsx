@@ -23,6 +23,10 @@ interface AudioFile {
   duration: number;
   created_at: string;
   size: number;
+  audio_data_url?: string;
+  codec?: string;
+  sample_rate?: number;
+  channels?: number;
 }
 
 const MicrophoneDashboard: React.FC = function (): JSX.Element {
@@ -90,9 +94,44 @@ const MicrophoneDashboard: React.FC = function (): JSX.Element {
   }
 
   async function fetchRecordings(): Promise<void> {
-    console.warn('Microphone recordings: not yet implemented via gRPC');
-    setRecordings([]);
-    setIsLoading(false);
+    setIsLoading(true);
+    setErrorMessage(null);
+    try {
+      const entries = await invoke<Array<{ uuid: string; origin: string; modality: string; timestamp: number | null }>>('query_timeline', {
+        textQuery: undefined,
+        collectorId: undefined,
+      });
+      const audioEntries = entries.filter(e => e.modality === 'Audio');
+      if (audioEntries.length === 0) {
+        setRecordings([]);
+        return;
+      }
+      const sorted = [...audioEntries].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+      const keys = sorted.slice(0, 50).map(e => ({ uuid: e.uuid, origin: e.origin }));
+      const frames = await invoke<Array<{
+        uuid: string; timestamp: number | null; audio_data_url: string | null;
+        codec: string | null; sample_rate: number | null; channels: number | null;
+        audio_duration_secs: number | null;
+      }>>('get_frame_data', { keys });
+      const audioFiles: AudioFile[] = frames.map(f => ({
+        path: f.uuid,
+        filename: f.uuid.slice(0, 8) + (f.codec ? `.${f.codec}` : ''),
+        duration: f.audio_duration_secs ?? 0,
+        created_at: f.timestamp ? new Date(f.timestamp * 1000).toISOString() : '',
+        size: 0,
+        audio_data_url: f.audio_data_url ?? undefined,
+        codec: f.codec ?? undefined,
+        sample_rate: f.sample_rate ?? undefined,
+        channels: f.channels ?? undefined,
+      }));
+      setRecordings(audioFiles);
+    } catch (err) {
+      console.error('Failed to fetch recordings:', err);
+      setErrorMessage(`Failed to load recordings: ${err}`);
+      setRecordings([]);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function handleStartRecording(): Promise<void> {
@@ -420,27 +459,30 @@ const MicrophoneDashboard: React.FC = function (): JSX.Element {
           ) : (
             <div className="space-y-2">
               {recordings.map((recording, index) => (
-                <div key={index} className="bg-[#1C2233] rounded-lg p-4 flex flex-col sm:flex-row sm:items-center gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Mic className="w-4 h-4 text-[#4C8BF5]" />
-                      <p className="font-medium text-[#F9FAFB] truncate">{recording.filename}</p>
-                    </div>
-                    <div className="flex flex-wrap text-xs text-[#9CA3AF] gap-x-4">
-                      <span>Duration: {formatTimeForDisplay(recording.duration)}</span>
-                      <span>Size: {formatFileSize(recording.size)}</span>
-                      <span>Created: {new Date(recording.created_at).toLocaleString()}</span>
-                    </div>
+                <div key={index} className="bg-[#1C2233] rounded-lg p-4 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Mic className="w-4 h-4 text-[#4C8BF5]" />
+                    <p className="font-medium text-[#F9FAFB] truncate">{recording.filename}</p>
                   </div>
-                  <div className="flex gap-2">
-                    <Button 
+                  <div className="flex flex-wrap text-xs text-[#9CA3AF] gap-x-4">
+                    <span>Duration: {formatTimeForDisplay(recording.duration)}</span>
+                    {recording.size > 0 && <span>Size: {formatFileSize(recording.size)}</span>}
+                    {recording.codec && <span>{recording.codec} · {recording.sample_rate}Hz</span>}
+                    {recording.created_at && <span>Created: {new Date(recording.created_at).toLocaleString()}</span>}
+                  </div>
+                  {recording.audio_data_url ? (
+                    <audio controls src={recording.audio_data_url} className="w-full h-8" />
+                  ) : (
+                    <Button
                       onClick={() => handlePlayRecording(recording)}
                       variant="default"
                       title="Play recording"
+                      className="flex items-center gap-2"
                     >
                       <Play className="w-4 h-4" />
+                      Play
                     </Button>
-                  </div>
+                  )}
                 </div>
               ))}
             </div>

@@ -1,22 +1,4 @@
 #V2
-select * from `FFFFFFFFFFFF:Screen`;
-select * from FFFFFFFFFFFF:Screen;
-select * from `FFFFFFFFFFFF:Screen`;
-info for db;
-select * from FFFFFFFFFFFF:Screen
-info for db;
-info for db
-select * from `FFFFFFFFFFFF:Screen`;
-select * from `FFFFFFFFFFFF:Screen` order by timestamp;
-select * from `FFFFFFFFFFFF:Screen` order by timestamp desc;
-select * from `FFFFFFFFFFFF:Screen` order by timestamp ascending;
-select * from `FFFFFFFFFFFF:Screen` order by timestamp desc;
-select * from `FFFFFFFFFFFF:Screen` order by timestamp ascending;
-select value record::id(id) from type::table(`FFFFFFFFFFF:Screen`);
-select value record::id(id) from type::table(FFFFFFFFFFF:Screen);
-select * from `FFFFFFFFFFFF:Screen` order by timestamp ascending;
-select record::id(id), timestamp from `FFFFFFFFFFFF:Screen` order by timestamp ascending;
-select record::id(id) from `FFFFFFFFFFFF:Screen`;
 info for db;
 SELECT <uuid> record::id(id) as uuid FROM `FFFFFFFFFFFF:Screen`;
 SELECT record::id(id) as uuid FROM `FFFFFFFFFFFF:Screen`;
@@ -99,3 +81,21 @@ select * from ocr_text_copy limit 1;
 select * from ocr_copy limit 1;
 select uuid from ocr_copy limit 1;
 select record::id(id) from ocr_copy limit 1;
+SELECT count() AS n FROM upload_chunks GROUP ALL;
+SELECT collector_id,stream_id,offset,created_at FROM upload_chunks ORDER BY created_at DESC LIMIT 10;
+SELECT count() AS n FROM `implement_this:Processes` GROUP ALL;
+SELECT timestamp, process_name, pid FROM `implement_this:Processes` ORDER BY timestamp DESC LIMIT 5;
+SELECT count() AS n FROM upload_chunks GROUP ALL;
+SELECT collector_id,stream_id,offset,created_at FROM upload_chunks ORDER BY created_at DESC LIMIT 10;
+SELECT stream_id, count() AS n FROM upload_chunks GROUP BY stream_id;
+SELECT collector_id,stream_id,offset,created_at FROM upload_chunks ORDER BY created_at DESC LIMIT 8;
+SELECT count() AS n FROM upload_chunks WHERE stream_id = 'processes' GROUP ALL;
+SELECT stream_id, count() AS n FROM upload_chunks GROUP BY stream_id;
+SELECT count() AS n FROM upload_chunks WHERE stream_id = 'processes' GROUP ALL;
+SELECT stream_id, count() AS n FROM upload_chunks GROUP BY stream_id ORDER BY stream_id;
+SELECT count() AS n FROM upload_chunks WHERE stream_id = 'processes' GROUP ALL;
+SELECT stream_id, count() AS n FROM upload_chunks GROUP BY stream_id ORDER BY stream_id;
+SELECT count() AS n FROM upload_chunks WHERE stream_id = 'processes' GROUP ALL;
+SELECT stream_id, count() AS n FROM upload_chunks GROUP BY  stream_id ORDER BY stream_id;
+SELECT stream_id, count() AS n FROM upload_chunks GROUP BY stream_id ORDER BY stream_id;
+SELECT count() AS n FROM upload_chunks WHERE stream_id = 'processes' GROUP ALL;

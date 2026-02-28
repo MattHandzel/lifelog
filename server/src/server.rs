@@ -5,7 +5,7 @@ use config::{load_transform_specs, ServerConfig, SystemConfig};
 use lifelog_core::*;
 use lifelog_types::*;
 use lifelog_types::{CollectorState, SystemState};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time;
 use surrealdb::engine::remote::ws::{Client, Ws};
@@ -176,6 +176,101 @@ impl ServerHandle {
 }
 
 impl Server {
+    async fn resolve_identity_candidates(&self, identifier: &str) -> Vec<String> {
+        let collectors = self.registered_collectors.read().await;
+        let mut out = Vec::new();
+
+        for collector in collectors.iter() {
+            let alias = collector
+                .latest_config
+                .as_ref()
+                .map(|c| c.id.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+            let mac = collector.id.clone();
+
+            let alias_match = alias
+                .as_deref()
+                .map(|a| a.eq_ignore_ascii_case(identifier))
+                .unwrap_or(false);
+            let mac_match = mac.eq_ignore_ascii_case(identifier);
+
+            if alias_match || mac_match {
+                // Alias should take precedence for query resolution when both exist.
+                if let Some(a) = alias {
+                    out.push(a);
+                }
+                out.push(mac);
+            }
+        }
+
+        let mut seen = HashSet::new();
+        out.retain(|v| seen.insert(v.to_lowercase()));
+        out
+    }
+
+    async fn resolve_search_origins(
+        &self,
+        search_term: &str,
+        available_origins: &[DataOrigin],
+    ) -> Vec<DataOrigin> {
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+
+        let push_unique =
+            |acc: &mut Vec<DataOrigin>, seen: &mut HashSet<String>, o: &DataOrigin| {
+                let key = o.get_table_name();
+                if seen.insert(key) {
+                    acc.push(o.clone());
+                }
+            };
+
+        // 1) Direct table/origin/modality matches.
+        for o in available_origins {
+            if o.get_table_name() == search_term
+                || o.to_string() == search_term
+                || o.modality_name == search_term
+            {
+                push_unique(&mut out, &mut seen, o);
+            }
+        }
+
+        // 2) Identity-aware mapping (alias or MAC), optionally with modality suffix.
+        if let Some((device_part, modality_part)) = search_term.split_once(':') {
+            let candidates = self.resolve_identity_candidates(device_part.trim()).await;
+            for candidate in candidates {
+                let wanted = format!("{}:{}", candidate, modality_part.trim());
+                for o in available_origins {
+                    if o.get_table_name().eq_ignore_ascii_case(&wanted)
+                        || o.to_string().eq_ignore_ascii_case(&wanted)
+                    {
+                        push_unique(&mut out, &mut seen, o);
+                    }
+                }
+            }
+        } else {
+            let candidates = self.resolve_identity_candidates(search_term.trim()).await;
+            if !candidates.is_empty() {
+                for o in available_origins {
+                    let table = o.get_table_name();
+                    let device = table.split(':').next().unwrap_or_default();
+                    if candidates.iter().any(|c| c.eq_ignore_ascii_case(device)) {
+                        push_unique(&mut out, &mut seen, o);
+                    }
+                }
+            }
+        }
+
+        // 3) Fallback parser support for explicit DataOrigin strings.
+        if out.is_empty() {
+            if let Ok(parsed) = DataOrigin::tryfrom_string(search_term.to_string()) {
+                out.push(parsed);
+            }
+        }
+
+        out
+    }
+
     pub async fn new(config: &ServerConfig) -> Result<Self, LifelogError> {
         // NOTE: `surrealdb::engine::remote::ws::Ws` expects an address like `127.0.0.1:8000`
         // (tests use this form). Prefixing with `ws://` can hang depending on driver/version.
@@ -340,20 +435,12 @@ impl Server {
             available_origins.clone()
         } else {
             let mut resolved = Vec::new();
+            let mut seen = HashSet::new();
             for s in &query_msg.search_origins {
-                if let Some(o) = available_origins
-                    .iter()
-                    .find(|o| o.get_table_name() == *s || o.to_string() == *s)
-                {
-                    resolved.push(o.clone());
-                } else if let Ok(o) = DataOrigin::tryfrom_string(s.clone()) {
-                    resolved.push(o);
-                } else {
-                    // Try to match as modality name
-                    for o in &available_origins {
-                        if o.modality_name == *s {
-                            resolved.push(o.clone());
-                        }
+                for o in self.resolve_search_origins(s, &available_origins).await {
+                    let key = o.get_table_name();
+                    if seen.insert(key) {
+                        resolved.push(o);
                     }
                 }
             }

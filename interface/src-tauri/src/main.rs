@@ -9,14 +9,13 @@ mod storage;
 use base64;
 use base64::{engine::general_purpose, Engine as _};
 
-use config::{ProcessesConfig, ScreenConfig, TextUploadConfig};
-use lifelog_interface_lib::config_utils;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fs;
+use std::path::PathBuf;
+#[cfg(target_os = "macos")]
 use std::process::Command;
 use std::sync::Arc;
-use std::sync::Mutex;
-use tauri::State;
 use tokio::time::{timeout, Duration};
 use tonic::transport::Channel;
 
@@ -31,21 +30,19 @@ pub mod lifelog {
     pub use lifelog_server_service_client::LifelogServerServiceClient;
 }
 
-struct AppState {
-    text_config: Mutex<TextUploadConfig>,
-    processes_config: Mutex<ProcessesConfig>,
-    screen_config: Mutex<ScreenConfig>,
-}
-
 pub struct GrpcClientState {
     client: Arc<tokio::sync::Mutex<Option<lifelog::LifelogServerServiceClient<Channel>>>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct InterfaceRuntimeConfig {
+    grpc_server_address: String,
 }
 
 #[tauri::command]
 async fn initialize_app(
     _window: tauri::Window,
     _app_handle: tauri::AppHandle,
-    _state: State<'_, AppState>,
 ) -> Result<(), String> {
     Ok(())
 }
@@ -124,34 +121,112 @@ async fn is_camera_supported() -> bool {
     }
 }
 
-#[tauri::command]
-async fn get_camera_settings(
-    config_manager: tauri::State<'_, Mutex<config_utils::ConfigManager>>,
-) -> Result<serde_json::Value, String> {
-    let camera_config = {
-        let config_manager = config_manager
-            .lock()
-            .expect("Failed to lock config_manager for camera status poll");
-        config_manager.get_camera_config()
-    };
+const DEFAULT_GRPC_SERVER_ADDRESS: &str = "http://localhost:7182";
 
+fn normalize_server_address(raw: &str) -> String {
+    let raw = raw.trim();
+    if raw.starts_with("http://") || raw.starts_with("https://") {
+        raw.to_string()
+    } else {
+        format!("http://{}", raw)
+    }
+}
+
+fn interface_config_path() -> Result<PathBuf, String> {
+    let config_base = dirs::config_dir()
+        .ok_or_else(|| "Could not resolve config directory for this platform".to_string())?;
+    Ok(config_base.join("lifelog").join("interface-config.toml"))
+}
+
+fn load_interface_runtime_config() -> InterfaceRuntimeConfig {
+    if let Ok(path) = interface_config_path() {
+        if let Ok(contents) = fs::read_to_string(path) {
+            if let Ok(parsed) = toml::from_str::<InterfaceRuntimeConfig>(&contents) {
+                if !parsed.grpc_server_address.trim().is_empty() {
+                    return InterfaceRuntimeConfig {
+                        grpc_server_address: normalize_server_address(&parsed.grpc_server_address),
+                    };
+                }
+            }
+        }
+    }
+
+    let env_addr = std::env::var("LIFELOG_INTERFACE_GRPC_ADDR")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .map(|s| normalize_server_address(&s));
+
+    InterfaceRuntimeConfig {
+        grpc_server_address: env_addr.unwrap_or_else(|| DEFAULT_GRPC_SERVER_ADDRESS.to_string()),
+    }
+}
+
+fn save_interface_runtime_config(cfg: &InterfaceRuntimeConfig) -> Result<(), String> {
+    let path = interface_config_path()?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Invalid interface config path".to_string())?;
+    fs::create_dir_all(parent)
+        .map_err(|e| format!("Failed to create interface config directory: {}", e))?;
+
+    let normalized = InterfaceRuntimeConfig {
+        grpc_server_address: normalize_server_address(&cfg.grpc_server_address),
+    };
+    let contents = toml::to_string_pretty(&normalized)
+        .map_err(|e| format!("Failed to serialize interface config: {}", e))?;
+    fs::write(&path, contents).map_err(|e| format!("Failed to write interface config: {}", e))
+}
+
+fn grpc_server_address() -> String {
+    load_interface_runtime_config().grpc_server_address
+}
+
+async fn reconnect_grpc_client(state: &GrpcClientState) -> Result<(), String> {
+    let server_addr = grpc_server_address();
+    let channel = create_grpc_channel(&server_addr)
+        .await
+        .map_err(|e| format!("Failed to connect to gRPC server: {}", e))?;
+    let new_client = lifelog::LifelogServerServiceClient::new(channel);
+    let mut client_guard = state.client.lock().await;
+    *client_guard = Some(new_client);
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_interface_settings() -> Result<Value, String> {
+    let cfg = load_interface_runtime_config();
+    let path = interface_config_path()?;
     Ok(serde_json::json!({
-        "enabled": camera_config.enabled,
-        "interval": camera_config.interval,
-        "output_dir": camera_config.output_dir.to_str().unwrap_or_default(),
-        "device": camera_config.device,
-        "resolution_x": camera_config.resolution_x,
-        "resolution_y": camera_config.resolution_y,
-        "fps": camera_config.fps,
-        "timestamp_format": camera_config.timestamp_format,
+        "grpcServerAddress": cfg.grpc_server_address,
+        "configPath": path.to_string_lossy().to_string(),
     }))
 }
 
-const GRPC_SERVER_ADDRESS: &str = "http://localhost:7182";
+#[tauri::command]
+async fn set_interface_settings(
+    grpc_server_address: String,
+    state: tauri::State<'_, GrpcClientState>,
+) -> Result<(), String> {
+    let cfg = InterfaceRuntimeConfig {
+        grpc_server_address: normalize_server_address(&grpc_server_address),
+    };
+    save_interface_runtime_config(&cfg)?;
+    reconnect_grpc_client(&state).await
+}
+
+#[tauri::command]
+async fn test_interface_server_connection(grpc_server_address: String) -> Result<(), String> {
+    let addr = normalize_server_address(&grpc_server_address);
+    create_grpc_channel(&addr)
+        .await
+        .map(|_| ())
+        .map_err(|e| format!("Connection test failed: {}", e))
+}
 
 /// Create a gRPC channel, enabling TLS when the address uses https://.
-async fn create_grpc_channel(addr: &'static str) -> Result<Channel, tonic::transport::Error> {
-    let endpoint = Channel::from_static(addr);
+async fn create_grpc_channel(addr: &str) -> Result<Channel, tonic::transport::Error> {
+    let addr_static: &'static str = Box::leak(addr.to_string().into_boxed_str());
+    let endpoint = Channel::from_static(addr_static);
     if addr.starts_with("https://") {
         let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
         endpoint.tls_config(tls)?.connect().await
@@ -171,9 +246,10 @@ async fn get_component_config(
     );
     println!(
         "gRPC: get_component_config - connecting to {}",
-        GRPC_SERVER_ADDRESS
+        grpc_server_address()
     );
-    let channel = create_grpc_channel(GRPC_SERVER_ADDRESS)
+    let server_addr = grpc_server_address();
+    let channel = create_grpc_channel(&server_addr)
         .await
         .map_err(|e| format!("Failed to connect to gRPC server: {}", e))?;
     println!("gRPC: get_component_config - connection established");
@@ -251,13 +327,14 @@ async fn set_component_config(
 ) -> Result<(), String> {
     println!(
         "gRPC: set_component_config - connecting to {}",
-        GRPC_SERVER_ADDRESS
+        grpc_server_address()
     );
     println!(
         "Attempting to set config for collector '{}', component type '{}' with data: {:?}",
         collector_id, component_type, config_value
     );
-    let channel = create_grpc_channel(GRPC_SERVER_ADDRESS)
+    let server_addr = grpc_server_address();
+    let channel = create_grpc_channel(&server_addr)
         .await
         .map_err(|e| format!("Failed to connect to gRPC server: {}", e))?;
     println!("gRPC: set_component_config - connection established");
@@ -298,7 +375,7 @@ async fn set_component_config(
             target_collector_config.screen = Some(lifelog::ScreenConfig {
                 enabled: local_conf.enabled,
                 interval: local_conf.interval,
-                output_dir: local_conf.output_dir.to_string_lossy().into_owned(),
+                output_dir: local_conf.output_dir.clone(),
                 program: local_conf.program,
                 timestamp_format: local_conf.timestamp_format,
             });
@@ -309,7 +386,7 @@ async fn set_component_config(
             target_collector_config.camera = Some(lifelog::CameraConfig {
                 enabled: local_conf.enabled,
                 interval: local_conf.interval,
-                output_dir: local_conf.output_dir.to_string_lossy().into_owned(),
+                output_dir: local_conf.output_dir.clone(),
                 device: local_conf.device,
                 resolution_x: local_conf.resolution_x,
                 resolution_y: local_conf.resolution_y,
@@ -322,7 +399,7 @@ async fn set_component_config(
                 .map_err(|e| format!("Invalid microphone config format: {}", e))?;
             target_collector_config.microphone = Some(lifelog::MicrophoneConfig {
                 enabled: local_conf.enabled,
-                output_dir: local_conf.output_dir.to_string_lossy().into_owned(),
+                output_dir: local_conf.output_dir.clone(),
                 chunk_duration_secs: local_conf.chunk_duration_secs,
                 capture_interval_secs: local_conf.capture_interval_secs,
                 timestamp_format: local_conf.timestamp_format,
@@ -337,7 +414,7 @@ async fn set_component_config(
             target_collector_config.processes = Some(lifelog::ProcessesConfig {
                 enabled: local_conf.enabled,
                 interval: local_conf.interval,
-                output_dir: local_conf.output_dir.to_string_lossy().into_owned(),
+                output_dir: local_conf.output_dir.clone(),
             });
         }
         "hyprland" => {
@@ -346,7 +423,7 @@ async fn set_component_config(
             target_collector_config.hyprland = Some(lifelog::HyprlandConfig {
                 enabled: local_conf.enabled,
                 interval: local_conf.interval,
-                output_dir: local_conf.output_dir.to_string_lossy().into_owned(),
+                output_dir: local_conf.output_dir.clone(),
                 log_active_monitor: local_conf.log_active_monitor,
                 log_activewindow: local_conf.log_activewindow,
                 log_workspace: local_conf.log_workspace,
@@ -524,7 +601,8 @@ async fn query_screenshot_keys(
         query_screenshot_keys_async(client_instance, collector_id).await
     } else {
         println!("[TAURI] query_screenshot_keys: gRPC client not initialized trying to reconnect");
-        match create_grpc_channel(GRPC_SERVER_ADDRESS).await {
+        let server_addr = grpc_server_address();
+        match create_grpc_channel(&server_addr).await {
             Ok(channel) => {
                 let new_client = lifelog::LifelogServerServiceClient::new(channel);
                 *client_guard = Some(new_client);
@@ -679,7 +757,8 @@ async fn get_screenshots_data(
         get_screenshots_data_async(client_instance, keys).await
     } else {
         println!("[TAURI] get_screenshots_data: gRPC client not initialized trying to reconnect");
-        match create_grpc_channel(GRPC_SERVER_ADDRESS).await {
+        let server_addr = grpc_server_address();
+        match create_grpc_channel(&server_addr).await {
             Ok(channel) => {
                 let new_client = lifelog::LifelogServerServiceClient::new(channel);
                 *client_guard = Some(new_client);
@@ -702,47 +781,28 @@ async fn get_collector_ids(
     let mut client_guard = state.client.lock().await;
     println!("[TAURI] get_collector_ids: client lock acquired");
 
+    if client_guard.is_none() {
+        drop(client_guard);
+        println!("[TAURI] get_collector_ids: client missing, reconnecting...");
+        reconnect_grpc_client(&state).await?;
+        client_guard = state.client.lock().await;
+    }
+
     if let Some(client_instance) = client_guard.as_mut() {
-        println!(
-            "[TAURI] get_collector_ids: client instance obtained, preparing GetSystemConfigRequest"
-        );
+        println!("[TAURI] get_collector_ids: client ready, requesting config");
         let request = tonic::Request::new(lifelog::GetSystemConfigRequest {});
-        println!("[TAURI] get_collector_ids: sending GetSystemConfigRequest to server...");
         match client_instance.get_config(request).await {
             Ok(response) => {
-                println!(
-                    "[TAURI] get_collector_ids: GetConfig response received from server: {:?}",
-                    response
-                );
                 let inner_response = response.into_inner();
-                println!(
-                    "[TAURI] get_collector_ids: Inner response: {:?}",
-                    inner_response
-                );
                 let system_config = inner_response.config.ok_or_else(|| {
-                    let err_msg = "[TAURI] get_collector_ids: Server response did not contain SystemConfig data".to_string();
-                    println!("{}", err_msg);
-                    err_msg
+                    "[TAURI] get_collector_ids: Server response missing SystemConfig".to_string()
                 })?;
-                println!(
-                    "[TAURI] get_collector_ids: SystemConfig extracted: {:?}",
-                    system_config
-                );
-                let collector_ids: Vec<String> = system_config.collectors.keys().cloned().collect();
-                println!(
-                    "[TAURI] get_collector_ids: returning collector IDs: {:?}",
-                    collector_ids
-                );
-                Ok(collector_ids)
+                Ok(system_config.collectors.keys().cloned().collect())
             }
-            Err(e) => {
-                println!("[TAURI] get_collector_ids: gRPC GetConfig failed: {:?}", e);
-                Err(format!("Failed to get collector IDs: {}", e))
-            }
+            Err(e) => Err(format!("Failed to get collector IDs: {}", e)),
         }
     } else {
-        println!("[TAURI] get_collector_ids: gRPC client was None after lock.");
-        Err("gRPC client not initialized after lock".to_string())
+        Err("gRPC client unavailable after reconnect attempt".to_string())
     }
 }
 
@@ -773,23 +833,26 @@ async fn query_timeline(
     let mut client_guard = state.client.lock().await;
     let client = match client_guard.as_mut() {
         Some(c) => c,
-        None => match create_grpc_channel(GRPC_SERVER_ADDRESS).await {
-            Ok(channel) => {
-                *client_guard = Some(lifelog::LifelogServerServiceClient::new(channel));
-                client_guard.as_mut().unwrap()
+        None => {
+            let server_addr = grpc_server_address();
+            match create_grpc_channel(&server_addr).await {
+                Ok(channel) => {
+                    *client_guard = Some(lifelog::LifelogServerServiceClient::new(channel));
+                    client_guard.as_mut().unwrap()
+                }
+                Err(e) => return Err(format!("gRPC connection failed: {}", e)),
             }
-            Err(e) => return Err(format!("gRPC connection failed: {}", e)),
-        },
+        }
     };
 
     let mut time_ranges = Vec::new();
     if let (Some(start), Some(end)) = (start_time, end_time) {
         time_ranges.push(lifelog::Timerange {
-            start: Some(prost_types::Timestamp {
+            start: Some(google::protobuf::Timestamp {
                 seconds: start,
                 nanos: 0,
             }),
-            end: Some(prost_types::Timestamp {
+            end: Some(google::protobuf::Timestamp {
                 seconds: end,
                 nanos: 0,
             }),
@@ -851,11 +914,11 @@ async fn replay_async(
     }
 
     let window = lifelog::Timerange {
-        start: Some(prost_types::Timestamp {
+        start: Some(google::protobuf::Timestamp {
             seconds: start_time,
             nanos: 0,
         }),
-        end: Some(prost_types::Timestamp {
+        end: Some(google::protobuf::Timestamp {
             seconds: end_time,
             nanos: 0,
         }),
@@ -867,7 +930,7 @@ async fn replay_async(
         context_origins: context_origins.unwrap_or_default(),
         max_steps: max_steps.unwrap_or(0),
         max_context_per_step: max_context_per_step.unwrap_or(0),
-        context_pad_ms: context_pad_ms.unwrap_or(0),
+        context_pad_ms: context_pad_ms.unwrap_or(0) as u64,
     };
 
     let request = tonic::Request::new(req);
@@ -920,13 +983,16 @@ async fn replay(
     let mut client_guard = state.client.lock().await;
     let client = match client_guard.as_mut() {
         Some(c) => c,
-        None => match create_grpc_channel(GRPC_SERVER_ADDRESS).await {
-            Ok(channel) => {
-                *client_guard = Some(lifelog::LifelogServerServiceClient::new(channel));
-                client_guard.as_mut().unwrap()
+        None => {
+            let server_addr = grpc_server_address();
+            match create_grpc_channel(&server_addr).await {
+                Ok(channel) => {
+                    *client_guard = Some(lifelog::LifelogServerServiceClient::new(channel));
+                    client_guard.as_mut().unwrap()
+                }
+                Err(e) => return Err(format!("gRPC connection failed: {}", e)),
             }
-            Err(e) => return Err(format!("gRPC connection failed: {}", e)),
-        },
+        }
     };
 
     replay_async(
@@ -950,23 +1016,569 @@ async fn select_file_dialog(
     Ok(Some("simulated/path/to/file.txt".to_string()))
 }
 
-#[tokio::main]
-async fn main() {
-    let config_manager = Mutex::new(config_utils::ConfigManager::new());
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ProcessInfoWrapper {
+    pid: i32,
+    ppid: i32,
+    name: String,
+    exe: String,
+    cmdline: String,
+    status: String,
+    cpu_usage: f64,
+    memory_usage: i64,
+    threads: i32,
+    user: String,
+    start_time: f64,
+}
 
-    let app_state = AppState {
-        text_config: Mutex::new(lifelog_interface_lib::config_utils::load_text_upload_config()),
-        processes_config: Mutex::new(lifelog_interface_lib::config_utils::load_processes_config()),
-        screen_config: Mutex::new(lifelog_interface_lib::config_utils::load_screen_config()),
+impl From<lifelog::ProcessInfo> for ProcessInfoWrapper {
+    fn from(p: lifelog::ProcessInfo) -> Self {
+        Self {
+            pid: p.pid,
+            ppid: p.ppid,
+            name: p.name,
+            exe: p.exe,
+            cmdline: p.cmdline,
+            status: p.status,
+            cpu_usage: p.cpu_usage,
+            memory_usage: p.memory_usage,
+            threads: p.threads,
+            user: p.user,
+            start_time: p.start_time,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct FrameDataWrapper {
+    uuid: String,
+    modality: String,
+    timestamp: Option<i64>,
+    text: Option<String>,
+    url: Option<String>,
+    title: Option<String>,
+    visit_count: Option<u32>,
+    command: Option<String>,
+    working_dir: Option<String>,
+    exit_code: Option<i32>,
+    application: Option<String>,
+    window_title: Option<String>,
+    duration_secs: Option<f32>,
+    audio_data_url: Option<String>,
+    codec: Option<String>,
+    sample_rate: Option<u32>,
+    channels: Option<u32>,
+    audio_duration_secs: Option<f32>,
+    image_data_url: Option<String>,
+    width: Option<u32>,
+    height: Option<u32>,
+    mime_type: Option<String>,
+    camera_device: Option<String>,
+    processes: Option<Vec<ProcessInfoWrapper>>,
+}
+
+async fn get_frame_data_async(
+    grpc_client: &mut lifelog::LifelogServerServiceClient<Channel>,
+    keys: Vec<LifelogDataKeyWrapper>,
+) -> Result<Vec<FrameDataWrapper>, String> {
+    if keys.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let batch_size = 5;
+    let mut all_frames: Vec<FrameDataWrapper> = Vec::new();
+
+    for key_batch in keys.chunks(batch_size) {
+        let current_batch_keys: Vec<lifelog::LifelogDataKey> = key_batch
+            .iter()
+            .map(|k| lifelog::LifelogDataKey {
+                uuid: k.uuid.clone(),
+                origin: k.origin.clone(),
+            })
+            .collect();
+
+        let request = tonic::Request::new(lifelog::GetDataRequest {
+            keys: current_batch_keys,
+        });
+
+        const GET_DATA_TIMEOUT_SECONDS: u64 = 15;
+        match timeout(
+            Duration::from_secs(GET_DATA_TIMEOUT_SECONDS),
+            grpc_client.get_data(request),
+        )
+        .await
+        {
+            Ok(Ok(response)) => {
+                let data_response = response.into_inner();
+                for lifelog_data in data_response.data {
+                    let Some(payload) = lifelog_data.payload else {
+                        continue;
+                    };
+                    let frame = match payload {
+                        lifelog::lifelog_data::Payload::Browserframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Browser".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: None,
+                            url: Some(f.url),
+                            title: Some(f.title),
+                            visit_count: Some(f.visit_count),
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: None,
+                            width: None,
+                            height: None,
+                            mime_type: None,
+                            camera_device: None,
+                            processes: None,
+                        },
+                        lifelog::lifelog_data::Payload::Ocrframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Ocr".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: Some(f.text),
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: None,
+                            width: None,
+                            height: None,
+                            mime_type: None,
+                            camera_device: None,
+                            processes: None,
+                        },
+                        lifelog::lifelog_data::Payload::Screenframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Screen".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: None,
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: Some(format!(
+                                "data:{};base64,{}",
+                                f.mime_type,
+                                general_purpose::STANDARD.encode(&f.image_bytes)
+                            )),
+                            width: Some(f.width),
+                            height: Some(f.height),
+                            mime_type: Some(f.mime_type),
+                            camera_device: None,
+                            processes: None,
+                        },
+                        lifelog::lifelog_data::Payload::Audioframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Audio".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: None,
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: Some(format!(
+                                "data:audio/{};base64,{}",
+                                f.codec,
+                                general_purpose::STANDARD.encode(&f.audio_bytes)
+                            )),
+                            codec: Some(f.codec),
+                            sample_rate: Some(f.sample_rate),
+                            channels: Some(f.channels),
+                            audio_duration_secs: Some(f.duration_secs),
+                            image_data_url: None,
+                            width: None,
+                            height: None,
+                            mime_type: None,
+                            camera_device: None,
+                            processes: None,
+                        },
+                        lifelog::lifelog_data::Payload::Keystrokeframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Keystrokes".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: Some(f.text),
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: Some(f.application),
+                            window_title: Some(f.window_title),
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: None,
+                            width: None,
+                            height: None,
+                            mime_type: None,
+                            camera_device: None,
+                            processes: None,
+                        },
+                        lifelog::lifelog_data::Payload::Clipboardframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Clipboard".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: Some(f.text),
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: None,
+                            width: None,
+                            height: None,
+                            mime_type: None,
+                            camera_device: None,
+                            processes: None,
+                        },
+                        lifelog::lifelog_data::Payload::Shellhistoryframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "ShellHistory".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: None,
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: Some(f.command),
+                            working_dir: Some(f.working_dir),
+                            exit_code: Some(f.exit_code),
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: None,
+                            width: None,
+                            height: None,
+                            mime_type: None,
+                            camera_device: None,
+                            processes: None,
+                        },
+                        lifelog::lifelog_data::Payload::Windowactivityframe(f) => {
+                            FrameDataWrapper {
+                                uuid: f.uuid.clone(),
+                                modality: "WindowActivity".to_string(),
+                                timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                                text: None,
+                                url: None,
+                                title: None,
+                                visit_count: None,
+                                command: None,
+                                working_dir: None,
+                                exit_code: None,
+                                application: Some(f.application),
+                                window_title: Some(f.window_title),
+                                duration_secs: Some(f.duration_secs),
+                                audio_data_url: None,
+                                codec: None,
+                                sample_rate: None,
+                                channels: None,
+                                audio_duration_secs: None,
+                                image_data_url: None,
+                                width: None,
+                                height: None,
+                                mime_type: None,
+                                camera_device: None,
+                                processes: None,
+                            }
+                        }
+                        lifelog::lifelog_data::Payload::Mouseframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Mouse".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: None,
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: None,
+                            width: None,
+                            height: None,
+                            mime_type: None,
+                            camera_device: None,
+                            processes: None,
+                        },
+                        lifelog::lifelog_data::Payload::Processframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Processes".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: None,
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: None,
+                            width: None,
+                            height: None,
+                            mime_type: None,
+                            camera_device: None,
+                            processes: Some(
+                                f.processes
+                                    .into_iter()
+                                    .map(ProcessInfoWrapper::from)
+                                    .collect(),
+                            ),
+                        },
+                        lifelog::lifelog_data::Payload::Cameraframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Camera".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: None,
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: Some(format!(
+                                "data:{};base64,{}",
+                                f.mime_type,
+                                general_purpose::STANDARD.encode(&f.image_bytes)
+                            )),
+                            width: Some(f.width),
+                            height: Some(f.height),
+                            mime_type: Some(f.mime_type),
+                            camera_device: Some(f.device),
+                            processes: None,
+                        },
+                        lifelog::lifelog_data::Payload::Weatherframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Weather".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: Some(format!(
+                                "{}°C, {}% humidity, {}",
+                                f.temperature, f.humidity, f.conditions
+                            )),
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: None,
+                            width: None,
+                            height: None,
+                            mime_type: None,
+                            camera_device: None,
+                            processes: None,
+                        },
+                        lifelog::lifelog_data::Payload::Hyprlandframe(f) => FrameDataWrapper {
+                            uuid: f.uuid.clone(),
+                            modality: "Hyprland".to_string(),
+                            timestamp: f.timestamp.as_ref().map(|ts| ts.seconds),
+                            text: f.active_workspace.map(|w| format!("Workspace: {}", w.name)),
+                            url: None,
+                            title: None,
+                            visit_count: None,
+                            command: None,
+                            working_dir: None,
+                            exit_code: None,
+                            application: None,
+                            window_title: None,
+                            duration_secs: None,
+                            audio_data_url: None,
+                            codec: None,
+                            sample_rate: None,
+                            channels: None,
+                            audio_duration_secs: None,
+                            image_data_url: None,
+                            width: None,
+                            height: None,
+                            mime_type: None,
+                            camera_device: None,
+                            processes: None,
+                        },
+                    };
+                    all_frames.push(frame);
+                }
+            }
+            Ok(Err(e)) => return Err(format!("Failed to get data for batch: {}", e)),
+            Err(_) => {
+                return Err(format!(
+                    "Fetching data timed out after {} seconds",
+                    GET_DATA_TIMEOUT_SECONDS
+                ))
+            }
+        }
+    }
+    Ok(all_frames)
+}
+
+#[tauri::command]
+async fn get_frame_data(
+    state: tauri::State<'_, GrpcClientState>,
+    keys: Vec<LifelogDataKeyWrapper>,
+) -> Result<Vec<FrameDataWrapper>, String> {
+    let mut client_guard = state.client.lock().await;
+    let client = match client_guard.as_mut() {
+        Some(c) => c,
+        None => {
+            let server_addr = grpc_server_address();
+            match create_grpc_channel(&server_addr).await {
+                Ok(channel) => {
+                    *client_guard = Some(lifelog::LifelogServerServiceClient::new(channel));
+                    client_guard.as_mut().unwrap()
+                }
+                Err(e) => return Err(format!("gRPC connection failed: {}", e)),
+            }
+        }
+    };
+    get_frame_data_async(client, keys).await
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct CollectorStateWrapper {
+    collector_id: String,
+    name: String,
+    last_seen_secs: Option<i64>,
+    total_buffer_size: u32,
+    upload_lag_bytes: u64,
+    last_upload_time_secs: Option<i64>,
+    source_states: Vec<String>,
+    source_buffer_sizes: Vec<String>,
+}
+
+#[tauri::command]
+async fn get_system_state(
+    state: tauri::State<'_, GrpcClientState>,
+) -> Result<Vec<CollectorStateWrapper>, String> {
+    let mut client_guard = state.client.lock().await;
+    let client = match client_guard.as_mut() {
+        Some(c) => c,
+        None => {
+            let server_addr = grpc_server_address();
+            match create_grpc_channel(&server_addr).await {
+                Ok(channel) => {
+                    *client_guard = Some(lifelog::LifelogServerServiceClient::new(channel));
+                    client_guard.as_mut().unwrap()
+                }
+                Err(e) => return Err(format!("gRPC connection failed: {}", e)),
+            }
+        }
     };
 
+    let request = tonic::Request::new(lifelog::GetStateRequest {});
+    match timeout(Duration::from_secs(10), client.get_state(request)).await {
+        Ok(Ok(response)) => {
+            let system_state = response.into_inner().state.unwrap_or_default();
+            let wrappers: Vec<CollectorStateWrapper> = system_state
+                .collector_states
+                .into_iter()
+                .map(|(id, cs)| CollectorStateWrapper {
+                    collector_id: id,
+                    name: cs.name,
+                    last_seen_secs: cs.last_seen.map(|ts| ts.seconds),
+                    total_buffer_size: cs.total_buffer_size,
+                    upload_lag_bytes: cs.upload_lag_bytes,
+                    last_upload_time_secs: cs.last_upload_time.map(|ts| ts.seconds),
+                    source_states: cs.source_states,
+                    source_buffer_sizes: cs.source_buffer_sizes,
+                })
+                .collect();
+            Ok(wrappers)
+        }
+        Ok(Err(e)) => Err(format!("GetState failed: {}", e)),
+        Err(_) => Err("GetState timed out".to_string()),
+    }
+}
+
+#[tokio::main]
+async fn main() {
     let grpc_client_state = GrpcClientState {
         client: Arc::new(tokio::sync::Mutex::new(None)),
     };
 
     let client_arc_clone = grpc_client_state.client.clone();
     tokio::spawn(async move {
-        match create_grpc_channel(GRPC_SERVER_ADDRESS).await {
+        let server_addr = grpc_server_address();
+        match create_grpc_channel(&server_addr).await {
             Ok(channel) => {
                 let client = lifelog::LifelogServerServiceClient::new(channel);
                 let mut client_guard = client_arc_clone.lock().await;
@@ -980,8 +1592,6 @@ async fn main() {
     });
 
     tauri::Builder::default()
-        .manage(app_state)
-        .manage(config_manager)
         .manage(grpc_client_state)
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -989,8 +1599,10 @@ async fn main() {
             // Local-only commands
             initialize_app,
             is_camera_supported,
-            get_camera_settings,
             select_file_dialog,
+            get_interface_settings,
+            set_interface_settings,
+            test_interface_server_connection,
             // gRPC-backed commands
             get_component_config,
             set_component_config,
@@ -998,7 +1610,9 @@ async fn main() {
             get_screenshots_data,
             get_collector_ids,
             query_timeline,
-            replay
+            replay,
+            get_frame_data,
+            get_system_state
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

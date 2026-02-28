@@ -74,12 +74,31 @@ impl AudioDataSource {
 
 fn record_wav_chunk_blocking(cfg: &MicrophoneConfig) -> Result<(Vec<u8>, u32, u32), LifelogError> {
     let host = cpal::default_host();
+
+    // On PipeWire/PulseAudio, monitor (loopback) devices have ".monitor" in their name.
+    // If no monitor device is found, warn and skip — do not fall back to the microphone silently.
     let device = host
-        .default_input_device()
-        .ok_or_else(|| LifelogError::Validation {
-            field: "microphone".to_string(),
-            reason: "no default input device available".to_string(),
+        .input_devices()
+        .map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("failed to enumerate audio input devices: {e}"),
+            ))
+        })?
+        .find(|d| {
+            d.name()
+                .map(|n| n.contains(".monitor"))
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| {
+            tracing::warn!("No PipeWire/PulseAudio monitor (loopback) device found — audio system output capture is unavailable on this system");
+            LifelogError::Validation {
+                field: "audio".to_string(),
+                reason: "no monitor/loopback device found (need a .monitor device for system audio capture)".to_string(),
+            }
         })?;
+
+    tracing::info!(device = %device.name().unwrap_or_default(), "Using audio loopback device");
 
     let supported = device.default_input_config().map_err(|e| {
         LifelogError::Io(std::io::Error::new(
@@ -201,7 +220,7 @@ fn record_wav_chunk_blocking(cfg: &MicrophoneConfig) -> Result<(Vec<u8>, u32, u3
         }
         other => {
             return Err(LifelogError::Validation {
-                field: "microphone".to_string(),
+                field: "audio".to_string(),
                 reason: format!("unsupported sample format: {other:?}"),
             });
         }

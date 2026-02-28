@@ -1,6 +1,5 @@
 use clap::{App, Arg, SubCommand};
 use config::load_config;
-use lifelog_interface_lib::api_client;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -32,8 +31,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         .get_matches();
 
     let _config = load_config();
-    let _client = api_client::create_client();
-    let _base_url = api_client::get_api_base_url();
 
     if let Some(matches) = matches.subcommand_matches("upload") {
         let file_path = matches.value_of("FILE").unwrap();

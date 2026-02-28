@@ -1,13 +1,11 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    rust-overlay.url = "github:oxalica/rust-overlay";
   };
 
   outputs = {
     self,
     nixpkgs,
-    rust-overlay,
   }: let
     systems = ["x86_64-linux" "x86_64-darwin" "aarch64-darwin"];
     forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -15,7 +13,6 @@
     packages = forAllSystems (system: let
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [(import rust-overlay)];
         config = {
           # SurrealDB is BSL-licensed and marked unfree in nixpkgs.
           # We allowlist it so `nix develop` and e2e tests can run a real DB.
@@ -39,9 +36,9 @@
             alsa-lib
             linuxPackages.v4l2loopback
             v4l-utils
-            xorg.libX11
-            xorg.libXtst
-            xorg.libXi
+            libx11
+            libxtst
+            libxi
             leptonica
             tesseract
           ];
@@ -107,7 +104,6 @@
     devShells = forAllSystems (system: let
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [(import rust-overlay)];
         config = {
           allowUnfreePredicate = pkg:
             builtins.elem (nixpkgs.lib.getName pkg) [
@@ -130,19 +126,39 @@
             pkgs.alsa-lib
             pkgs.libv4l
             pkgs.libxkbcommon
-            pkgs.xorg.libX11
-            pkgs.xorg.libXi
-            pkgs.xorg.libXtst
+            pkgs.libx11
+            pkgs.libxi
+            pkgs.libxtst
+            pkgs.libdrm
+            pkgs.libglvnd
+            pkgs.mesa
+            pkgs.vulkan-loader
+            pkgs.webkitgtk_4_1
+            pkgs.libsoup_3
+            pkgs.gtk3
+            pkgs.glib
+            pkgs.pango
+            pkgs.cairo
+            pkgs.gdk-pixbuf
+            pkgs.atk
             pkgs.stdenv.cc.cc.lib
           ]);
+
+        LIBGL_DRIVERS_PATH =
+          pkgs.lib.optionalString pkgs.stdenv.isLinux
+          "${pkgs.mesa}/lib/dri";
+        GBM_BACKENDS_PATH =
+          pkgs.lib.optionalString pkgs.stdenv.isLinux
+          "${pkgs.mesa}/lib/gbm";
 
         RUSTC_WRAPPER = "sccache";
 
         packages = with pkgs;
           [
-            (rust-bin.stable.latest.default.override {
-              extensions = ["rust-src" "rust-analyzer"];
-            })
+            rustc
+            cargo
+            rust-analyzer
+            rustfmt
             openssl
             sqlite
             protobuf
@@ -161,10 +177,10 @@
             libxkbcommon
             alsa-lib
             grim
-            xorg.libX11
+            libx11
             slurp
-            xorg.libXtst
-            xorg.libXi
+            libxtst
+            libxi
 
             glib
             gtk3
@@ -205,9 +221,9 @@
             pkgs.alsa-lib
             pkgs.libv4l
             pkgs.libxkbcommon
-            pkgs.xorg.libX11
-            pkgs.xorg.libXi
-            pkgs.xorg.libXtst
+            pkgs.libx11
+            pkgs.libxi
+            pkgs.libxtst
             pkgs.openssl
             pkgs.stdenv.cc.cc.lib
           ]
@@ -218,9 +234,10 @@
 
         packages = with pkgs;
           [
-            (rust-bin.stable.latest.default.override {
-              extensions = ["rust-src" "rust-analyzer"];
-            })
+            rustc
+            cargo
+            rust-analyzer
+            rustfmt
             openssl
             sqlite
             pkg-config
@@ -249,9 +266,9 @@
             linuxPackages.v4l2loopback
             v4l-utils
             libxkbcommon
-            xorg.libX11
-            xorg.libXtst
-            xorg.libXi
+            libx11
+            libxtst
+            libxi
             leptonica
             tesseract
           ];

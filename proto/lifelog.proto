@@ -269,6 +269,31 @@ message ControlMessage {
 
 
 // -----------------------------------------------------------------------------
+// Modality registry messages (for ListModalities RPC)
+// -----------------------------------------------------------------------------
+
+message FieldDescriptor {
+  string name = 1;
+  string ty = 2;
+  string display = 3;
+  bool primary = 4;
+  bool searchable = 5;
+}
+
+message ModalityDescriptor {
+  string name = 1;
+  string stream_id = 2;
+  string category = 3;
+  repeated FieldDescriptor fields = 4;
+}
+
+message ListModalitiesRequest {}
+
+message ListModalitiesResponse {
+  repeated ModalityDescriptor modalities = 1;
+}
+
+// -----------------------------------------------------------------------------
 
 
 
@@ -385,7 +410,8 @@ service LifelogServerService {
 
   rpc GetUploadOffset(GetUploadOffsetRequest) returns (GetUploadOffsetResponse);
 
-
+  // Returns all registered modality descriptors, enabling schema-driven clients.
+  rpc ListModalities(ListModalitiesRequest) returns (ListModalitiesResponse);
 
 }
 

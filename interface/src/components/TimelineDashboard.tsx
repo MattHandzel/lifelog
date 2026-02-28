@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Clock, Camera, Mic, FileText, Search, RefreshCw } from 'lucide-react';
+import { Clock, Search, RefreshCw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
+import ResultCard, { FrameDataWrapper } from './ResultCard';
 
 interface TimelineEntry {
   uuid: string;
@@ -21,25 +22,8 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
   const [textQuery, setTextQuery] = useState<string>('');
   const [queryMode, setQueryMode] = useState<'text' | 'llql'>('text');
   const [results, setResults] = useState<TimelineEntry[]>([]);
+  const [frames, setFrames] = useState<FrameDataWrapper[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-
-  function getModalityIcon(modality: string): JSX.Element {
-    switch (modality?.toLowerCase()) {
-      case 'screen':
-        return <Camera className="w-4 h-4 text-blue-400" />;
-      case 'audio':
-        return <Mic className="w-4 h-4 text-green-400" />;
-      case 'camera':
-        return <Camera className="w-4 h-4 text-purple-400" />;
-      default:
-        return <FileText className="w-4 h-4 text-gray-400" />;
-    }
-  }
-
-  function formatTimestamp(timestamp: number | null): string {
-    if (!timestamp) return 'N/A';
-    return new Date(timestamp * 1000).toLocaleString();
-  }
 
   async function handleSearch(): Promise<void> {
     setIsLoading(true);
@@ -61,9 +45,28 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
       });
 
       setResults(entries);
+
+      if (entries.length > 0) {
+        const keys = entries.slice(0, 50).map(e => ({ uuid: e.uuid, origin: e.origin }));
+        const enriched = await invoke<FrameDataWrapper[]>('get_frame_data', { keys });
+        const frameMap = new Map(enriched.map(f => [f.uuid, f]));
+        const ordered = entries.slice(0, 50).map(e => frameMap.get(e.uuid) ?? {
+          uuid: e.uuid, modality: e.modality, timestamp: e.timestamp,
+          text: null, url: null, title: null, visit_count: null,
+          command: null, working_dir: null, exit_code: null,
+          application: null, window_title: null, duration_secs: null,
+          audio_data_url: null, codec: null, sample_rate: null, channels: null, audio_duration_secs: null,
+          image_data_url: null, width: null, height: null, mime_type: null,
+          camera_device: null, processes: null,
+        });
+        setFrames(ordered);
+      } else {
+        setFrames([]);
+      }
     } catch (error) {
       console.error('Timeline query failed:', error);
       setResults([]);
+      setFrames([]);
     } finally {
       setIsLoading(false);
     }
@@ -74,6 +77,7 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
     setEndDate('');
     setTextQuery('');
     setResults([]);
+    setFrames([]);
   }
 
   return (
@@ -192,32 +196,17 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
               <p>Try adjusting your search criteria</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {results.map((entry) => (
-                <div
-                  key={entry.uuid}
-                  className="flex items-start gap-4 p-4 rounded-lg bg-[#232B3D] hover:bg-[#2A3142] transition-colors"
-                >
-                  <div className="pt-1">
-                    {getModalityIcon(entry.modality)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-[#4C8BF5]/20 text-[#4C8BF5]">
-                        {entry.modality || 'Unknown'}
-                      </span>
-                      <span className="text-xs text-[#9CA3AF]">
-                        {formatTimestamp(entry.timestamp)}
-                      </span>
-                    </div>
-                    <p className="text-sm text-[#F9FAFB] truncate" title={entry.uuid}>
-                      {entry.uuid.substring(0, 16)}...
-                    </p>
-                    <p className="text-xs text-[#9CA3AF] truncate" title={entry.origin}>
-                      {entry.origin}
-                    </p>
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {(frames.length > 0 ? frames : results.map(e => ({
+                uuid: e.uuid, modality: e.modality, timestamp: e.timestamp,
+                text: null, url: null, title: null, visit_count: null,
+                command: null, working_dir: null, exit_code: null,
+                application: null, window_title: null, duration_secs: null,
+                audio_data_url: null, codec: null, sample_rate: null, channels: null, audio_duration_secs: null,
+                image_data_url: null, width: null, height: null, mime_type: null,
+                camera_device: null, processes: null,
+              }))).map((frame) => (
+                <ResultCard key={frame.uuid} frame={frame} />
               ))}
             </div>
           )}
