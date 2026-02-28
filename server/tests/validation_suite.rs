@@ -63,8 +63,8 @@ async fn it_090_resume_upload_with_byte_offsets() {
     let stream = tokio_stream::iter(vec![chunk1]);
     let response = client.upload_chunks(stream).await.expect("Upload failed");
     let ack = response.into_inner();
-    // Indexed is false, so ACK should be 0
-    assert_eq!(ack.acked_offset, 0);
+    // Unknown streams are immediately marked as indexed, so ACK should advance.
+    assert_eq!(ack.acked_offset, 11);
 
     // 2. Get offset (should be 11 because we have chunk 0..11)
     let offset_resp = client
@@ -106,6 +106,12 @@ async fn it_090_resume_upload_with_byte_offsets() {
 #[tokio::test]
 #[ignore = "integration test: requires SurrealDB"]
 async fn it_081_ack_implies_queryable() {
+    // Enable OCR transform so that ScreenFrame ingestion sets indexed=false and gates the ACK.
+    std::env::set_var(
+        "LIFELOG_TRANSFORMS_JSON",
+        r#"[{"id":"ocr","enabled":true,"source_origin":"*:screen"}]"#,
+    );
+
     let ctx = TestContext::new().await;
     let mut client = ctx.client();
 
@@ -192,7 +198,7 @@ async fn it_081_ack_implies_queryable() {
     assert!(!results.is_empty(), "Chunk record should exist");
 
     // Update to indexed=true
-    let _updated: Option<serde_json::Value> = db
+    let _updated: Vec<RawRec> = db
         .query(
             "UPDATE upload_chunks SET indexed = true WHERE id = type::thing('upload_chunks', $id)",
         )
@@ -202,7 +208,7 @@ async fn it_081_ack_implies_queryable() {
         .take(0)
         .expect("Take failed");
     assert!(
-        _updated.is_some(),
+        !_updated.is_empty(),
         "Update should have affected at least one record"
     );
 

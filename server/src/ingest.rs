@@ -181,9 +181,9 @@ impl IngestBackend for SurrealIngestBackend {
                                     persisted_ok = true;
                                     // If OCR transforms are enabled, keep ACK pinned until the
                                     // derived record is produced; otherwise screen is queryable now.
-                                    let ocr_enabled = load_transform_specs()
-                                        .iter()
-                                        .any(|spec| spec.enabled && spec.id.eq_ignore_ascii_case("ocr"));
+                                    let ocr_enabled = load_transform_specs().iter().any(|spec| {
+                                        spec.enabled && spec.id.eq_ignore_ascii_case("ocr")
+                                    });
                                     indexed = !ocr_enabled;
                                 }
                             }
@@ -638,23 +638,30 @@ impl IngestBackend for SurrealIngestBackend {
         // Use a unique ID based on session and offset to ensure idempotency
         let id_str = format!("{}_{}_{}_{}", collector_id, stream_id, session_id, offset);
 
-        let record = serde_json::json!({
-            "collector_id": collector_id,
-            "stream_id": stream_id,
-            "session_id": session_id,
-            "offset": offset,
-            "length": length,
-            "hash": hash,
-            "frame_uuid": frame_uuid,
-            "indexed": indexed,
-        });
-
-        // Use a raw SQL query with CONTENT to avoid serialization issues
-        let q = "UPSERT type::thing('upload_chunks', $id) CONTENT $record";
+        // We use SET instead of CONTENT, and `indexed = (indexed = true OR $indexed = true)`
+        // so that if an idempotent retry happens after `indexed` became true, we don't revert it to false.
+        let q = "
+            UPSERT type::thing('upload_chunks', $id)
+            SET collector_id = $collector_id,
+                stream_id = $stream_id,
+                session_id = $session_id,
+                offset = $offset,
+                length = $length,
+                hash = $hash,
+                frame_uuid = $frame_uuid,
+                indexed = (indexed = true OR $indexed = true)
+        ";
         let result = db
             .query(q)
             .bind(("id", id_str))
-            .bind(("record", record))
+            .bind(("collector_id", collector_id.to_string()))
+            .bind(("stream_id", stream_id.to_string()))
+            .bind(("session_id", session_id))
+            .bind(("offset", offset))
+            .bind(("length", length))
+            .bind(("hash", hash.to_string()))
+            .bind(("frame_uuid", frame_uuid))
+            .bind(("indexed", indexed))
             .await;
 
         match result {
