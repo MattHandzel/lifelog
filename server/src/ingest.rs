@@ -181,9 +181,9 @@ impl IngestBackend for SurrealIngestBackend {
                                     persisted_ok = true;
                                     // If OCR transforms are enabled, keep ACK pinned until the
                                     // derived record is produced; otherwise screen is queryable now.
-                                    let ocr_enabled = load_transform_specs()
-                                        .iter()
-                                        .any(|spec| spec.enabled && spec.id.eq_ignore_ascii_case("ocr"));
+                                    let ocr_enabled = load_transform_specs().iter().any(|spec| {
+                                        spec.enabled && spec.id.eq_ignore_ascii_case("ocr")
+                                    });
                                     indexed = !ocr_enabled;
                                 }
                             }

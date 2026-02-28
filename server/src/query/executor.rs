@@ -205,8 +205,10 @@ pub async fn execute(
             for (start, end) in intersection {
                 clauses.push(format!(
                     // Interval overlap: [t_canonical, t_end] overlaps [start, end]
-                    "(t_canonical <= d'{}' AND t_end >= d'{}')",
+                    // If t_end is missing (Point record), fallback to checking t_canonical
+                    "(t_canonical <= d'{}' AND (t_end >= d'{}' OR t_canonical >= d'{}'))",
                     end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                    start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
                     start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
                 ));
             }

@@ -530,8 +530,8 @@ impl Server {
                 // Avoid Surreal datetime parser overflow on extreme chrono bounds.
                 // Use a wide, practical range as the "match all" fallback.
                 (None, None) => {
-                    let start =
-                        chrono::DateTime::from_timestamp(0, 0).unwrap_or(chrono::DateTime::<Utc>::MIN_UTC);
+                    let start = chrono::DateTime::from_timestamp(0, 0)
+                        .unwrap_or(chrono::DateTime::<Utc>::MIN_UTC);
                     let end = chrono::DateTime::from_timestamp(4_102_444_800, 0)
                         .unwrap_or(chrono::DateTime::<Utc>::MAX_UTC); // 2100-01-01T00:00:00Z
                     crate::query::ast::Expression::TimeRange(start, end)

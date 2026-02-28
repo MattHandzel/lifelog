@@ -1,56 +1,22 @@
-# Lifelog Development Plan
+# Plan: Temporal Query Engine Completion
 
-## Phase 1: Fundamentals (COMPLETED)
-- [x] Time Skew Estimator (UT-010)
-- [x] Replay Step Builder (UT-011)
-- [x] Correlation Operators (UT-020)
-- [x] Chunk/Offset + CAS Primitives (UT-040)
-- [x] Integration Scaffolding & Test Harness (IT-090)
-- [x] Proto-First Type System Migration
+## Objective
+Enable full cross-modal correlation by finalizing the `WITHIN` and `DURING` operators in the query engine.
 
-## Phase 2: Critical Functional Repairs (COMPLETED)
+## Phase 1: Research & Strategy
+1. **Inventory:** Analyze `server/src/query/planner.rs` and `executor.rs`.
+2. **Interval Intersection:** The `DURING` operator currently handles conjunctions (`AND`) by intersecting interval sets. We need to ensure it handles the "Point-to-Interval" expansion correctly (e.g., expanding a single Screen Capture timestamp into a small window to catch overlapping Audio).
+3. **Multi-Stage Execution:** Ensure the `WITHIN` operator can handle multiple terms (e.g., `A within B and A within C`).
 
-### 1. Collector Upload Implementation (DONE)
-- [x] **Upload Manager Actor:** Background actor in `collector` pumping data to server.
-- [x] **Cursor Management:** Local WAL offset tracking in `DiskBuffer`.
-- [x] **Data Pump:** Binary streaming via `UploadChunks` RPC.
-- [x] **Durable ACK Gate:** Local cursor only advances on server confirmation.
+## Phase 2: Execution
+1. **Refine Interval Logic:** Update `server/src/query/executor.rs` to use a robust interval intersection algorithm that supports both `Point` and `Interval` record types.
+2. **Canonical Test Case:** Ensure the test in `server/tests/canonical_llql_example.rs` (Audio during YouTube + 3Blue1Brown) is fully enabled and passing.
+3. **Error Handling:** Add descriptive errors for unsupported nested temporal joins (as per Spec §10.1).
 
-### 2. Server Control Plane & Device Persistence (DONE)
-- [x] **Improved Sync Protocol:** Functional `UploadChunks` and `GetUploadOffset` implementation.
-- [x] **Robust Metadata Ingestion:** Resolved serialization issues between Protobuf and SurrealDB.
+## Phase 3: Verification
+1. Run `just test --test canonical_llql_example`.
+2. Run `just test --test cross_modal_query`.
+3. Verify that result timestamps (`t_canonical`) are correctly returned to the UI.
 
-## Phase 3: Architecture & Performance (COMPLETED)
-
-### 1. Transformation Pipeline Optimization (DONE)
-- [x] **Watermark Polling:** Replaced $O(N)$ full-table diffing in OCR pipeline with an efficient cursor-based approach.
-- [x] **Persistence:** Added `watermarks` table to track progress per transform.
-
-### 2. Proto Crate Decoupling (DONE)
-- [x] **Feature-Based Split:** Refactored `lifelog-types` to use cargo features, allowing lightweight clients to pull generated code without heavy dependencies.
-
-### 3. Explicit Database Schema & Migrations (DONE)
-- [x] **Schema Registry:** Centralized SurrealDB DDL in `server/src/schema.rs`.
-- [x] **Strict Typing:** Enabled `SCHEMAFULL` tables for improved data integrity.
-
-## Phase 4: Final Validation & Cleanup (COMPLETED)
-
-- [x] **Error Consolidation:** Unified `LifelogError` hierarchy across all crates.
-
-- [x] **IT-010:** Cross-modal query E2E test.
-
-- [x] **IT-110:** Full OCR Transform Pipeline integration test.
-
-- [x] **IT-160:** Performance Suite & established baselines.
-
-
-
-## Phase 5: Polish & Architectural Cleanup (COMPLETED)
-
-- [x] **Unified Trait Model:** Finalized `DataType`, `Modality`, and `ToRecord` traits.
-
-- [x] **Catalog Refactor:** Moved away from `INFO FOR DB` to explicit `catalog` table.
-
-- [x] **Robust Key Retrieval:** Fixed serialization issues with SurrealDB native types in query results.
-
-- [x] **Code Coverage:** Increased test coverage for core modules.
+## Model Recommendation
+**Gemini 2.5 Pro** (Required for complex SQL generation and interval math).
