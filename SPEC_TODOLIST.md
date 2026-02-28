@@ -187,6 +187,7 @@ Retrieve audio during times when:
 | 8.9 | Multi-device health/backlog visualization | `[ ]` | Devices dashboard exists but no per-device metrics |
 | 8.10 | Privacy controls surface (pause, per-stream toggles, retention, deletion) | `[~]` | Global pause exists; no per-stream toggle UI, no retention UI |
 | 8.11 | Mobile-responsive design | `[ ]` | Spec §11: must work on phone browser (secondary) |
+| 8.15 | **Network Topology Dashboard** (Animated data streams & config editor) | `[ ]` | Replaces/enhances the Devices dashboard. Spec §11.4 |
 
 ### Frontend Infrastructure Gaps (from remaining-work.md)
 

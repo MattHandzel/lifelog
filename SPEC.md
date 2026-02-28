@@ -62,6 +62,16 @@ After initial setup, no manual “organize/tag/save” is required. Failures are
 
 All ingestion, storage, processing, and queries execute on user-controlled machines by default. No cloud sync in v1.
 
+### 1.5 Core Principle: Extreme Extensibility and Environment Agnosticism
+
+The system must be designed as a **platform for diverse environments**, not a hardcoded tool for a specific setup.
+
+- **Environment-Aware Providers**: For any modality that depends on external software (Shells, Window Managers, Browsers), the implementation must use a provider-based pattern.
+  - *Example (Shell History)*: The system must support multiple shells (Bash, Zsh, Fish) concurrently or via configuration, rather than assuming a single system default.
+  - *Example (Window Activity)*: Support for different compositors (Hyprland, X11, GNOME/Mutter) should be handled via modular adapters.
+- **Isomorphic Configuration**: If a feature or behavior *can* vary between users or environments, it *must* be configurable. Avoid "magic" defaults that cannot be overridden.
+- **Modality Pluggability**: Adding a new stream type (e.g., "Heart Rate" or "Local LLM Thought Stream") should only require a new Proto message and a registration in the metadata schema, without core backend refactoring.
+
 ---
 
 ## 2. Non-Goals (v1 explicitly does not do)
@@ -80,9 +90,9 @@ Collectors must produce at least these streams:
 
 ### 3.1 Desktop/Laptop (Primary)
 
-- Screen capture (fixed interval) + metadata (resolution, active window/app).
+- **Screen Capture**: Captured as **Per-Monitor Streams** (each monitor is a separate logical stream, e.g., `screen-1`, `screen-2`).
+- **Browser Activity**: **Surface-Level (URL/Title)** logging for v1; full DOM/content extraction deferred for v2 (Section 18.11).
 - Desktop microphone audio capture (fixed interval chunking).
-- Browser activity (URLs/titles/visit events; optionally “active tab” snapshots).
 - App/window activity (active window title, process, workspace).
 - Keystrokes (content policy TBD; minimum required: key events + timestamps).
 - Mouse events (minimum: activity indicators + timestamps).
@@ -379,12 +389,14 @@ v1 blob storage is a **filesystem content-addressed store (CAS)**:
 v1 must provide:
 
 - time index (range scan by time, per stream),
+- **Text Search Index (BM25)**: Ranking for text search results is **Relevance-Biased (BM25)** by default, with future support for per-query user overrides (Section 18.11).
 - text search index for:
   - OCR text,
   - browser URL/title,
   - clipboard text,
   - shell commands,
-  - (optional) keystroke content if stored as text.
+  - (optional) keystroke captured text if stored as text.
+
 
 Vector index can be added later but v1 should reserve schema hooks for embeddings.
 
@@ -403,6 +415,7 @@ v1 must implement:
 ### 9.2 Transform Execution Model
 
 - Backend schedules transforms via a job runner.
+- **Transform Location**: Transforms (like OCR) are **Centralized (Server-Only)** to ensure consistency and easier management of derived data (Section 18.10).
 - Transforms are idempotent and resumable.
 - Re-transform policy is versioned:
   - changing OCR engine/model version creates a new derived stream version or marks derived records with transform version.
@@ -456,6 +469,7 @@ Replay is a query mode that returns ordered steps:
 
 - default step granularity: screen capture interval
 - includes aligned context from other streams (keystrokes/clipboard/window/audio markers) within correlation window
+- **Replay Context Scope**: Aligned context (e.g., keystrokes, clipboard events) should be **filtered to the active window** during that frame whenever possible (Section 18.9).
 
 Replay must be able to drive a UI that “walks forward” through time.
 
@@ -493,14 +507,29 @@ Implementation note: this repo’s UI is Vite + React + strict TypeScript; `npm 
   - step-by-step screen frames,
   - optionally audio playback aligned to frames,
   - visible aligned events (clipboard, key bursts, commands).
+- **Network Topology Dashboard**: A rich, animated visual representation of the entire Lifelog system.
 
-### 11.2 Query Cancellation
+### 11.4 Network Topology Dashboard (Interactive Visualizer)
+
+Instead of a basic "Devices" list, the UI must include an animated, interactive "Network" tab with a dark aesthetic:
+- **Visual Nodes**: The Server and all connected Collectors are represented as nodes. Users can assign custom icons (Desktop, Laptop, Phone, Cloud) to represent physical devices.
+- **Animated Data Streams**: Active connections are shown as glowing lines between nodes. When data is actively being ingested, colored light pulses travel along the lines (each color representing a different data modality, e.g., blue for screen, green for audio).
+- **Live State & Health**: Hovering or clicking a node reveals its current health, backlog size, buffer fullness, and last capture timestamp.
+- **Interactive Configuration**: The visualizer is not just read-only. It acts as a graphical interface for the `lifelog-config.toml`. Users can click on a collector node to:
+  - Force an immediate data sync.
+  - Toggle specific modalities (e.g., disable microphone).
+  - Pause/Resume the entire device.
+  - Modify device aliases and icons.
 
 UI must be able to cancel in-flight queries/streams when:
 
 - user issues a new query,
 - user navigates away,
 - backend signals overload.
+
+### 11.3 Interface Offline Support
+
+The interface should support an **Offline-Capable Cache** (Section 18.10), allowing the user to browse recent data (e.g., the last 24 hours) even if the backend is temporarily unreachable.
 
 ---
 
@@ -522,7 +551,8 @@ v1 cannot be “perfect privacy”, but it must not be structurally unsafe.
 
 Even if the product goal is “record everything”, v1 must support:
 
-- emergency pause/resume capture,
+- **Emergency Pause**: A global pause command that stops all capture across all devices. For v1, this will be supported via a backend command broadcast to collectors, with the trigger mechanism (Hotkey vs. UI) deferred for later refinement (Section 18.9).
+- **Plugin Strategy**: Users can extend the system by adding a script path to the configuration; the collector will execute the script and ingest its output (Section 18.10).
 - per-stream disable (config-driven),
 - retention controls (at least coarse-grained).
 
@@ -542,6 +572,29 @@ This is explicitly high risk. Minimum required mitigations for v1:
 ### 12.5 Retention Policy (Decision)
 
 Default retention for raw screen/audio and other captured streams is **forever** (unless the user explicitly configures deletion).
+
+---
+
+### 18.9 User Interaction and Data Lifecycle
+
+- **Deletion Control**: The system must support data deletion via **Time-Range Wipe** (e.g., "delete everything from last Tuesday") and **Query-Based Delete** (e.g., "delete all screen captures where URL contains 'bank'").
+- **OCR Engine**: **Tesseract (Standard)** is the default OCR engine for v1, prioritizing standard performance and accuracy (Section 9.1).
+- **Replay Context Scope**: Replay events (keystrokes, clipboard, etc.) are filtered to the **active window** to reduce noise and improve focus during recall (Section 10.3).
+- **Emergency Pause**: Minimal support for a global pause command; exact trigger (Hotkey/Tray) is deferred for v1.
+
+### 18.10 Platform Extensibility and Cache
+
+- **Transform Location**: Transforms are executed exclusively on the **Centralized Server** for v1 (Section 9.2).
+- **Plugin Strategy**: Third-party extensions are added via **Config-Driven Scripts**; the collector executes specified scripts and ingests their output (Section 12.3).
+- **Blob Compression**: No application-layer compression is implemented for v1, but **Application-Layer (Zstd)** remains the target for future optimization.
+- **Local UI Caching**: The interface app should maintain an **Offline-Capable Cache** for the most recent 24 hours of data (Section 11.3).
+
+### 18.11 Modality Depth and Search UX
+
+- **Browser Logging Depth**: v1 captures only **Surface-Level (URL/Title)** information; deep content extraction is a v2 priority (Section 3.1).
+- **Audio Indicators**: v1 shows **Raw Presence Only** on the timeline; specialized speech/noise detection transforms are deferred.
+- **Search Ranking**: Text search defaults to **Relevance-Biased (BM25)** to surface the most relevant matches first (Section 8.3).
+- **Multi-Monitor Handling**: Screen capture is implemented as **Per-Monitor Streams**, allowing independent navigation and replay of individual displays (Section 3.1).
 
 ---
 
@@ -773,9 +826,10 @@ This section records decisions you’ve made so far so they cannot silently drif
 - Upload resume offset unit: **byte offset within a per-stream session file** (Section 7.3.1).
 - Per-stream monotonic ordering: **required sequence numbers** exist for ordering and dedupe, but are not the upload offset (Section 4.2, Section 7.3.1).
 
-### 18.3 Delivery Semantics
+### 18.3 Delivery and Indexing Semantics
 
-- ACK implies **fully queryable** (baseline indexes updated), accepting ingest backpressure (Section 6.2.1).
+- ACK implies **persistence and durability** (Section 6.2).
+- Indexing strategy: **Relaxed/Background Indexing** (Section 6.2.1). (ACK is sent as soon as metadata/blobs are persisted; indexing happens as a background task, with a small latency before records are searchable.)
 
 ### 18.4 API Surface
 
@@ -792,9 +846,17 @@ This section records decisions you’ve made so far so they cannot silently drif
 - Keystrokes: **full text capture with minimal controls** (Section 12.4). (High risk acknowledged.)
 - Default retention: **forever** (Section 12.5).
 
-### 18.7 Query Authoring (Ambiguous; Needs Confirmation)
+### 18.7 Query Authoring and Performance
 
-- Templates + builder first, DSL as advanced view
+- Query syntax: Templates + builder first, DSL as advanced view (Section 18.7).
+- Query performance target: **Snappy (<1s latency)** for most queries.
+- Audio clipping: **Raw Overlapping Chunks** (Return full 10s-30s chunks that overlap the query window instead of precisely clipped segments).
+
+### 18.8 Environment and Extensibility
+
+- Operating System: **NixOS** (Systemd user services for collectors).
+- Shell Support: **Bash, Zsh, and Fish** must be supported on Day 1.
+- Enrollment/Pairing: **Token-based Authentication** (Default choice for v1).
 
 ---
 

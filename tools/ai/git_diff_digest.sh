@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
-set -euo pipefail
-out() { printf '%s\n' "$*" 2>/dev/null || true; }
+# tools/ai/git_diff_digest.sh
+# Summarizes changes in a diff without printing every single line.
 
-DIFF_ARGS=""
+REF=${1:-main}
+echo "--- Change Digest against $REF ---"
 
-if [ "${1:-}" = "--cached" ]; then
-  DIFF_ARGS="--cached"
-  shift
-fi
+# List files changed and their status
+git diff --stat "$REF"
 
-SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-
-out "[git] diff --stat $DIFF_ARGS"
-# shellcheck disable=SC2086
- git diff --stat $DIFF_ARGS
-
-# shellcheck disable=SC2086
- git diff $DIFF_ARGS | "$SCRIPT_DIR/summarize_output.sh" --lines 120 --matches 80 --top 20
+echo "\n--- Summary of Modified Logic ---"
+# Show only lines that changed significantly (ignoring imports/comments)
+# Using a grep pattern to find interesting changes
+git diff -U0 "$REF" | grep -E "^\+|^\-" | grep -vE "^\+\+\+|^\-\-\-" | grep -vE "import |use |//|/\*" | head -n 50
+echo "..."

@@ -1,32 +1,39 @@
 #!/usr/bin/env bash
-# Replace a pattern across multiple files, reporting only what changed.
-# Usage: bulk_replace.sh <old_pattern> <new_pattern> <file_or_glob>...
-# Example: bulk_replace.sh 'println!' 'tracing::info!' src/**/*.rs
-set -euo pipefail
+# tools/ai/bulk_replace.sh
+# Safely replaces a string across the whole project and summarizes changes.
 
-if [ "$#" -lt 3 ]; then
-  echo "Usage: bulk_replace.sh <old_pattern> <new_pattern> <file_or_glob>..." >&2
-  exit 2
+OLD_STRING=$1
+NEW_STRING=$2
+
+if [ -z "$OLD_STRING" ] || [ -z "$NEW_STRING" ]; then
+    echo "Usage: tools/ai/bulk_replace.sh <old_string> <new_string>"
+    exit 1
 fi
 
-OLD="$1"; shift
-NEW="$1"; shift
+echo "--- Bulk Replace Analysis ---"
+echo "Replacing: '$OLD_STRING' -> '$NEW_STRING'"
 
-changed=0
-skipped=0
-total_replacements=0
+# Find files that contain the old string
+FILES=$(rg -l "$OLD_STRING" --type rust --type ts --type tsx --type proto --glob "!**/target/**" --glob "!**/node_modules/**")
 
-for file in "$@"; do
-  [ -f "$file" ] || continue
-  count=$(grep -cF "$OLD" "$file" 2>/dev/null || true)
-  if [ "$count" -gt 0 ]; then
-    sed -i "s|$(printf '%s' "$OLD" | sed 's/[&/\]/\\&/g')|$(printf '%s' "$NEW" | sed 's/[&/\]/\\&/g')|g" "$file"
-    printf "  %-60s %d replacements\n" "$file" "$count"
-    changed=$((changed + 1))
-    total_replacements=$((total_replacements + count))
-  else
-    skipped=$((skipped + 1))
-  fi
+if [ -z "$FILES" ]; then
+    echo "No occurrences found."
+    exit 0
+fi
+
+echo "Files to be modified:"
+echo "$FILES"
+echo "---"
+
+# Perform the replacement using sed (handling different OS versions of sed)
+for file in $FILES; do
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        sed -i '' "s/$OLD_STRING/$NEW_STRING/g" "$file"
+    else
+        sed -i "s/$OLD_STRING/$NEW_STRING/g" "$file"
+    fi
+    echo "Modified: $file"
 done
 
-echo "[bulk_replace] files_changed=$changed files_skipped=$skipped total_replacements=$total_replacements"
+echo "--- Summary ---"
+echo "Bulk replacement complete."

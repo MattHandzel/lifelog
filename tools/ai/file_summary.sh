@@ -1,35 +1,17 @@
 #!/usr/bin/env bash
-# Show a compact summary of a Rust file without reading the full contents.
-# Usage: file_summary.sh <file.rs> [file2.rs ...]
-# Output: line count, use/mod imports, pub signatures, TODO/FIXME counts
-set -euo pipefail
+# tools/ai/file_summary.sh
+# Summarizes a file's structure (symbols, functions) instead of reading full content.
 
-if [ "$#" -eq 0 ]; then
-  echo "Usage: file_summary.sh <file.rs> [file2.rs ...]" >&2
-  exit 2
+FILE=$1
+echo "--- Structure of $FILE ---"
+
+if [[ $FILE == *.rs ]]; then
+    grep -E "pub (fn|struct|enum|trait|type)" "$FILE" | head -n 100
+elif [[ $FILE == *.ts ]] || [[ $FILE == *.tsx ]]; then
+    grep -E "export (function|const|class|interface|type|enum)" "$FILE" | head -n 100
+elif [[ $FILE == *.proto ]]; then
+    grep -E "(message|service|rpc|enum)" "$FILE" | head -n 100
+else
+    echo "(Generic File) First 20 lines:"
+    head -n 20 "$FILE"
 fi
-
-for file in "$@"; do
-  [ -f "$file" ] || { echo "[skip] $file (not found)"; continue; }
-
-  lines=$(wc -l < "$file" | tr -d ' ')
-  todo_count=$(grep -ciE 'TODO|FIXME|HACK|XXX' "$file" 2>/dev/null || echo 0)
-  unsafe_count=$(grep -c 'unsafe' "$file" 2>/dev/null || echo 0)
-  expect_count=$(grep -cE '\.(expect|unwrap)\(' "$file" 2>/dev/null || echo 0)
-  println_count=$(grep -cE '(println!|eprintln!)\(' "$file" 2>/dev/null || echo 0)
-
-  echo "=== $file ($lines lines) ==="
-  echo "  todos=$todo_count unsafe=$unsafe_count expect/unwrap=$expect_count println=$println_count"
-
-  # Show pub items (signatures only, no body)
-  echo "  [pub items]"
-  grep -nE '^\s*pub\s+(fn|struct|enum|trait|type|mod|const|static|async fn)' "$file" \
-    | sed 's/^/    /' | head -30 || true
-
-  # Show use/mod declarations
-  echo "  [imports]"
-  grep -nE '^\s*(use |mod |pub mod |pub use )' "$file" \
-    | sed 's/^/    /' | head -20 || true
-
-  echo ""
-done

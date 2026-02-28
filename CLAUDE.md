@@ -5,16 +5,27 @@
 **Nix is required.** All cargo commands must run inside `nix develop`.
 Use `just` recipes (which wrap nix) instead of raw cargo.
 
-**Worktrees:** Feature branches use git worktrees in `~/.config/superpowers/worktrees/lifelog/`
+**Worktrees:** Feature branches use git worktrees. 
+- **Standard Location:** `worktrees/feature/<branch-name>` (ignored by git).
+- **Alternative:** `~/.config/superpowers/worktrees/lifelog/` (legacy/external).
 
-| Command              | What it does                                |
-| -------------------- | ------------------------------------------- |
-| `just check`         | `cargo check --all-targets`                 |
-| `just test`          | `cargo test --all-targets`                  |
-| `just test-e2e`      | Integration suite (needs SurrealDB running) |
-| `just validate`      | Full gate: fmt + check + clippy + test      |
-| `just run-server`    | Start the lifelog server                    |
-| `just run-collector` | Start the collector daemon                  |
+| Command                       | What it does                                     |
+| ----------------------------- | ------------------------------------------------ |
+| `just work`                   | Display developer dashboard & active agents      |
+| `just status-all`             | List all active worktrees & branch status        |
+| `just init-session`           | Prepare workspace for new AI session             |
+| `just worktree-list`          | List all active worktrees                        |
+| `just worktree-create <name>` | Create a new feature branch and local worktree   |
+| `just worktree-remove <name>` | Safely remove a worktree and its branch          |
+| `just review-feature <name>`  | Read agent handoff report & change digest        |
+| `just ship-feature <name>`    | Validate, merge, and prune a feature worktree    |
+| `just check`                  | `cargo check --all-targets`                      |
+| `just test`                   | `cargo test --all-targets`                       |
+| `just test-e2e`               | Integration suite (needs SurrealDB running)      |
+| `just validate`               | Full gate: fmt + check + clippy + test           |
+| `just run-server`             | Start the lifelog server                         |
+| `just run-collector`          | Start the collector daemon                       |
+
 
 ## Architecture
 
@@ -77,19 +88,49 @@ See @README.md for project overview.
 - `proto/*.proto` — cascades to all crates
 - `Cargo.toml` / `Cargo.lock` — workspace-wide
 - `server/src/server.rs` — central server logic
+## AI Token-Efficient Workflow
 
-## AI Agent Workflow
+For coding agents (Claude Code, Gemini CLI, etc.), the repo includes a small context surface and output digests to reduce token usage. You MUST use these tools to prevent context bloat:
 
-Use digest tools instead of reading raw output:
+- **`IS_LLM_AGENT` (Env Var)**
+  - *Effect:* When set to `1` (default for new agents), `just check`, `just test`, and `just validate` automatically use the digest tools below. `just init-session` also skips the mandatory build check to speed up startup.
+  - *Toggle:* Run `export IS_LLM_AGENT=0` to disable and get full verbose output.
 
-| Tool                          | Use instead of        |
-| ----------------------------- | --------------------- |
-| `tools/ai/check_digest.sh`    | raw cargo check       |
-| `tools/ai/run_and_digest.sh`  | raw command execution |
-| `tools/ai/scope_changes.sh`   | grep for scoping      |
-| `tools/ai/file_summary.sh`    | reading full files    |
-| `tools/ai/git_diff_digest.sh` | git diff              |
-| `tools/ai/bulk_replace.sh`    | sequential Edit calls |
+- **`tools/ai/run_and_digest.sh "<command>"`**
+...
+  - *Why:* Commands like `cargo build` or `npm run dev` output hundreds of lines of noise, blowing up your context window and causing you to forget previous instructions.
+  - *When:* Use this whenever you need to compile code, run a test suite, or start a server where you only care about the final status or the actual errors.
+  - *How:* `tools/ai/run_and_digest.sh "cargo build"` or `tools/ai/run_and_digest.sh "npm install"`.
+
+- **`just diff-digest`**
+  - *Why:* Raw `git diff` includes unmodified context lines, import statements, and other boilerplate that wastes tokens.
+  - *When:* Use this before committing or when reviewing what changes you've made in your current branch.
+  - *How:* Just run `just diff-digest`.
+
+- **`just summary <file>`**
+  - *Why:* Reading a 1000-line file just to find the name of a struct or a function signature is highly inefficient.
+  - *When:* Use this when exploring a new part of the codebase to get a "map" of a file's public API without reading its implementation details.
+  - *How:* `just summary server/src/query/planner.rs`.
+
+- **`just check-digest`**
+  - *Why:* Standard type checkers produce verbose output. This script distills it down to just the actionable error messages.
+  - *When:* Run this frequently during development to ensure you haven't broken the build, especially after making surgical changes.
+  - *How:* Just run `just check-digest`.
+
+- **`tools/ai/scope_changes.sh <symbol>`**
+  - *Why:* Changing a core symbol requires knowing every usage site to avoid regressions.
+  - *When:* Before refactoring or changing a public struct/function.
+  - *How:* `tools/ai/scope_changes.sh "DataModality"`.
+
+- **`tools/ai/bulk_replace.sh <old> <new>`**
+  - *Why:* Replacing a string in 50 files manually blows up the context window.
+  - *When:* For large-scale renaming or refactoring.
+  - *How:* `tools/ai/bulk_replace.sh "OldType" "NewType"`.
+
+- **`tools/ai/summarize_output.sh`**
+  - *Why:* Long-running servers or noisy logs flood the context.
+  - *When:* When monitoring a process that outputs repetitive lines.
+  - *How:* `npm run dev | tools/ai/summarize_output.sh`.
 
 ## Compaction Rules
 

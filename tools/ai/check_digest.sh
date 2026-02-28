@@ -1,45 +1,28 @@
 #!/usr/bin/env bash
-# Specialized digest for cargo check/clippy/test output.
-# Usage: check_digest.sh <command> [args...]
-# Example: check_digest.sh cargo check --all-targets
-#          check_digest.sh cargo clippy --all-targets -- -D warnings
-#          check_digest.sh cargo nextest run
-set -euo pipefail
+# tools/ai/check_digest.sh
+# Specifically for 'cargo check' or 'npm check', extracting only actionable errors.
 
-if [ "$#" -eq 0 ]; then
-  echo "Usage: check_digest.sh <command> [args...]" >&2
-  exit 2
+echo "--- Build Health Check ---"
+TEMP_OUT=$(mktemp)
+
+# Determine project type
+if [ -f "Cargo.toml" ]; then
+    nix develop --command cargo check --message-format=short > "$TEMP_OUT" 2>&1
+elif [ -f "package.json" ]; then
+    npm run typecheck > "$TEMP_OUT" 2>&1
 fi
 
-tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
+EXIT_CODE=$?
 
-set +e
-"$@" > "$tmp" 2>&1
-exit_code=$?
-set -e
-
-line_count=$(wc -l < "$tmp" | tr -d ' ')
-# grep -c prints "0" but exits 1 when there are no matches; don't append a second "0".
-err_count=$(grep -ciE '^error' "$tmp" 2>/dev/null || true)
-warn_count=$(grep -ciE '^warning' "$tmp" 2>/dev/null || true)
-err_count=${err_count:-0}
-warn_count=${warn_count:-0}
-
-echo "[check] cmd=$*"
-echo "[check] exit_code=$exit_code lines=$line_count errors=$err_count warnings=$warn_count"
-
-if [ "$exit_code" -ne 0 ]; then
-  echo "[check] FAILED — first 5 errors:"
-  grep -E '^error' "$tmp" | head -5 | sed 's/^/  /'
-  echo ""
-  echo "[check] last 10 lines:"
-  tail -10 "$tmp" | sed 's/^/  /'
-elif [ "$warn_count" -gt 0 ]; then
-  echo "[check] PASSED with warnings — first 5:"
-  grep -E '^warning' "$tmp" | head -5 | sed 's/^/  /'
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "✅ Project is healthy (buildable/type-safe)."
 else
-  echo "[check] PASSED (clean)"
+    echo "❌ Build Issues Found:"
+    # Short format usually gives 1 line per error
+    grep -E "error|error\[" "$TEMP_OUT" | head -n 30
+    echo "---"
+    echo "Total errors: $(grep -c "error:" "$TEMP_OUT")"
 fi
 
-exit "$exit_code"
+rm "$TEMP_OUT"
+exit $EXIT_CODE
