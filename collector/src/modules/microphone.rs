@@ -1,433 +1,405 @@
-use crate::logger::*;
+use crate::data_source::{BufferedSource, DataSource, DataSourceHandle};
 use async_trait::async_trait;
-use chrono;
+use chrono::Utc;
 use config::MicrophoneConfig;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{WavSpec, WavWriter};
-use std::fs;
+use lifelog_core::{LifelogError, Uuid};
+use lifelog_types::{to_pb_ts, AudioFrame, RecordType};
+use prost::Message;
+use std::io::Cursor;
+use std::io::{Seek, SeekFrom, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
-use std::thread;
-use std::time::Duration;
-use tokio::time::{sleep, Duration as TokioDuration};
+use std::sync::{Arc, Mutex};
+use tokio::time::{sleep, Duration};
+use utils::buffer::DiskBuffer;
 
-#[cfg(target_os = "macos")]
-use std::process::Command;
+static RUNNING: AtomicBool = AtomicBool::new(false);
 
-// Global flags for controlling recording state
-static RECORDING_ENABLED: AtomicBool = AtomicBool::new(false);
-static RECORDING_PAUSED: AtomicBool = AtomicBool::new(false);
-static AUTO_RECORDING_ENABLED: AtomicBool = AtomicBool::new(false);
+#[derive(Clone)]
+struct SharedCursor {
+    inner: Arc<Mutex<Cursor<Vec<u8>>>>,
+}
 
-// Shared config for updating settings during runtime
-static CURRENT_CONFIG: OnceLock<Mutex<MicrophoneConfig>> = OnceLock::new();
+impl Write for SharedCursor {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "cursor mutex poisoned"))?;
+        guard.write(buf)
+    }
 
-pub struct MicrophoneLogger {
+    fn flush(&mut self) -> std::io::Result<()> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "cursor mutex poisoned"))?;
+        guard.flush()
+    }
+}
+
+impl Seek for SharedCursor {
+    fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        let mut guard = self
+            .inner
+            .lock()
+            .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "cursor mutex poisoned"))?;
+        guard.seek(pos)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MicrophoneDataSource {
     config: MicrophoneConfig,
+    pub buffer: Arc<DiskBuffer>,
 }
 
-impl MicrophoneLogger {
-    pub fn new(config: MicrophoneConfig) -> Result<Self, LoggerError> {
-        Ok(MicrophoneLogger { config })
-    }
+impl MicrophoneDataSource {
+    pub fn new(config: MicrophoneConfig) -> Result<Self, LifelogError> {
+        let buffer_path = std::path::Path::new(&config.output_dir).join("mic_buffer");
+        let buffer = DiskBuffer::new(&buffer_path).map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
 
-    pub fn setup(&self) -> Result<LoggerHandle, LoggerError> {
-        DataLogger::setup(self, self.config.clone())
-    }
-}
-
-#[async_trait]
-impl DataLogger for MicrophoneLogger {
-    type Config = MicrophoneConfig;
-
-    fn new(config: MicrophoneConfig) -> Result<Self, LoggerError> {
-        MicrophoneLogger::new(config)
-    }
-
-    fn setup(&self, config: MicrophoneConfig) -> Result<LoggerHandle, LoggerError> {
-        let logger = Self::new(config)?;
-        let join = tokio::spawn(async move {
-
-            let task_result = logger.run().await;
-
-            tracing::debug!(result = ?task_result, "Background task finished");
-
-            task_result
-        });
-
-        Ok(LoggerHandle { join })
-    }
-
-    async fn run(&self) -> Result<(), LoggerError> {
-        let config = self.config.clone();
-        tracing::info!(config = ?config, "Starting microphone logger");
-
-        // Store config for runtime updates
-        let _ = CURRENT_CONFIG.set(Mutex::new(config.clone()));
-
-        // Initialize flags
-        AUTO_RECORDING_ENABLED.store(config.enabled, Ordering::SeqCst);
-        RECORDING_ENABLED.store(false, Ordering::SeqCst);
-        RECORDING_PAUSED.store(false, Ordering::SeqCst);
-
-        // Ensure output directory exists
-        if let Err(e) = fs::create_dir_all(&config.output_dir) {
-            tracing::error!(error = %e, "Failed to create output directory");
-        }
-
-        // Spawn the auto‑recording scheduler
-        {
-            let cfg = config.clone();
-            tokio::spawn(async move {
-                tracing::info!("Starting auto-recording scheduler");
-                loop {
-                    if !AUTO_RECORDING_ENABLED.load(Ordering::SeqCst) {
-                        sleep(TokioDuration::from_secs(1)).await;
-                        continue;
-                    }
-                    let interval_secs = CURRENT_CONFIG
-                        .get()
-                        .map(|m| m.lock().expect("mutex poisoned").capture_interval_secs)
-                        .unwrap_or(cfg.capture_interval_secs)
-                        .max(1);
-
-                    if !RECORDING_ENABLED.load(Ordering::SeqCst) {
-                        tracing::info!("Auto-recording: starting new recording");
-                        RECORDING_ENABLED.store(true, Ordering::SeqCst);
-                        RECORDING_PAUSED.store(false, Ordering::SeqCst);
-                    }
-                    tracing::debug!(interval_secs, "Scheduler waiting");
-                    sleep(TokioDuration::from_secs(interval_secs)).await;
-                }
-            });
-        }
-
-        // Kick off the platform‑specific recording loop in its own thread
-        #[cfg(not(target_os = "macos"))]
-        {
-            let rec_cfg = config.clone();
-            thread::spawn(move || blocking_cross_platform_recording_loop(rec_cfg));
-        }
-
-        #[cfg(target_os = "macos")]
-        {
-            let rec_cfg = config.clone();
-            thread::spawn(move || blocking_macos_recording_loop(rec_cfg));
-        }
-
-        Ok(())
-    }
-
-    fn stop(&self) {
-        RECORDING_ENABLED.store(false, Ordering::SeqCst);
-        AUTO_RECORDING_ENABLED.store(false, Ordering::SeqCst);
-    }
-
-    async fn log_data(&self) -> Result<(), LoggerError> {
-        Ok(())
+        Ok(Self {
+            config,
+            buffer: Arc::new(buffer),
+        })
     }
 }
 
-// Blocking, sync recording loops:
-#[cfg(not(target_os = "macos"))]
-fn blocking_cross_platform_recording_loop(config: MicrophoneConfig) {
+fn record_mic_chunk_blocking(cfg: &MicrophoneConfig) -> Result<(Vec<u8>, u32, u32), LifelogError> {
     let host = cpal::default_host();
-    let device = match host.default_input_device() {
-        Some(d) => d,
-        None => {
-            tracing::error!("No input device available");
-            return;
-        }
+    let device = host
+        .default_input_device()
+        .ok_or_else(|| LifelogError::Validation {
+            field: "microphone".to_string(),
+            reason: "no default input device available".to_string(),
+        })?;
+
+    let supported = device.default_input_config().map_err(|e| {
+        LifelogError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            e.to_string(),
+        ))
+    })?;
+    let sample_format = supported.sample_format();
+    let sample_rate = supported.sample_rate().0;
+    let channels = supported.channels();
+
+    let stream_config = cpal::StreamConfig {
+        channels,
+        sample_rate: cpal::SampleRate(sample_rate),
+        buffer_size: cpal::BufferSize::Default,
     };
 
-    let input_config = match device.default_input_config() {
-        Ok(c) => c,
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to get default input config");
-            return;
-        }
-    };
-
-    let stream_config = input_config.config();
     let spec = WavSpec {
-        channels: config.channels as u16,
-        sample_rate: config.sample_rate as u32,
-        bits_per_sample: config.bits_per_sample as u16,
+        channels,
+        sample_rate,
+        bits_per_sample: 16,
         sample_format: hound::SampleFormat::Int,
     };
 
-    tracing::debug!(
-        sample_rate = input_config.sample_rate().0,
-        channels = input_config.channels(),
-        "Audio settings"
-    );
+    let backing = Arc::new(Mutex::new(Cursor::new(Vec::new())));
+    let shared = SharedCursor {
+        inner: Arc::clone(&backing),
+    };
 
-    loop {
-        if !RECORDING_ENABLED.load(Ordering::SeqCst) {
-            thread::sleep(Duration::from_millis(500));
-            continue;
-        }
+    let writer = WavWriter::new(shared, spec).map_err(|e| {
+        LifelogError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("failed to create wav writer: {e}"),
+        ))
+    })?;
+    let writer = Arc::new(Mutex::new(Some(writer)));
 
-        let current_config = CURRENT_CONFIG
-            .get()
-            .map(|m| m.lock().expect("mutex poisoned").clone())
-            .unwrap_or_else(|| config.clone());
-
-        if let Err(e) = fs::create_dir_all(&current_config.output_dir) {
-            tracing::error!(error = %e, "Failed to create output directory");
-            RECORDING_ENABLED.store(false, Ordering::SeqCst);
-            continue;
-        }
-
-        let timestamp = chrono::Local::now().format(current_config.timestamp_format.as_str());
-        let output_path = format!(
-            "{}/{}.wav",
-            current_config.output_dir.to_str().unwrap(),
-            timestamp
-        );
-        tracing::info!(path = %output_path, "Creating new audio file");
-
-        let writer = match WavWriter::create(&output_path, spec) {
-            Ok(w) => w,
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to create WAV file");
-                RECORDING_ENABLED.store(false, Ordering::SeqCst);
-                thread::sleep(Duration::from_secs(1));
-                continue;
-            }
-        };
-
-        let writer = Arc::new(Mutex::new(Some(writer)));
-        let err_writer = Arc::clone(&writer);
-        let stream = match device.build_input_stream(
-            &stream_config,
-            {
-                let writer = Arc::clone(&writer);
-                move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                    if RECORDING_PAUSED.load(Ordering::SeqCst) {
+    let err_writer = Arc::clone(&writer);
+    let stream = match sample_format {
+        cpal::SampleFormat::F32 => {
+            let writer = Arc::clone(&writer);
+            device.build_input_stream(
+                &stream_config,
+                move |data: &[f32], _info| {
+                    let Ok(mut guard) = writer.lock() else {
                         return;
+                    };
+                    let Some(w) = guard.as_mut() else {
+                        return;
+                    };
+                    for &s in data {
+                        let v = (s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                        let _ = w.write_sample(v);
                     }
-                    if let Ok(mut guard) = writer.lock() {
-                        if let Some(w) = guard.as_mut() {
-                            for &sample in data {
-                                let sample = (sample * i16::MAX as f32) as i16;
-                                if let Err(e) = w.write_sample(sample) {
-                                    tracing::error!(error = %e, "Error writing sample");
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            move |err| {
-                tracing::error!(error = %err, "An error occurred on the input audio stream");
-                if let Ok(mut guard) = err_writer.lock() {
+                },
+                move |err| {
+                    tracing::error!(error = %err, "Microphone input stream error (f32)");
+                    let Ok(mut guard) = err_writer.lock() else {
+                        return;
+                    };
                     *guard = None;
+                },
+                None,
+            )
+        }
+        cpal::SampleFormat::I16 => {
+            let writer = Arc::clone(&writer);
+            device.build_input_stream(
+                &stream_config,
+                move |data: &[i16], _info| {
+                    let Ok(mut guard) = writer.lock() else {
+                        return;
+                    };
+                    let Some(w) = guard.as_mut() else {
+                        return;
+                    };
+                    for &s in data {
+                        let _ = w.write_sample(s);
+                    }
+                },
+                move |err| {
+                    tracing::error!(error = %err, "Microphone input stream error (i16)");
+                    let Ok(mut guard) = err_writer.lock() else {
+                        return;
+                    };
+                    *guard = None;
+                },
+                None,
+            )
+        }
+        cpal::SampleFormat::U16 => {
+            let writer = Arc::clone(&writer);
+            device.build_input_stream(
+                &stream_config,
+                move |data: &[u16], _info| {
+                    let Ok(mut guard) = writer.lock() else {
+                        return;
+                    };
+                    let Some(w) = guard.as_mut() else {
+                        return;
+                    };
+                    for &s in data {
+                        let v = (s as i32 - i16::MAX as i32) as i16;
+                        let _ = w.write_sample(v);
+                    }
+                },
+                move |err| {
+                    tracing::error!(error = %err, "Microphone input stream error (u16)");
+                    let Ok(mut guard) = err_writer.lock() else {
+                        return;
+                    };
+                    *guard = None;
+                },
+                None,
+            )
+        }
+        other => {
+            return Err(LifelogError::Validation {
+                field: "microphone".to_string(),
+                reason: format!("unsupported sample format: {other:?}"),
+            });
+        }
+    }
+    .map_err(|e| {
+        LifelogError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            e.to_string(),
+        ))
+    })?;
+
+    stream.play().map_err(|e| {
+        LifelogError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("failed to start microphone stream: {e}"),
+        ))
+    })?;
+
+    let chunk_secs = cfg.chunk_duration_secs.max(1);
+    std::thread::sleep(std::time::Duration::from_secs(chunk_secs));
+    drop(stream);
+
+    let mut guard = writer.lock().map_err(|_| {
+        LifelogError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "wav writer mutex poisoned",
+        ))
+    })?;
+    let Some(w) = guard.take() else {
+        return Err(LifelogError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "microphone writer became unavailable due to stream error",
+        )));
+    };
+
+    w.finalize().map_err(|e| {
+        LifelogError::Io(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("failed to finalize wav: {e}"),
+        ))
+    })?;
+
+    let bytes = backing
+        .lock()
+        .map_err(|_| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                "cursor mutex poisoned",
+            ))
+        })?
+        .get_ref()
+        .clone();
+
+    Ok((bytes, sample_rate, channels as u32))
+}
+
+#[async_trait]
+impl DataSource for MicrophoneDataSource {
+    type Config = MicrophoneConfig;
+
+    fn new(config: MicrophoneConfig) -> Result<Self, LifelogError> {
+        MicrophoneDataSource::new(config)
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>> {
+        Some(Arc::new(MicrophoneBufferedSource {
+            stream_id: "microphone".to_string(),
+            buffer: self.buffer.clone(),
+        }))
+    }
+
+    fn start(&self) -> Result<DataSourceHandle, LifelogError> {
+        if RUNNING.load(Ordering::SeqCst) {
+            tracing::warn!("MicrophoneDataSource: Start called but task is already running.");
+            return Err(LifelogError::AlreadyRunning);
+        }
+
+        RUNNING.store(true, Ordering::SeqCst);
+        let source_clone = self.clone();
+        let _join_handle = tokio::spawn(async move { source_clone.run().await });
+
+        Ok(DataSourceHandle {
+            join: tokio::spawn(async { Ok(()) }),
+        })
+    }
+
+    async fn stop(&mut self) -> Result<(), LifelogError> {
+        RUNNING.store(false, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn run(&self) -> Result<(), LifelogError> {
+        while RUNNING.load(Ordering::SeqCst) {
+            let cfg = self.config.clone();
+            let started_at = Utc::now();
+
+            let result = tokio::task::spawn_blocking(move || record_mic_chunk_blocking(&cfg))
+                .await
+                .map_err(|e| {
+                    LifelogError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("microphone worker join error: {e}"),
+                    ))
+                })?;
+
+            let (wav_bytes, sample_rate, channels) = match result {
+                Ok(v) => v,
+                Err(e) => {
+                    tracing::error!(error = %e, "Microphone recording chunk failed");
+                    sleep(Duration::from_secs(5)).await;
+                    continue;
                 }
-            },
-            None,
-        ) {
-            Ok(s) => s,
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to build input stream");
-                RECORDING_ENABLED.store(false, Ordering::SeqCst);
-                thread::sleep(Duration::from_secs(1));
-                continue;
-            }
-        };
+            };
 
-        if let Err(e) = stream.play() {
-            tracing::error!(error = %e, "Failed to start audio stream");
-            RECORDING_ENABLED.store(false, Ordering::SeqCst);
-            thread::sleep(Duration::from_secs(1));
-            continue;
-        }
+            let chunk_secs = self.config.chunk_duration_secs.max(1) as f32;
+            let t0 = to_pb_ts(started_at);
+            let t1 = to_pb_ts(
+                started_at + chrono::Duration::seconds(self.config.chunk_duration_secs as i64),
+            );
 
-        tracing::info!("Audio recording started");
+            let frame = AudioFrame {
+                uuid: Uuid::new_v4().to_string(),
+                timestamp: t0,
+                audio_bytes: wav_bytes,
+                codec: "wav".to_string(),
+                sample_rate,
+                channels,
+                duration_secs: chunk_secs,
+                t_device: t0,
+                t_canonical: t0,
+                t_end: t1,
+                record_type: RecordType::Interval as i32,
+                ..Default::default()
+            };
 
-        let mut chunk_timer = Duration::from_secs(0);
-        let check_interval = Duration::from_millis(100);
-        let chunk_duration_secs = unsafe {
-            CURRENT_CONFIG
-                .as_ref()
-                .map(|m| m.lock().unwrap().chunk_duration_secs)
-                .unwrap_or(config.chunk_duration_secs)
-        };
-
-        loop {
-            thread::sleep(check_interval);
-
-            if !RECORDING_ENABLED.load(Ordering::SeqCst) {
-                tracing::info!("Recording stopped by user");
-                stream
-                    .pause()
-                    .unwrap_or_else(|e| tracing::error!(error = %e, "Failed to pause stream"));
-                break;
+            let mut buf = Vec::new();
+            if let Err(e) = frame.encode(&mut buf) {
+                tracing::error!(error = %e, "Failed to encode microphone AudioFrame");
+            } else if let Err(e) = self.buffer.append(&buf).await {
+                tracing::error!(error = %e, "Failed to append microphone frame to buffer");
+            } else {
+                tracing::debug!("Stored microphone frame in WAL");
             }
 
-            if !RECORDING_PAUSED.load(Ordering::SeqCst) {
-                chunk_timer += check_interval;
-            }
-
-            if chunk_timer.as_secs() >= chunk_duration_secs {
-                tracing::debug!("Chunk duration reached, finalizing recording");
-                stream
-                    .pause()
-                    .unwrap_or_else(|e| tracing::error!(error = %e, "Failed to pause stream"));
-                if !AUTO_RECORDING_ENABLED.load(Ordering::SeqCst) {
-                    RECORDING_ENABLED.store(false, Ordering::SeqCst);
-                }
-                break;
+            let capture_interval = self
+                .config
+                .capture_interval_secs
+                .max(self.config.chunk_duration_secs)
+                .max(1);
+            let remaining = capture_interval.saturating_sub(self.config.chunk_duration_secs);
+            if remaining > 0 {
+                sleep(Duration::from_secs(remaining)).await;
             }
         }
 
-        if let Ok(mut guard) = writer.lock() {
-            if let Some(w) = guard.take() {
-                if let Err(e) = w.finalize() {
-                    tracing::error!(error = %e, "Error finalizing WAV file");
-                }
-            }
-        }
+        Ok(())
+    }
 
-        tracing::info!("Recording chunk completed");
+    fn is_running(&self) -> bool {
+        RUNNING.load(Ordering::SeqCst)
+    }
+
+    fn get_config(&self) -> Self::Config {
+        self.config.clone()
     }
 }
 
-#[cfg(target_os = "macos")]
-fn blocking_macos_recording_loop(config: MicrophoneConfig) {
-    tracing::info!("Using macOS-specific recording implementation");
+pub struct MicrophoneBufferedSource {
+    stream_id: String,
+    buffer: Arc<DiskBuffer>,
+}
 
-    let has_sox = Command::new("which")
-        .arg("sox")
-        .output()
-        .map(|output| output.status.success())
-        .unwrap_or(false);
-
-    if !has_sox {
-        tracing::error!(
-            "SoX not found. Please install SoX with 'brew install sox' to enable audio recording."
-        );
-        return;
+#[async_trait]
+impl BufferedSource for MicrophoneBufferedSource {
+    fn stream_id(&self) -> String {
+        self.stream_id.clone()
     }
 
-    let base_dir = config.output_dir.clone();
-    if let Err(e) = fs::create_dir_all(&base_dir) {
-        tracing::error!(error = %e, "Failed to create output directory");
-        return;
+    async fn peek_upload_batch(
+        &self,
+        max_items: usize,
+    ) -> Result<(u64, Vec<Vec<u8>>), LifelogError> {
+        let (next_offset, raws) = self.buffer.peek_chunk(max_items).await.map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("microphone buffer peek error: {e}"),
+            ))
+        })?;
+        Ok((next_offset, raws))
     }
 
-    loop {
-        if !RECORDING_ENABLED.load(Ordering::SeqCst) {
-            thread::sleep(Duration::from_millis(500));
-            continue;
-        }
-
-        let current_config = unsafe {
-            CURRENT_CONFIG
-                .as_ref()
-                .map(|m| m.lock().unwrap().clone())
-                .unwrap_or_else(|| config.clone())
-        };
-
-        if let Err(e) = fs::create_dir_all(&current_config.output_dir) {
-            tracing::error!(error = %e, "Failed to create output directory");
-            RECORDING_ENABLED.store(false, Ordering::SeqCst);
-            continue;
-        }
-
-        let timestamp = chrono::Local::now().format(current_config.timestamp_format.as_str());
-        let output_path = format!(
-            "{}/{}.wav",
-            current_config.output_dir.to_str().unwrap(),
-            timestamp
-        );
-        tracing::info!(path = %output_path, "Creating new audio file with SoX");
-
-        let mut cmd = Command::new("rec");
-        cmd.arg("-c")
-            .arg(current_config.channels.to_string())
-            .arg("-r")
-            .arg(current_config.sample_rate.to_string())
-            .arg("-b")
-            .arg(current_config.bits_per_sample.to_string())
-            .arg("-e")
-            .arg("signed-integer")
-            .arg(&output_path)
-            .arg("trim")
-            .arg("0")
-            .arg(current_config.chunk_duration_secs.to_string());
-
-        tracing::debug!(command = ?cmd, "Starting SoX recording command");
-
-        let mut recording = match cmd.spawn() {
-            Ok(child) => child,
-            Err(e) => {
-                tracing::error!(error = %e, "Failed to start recording with SoX");
-                RECORDING_ENABLED.store(false, Ordering::SeqCst);
-                thread::sleep(Duration::from_secs(1));
-                continue;
-            }
-        };
-
-        let start = std::time::Instant::now();
-        while start.elapsed().as_secs() < config.chunk_duration_secs {
-            thread::sleep(Duration::from_millis(100));
-            if !RECORDING_ENABLED.load(Ordering::SeqCst) {
-                let _ = recording.kill();
-                break;
-            }
-        }
-
-        let _ = recording.wait();
-        tracing::info!("macOS recording chunk completed");
-    }
-}
-
-// Control functions
-pub fn pause_recording() {
-    RECORDING_PAUSED.store(true, Ordering::SeqCst);
-    tracing::info!("Recording paused");
-}
-pub fn resume_recording() {
-    RECORDING_PAUSED.store(false, Ordering::SeqCst);
-    tracing::info!("Recording resumed");
-}
-pub fn start_recording() {
-    RECORDING_ENABLED.store(true, Ordering::SeqCst);
-    RECORDING_PAUSED.store(false, Ordering::SeqCst);
-    tracing::info!("Recording started");
-}
-pub fn stop_recording() {
-    RECORDING_ENABLED.store(false, Ordering::SeqCst);
-    tracing::info!("Recording stopped");
-}
-pub fn enable_auto_recording() {
-    AUTO_RECORDING_ENABLED.store(true, Ordering::SeqCst);
-    tracing::info!("Auto recording enabled");
-}
-pub fn disable_auto_recording() {
-    AUTO_RECORDING_ENABLED.store(false, Ordering::SeqCst);
-    tracing::info!("Auto recording disabled");
-}
-
-pub fn is_recording() -> bool {
-    RECORDING_ENABLED.load(Ordering::SeqCst)
-}
-pub fn is_paused() -> bool {
-    RECORDING_PAUSED.load(Ordering::SeqCst)
-}
-pub fn is_auto_recording_enabled() -> bool {
-    AUTO_RECORDING_ENABLED.load(Ordering::SeqCst)
-}
-
-pub fn update_settings(config: &MicrophoneConfig) {
-    unsafe {
-        if let Some(ref mutex) = CURRENT_CONFIG {
-            if let Ok(mut current) = mutex.lock() {
-                *current = config.clone();
-                tracing::debug!(config = ?config, "Updated microphone settings");
-            }
-        }
+    async fn commit_upload(&self, offset: u64) -> Result<(), LifelogError> {
+        self.buffer.commit_offset(offset).await.map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("microphone buffer commit error: {e}"),
+            ))
+        })
     }
 }

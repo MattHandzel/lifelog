@@ -425,6 +425,76 @@ impl IngestBackend for SurrealIngestBackend {
                     }
                 }
             }
+            "microphone" => {
+                if let Ok(frame) = lifelog_types::AudioFrame::decode(payload) {
+                    if frame.audio_bytes.is_empty() {
+                        return Err("microphone frame has empty audio_bytes".to_string());
+                    }
+                    let blob_hash = match self.cas.put(&frame.audio_bytes) {
+                        Ok(h) => h,
+                        Err(e) => {
+                            tracing::error!("CAS put failed for microphone blob: {}", e);
+                            return Err(e.to_string());
+                        }
+                    };
+
+                    let origin = DataOrigin::new(
+                        DataOriginType::DeviceId(collector_id.to_string()),
+                        DataModality::Microphone.as_str_name().to_string(),
+                    );
+                    if ensure_table_schema(&db, &origin).await.is_ok() {
+                        let table = origin.get_table_name();
+                        let id = frame.uuid.clone();
+                        frame_uuid = Some(id.clone());
+                        let mut record = frame.to_record();
+                        record.blob_hash = blob_hash;
+                        record.blob_size = frame.audio_bytes.len() as u64;
+                        let now: surrealdb::sql::Datetime = Utc::now().into();
+
+                        let skew_est = self.skew_estimates.read().await.get(collector_id).copied();
+                        let t_device_dt: chrono::DateTime<chrono::Utc> = record.timestamp.0;
+                        let (t_canonical_dt, quality_str) = match skew_est {
+                            Some(est) => (
+                                est.apply(t_device_dt),
+                                est.time_quality.as_str().to_string(),
+                            ),
+                            None => (t_device_dt, "unknown".to_string()),
+                        };
+
+                        record.t_ingest = Some(now.clone());
+                        record.t_canonical = Some(t_canonical_dt.into());
+                        let dur_ms =
+                            if record.duration_secs.is_finite() && record.duration_secs > 0.0 {
+                                (record.duration_secs as f64 * 1000.0).round() as i64
+                            } else {
+                                0
+                            };
+                        let t_end_dt = t_canonical_dt + chrono::Duration::milliseconds(dur_ms);
+                        record.t_end = Some(t_end_dt.into());
+                        record.time_quality = Some(quality_str);
+
+                        match db
+                            .upsert::<Option<lifelog_types::AudioRecord>>((&table, &id))
+                            .content(record)
+                            .await
+                        {
+                            Ok(result) => {
+                                if result.is_some() {
+                                    persisted_ok = true;
+                                    indexed = true;
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    id = %id,
+                                    error = %e,
+                                    "Microphone frame ingestion failed"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
             "weather" => {
                 ingest_frame!(
                     lifelog_types::WeatherFrame,
@@ -547,6 +617,7 @@ impl IngestBackend for SurrealIngestBackend {
                 | "processes"
                 | "camera"
                 | "audio"
+                | "microphone"
                 | "weather"
                 | "hyprland"
                 | "clipboard"

@@ -67,9 +67,40 @@ export default function CameraDashboard(): JSX.Element {
   }
 
   async function loadFrames(): Promise<void> {
-    console.warn('Camera frames: not yet implemented via gRPC');
-    setFrames([]);
-    setIsLoading(false);
+    setIsLoading(true);
+    try {
+      const entries = await invoke<Array<{ uuid: string; origin: string; modality: string; timestamp: number | null }>>('query_timeline', {
+        textQuery: undefined,
+        collectorId: undefined,
+      });
+      const cameraEntries = entries.filter(e => e.modality === 'Camera');
+      if (cameraEntries.length === 0) {
+        setFrames([]);
+        return;
+      }
+      const sorted = [...cameraEntries].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
+      const paged = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+      const keys = paged.map(e => ({ uuid: e.uuid, origin: e.origin }));
+      const frameData = await invoke<Array<{
+        uuid: string; timestamp: number | null; image_data_url: string | null;
+        width: number | null; height: number | null;
+      }>>('get_frame_data', { keys });
+      const cameraFrames: CameraFrame[] = frameData
+        .filter(f => f.image_data_url)
+        .map(f => ({
+          timestamp: f.timestamp ?? 0,
+          path: f.uuid,
+          width: f.width ?? 0,
+          height: f.height ?? 0,
+          dataUrl: f.image_data_url ?? undefined,
+        }));
+      setFrames(cameraFrames);
+    } catch (err) {
+      console.error('Failed to load camera frames:', err);
+      setFrames([]);
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function loadSettings(): Promise<void> {

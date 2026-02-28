@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { invoke } from '@tauri-apps/api/core';
-import { Search, Filter, ArrowUpDown, Image, FileAudio, File, Loader, Calendar } from 'lucide-react';
+import { Search, Filter, ArrowUpDown, Loader, Calendar } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { Card, CardContent } from './ui/card';
+import ResultCard, { type SearchResult } from './ResultCard';
 
 import {
   DropdownMenu,
@@ -19,18 +19,24 @@ import {
   SelectValue,
 } from './ui/select';
 
-interface SearchResult {
-  id: string;
-  type: 'image' | 'audio' | 'file';
-  name: string;
-  path: string;
-  timestamp: number;
-  source: string; 
-  preview?: string;
-  size?: number;
-  duration?: number; 
-  metadata?: Record<string, any>; 
-}
+const MODALITY_TYPE_MAP: Record<string, SearchResult['type']> = {
+  screen: 'image',
+  camera: 'image',
+  audio: 'audio',
+  microphone: 'audio',
+  ocr: 'file',
+  browser: 'file',
+  keystrokes: 'file',
+  clipboard: 'file',
+  shell_history: 'file',
+  shellhistory: 'file',
+  window_activity: 'file',
+  windowactivity: 'file',
+  mouse: 'file',
+  processes: 'file',
+  weather: 'file',
+  hyprland: 'file',
+};
 
 export default function SearchDashboard(): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,13 +56,15 @@ export default function SearchDashboard(): JSX.Element {
         textQuery: [searchQuery],
       });
       setResults(entries.map(function (e) {
+        const modalityLower = e.modality.toLowerCase();
         return {
           id: e.uuid,
-          type: (e.modality === 'Screen' ? 'image' : e.modality === 'Audio' ? 'audio' : 'file') as 'image' | 'audio' | 'file',
+          type: MODALITY_TYPE_MAP[modalityLower] ?? 'file',
           name: e.uuid.substring(0, 8),
           path: e.origin,
           timestamp: e.timestamp || 0,
           source: e.origin,
+          modality: e.modality,
         };
       }));
     } catch (error) {
@@ -79,27 +87,6 @@ export default function SearchDashboard(): JSX.Element {
   function handleSearchSubmit(e: React.FormEvent): void {
     e.preventDefault();
     performSearch();
-  }
-
-  function formatDate(timestamp: number): string {
-    return new Date(timestamp).toLocaleString();
-  }
-
-  function formatFileSize(bytes: number): string {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
-  }
-
-  function renderTypeIcon(type: string): JSX.Element {
-    switch (type) {
-      case 'image':
-        return <Image className="w-5 h-5 text-blue-400" />;
-      case 'audio':
-        return <FileAudio className="w-5 h-5 text-green-400" />;
-      default:
-        return <File className="w-5 h-5 text-gray-400" />;
-    }
   }
 
   return (
@@ -158,10 +145,19 @@ export default function SearchDashboard(): JSX.Element {
                 </SelectTrigger>
                 <SelectContent className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]">
                   <SelectItem value="all">All Sources</SelectItem>
+                  <SelectItem value="screen">Screen</SelectItem>
                   <SelectItem value="camera">Camera</SelectItem>
-                  <SelectItem value="screen">Screenshots</SelectItem>
+                  <SelectItem value="audio">Audio (system)</SelectItem>
                   <SelectItem value="microphone">Microphone</SelectItem>
-                  <SelectItem value="text">Files</SelectItem>
+                  <SelectItem value="browser">Browser</SelectItem>
+                  <SelectItem value="keystrokes">Keystrokes</SelectItem>
+                  <SelectItem value="clipboard">Clipboard</SelectItem>
+                  <SelectItem value="shell_history">Shell History</SelectItem>
+                  <SelectItem value="mouse">Mouse</SelectItem>
+                  <SelectItem value="processes">Processes</SelectItem>
+                  <SelectItem value="weather">Weather</SelectItem>
+                  <SelectItem value="hyprland">Hyprland</SelectItem>
+                  <SelectItem value="window_activity">Window Activity</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -209,53 +205,7 @@ export default function SearchDashboard(): JSX.Element {
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
               {results.map((result) => (
-                <Card key={result.id} className="bg-[#1A1E2E] border-[#232B3D] overflow-hidden">
-                  <div className="relative">
-                    {result.type === 'image' && result.preview && (
-                      <div className="aspect-video bg-[#0F111A] flex items-center justify-center overflow-hidden">
-                        <img 
-                          src={result.preview} 
-                          alt={result.name} 
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                    )}
-                    {result.type === 'audio' && (
-                      <div className="aspect-video bg-[#0F111A] flex items-center justify-center">
-                        <FileAudio className="w-16 h-16 text-[#4C8BF5]" />
-                      </div>
-                    )}
-                    {result.type === 'file' && (
-                      <div className="aspect-video bg-[#0F111A] flex items-center justify-center">
-                        <File className="w-16 h-16 text-[#4C8BF5]" />
-                      </div>
-                    )}
-                  </div>
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1">
-                        {renderTypeIcon(result.type)}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-[#F9FAFB] truncate" title={result.name}>
-                          {result.name}
-                        </h3>
-                        <div className="text-sm text-[#9CA3AF] mt-1">
-                          <p className="truncate" title={result.path}>
-                            Source: {result.source}
-                          </p>
-                          <p>{formatDate(result.timestamp)}</p>
-                          {result.size && (
-                            <p>{formatFileSize(result.size)}</p>
-                          )}
-                          {result.duration && (
-                            <p>{Math.floor(result.duration / 60)}:{(result.duration % 60).toString().padStart(2, '0')}</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                <ResultCard key={result.id} result={result} />
               ))}
             </div>
 

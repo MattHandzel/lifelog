@@ -38,33 +38,21 @@ pub mod config_utils {
 
     pub fn load_processes_config() -> ProcessesConfig {
         let config = load_config();
-        config
-            .processes
-            .clone()
-            .expect("Missing [collectors.<id>.processes] config")
+        config.processes.clone().unwrap_or_default()
     }
 
     pub fn load_screen_config() -> ScreenConfig {
         let config = load_config();
-        config
-            .screen
-            .clone()
-            .expect("Missing [collectors.<id>.screen] config")
+        config.screen.clone().unwrap_or_default()
     }
 
     pub fn load_camera_config() -> CameraConfig {
         let config = load_config();
-        config
-            .camera
-            .clone()
-            .expect("Missing [collectors.<id>.camera] config")
+        config.camera.clone().unwrap_or_default()
     }
 
     pub fn load_microphone_config() -> config::MicrophoneConfig {
         let config = load_config();
-        config
-            .microphone
-            .clone()
-            .expect("Missing [collectors.<id>.microphone] config")
+        config.microphone.clone().unwrap_or_default()
     }
 }

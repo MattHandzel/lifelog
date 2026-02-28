@@ -52,6 +52,25 @@ See @README.md for project overview.
 - **Don't use `unsafe`** — existing unsafe is legacy debt
 - **Don't commit broken code** — `just validate` before every commit
 - **Build.rs `println!("cargo:...")` is a Cargo directive** — never replace these
+- **Never `git add .`** — stage only the specific files you intend to commit
+- **Never force push** — if push fails, investigate; never use `--force`
+- **No silent failures** — if an operation fails, surface an error or prominent warning; never silently fall back
+- **No comments in code** — unless the code is complex or the user asks; mimic the file's existing style
+- **Check library availability** — before using a crate or library, verify it's already in `Cargo.toml`; never assume
+
+## Security
+
+- **No secrets in commits** — never commit API keys, tokens, or credentials
+- **API keys via environment variables** — if a task needs an external API key, tell the user to set it as an env var; never hardcode
+
+## Observability
+
+- Build in meaningful logging so program state, events, and errors are easy to follow for both humans and automated review.
+
+## Coding Standards
+
+- **Mimic existing style** — before editing a file, understand its conventions (naming, error handling, imports) and match them.
+- **Validate after changes** — after making a change, run `just validate` (or write a targeted test) to confirm correctness before finishing.
 
 ## Conflict Zones (Coordinate Before Touching)
 

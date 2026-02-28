@@ -38,10 +38,22 @@ interface MicrophoneConfig extends BaseConfig {
   timestamp_format?: string;
 }
 
+interface CollectorStateWrapper {
+  collector_id: string;
+  name: string;
+  last_seen_secs: number | null;
+  total_buffer_size: number;
+  upload_lag_bytes: number;
+  last_upload_time_secs: number | null;
+  source_states: string[];
+  source_buffer_sizes: string[];
+}
+
 interface CollectorStatus {
   id: string;
-  isOnline: boolean; // Placeholder for now
+  isOnline: boolean;
   lastSeen?: Date;
+  state?: CollectorStateWrapper;
 }
 
 export default function DevicesDashboard(): JSX.Element {
@@ -57,6 +69,8 @@ export default function DevicesDashboard(): JSX.Element {
 
   useEffect(() => {
     loadCollectors();
+    const interval = setInterval(loadCollectors, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -69,21 +83,31 @@ export default function DevicesDashboard(): JSX.Element {
     setIsLoading(true);
     setError(null);
     try {
-      const ids = await invoke<string[]>('get_collector_ids');
-      const collectorObjects = ids.map(id => ({
-        id,
-        isOnline: true, // Mock status for now as backend doesn't provide heartbeat yet
-        lastSeen: new Date()
+      const now = Math.floor(Date.now() / 1000);
+      const states = await invoke<CollectorStateWrapper[]>('get_system_state');
+      const collectorObjects = states.map(s => ({
+        id: s.collector_id,
+        isOnline: s.last_seen_secs !== null && (now - s.last_seen_secs) < 120,
+        lastSeen: s.last_seen_secs ? new Date(s.last_seen_secs * 1000) : undefined,
+        state: s,
       }));
       setCollectors(collectorObjects);
-      
-      // Auto-select first device if none selected
       if (collectorObjects.length > 0 && !selectedCollectorId) {
         setSelectedCollectorId(collectorObjects[0].id);
       }
-    } catch (err) {
-      console.error('Failed to load collectors:', err);
-      setError('Failed to load devices. Is the server running?');
+    } catch (_err) {
+      // Fall back to collector IDs if state RPC not available
+      try {
+        const ids = await invoke<string[]>('get_collector_ids');
+        const collectorObjects = ids.map(id => ({ id, isOnline: false }));
+        setCollectors(collectorObjects);
+        if (collectorObjects.length > 0 && !selectedCollectorId) {
+          setSelectedCollectorId(collectorObjects[0].id);
+        }
+      } catch (err2) {
+        console.error('Failed to load collectors:', err2);
+        setError('Failed to load devices. Is the server running?');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -206,7 +230,9 @@ export default function DevicesDashboard(): JSX.Element {
                   {collector.isOnline ? "Online" : "Offline"}
                 </span>
                 <span className="text-[#9CA3AF]">
-                  Last seen: Today
+                  {collector.lastSeen
+                    ? `${Math.round((Date.now() - collector.lastSeen.getTime()) / 60000)}m ago`
+                    : 'Never'}
                 </span>
               </div>
             </div>
@@ -217,6 +243,36 @@ export default function DevicesDashboard(): JSX.Element {
         <div className="lg:col-span-3 flex flex-col gap-6 overflow-y-auto pb-8">
           {selectedCollectorId ? (
             <>
+              {/* Collector Health Metrics */}
+              {collectors.find(c => c.id === selectedCollectorId)?.state && (() => {
+                const s = collectors.find(c => c.id === selectedCollectorId)!.state!;
+                const lagMb = (s.upload_lag_bytes / (1024 * 1024)).toFixed(1);
+                const lastUpload = s.last_upload_time_secs
+                  ? new Date(s.last_upload_time_secs * 1000).toLocaleTimeString()
+                  : 'Never';
+                return (
+                  <Card className="bg-[#1A1E2E] border-[#232B3D]">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-[#F9FAFB]">Health Metrics</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <p className="text-lg font-bold text-[#F9FAFB]">{lagMb} MB</p>
+                        <p className="text-xs text-[#9CA3AF]">Upload lag</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-[#F9FAFB]">{s.total_buffer_size}</p>
+                        <p className="text-xs text-[#9CA3AF]">Buffer items</p>
+                      </div>
+                      <div>
+                        <p className="text-lg font-bold text-[#F9FAFB]">{lastUpload}</p>
+                        <p className="text-xs text-[#9CA3AF]">Last upload</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
               {/* Quick Toggles */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Camera Toggle */}

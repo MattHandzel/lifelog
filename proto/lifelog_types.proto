@@ -144,6 +144,7 @@ enum DataModality {
   Camera = 10;
   Weather = 11;
   Hyprland = 12;
+  Microphone = 13;
 }
 
 message GeoConfig {
