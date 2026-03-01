@@ -1,30 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { invoke } from '@tauri-apps/api/core';
-import { Play, RefreshCw, Clock, List, Monitor, Mic, FileText } from 'lucide-react';
+import { Clock, List, Monitor, Pause, Play, RefreshCw, SkipBack, SkipForward } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import { FrameDataWrapper } from './ResultCard';
-
-interface LifelogDataKeyWrapper {
-  uuid: string;
-  origin: string;
-}
-
-interface ReplayStepWrapper {
-  start: number | null;
-  end: number | null;
-  screen_key: LifelogDataKeyWrapper | null;
-  context_keys: LifelogDataKeyWrapper[];
-}
-
-interface Screenshot {
-  uuid: string;
-  timestamp: number | null;
-  dataUrl: string;
-  width: number;
-  height: number;
-  mime_type: string;
-}
+import { Slider } from './ui/slider';
+import ReplayFrame from './ReplayFrame';
+import { useReplay } from '../lib/useReplay';
 
 function toUnixSeconds(dtLocal: string): number | null {
   if (!dtLocal) return null;
@@ -40,29 +20,43 @@ function fmtUnixSeconds(ts: number | null | undefined): string {
 
 function parseOrigins(text: string): string[] {
   return text
-    .split(/[,\n]/g)
+    .split(/[\n,]/g)
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 }
 
 export default function ReplayDashboard(): JSX.Element {
   const [screenOrigin, setScreenOrigin] = useState<string>('');
-  const [contextOriginsText, setContextOriginsText] = useState<string>('Browser,Ocr');
+  const [contextOriginsText, setContextOriginsText] = useState<string>('Browser,Ocr,Clipboard,Keystrokes,ShellHistory,WindowActivity,Audio');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
   const [maxSteps, setMaxSteps] = useState<number>(200);
   const [maxContextPerStep, setMaxContextPerStep] = useState<number>(25);
   const [contextPadMs, setContextPadMs] = useState<number>(15000);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [steps, setSteps] = useState<ReplayStepWrapper[]>([]);
-  const [selectedIdx, setSelectedIdx] = useState<number>(0);
-  const [selectedScreenshot, setSelectedScreenshot] = useState<Screenshot | null>(null);
-  const [ocrFrames, setOcrFrames] = useState<FrameDataWrapper[]>([]);
-  const [audioFrames, setAudioFrames] = useState<FrameDataWrapper[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    steps,
+    selectedIdx,
+    selectedStep,
+    selectedScreenshot,
+    selectedContext,
+    isLoadingReplay,
+    isLoadingContext,
+    isPlaying,
+    playbackMs,
+    bufferedScreenshots,
+    totalScreenSteps,
+    isPrefetching,
+    error,
+    backgroundError,
+    loadReplay,
+    setSelectedIdx,
+    stepForward,
+    stepBackward,
+    togglePlay,
+    setPlaybackMs,
+  } = useReplay();
 
-  // Default to "last 10 minutes".
   useEffect(() => {
     const now = new Date();
     const tenMinAgo = new Date(now.getTime() - 10 * 60 * 1000);
@@ -76,88 +70,38 @@ export default function ReplayDashboard(): JSX.Element {
 
   const contextOrigins = useMemo(() => parseOrigins(contextOriginsText), [contextOriginsText]);
 
-  const selectedStep = steps.length > 0 ? steps[Math.min(selectedIdx, steps.length - 1)] : null;
-
-  async function loadReplay(): Promise<void> {
-    setIsLoading(true);
-    setError(null);
-    setSelectedScreenshot(null);
-    try {
-      const startTime = toUnixSeconds(startDate);
-      const endTime = toUnixSeconds(endDate);
-      if (startTime == null || endTime == null) {
-        throw new Error('Start and end must be set');
-      }
-      if (startTime >= endTime) {
-        throw new Error('Start must be before end');
-      }
-
-      const res = await invoke<ReplayStepWrapper[]>('replay', {
-        screenOrigin: screenOrigin || undefined,
-        contextOrigins: contextOrigins.length > 0 ? contextOrigins : undefined,
-        startTime,
-        endTime,
-        maxSteps,
-        maxContextPerStep,
-        contextPadMs,
-      });
-
-      setSteps(Array.isArray(res) ? res : []);
-      setSelectedIdx(0);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      console.error('[ReplayDashboard] replay failed:', e);
-      setSteps([]);
-      setError(msg);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function loadScreenshotForStep(step: ReplayStepWrapper | null): Promise<void> {
-    setSelectedScreenshot(null);
-    if (!step?.screen_key) return;
-    try {
-      const frames = await invoke<Screenshot[]>('get_screenshots_data', { keys: [step.screen_key] });
-      setSelectedScreenshot(frames?.[0] ?? null);
-    } catch (e) {
-      console.error('[ReplayDashboard] get_screenshots_data failed:', e);
-      setSelectedScreenshot(null);
-    }
-  }
-
-  async function loadContextFramesForStep(step: ReplayStepWrapper | null): Promise<void> {
-    setOcrFrames([]);
-    setAudioFrames([]);
-    if (!step?.context_keys?.length) return;
-    const ocrKeys = step.context_keys.filter(k => k.origin.includes('Ocr'));
-    const audioKeys = step.context_keys.filter(k => k.origin.includes('Audio'));
-    try {
-      if (ocrKeys.length > 0) {
-        const frames = await invoke<FrameDataWrapper[]>('get_frame_data', { keys: ocrKeys });
-        setOcrFrames(frames);
-      }
-      if (audioKeys.length > 0) {
-        const frames = await invoke<FrameDataWrapper[]>('get_frame_data', { keys: audioKeys });
-        setAudioFrames(frames);
-      }
-    } catch (e) {
-      console.error('[ReplayDashboard] get_frame_data for context failed:', e);
-    }
-  }
-
-  useEffect(() => {
-    void loadScreenshotForStep(selectedStep);
-    void loadContextFramesForStep(selectedStep);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIdx, steps.length]);
-
   const stepsSummary = useMemo(() => {
     if (steps.length === 0) return 'No steps loaded';
     const first = steps[0];
     const last = steps[steps.length - 1];
     return `${steps.length} steps (${fmtUnixSeconds(first?.start)} -> ${fmtUnixSeconds(last?.end)})`;
   }, [steps]);
+
+  const bufferSummary = useMemo(() => {
+    if (totalScreenSteps === 0) return 'No screen frames in replay';
+    return `${bufferedScreenshots}/${totalScreenSteps} frames buffered`;
+  }, [bufferedScreenshots, totalScreenSteps]);
+
+  async function onLoadReplay(): Promise<void> {
+    const startTime = toUnixSeconds(startDate);
+    const endTime = toUnixSeconds(endDate);
+    if (startTime == null || endTime == null) {
+      return;
+    }
+    if (startTime >= endTime) {
+      return;
+    }
+
+    await loadReplay({
+      screenOrigin: screenOrigin || undefined,
+      contextOrigins: contextOrigins.length > 0 ? contextOrigins : undefined,
+      startTime,
+      endTime,
+      maxSteps,
+      maxContextPerStep,
+      contextPadMs,
+    });
+  }
 
   return (
     <div className="p-6 md:p-8 space-y-6">
@@ -252,8 +196,8 @@ export default function ReplayDashboard(): JSX.Element {
           </div>
 
           <div className="flex gap-2 justify-end border-t border-[#232B3D] pt-4">
-            <Button onClick={loadReplay} disabled={isLoading}>
-              {isLoading ? (
+            <Button onClick={onLoadReplay} disabled={isLoadingReplay}>
+              {isLoadingReplay ? (
                 <>
                   <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
                   Loading...
@@ -267,11 +211,8 @@ export default function ReplayDashboard(): JSX.Element {
             </Button>
           </div>
 
-          {error && (
-            <div className="mt-2 text-sm text-red-300">
-              {error}
-            </div>
-          )}
+          {error && <div className="mt-2 text-sm text-red-300">{error}</div>}
+          {backgroundError && <div className="mt-1 text-xs text-amber-300">{backgroundError}</div>}
         </div>
       </div>
 
@@ -291,9 +232,9 @@ export default function ReplayDashboard(): JSX.Element {
               </div>
             ) : (
               <div className="space-y-2 max-h-[520px] overflow-auto pr-1">
-                {steps.map((s, idx) => (
+                {steps.map((step, idx) => (
                   <button
-                    key={`${s.screen_key?.uuid ?? 'no-screen'}:${idx}`}
+                    key={`${step.screen_key?.uuid ?? 'no-screen'}:${idx}`}
                     type="button"
                     className={[
                       'w-full text-left p-3 rounded-lg border transition-colors',
@@ -304,15 +245,11 @@ export default function ReplayDashboard(): JSX.Element {
                     onClick={() => setSelectedIdx(idx)}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="text-sm text-[#F9FAFB] truncate">
-                        {fmtUnixSeconds(s.start)}
-                      </div>
-                      <div className="text-xs text-[#9CA3AF]">
-                        {s.context_keys?.length ?? 0} ctx
-                      </div>
+                      <div className="text-sm text-[#F9FAFB] truncate">{fmtUnixSeconds(step.start)}</div>
+                      <div className="text-xs text-[#9CA3AF]">{step.context_keys?.length ?? 0} ctx</div>
                     </div>
                     <div className="text-xs text-[#9CA3AF] mt-1 truncate">
-                      {s.screen_key ? `${s.screen_key.origin} • ${s.screen_key.uuid.slice(0, 8)}…` : 'No screen key'}
+                      {step.screen_key ? `${step.screen_key.origin} • ${step.screen_key.uuid.slice(0, 8)}...` : 'No screen key'}
                     </div>
                   </button>
                 ))}
@@ -323,7 +260,7 @@ export default function ReplayDashboard(): JSX.Element {
 
         <div className="card lg:col-span-2">
           <div className="p-6 space-y-4">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-2">
                 <Monitor className="w-5 h-5 text-[#9CA3AF]" />
                 <div className="text-sm text-[#9CA3AF]">
@@ -335,67 +272,82 @@ export default function ReplayDashboard(): JSX.Element {
               </div>
             </div>
 
-            <div className="rounded-lg border border-[#232B3D] bg-[#0F111A] overflow-hidden">
-              {selectedScreenshot ? (
-                <img
-                  src={selectedScreenshot.dataUrl}
-                  alt="Replay step screenshot"
-                  className="w-full h-auto block"
+            <div className="rounded-lg border border-[#232B3D] bg-[#1A1E2E] p-4 space-y-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Previous step"
+                  onClick={stepBackward}
+                  disabled={steps.length === 0 || selectedIdx === 0}
+                  className="bg-[#0F111A] border-[#334155]"
+                >
+                  <SkipBack className="w-4 h-4" />
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label={isPlaying ? 'Pause replay' : 'Play replay'}
+                  onClick={togglePlay}
+                  disabled={steps.length === 0}
+                  className="bg-[#0F111A] border-[#334155]"
+                >
+                  {isPlaying ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="icon"
+                  aria-label="Next step"
+                  onClick={stepForward}
+                  disabled={steps.length === 0 || selectedIdx >= steps.length - 1}
+                  className="bg-[#0F111A] border-[#334155]"
+                >
+                  <SkipForward className="w-4 h-4" />
+                </Button>
+
+                <div className="ml-2 text-xs text-[#9CA3AF]">Playback</div>
+                <select
+                  value={playbackMs}
+                  onChange={(e) => setPlaybackMs(Number(e.target.value))}
+                  className="h-9 px-2 rounded-md border border-[#334155] bg-[#0F111A] text-[#E5E7EB] text-xs"
+                  aria-label="Playback speed"
+                >
+                  <option value={300}>Fast (300ms)</option>
+                  <option value={500}>Quick (500ms)</option>
+                  <option value={800}>Normal (800ms)</option>
+                  <option value={1200}>Slow (1200ms)</option>
+                </select>
+
+                <div className="ml-auto text-xs text-[#9CA3AF]">
+                  {bufferSummary}{isPrefetching ? ' • prefetching' : ''}
+                </div>
+              </div>
+
+              {steps.length > 1 ? (
+                <Slider
+                  value={[selectedIdx]}
+                  min={0}
+                  max={steps.length - 1}
+                  step={1}
+                  onValueChange={(value) => setSelectedIdx(value[0] ?? 0)}
+                  aria-label="Replay timeline scrubber"
                 />
               ) : (
-                <div className="flex flex-col items-center justify-center py-16 text-[#9CA3AF]">
-                  <Monitor className="w-12 h-12 mb-3" />
-                  <div className="text-sm">No screenshot loaded for this step</div>
-                </div>
+                <div className="h-2 rounded-full bg-[#2a3142]" />
               )}
             </div>
 
-            {audioFrames.length > 0 && (
-              <div className="rounded-lg border border-[#232B3D] bg-[#1A1E2E] p-4 space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-[#F9FAFB]">
-                  <Mic className="w-4 h-4 text-cyan-400" />
-                  Audio ({audioFrames.length})
-                </div>
-                {audioFrames.map(f => f.audio_data_url ? (
-                  <audio key={f.uuid} controls src={f.audio_data_url} className="w-full h-8" />
-                ) : null)}
-              </div>
-            )}
-
-            {ocrFrames.length > 0 && (
-              <div className="rounded-lg border border-[#232B3D] bg-[#1A1E2E] p-4 space-y-2">
-                <div className="flex items-center gap-2 text-sm font-medium text-[#F9FAFB]">
-                  <FileText className="w-4 h-4 text-blue-400" />
-                  OCR Text ({ocrFrames.length} frames)
-                </div>
-                <div className="max-h-48 overflow-y-auto space-y-2">
-                  {ocrFrames.map(f => (
-                    <p key={f.uuid} className="text-xs text-[#D1D5DB] leading-relaxed whitespace-pre-wrap">
-                      {f.text}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="rounded-lg border border-[#232B3D] bg-[#1A1E2E] p-4">
-              <div className="text-sm font-medium text-[#F9FAFB] mb-2">Context Keys</div>
-              {selectedStep?.context_keys?.length ? (
-                <div className="space-y-1">
-                  {selectedStep.context_keys.slice(0, 50).map((k, i) => (
-                    <div key={`${k.uuid}:${i}`} className="text-xs text-[#9CA3AF] truncate">
-                      {k.origin} • {k.uuid}
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-[#9CA3AF]">No context for this step</div>
-              )}
-            </div>
+            <ReplayFrame
+              step={selectedStep}
+              screenshot={selectedScreenshot}
+              contextFrames={selectedContext}
+              isLoadingContext={isLoadingContext}
+            />
           </div>
         </div>
       </div>
     </div>
   );
 }
-
