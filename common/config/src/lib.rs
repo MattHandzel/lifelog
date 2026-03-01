@@ -107,7 +107,59 @@ pub fn load_server_config_from_unified() -> Option<ServerConfig> {
         .unwrap_or_else(|_| default_lifelog_config_path());
     let root = load_toml_from_path(&path)?;
     let server = root.get("server")?.clone();
-    toml::from_str::<ServerConfig>(&toml::to_string(&server).ok()?).ok()
+    if let Ok(cfg) = toml::from_str::<ServerConfig>(&toml::to_string(&server).ok()?) {
+        return Some(cfg);
+    }
+
+    let table = server.as_table()?;
+    let get_str = |a: &str, b: &str| {
+        table
+            .get(a)
+            .or_else(|| table.get(b))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+    };
+    let get_u32 = |a: &str, b: &str| {
+        table
+            .get(a)
+            .or_else(|| table.get(b))
+            .and_then(|v| v.as_integer())
+            .and_then(|n| u32::try_from(n).ok())
+    };
+    let get_u64 = |a: &str, b: &str| {
+        table
+            .get(a)
+            .or_else(|| table.get(b))
+            .and_then(|v| v.as_integer())
+            .and_then(|n| u64::try_from(n).ok())
+    };
+
+    let retention_value = table
+        .get("retentionPolicyDays")
+        .or_else(|| table.get("retention_policy_days"));
+    let mut retention_policy_days = HashMap::new();
+    if let Some(retention_table) = retention_value.and_then(|v| v.as_table()) {
+        for (k, v) in retention_table {
+            if let Some(days) = v.as_integer().and_then(|n| u32::try_from(n).ok()) {
+                retention_policy_days.insert(k.clone(), days);
+            }
+        }
+    }
+
+    Some(ServerConfig {
+        host: get_str("host", "host")?,
+        port: get_u32("port", "port")?,
+        database_endpoint: get_str("databaseEndpoint", "database_endpoint")?,
+        database_name: get_str("databaseName", "database_name")?,
+        server_name: get_str("serverName", "server_name")?,
+        cas_path: get_str("casPath", "cas_path")?,
+        default_correlation_window_ms: get_u64(
+            "defaultCorrelationWindowMs",
+            "default_correlation_window_ms",
+        )
+        .unwrap_or(30_000),
+        retention_policy_days,
+    })
 }
 
 pub fn load_device_aliases_from_unified() -> HashMap<String, String> {

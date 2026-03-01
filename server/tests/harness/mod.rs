@@ -138,6 +138,7 @@ impl TestContext {
     }
 
     pub async fn new_with_faults(fault_controller: FaultController) -> Self {
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let db_port = portpicker::pick_unused_port().expect("No ports available");
         let server_port = portpicker::pick_unused_port().expect("No ports available");
