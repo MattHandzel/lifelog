@@ -950,3 +950,16 @@ Launch-blocking requirements implied by the audit:
 - Result card media loading is lazy for viewport efficiency:
   - thumbnail images mount only once cards approach viewport,
   - a skeleton placeholder is shown before image decode/load completes.
+
+### 20.2 Security Hardening (March 1, 2026)
+
+- gRPC TLS is now enforced for server startup:
+  - server fails fast when `LIFELOG_TLS_CERT_PATH` or `LIFELOG_TLS_KEY_PATH` is missing.
+- gRPC authentication token configuration is now enforced on server startup:
+  - `LIFELOG_AUTH_TOKEN` and `LIFELOG_ENROLLMENT_TOKEN` must be present.
+- Server-side auth interceptor rejects missing/invalid `Authorization: Bearer ...` metadata.
+- Collector control/upload paths now enforce secure transport:
+  - collector and upload manager reject non-`https://` server URLs.
+- Collector pairing flow is wired into handshake:
+  - when no auth token is present, collector calls `PairCollector` using enrollment token before opening `ControlStream`,
+  - collector includes `x-lifelog-client-id` metadata hint; server returns that stable id when provided.

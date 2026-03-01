@@ -37,6 +37,102 @@
 </state_snapshot>
 
 <state_snapshot>
+    <timestamp_utc>
+        2026-03-01T20:05:26Z
+    </timestamp_utc>
+
+    <overall_goal>
+        Implement security hardening for transport security, authentication, and collector enrollment handshake.
+    </overall_goal>
+
+    <what_to_do>
+        - Enforced TLS requirements for server startup and collector upload/control clients.
+        - Enforced token requirements on server startup and in gRPC auth interception.
+        - Wired collector `PairCollector` handshake path when only enrollment token is configured.
+        - Standardized collector identity usage to configured collector id for control/state messaging.
+        - Updated SPEC/DESIGN notes with implemented security behavior.
+    </what_to_do>
+
+    <why>
+        - Spec Section 12.1 requires encrypted transport, and plaintext fallback is unsafe.
+        - Security hardening plan requires explicit auth checks and enrollment flow usage.
+        - Using configured collector id consistently avoids identity drift between control and upload paths.
+        - Hypothesis: strict fail-fast checks for TLS/token config reduce unsafe accidental deployments.
+    </why>
+
+    <how>
+        - Updated `server/src/main.rs`:
+          - mandatory TLS env validation,
+          - mandatory token env validation,
+          - stricter auth interceptor behavior,
+          - separate generated auth/enrollment tokens.
+        - Updated `server/src/grpc_service.rs`:
+          - pairing now honors `x-lifelog-client-id` metadata hint for stable identity.
+        - Updated `collector/src/collector.rs`:
+          - strict auth token requirement,
+          - strict `https://` endpoint requirement,
+          - pre-control-stream `PairCollector` call when using enrollment token only.
+        - Updated `collector/src/collector/upload_manager.rs`:
+          - strict auth token requirement,
+          - strict `https://` endpoint requirement.
+    </how>
+
+    <validation_steps>
+        - `tools/ai/run_and_digest.sh "just check"` (pass).
+        - `tools/ai/run_and_digest.sh "just test"` (started; did not complete during this session window).
+    </validation_steps>
+
+</state_snapshot>
+
+<state_snapshot>
+    <timestamp_utc>
+        2026-03-01T20:05:26Z
+    </timestamp_utc>
+
+    <overall_goal>
+        Implement security hardening for transport security, authentication, and collector enrollment handshake.
+    </overall_goal>
+
+    <what_to_do>
+        - Enforced TLS requirements for server startup and collector upload/control clients.
+        - Enforced token requirements on server startup and in gRPC auth interception.
+        - Wired collector `PairCollector` handshake path when only enrollment token is configured.
+        - Standardized collector identity usage to configured collector id for control/state messaging.
+        - Updated SPEC/DESIGN notes with implemented security behavior.
+    </what_to_do>
+
+    <why>
+        - Spec Section 12.1 requires encrypted transport, and plaintext fallback is unsafe.
+        - Security hardening plan requires explicit auth checks and enrollment flow usage.
+        - Using configured collector id consistently avoids identity drift between control and upload paths.
+        - Hypothesis: strict fail-fast checks for TLS/token config reduce unsafe accidental deployments.
+    </why>
+
+    <how>
+        - Updated `server/src/main.rs`:
+          - mandatory TLS env validation,
+          - mandatory token env validation,
+          - stricter auth interceptor behavior,
+          - separate generated auth/enrollment tokens.
+        - Updated `server/src/grpc_service.rs`:
+          - pairing now honors `x-lifelog-client-id` metadata hint for stable identity.
+        - Updated `collector/src/collector.rs`:
+          - strict auth token requirement,
+          - strict `https://` endpoint requirement,
+          - pre-control-stream `PairCollector` call when using enrollment token only.
+        - Updated `collector/src/collector/upload_manager.rs`:
+          - strict auth token requirement,
+          - strict `https://` endpoint requirement.
+    </how>
+
+    <validation_steps>
+        - `tools/ai/run_and_digest.sh "just check"` (pass).
+        - `tools/ai/run_and_digest.sh "just test"` (started; did not complete during this session window).
+    </validation_steps>
+
+</state_snapshot>
+
+<state_snapshot>
     <overall_goal>
         Implement search previews (snippets + thumbnails) for the Search dashboard.
     </overall_goal>
@@ -112,6 +208,54 @@
         - `tools/ai/run_and_digest.sh "just test-ui"` (pass).
         - `tools/ai/run_and_digest.sh "just validate-all"` (pass).
         - Verified test coverage for node render and `set_component_config` dispatch in `NetworkTopologyDashboard.test.tsx`.
+    </validation_steps>
+
+</state_snapshot>
+
+<state_snapshot>
+    <timestamp_utc>
+        2026-03-01T20:05:26Z
+    </timestamp_utc>
+
+    <overall_goal>
+        Implement security hardening for transport security, authentication, and collector enrollment handshake.
+    </overall_goal>
+
+    <what_to_do>
+        - Enforced TLS requirements for server startup and collector upload/control clients.
+        - Enforced token requirements on server startup and in gRPC auth interception.
+        - Wired collector `PairCollector` handshake path when only enrollment token is configured.
+        - Standardized collector identity usage to configured collector id for control/state messaging.
+        - Updated SPEC/DESIGN notes with implemented security behavior.
+    </what_to_do>
+
+    <why>
+        - Spec Section 12.1 requires encrypted transport, and plaintext fallback is unsafe.
+        - Security hardening plan requires explicit auth checks and enrollment flow usage.
+        - Using configured collector id consistently avoids identity drift between control and upload paths.
+        - Hypothesis: strict fail-fast checks for TLS/token config reduce unsafe accidental deployments.
+    </why>
+
+    <how>
+        - Updated `server/src/main.rs`:
+          - mandatory TLS env validation,
+          - mandatory token env validation,
+          - stricter auth interceptor behavior,
+          - separate generated auth/enrollment tokens.
+        - Updated `server/src/grpc_service.rs`:
+          - pairing now honors `x-lifelog-client-id` metadata hint for stable identity.
+        - Updated `collector/src/collector.rs`:
+          - strict auth token requirement,
+          - strict `https://` endpoint requirement,
+          - pre-control-stream `PairCollector` call when using enrollment token only.
+        - Updated `collector/src/collector/upload_manager.rs`:
+          - strict auth token requirement,
+          - strict `https://` endpoint requirement.
+    </how>
+
+    <validation_steps>
+        - `tools/ai/run_and_digest.sh "just check"` (pass).
+        - `tools/ai/run_and_digest.sh "just test"` (started; did not complete during this session window).
     </validation_steps>
 
 </state_snapshot>

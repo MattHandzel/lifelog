@@ -28,20 +28,18 @@ enum Commands {
 }
 
 fn check_auth(req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
-    let auth_token = std::env::var("LIFELOG_AUTH_TOKEN").unwrap_or_default();
-    let enrollment_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN").unwrap_or_default();
-
-    if auth_token.is_empty() && enrollment_token.is_empty() {
-        return Ok(req);
-    }
+    let auth_token = std::env::var("LIFELOG_AUTH_TOKEN")
+        .map_err(|_| tonic::Status::internal("LIFELOG_AUTH_TOKEN must be configured"))?;
+    let enrollment_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN")
+        .map_err(|_| tonic::Status::internal("LIFELOG_ENROLLMENT_TOKEN must be configured"))?;
 
     match req.metadata().get("authorization") {
         Some(t) => {
             let token_str = t.to_str().unwrap_or_default();
-            if !auth_token.is_empty() && token_str == format!("Bearer {}", auth_token) {
+            if token_str == format!("Bearer {}", auth_token) {
                 return Ok(req);
             }
-            if !enrollment_token.is_empty() && token_str == format!("Bearer {}", enrollment_token) {
+            if token_str == format!("Bearer {}", enrollment_token) {
                 return Ok(req);
             }
             tracing::warn!("Invalid authentication token provided");
@@ -59,9 +57,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     if let Some(Commands::GenerateToken) = cli.command {
-        let token = Uuid::new_v4().to_string().replace("-", "");
-        println!("Generated LIFELOG_AUTH_TOKEN: {}", token);
-        println!("Generated LIFELOG_ENROLLMENT_TOKEN: {}", token);
+        let auth_token = Uuid::new_v4().to_string().replace("-", "");
+        let enrollment_token = Uuid::new_v4().to_string().replace("-", "");
+        println!("Generated LIFELOG_AUTH_TOKEN: {}", auth_token);
+        println!("Generated LIFELOG_ENROLLMENT_TOKEN: {}", enrollment_token);
         return Ok(());
     }
 
@@ -122,25 +121,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .accept_http1(true)
         .layer(tonic_web::GrpcWebLayer::new());
 
-    if let (Some(cert_path), Some(key_path)) = (&tls_config.cert_path, &tls_config.key_path) {
-        let cert = std::fs::read_to_string(cert_path)?;
-        let key = std::fs::read_to_string(key_path)?;
-        let identity = tonic::transport::Identity::from_pem(cert, key);
-        let tls = tonic::transport::ServerTlsConfig::new().identity(identity);
-        builder = builder.tls_config(tls)?;
-        tracing::info!("TLS enabled");
-    } else {
-        tracing::warn!("LIFELOG_TLS_CERT_PATH or LIFELOG_TLS_KEY_PATH is not set. Server is running in plaintext!");
+    if !tls_config.is_enabled() {
+        return Err(lifelog_core::LifelogError::Validation {
+            field: "LIFELOG_TLS_CERT_PATH/LIFELOG_TLS_KEY_PATH".to_string(),
+            reason: "must both be set; plaintext gRPC is not allowed".to_string(),
+        }
+        .into());
     }
+    let cert_path = tls_config.cert_path.expect("checked above");
+    let key_path = tls_config.key_path.expect("checked above");
+    let cert = std::fs::read_to_string(&cert_path)?;
+    let key = std::fs::read_to_string(&key_path)?;
+    let identity = tonic::transport::Identity::from_pem(cert, key);
+    let tls = tonic::transport::ServerTlsConfig::new().identity(identity);
+    builder = builder.tls_config(tls)?;
+    tracing::info!(cert = %cert_path, key = %key_path, "TLS enabled");
 
-    let auth_token = std::env::var("LIFELOG_AUTH_TOKEN").unwrap_or_default();
-    let enrollment_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN").unwrap_or_default();
-    if auth_token.is_empty() && enrollment_token.is_empty() {
-        tracing::warn!("LIFELOG_AUTH_TOKEN and LIFELOG_ENROLLMENT_TOKEN are not set. Server is unauthenticated!");
-        tracing::warn!(
-            "To generate a secure token, run: cargo run -p lifelog-server -- generate-token"
-        );
-    }
+    let _auth_token = std::env::var("LIFELOG_AUTH_TOKEN").map_err(|_| {
+        lifelog_core::LifelogError::Validation {
+            field: "LIFELOG_AUTH_TOKEN".to_string(),
+            reason: "must be set".to_string(),
+        }
+    })?;
+    let _enrollment_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN").map_err(|_| {
+        lifelog_core::LifelogError::Validation {
+            field: "LIFELOG_ENROLLMENT_TOKEN".to_string(),
+            reason: "must be set".to_string(),
+        }
+    })?;
 
     builder
         .add_service(reflection_service)
