@@ -19,6 +19,8 @@ The following is confirmed implemented in this repository/runtime:
   - OCR enabled: screen ACK waits for OCR-derived completion.
   - OCR disabled: screen records are indexed/queryable immediately.
 - Transform fallback is strict: no implicit OCR transform is auto-enabled if transform config is absent.
+- Interface includes a Network topology dashboard view (server + collectors) with visual links, live health metrics, and collector capture controls backed by existing config/state RPCs.
+  - Current limitation: alias/icon customization is interface-local, and force-sync command is not yet exposed by a stable backend RPC.
 
 ---
 
