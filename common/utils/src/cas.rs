@@ -66,6 +66,14 @@ impl FsCas {
         Ok(p.exists())
     }
 
+    pub fn remove(&self, hash: &str) -> Result<(), CasError> {
+        let p = self.path_for_hash(hash)?;
+        if p.exists() {
+            fs::remove_file(p)?;
+        }
+        Ok(())
+    }
+
     fn path_for_hash(&self, hash: &str) -> Result<PathBuf, CasError> {
         if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
             return Err(CasError::InvalidHash(hash.to_string()));

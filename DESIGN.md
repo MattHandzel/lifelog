@@ -93,3 +93,32 @@
 
 - Verified compilation with `tools/ai/run_and_digest.sh "just check"` after changes.
 - `just test` was started under digest wrapper and did not complete in this environment within the session window.
+
+## Retention Controls (2026-03-01)
+
+### Scope
+
+- Added coarse-grained retention controls for automatic data lifecycle management.
+- Added a server-side pruning worker and UI controls in Settings.
+
+### Architecture Decisions
+
+- `ServerConfig` now carries `retention_policy_days: map<string,uint32>`.
+  - Keys are modality buckets (for now: `screen`, `audio`, `text`; optional `all` fallback in pruning logic).
+  - `0` means no automatic deletion.
+- Retention worker runs as a dedicated server background task.
+  - Default schedule is daily.
+  - `LIFELOG_RETENTION_INTERVAL_SECS` can override interval for testing/ops.
+- Prune semantics:
+  - Use `t_canonical` when present, otherwise `timestamp`.
+  - Delete stale rows from origin tables by modality policy.
+  - Gather `blob_hash` values from deleted rows and remove only orphaned CAS blobs after cross-table reference checks.
+- Live config updates:
+  - `SetSystemConfigRequest` now carries full `SystemConfig`.
+  - Server `SetConfig` applies server retention/default-window updates and forwards collector updates over `ControlStream` via `UpdateConfig`.
+
+### Validation
+
+- `tools/ai/run_and_digest.sh "just check"`: pass.
+- `tools/ai/run_and_digest.sh "just test"`: pass.
+- `tools/ai/run_and_digest.sh "cd interface && npm run build"`: pass.

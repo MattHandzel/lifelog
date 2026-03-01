@@ -272,6 +272,20 @@ async fn get_component_config(
                 .config
                 .ok_or_else(|| "Server response did not contain SystemConfig data".to_string())?;
 
+            if component_type.eq_ignore_ascii_case("retention") {
+                let retention = system_config
+                    .server
+                    .as_ref()
+                    .map(|s| s.retention_policy_days.clone())
+                    .unwrap_or_default();
+                let value = serde_json::json!({
+                    "screenDays": retention.get("screen").copied().unwrap_or(0),
+                    "audioDays": retention.get("audio").copied().unwrap_or(0),
+                    "textDays": retention.get("text").copied().unwrap_or(0),
+                });
+                return Ok(value);
+            }
+
             let target_collector_config =
                 system_config.collectors.get(&collector_id).ok_or_else(|| {
                     format!(
@@ -351,100 +365,143 @@ async fn set_component_config(
         "gRPC: set_component_config - RPC get_config succeeded: {:?}",
         get_response
     );
-    let system_config = get_response
+    let mut system_config = get_response
         .into_inner()
         .config
         .ok_or_else(|| "Server response did not contain SystemConfig data".to_string())?;
 
-    let mut target_collector_config = system_config.collectors.get(&collector_id).cloned()
-        .unwrap_or_else(|| {
-            println!("gRPC: set_component_config - No existing collector config found for ID '{}'. Creating new default.", collector_id);
-            lifelog::CollectorConfig {
-                id: collector_id.clone(),
-                ..Default::default()
+    if component_type.eq_ignore_ascii_case("retention") {
+        let raw = config_value
+            .as_object()
+            .ok_or_else(|| "Invalid retention config format".to_string())?;
+        let screen_days = raw
+            .get("screenDays")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+            .min(u64::from(u32::MAX)) as u32;
+        let audio_days = raw
+            .get("audioDays")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+            .min(u64::from(u32::MAX)) as u32;
+        let text_days = raw
+            .get("textDays")
+            .and_then(|v| v.as_u64())
+            .unwrap_or(0)
+            .min(u64::from(u32::MAX)) as u32;
+
+        let mut server_cfg = system_config.server.clone().unwrap_or_default();
+        server_cfg
+            .retention_policy_days
+            .insert("screen".to_string(), screen_days);
+        server_cfg
+            .retention_policy_days
+            .insert("audio".to_string(), audio_days);
+        server_cfg
+            .retention_policy_days
+            .insert("text".to_string(), text_days);
+        system_config.server = Some(server_cfg);
+    } else {
+        let mut target_collector_config = system_config
+            .collectors
+            .get(&collector_id)
+            .cloned()
+            .unwrap_or_else(|| {
+                println!("gRPC: set_component_config - No existing collector config found for ID '{}'. Creating new default.", collector_id);
+                lifelog::CollectorConfig {
+                    id: collector_id.clone(),
+                    ..Default::default()
+                }
+            });
+
+        println!(
+            "gRPC: set_component_config - starting with CollectorConfig for ID '{}': {:?}",
+            collector_id, target_collector_config
+        );
+
+        match component_type.to_lowercase().as_str() {
+            "screen" => {
+                let local_conf: config::ScreenConfig = serde_json::from_value(config_value)
+                    .map_err(|e| format!("Invalid screen config format: {}", e))?;
+                target_collector_config.screen = Some(lifelog::ScreenConfig {
+                    enabled: local_conf.enabled,
+                    interval: local_conf.interval,
+                    output_dir: local_conf.output_dir.clone(),
+                    program: local_conf.program,
+                    timestamp_format: local_conf.timestamp_format,
+                });
             }
-        });
-
-    println!(
-        "gRPC: set_component_config - starting with CollectorConfig for ID '{}': {:?}",
-        collector_id, target_collector_config
-    );
-
-    match component_type.to_lowercase().as_str() {
-        "screen" => {
-            let local_conf: config::ScreenConfig = serde_json::from_value(config_value)
-                .map_err(|e| format!("Invalid screen config format: {}", e))?;
-            target_collector_config.screen = Some(lifelog::ScreenConfig {
-                enabled: local_conf.enabled,
-                interval: local_conf.interval,
-                output_dir: local_conf.output_dir.clone(),
-                program: local_conf.program,
-                timestamp_format: local_conf.timestamp_format,
-            });
+            "camera" => {
+                let local_conf: config::CameraConfig = serde_json::from_value(config_value)
+                    .map_err(|e| format!("Invalid camera config format: {}", e))?;
+                target_collector_config.camera = Some(lifelog::CameraConfig {
+                    enabled: local_conf.enabled,
+                    interval: local_conf.interval,
+                    output_dir: local_conf.output_dir.clone(),
+                    device: local_conf.device,
+                    resolution_x: local_conf.resolution_x,
+                    resolution_y: local_conf.resolution_y,
+                    fps: local_conf.fps,
+                    timestamp_format: local_conf.timestamp_format,
+                });
+            }
+            "microphone" => {
+                let local_conf: config::MicrophoneConfig = serde_json::from_value(config_value)
+                    .map_err(|e| format!("Invalid microphone config format: {}", e))?;
+                target_collector_config.microphone = Some(lifelog::MicrophoneConfig {
+                    enabled: local_conf.enabled,
+                    output_dir: local_conf.output_dir.clone(),
+                    chunk_duration_secs: local_conf.chunk_duration_secs,
+                    capture_interval_secs: local_conf.capture_interval_secs,
+                    timestamp_format: local_conf.timestamp_format,
+                    sample_rate: local_conf.sample_rate,
+                    bits_per_sample: local_conf.bits_per_sample,
+                    channels: local_conf.channels,
+                });
+            }
+            "processes" => {
+                let local_conf: config::ProcessesConfig = serde_json::from_value(config_value)
+                    .map_err(|e| format!("Invalid processes config format: {}", e))?;
+                target_collector_config.processes = Some(lifelog::ProcessesConfig {
+                    enabled: local_conf.enabled,
+                    interval: local_conf.interval,
+                    output_dir: local_conf.output_dir.clone(),
+                });
+            }
+            "hyprland" => {
+                let local_conf: config::HyprlandConfig = serde_json::from_value(config_value)
+                    .map_err(|e| format!("Invalid hyprland config format: {}", e))?;
+                target_collector_config.hyprland = Some(lifelog::HyprlandConfig {
+                    enabled: local_conf.enabled,
+                    interval: local_conf.interval,
+                    output_dir: local_conf.output_dir.clone(),
+                    log_active_monitor: local_conf.log_active_monitor,
+                    log_activewindow: local_conf.log_activewindow,
+                    log_workspace: local_conf.log_workspace,
+                    log_clients: local_conf.log_clients,
+                    log_devices: local_conf.log_devices,
+                });
+            }
+            _ => {
+                return Err(format!(
+                    "Unknown component type '{}' for setting config",
+                    component_type
+                ))
+            }
         }
-        "camera" => {
-            let local_conf: config::CameraConfig = serde_json::from_value(config_value)
-                .map_err(|e| format!("Invalid camera config format: {}", e))?;
-            target_collector_config.camera = Some(lifelog::CameraConfig {
-                enabled: local_conf.enabled,
-                interval: local_conf.interval,
-                output_dir: local_conf.output_dir.clone(),
-                device: local_conf.device,
-                resolution_x: local_conf.resolution_x,
-                resolution_y: local_conf.resolution_y,
-                fps: local_conf.fps,
-                timestamp_format: local_conf.timestamp_format,
-            });
-        }
-        "microphone" => {
-            let local_conf: config::MicrophoneConfig = serde_json::from_value(config_value)
-                .map_err(|e| format!("Invalid microphone config format: {}", e))?;
-            target_collector_config.microphone = Some(lifelog::MicrophoneConfig {
-                enabled: local_conf.enabled,
-                output_dir: local_conf.output_dir.clone(),
-                chunk_duration_secs: local_conf.chunk_duration_secs,
-                capture_interval_secs: local_conf.capture_interval_secs,
-                timestamp_format: local_conf.timestamp_format,
-                sample_rate: local_conf.sample_rate,
-                bits_per_sample: local_conf.bits_per_sample,
-                channels: local_conf.channels,
-            });
-        }
-        "processes" => {
-            let local_conf: config::ProcessesConfig = serde_json::from_value(config_value)
-                .map_err(|e| format!("Invalid processes config format: {}", e))?;
-            target_collector_config.processes = Some(lifelog::ProcessesConfig {
-                enabled: local_conf.enabled,
-                interval: local_conf.interval,
-                output_dir: local_conf.output_dir.clone(),
-            });
-        }
-        "hyprland" => {
-            let local_conf: config::HyprlandConfig = serde_json::from_value(config_value)
-                .map_err(|e| format!("Invalid hyprland config format: {}", e))?;
-            target_collector_config.hyprland = Some(lifelog::HyprlandConfig {
-                enabled: local_conf.enabled,
-                interval: local_conf.interval,
-                output_dir: local_conf.output_dir.clone(),
-                log_active_monitor: local_conf.log_active_monitor,
-                log_activewindow: local_conf.log_activewindow,
-                log_workspace: local_conf.log_workspace,
-                log_clients: local_conf.log_clients,
-                log_devices: local_conf.log_devices,
-            });
-        }
-        _ => {
-            return Err(format!(
-                "Unknown component type '{}' for setting config",
-                component_type
-            ))
-        }
+        system_config
+            .collectors
+            .insert(collector_id.clone(), target_collector_config.clone());
+        println!(
+            "gRPC: set_component_config - updated collector config for '{}': {:?}",
+            collector_id, target_collector_config
+        );
     }
 
-    println!("gRPC: set_component_config - sending modified CollectorConfig (via SetSystemConfigRequest) for ID '{}': {:?}", collector_id, target_collector_config);
+    println!("gRPC: set_component_config - sending modified SystemConfig");
 
     let set_request = tonic::Request::new(lifelog::SetSystemConfigRequest {
-        config: Some(target_collector_config.clone()),
+        config: Some(system_config),
     });
     let set_response = client
         .set_config(set_request)

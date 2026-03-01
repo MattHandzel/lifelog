@@ -963,3 +963,16 @@ Launch-blocking requirements implied by the audit:
 - Collector pairing flow is wired into handshake:
   - when no auth token is present, collector calls `PairCollector` using enrollment token before opening `ControlStream`,
   - collector includes `x-lifelog-client-id` metadata hint; server returns that stable id when provided.
+
+### 20.3 Retention Controls (March 1, 2026)
+
+- `ServerConfig` now includes `retention_policy_days` (`map<string,uint32>`), where `0` means keep forever.
+- Server now runs a retention worker loop (daily by default; configurable via `LIFELOG_RETENTION_INTERVAL_SECS`) that:
+  - prunes stale records per modality policy using canonical time when present,
+  - collects candidate `blob_hash` values from deleted records,
+  - deletes orphan CAS blobs only when no remaining metadata row references the hash.
+- Server `SetConfig` is no longer a no-op:
+  - request payload now carries full `SystemConfig`,
+  - server applies server policy updates live (`default_correlation_window_ms`, `retention_policy_days`),
+  - collector updates are propagated over `ControlStream` via `UpdateConfig` command payloads.
+- Interface Settings now includes `Privacy & Storage` controls for `screen`, `audio`, and `text` retention days, wired through existing `get_component_config` / `set_component_config`.

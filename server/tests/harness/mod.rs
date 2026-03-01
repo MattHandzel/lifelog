@@ -179,6 +179,7 @@ impl TestContext {
             server_name: "TestServer".to_string(),
             cas_path: cas_path.display().to_string(),
             default_correlation_window_ms: 30_000,
+            retention_policy_days: std::collections::HashMap::new(),
         };
 
         let server = timeout(Duration::from_secs(30), Server::new(&config))

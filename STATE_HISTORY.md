@@ -85,54 +85,6 @@
 </state_snapshot>
 
 <state_snapshot>
-    <timestamp_utc>
-        2026-03-01T20:05:26Z
-    </timestamp_utc>
-
-    <overall_goal>
-        Implement security hardening for transport security, authentication, and collector enrollment handshake.
-    </overall_goal>
-
-    <what_to_do>
-        - Enforced TLS requirements for server startup and collector upload/control clients.
-        - Enforced token requirements on server startup and in gRPC auth interception.
-        - Wired collector `PairCollector` handshake path when only enrollment token is configured.
-        - Standardized collector identity usage to configured collector id for control/state messaging.
-        - Updated SPEC/DESIGN notes with implemented security behavior.
-    </what_to_do>
-
-    <why>
-        - Spec Section 12.1 requires encrypted transport, and plaintext fallback is unsafe.
-        - Security hardening plan requires explicit auth checks and enrollment flow usage.
-        - Using configured collector id consistently avoids identity drift between control and upload paths.
-        - Hypothesis: strict fail-fast checks for TLS/token config reduce unsafe accidental deployments.
-    </why>
-
-    <how>
-        - Updated `server/src/main.rs`:
-          - mandatory TLS env validation,
-          - mandatory token env validation,
-          - stricter auth interceptor behavior,
-          - separate generated auth/enrollment tokens.
-        - Updated `server/src/grpc_service.rs`:
-          - pairing now honors `x-lifelog-client-id` metadata hint for stable identity.
-        - Updated `collector/src/collector.rs`:
-          - strict auth token requirement,
-          - strict `https://` endpoint requirement,
-          - pre-control-stream `PairCollector` call when using enrollment token only.
-        - Updated `collector/src/collector/upload_manager.rs`:
-          - strict auth token requirement,
-          - strict `https://` endpoint requirement.
-    </how>
-
-    <validation_steps>
-        - `tools/ai/run_and_digest.sh "just check"` (pass).
-        - `tools/ai/run_and_digest.sh "just test"` (started; did not complete during this session window).
-    </validation_steps>
-
-</state_snapshot>
-
-<state_snapshot>
     <overall_goal>
         Implement search previews (snippets + thumbnails) for the Search dashboard.
     </overall_goal>
@@ -208,54 +160,6 @@
         - `tools/ai/run_and_digest.sh "just test-ui"` (pass).
         - `tools/ai/run_and_digest.sh "just validate-all"` (pass).
         - Verified test coverage for node render and `set_component_config` dispatch in `NetworkTopologyDashboard.test.tsx`.
-    </validation_steps>
-
-</state_snapshot>
-
-<state_snapshot>
-    <timestamp_utc>
-        2026-03-01T20:05:26Z
-    </timestamp_utc>
-
-    <overall_goal>
-        Implement security hardening for transport security, authentication, and collector enrollment handshake.
-    </overall_goal>
-
-    <what_to_do>
-        - Enforced TLS requirements for server startup and collector upload/control clients.
-        - Enforced token requirements on server startup and in gRPC auth interception.
-        - Wired collector `PairCollector` handshake path when only enrollment token is configured.
-        - Standardized collector identity usage to configured collector id for control/state messaging.
-        - Updated SPEC/DESIGN notes with implemented security behavior.
-    </what_to_do>
-
-    <why>
-        - Spec Section 12.1 requires encrypted transport, and plaintext fallback is unsafe.
-        - Security hardening plan requires explicit auth checks and enrollment flow usage.
-        - Using configured collector id consistently avoids identity drift between control and upload paths.
-        - Hypothesis: strict fail-fast checks for TLS/token config reduce unsafe accidental deployments.
-    </why>
-
-    <how>
-        - Updated `server/src/main.rs`:
-          - mandatory TLS env validation,
-          - mandatory token env validation,
-          - stricter auth interceptor behavior,
-          - separate generated auth/enrollment tokens.
-        - Updated `server/src/grpc_service.rs`:
-          - pairing now honors `x-lifelog-client-id` metadata hint for stable identity.
-        - Updated `collector/src/collector.rs`:
-          - strict auth token requirement,
-          - strict `https://` endpoint requirement,
-          - pre-control-stream `PairCollector` call when using enrollment token only.
-        - Updated `collector/src/collector/upload_manager.rs`:
-          - strict auth token requirement,
-          - strict `https://` endpoint requirement.
-    </how>
-
-    <validation_steps>
-        - `tools/ai/run_and_digest.sh "just check"` (pass).
-        - `tools/ai/run_and_digest.sh "just test"` (started; did not complete during this session window).
     </validation_steps>
 
 </state_snapshot>
@@ -346,5 +250,90 @@
         - `tools/ai/run_and_digest.sh "nix develop --command cargo test -p lifelog-server --test smoke_server_bin -- --nocapture"` -> pass.
         - Verified schema includes `DEFINE INDEX {table}_text_search ... BM25` for `DataModality::Keystrokes`.
     </validation_steps>
+</state_snapshot>
 
+<state_snapshot>
+    <timestamp_utc>
+        2026-03-01T20:58:03Z
+    </timestamp_utc>
+
+    <overall_goal>
+        Implement retention-controls end-to-end: server retention policies, pruning worker, live config update wiring, and Settings UI controls.
+    </overall_goal>
+
+    <what_to_do>
+        - Added retention policy map to `ServerConfig` and default config.
+        - Implemented server retention pruning logic for stale metadata rows and orphan CAS blobs.
+        - Added background retention worker loop in server startup.
+        - Upgraded `SetConfig` flow from no-op to live `SystemConfig` application.
+        - Extended Tauri settings RPC paths + Settings UI with Privacy & Storage retention controls.
+        - Updated spec/design docs with decisions and implementation notes.
+    </what_to_do>
+
+    <why>
+        - Spec requires coarse-grained retention controls and explicit data lifecycle behavior.
+        - Existing backend lacked live server policy mutation and retention enforcement.
+        - Hypothesis: introducing a daily prune worker plus live system config updates enables immediate policy management without restart and bounded storage growth.
+    </why>
+
+    <how>
+        - Proto changes:
+            - `ServerConfig.retention_policy_days` added.
+            - `SetSystemConfigRequest.config` changed from `CollectorConfig` to `SystemConfig`.
+        - Server:
+            - Added `server/src/retention.rs` (`prune_once`) and wired module export.
+            - `Server` now stores mutable config (`Arc<RwLock<ServerConfig>>`).
+            - Added `run_retention_once` + `apply_system_config` methods.
+            - `grpc_service::set_config` now validates/applies config and returns success.
+            - `main.rs` now spawns periodic retention worker task.
+        - CAS:
+            - Added `FsCas::remove` for orphan blob deletion.
+        - Interface:
+            - `get_component_config` and `set_component_config` now support `componentType="retention"`.
+            - `set_component_config` now sends full `SystemConfig` payload.
+            - `SettingsDashboard` now has Privacy & Storage section (screen/audio/text day values).
+    </how>
+
+    <validation_steps>
+        - `tools/ai/run_and_digest.sh "just check"` -> pass.
+        - `tools/ai/run_and_digest.sh "just test"` -> pass.
+        - `tools/ai/run_and_digest.sh "cd interface && npm run build"` -> pass.
+    </validation_steps>
+</state_snapshot>
+
+<state_snapshot>
+    <timestamp_utc>
+        2026-03-01T21:10:45Z
+    </timestamp_utc>
+
+    <overall_goal>
+        Implement cli-onboarding end-to-end: lifelog init/join subcommands, native TLS cert generation, and automated config scaffolding.
+    </overall_goal>
+
+    <what_to_do>
+        - Added `init` and `join` subcommands to the `lifelog` server CLI.
+        - Implemented native TLS cert generation via `rcgen` (removes `openssl` binary dependency).
+        - Added interactive setup wizard via `inquire`.
+        - Automated token generation and `.env` scaffolding.
+        - Added `lifelog` binary alias pointing to `server/src/main.rs`.
+    </what_to_do>
+
+    <why>
+        - Manual setup of mandatory TLS and tokens was a major friction point for new users.
+        - Native cert generation ensures security works out-of-the-box on all platforms.
+        - Hypothesis: a single onboarding command reduces "Zero-to-Ingest" time to < 60 seconds.
+    </why>
+
+    <how>
+        - Updated `server/Cargo.toml` with `inquire`, `rcgen`, `tokio-rustls`.
+        - Refactored `server/src/main.rs` main function to handle new subcommands.
+        - Implemented `run_init` (Server) and `run_join` (Collector) wizard logic.
+        - Added `ensure_parent` and `sha256_fingerprint` helpers for robust filesystem and cert handling.
+    </how>
+
+    <validation_steps>
+        - `tools/ai/run_and_digest.sh "just check"` -> pass.
+        - `tools/ai/run_and_digest.sh "just test"` -> pass.
+        - Manually verified `--help` and subcommand visibility in the new `lifelog` binary.
+    </validation_steps>
 </state_snapshot>

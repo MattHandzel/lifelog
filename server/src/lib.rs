@@ -9,6 +9,7 @@ pub mod grpc_service;
 pub(crate) mod ingest;
 pub mod query;
 pub(crate) mod replay;
+pub(crate) mod retention;
 pub(crate) mod schema;
 pub(crate) mod sync;
 pub(crate) mod transform;

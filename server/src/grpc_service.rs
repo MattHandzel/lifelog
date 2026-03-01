@@ -127,10 +127,20 @@ impl LifelogServerService for GRPCServerLifelogServerService {
 
     async fn set_config(
         &self,
-        _request: Request<SetSystemConfigRequest>,
+        request: Request<SetSystemConfigRequest>,
     ) -> Result<Response<SetSystemConfigResponse>, Status> {
         tracing::info!("Received set config request");
-        Ok(Response::new(SetSystemConfigResponse::default()))
+        let system_config = request
+            .into_inner()
+            .config
+            .ok_or_else(|| Status::invalid_argument("missing system config payload"))?;
+
+        self.server
+            .apply_system_config(system_config)
+            .await
+            .map_err(|e| Status::internal(format!("failed to apply config: {e}")))?;
+
+        Ok(Response::new(SetSystemConfigResponse { success: true }))
     }
 
     async fn query(

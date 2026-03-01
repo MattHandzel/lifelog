@@ -802,8 +802,36 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         LifelogServerHandle::new(std::sync::Arc::new(tokio::sync::RwLock::new(server)));
     let server_handle2 = server_handle.clone();
 
+    let loop_handle = server_handle.clone();
     tokio::task::spawn(async move {
-        server_handle.r#loop().await;
+        loop_handle.r#loop().await;
+    });
+
+    let retention_handle = server_handle.clone();
+    tokio::task::spawn(async move {
+        let interval_secs = std::env::var("LIFELOG_RETENTION_INTERVAL_SECS")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(86_400)
+            .max(60);
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(interval_secs));
+        loop {
+            interval.tick().await;
+            match retention_handle.run_retention_once().await {
+                Ok(summary) => {
+                    if summary.deleted_records > 0 || summary.deleted_blobs > 0 {
+                        tracing::info!(
+                            deleted_records = summary.deleted_records,
+                            deleted_blobs = summary.deleted_blobs,
+                            "retention prune completed"
+                        );
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "retention prune failed");
+                }
+            }
+        }
     });
 
     let tls_config = TlsConfig::from_env();
