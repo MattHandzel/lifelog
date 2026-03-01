@@ -31,7 +31,7 @@ message GetSystemConfigResponse {
 }
 
 message SetSystemConfigRequest {
-  CollectorConfig config = 1;
+  SystemConfig config = 1;
 }
 message SetSystemConfigResponse {
   bool success = 1;
@@ -425,4 +425,3 @@ service LifelogServerService {
   rpc PairCollector(PairCollectorRequest) returns (PairCollectorResponse);
 
 }
-

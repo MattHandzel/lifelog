@@ -310,3 +310,53 @@
     </validation_steps>
 
 </state_snapshot>
+
+<state_snapshot>
+    <timestamp_utc>
+        2026-03-01T20:58:03Z
+    </timestamp_utc>
+
+    <overall_goal>
+        Implement retention-controls end-to-end: server retention policies, pruning worker, live config update wiring, and Settings UI controls.
+    </overall_goal>
+
+    <what_to_do>
+        - Added retention policy map to `ServerConfig` and default config.
+        - Implemented server retention pruning logic for stale metadata rows and orphan CAS blobs.
+        - Added background retention worker loop in server startup.
+        - Upgraded `SetConfig` flow from no-op to live `SystemConfig` application.
+        - Extended Tauri settings RPC paths + Settings UI with Privacy & Storage retention controls.
+        - Updated spec/design docs with decisions and implementation notes.
+    </what_to_do>
+
+    <why>
+        - Spec requires coarse-grained retention controls and explicit data lifecycle behavior.
+        - Existing backend lacked live server policy mutation and retention enforcement.
+        - Hypothesis: introducing a daily prune worker plus live system config updates enables immediate policy management without restart and bounded storage growth.
+    </why>
+
+    <how>
+        - Proto changes:
+            - `ServerConfig.retention_policy_days` added.
+            - `SetSystemConfigRequest.config` changed from `CollectorConfig` to `SystemConfig`.
+        - Server:
+            - Added `server/src/retention.rs` (`prune_once`) and wired module export.
+            - `Server` now stores mutable config (`Arc<RwLock<ServerConfig>>`).
+            - Added `run_retention_once` + `apply_system_config` methods.
+            - `grpc_service::set_config` now validates/applies config and returns success.
+            - `main.rs` now spawns periodic retention worker task.
+        - CAS:
+            - Added `FsCas::remove` for orphan blob deletion.
+        - Interface:
+            - `get_component_config` and `set_component_config` now support `componentType="retention"`.
+            - `set_component_config` now sends full `SystemConfig` payload.
+            - `SettingsDashboard` now has Privacy & Storage section (screen/audio/text day values).
+    </how>
+
+    <validation_steps>
+        - `tools/ai/run_and_digest.sh "just check"` -> pass.
+        - `tools/ai/run_and_digest.sh "just test"` -> pass.
+        - `tools/ai/run_and_digest.sh "cd interface && npm run build"` -> pass.
+    </validation_steps>
+
+</state_snapshot>

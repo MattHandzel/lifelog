@@ -47,7 +47,10 @@ describe('NetworkTopologyDashboard', () => {
       expect(setConfigSpy).toHaveBeenCalled();
     });
 
-    const payload = setConfigSpy.mock.calls[0][0] as {
+    const calls = setConfigSpy.mock.calls as unknown as Array<[unknown]>;
+    const firstCall = calls[0];
+    expect(firstCall).toBeDefined();
+    const payload = firstCall[0] as {
       collectorId: string;
       componentType: string;
       configValue: { enabled: boolean };

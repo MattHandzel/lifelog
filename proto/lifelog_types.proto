@@ -509,6 +509,8 @@ message ServerConfig {
   // Spec §4.3: global default correlation window (Δt_default) used when query predicates omit
   // an explicit temporal window.
   uint64 default_correlation_window_ms = 7;
+  // Per-modality retention in days. 0 means keep forever.
+  map<string, uint32> retention_policy_days = 8;
 }
 
 message ServerState {

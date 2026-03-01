@@ -62,6 +62,7 @@ databaseName = "main"
 serverName = "LifelogServer"
 casPath = "~/lifelog/cas"
 defaultCorrelationWindowMs = 30000
+retentionPolicyDays = { screen = 0, audio = 0, text = 0 }
 
 transforms = [
   { id = "ocr", enabled = true, sourceOrigin = "*:screen", language = "eng" }

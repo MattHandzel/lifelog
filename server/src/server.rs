@@ -16,6 +16,7 @@ use utils::cas::FsCas;
 
 use crate::data_retrieval::get_data_by_key;
 use crate::db::get_origins_from_db;
+use crate::retention::prune_once;
 use crate::sync::sync_data_with_collectors;
 use crate::transform::LifelogTransform;
 
@@ -35,7 +36,7 @@ type SkewSamples = HashMap<String, Vec<(chrono::DateTime<Utc>, chrono::DateTime<
 pub struct Server {
     pub(crate) db: Surreal<Client>,
     pub(crate) cas: FsCas,
-    pub(crate) config: Arc<ServerConfig>,
+    pub(crate) config: Arc<RwLock<ServerConfig>>,
     pub(crate) state: Arc<RwLock<SystemState>>,
     pub(crate) registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
     pub(crate) policy: Arc<RwLock<ServerPolicy>>,
@@ -81,6 +82,21 @@ impl ServerHandle {
     pub async fn get_config(&self) -> SystemConfig {
         let server = self.server.read().await;
         server.get_config().await
+    }
+
+    pub async fn apply_system_config(
+        &self,
+        system_config: SystemConfig,
+    ) -> Result<(), LifelogError> {
+        let server = self.server.read().await;
+        server.apply_system_config(system_config).await
+    }
+
+    pub async fn run_retention_once(
+        &self,
+    ) -> Result<crate::retention::RetentionRunSummary, LifelogError> {
+        let server = self.server.read().await;
+        server.run_retention_once().await
     }
 
     pub async fn get_data(
@@ -365,7 +381,7 @@ impl Server {
         Ok(Server {
             db,
             cas,
-            config: Arc::new(config.clone()),
+            config: Arc::new(RwLock::new(config.clone())),
             state: Arc::new(RwLock::new(system_state)),
             registered_collectors: Arc::new(RwLock::new(vec![])),
             policy: Arc::new(RwLock::new(ServerPolicy::new(policy_config))),
@@ -403,6 +419,7 @@ impl Server {
     }
 
     async fn get_config(&self) -> SystemConfig {
+        let server_config = self.config.read().await.clone();
         let collectors = self.registered_collectors.read().await;
         let mut collector_configs = HashMap::new();
         for collector in collectors.iter() {
@@ -412,7 +429,7 @@ impl Server {
         }
 
         SystemConfig {
-            server: Some((*self.config).clone()),
+            server: Some(server_config),
             collectors: collector_configs,
         }
     }
@@ -450,7 +467,7 @@ impl Server {
         // LLQL (JSON) escape hatch: allow the UI to execute typed cross-modal queries
         // without changing the protobuf. Use `Query.text = ["llql:{...json...}"]`.
         if let Some(ast_query) = crate::query::llql::try_parse_llql(&query_msg.text)? {
-            let default_window_ms = self.config.default_correlation_window_ms;
+            let default_window_ms = self.config.read().await.default_correlation_window_ms;
             let default_window =
                 chrono::Duration::milliseconds(i64::try_from(default_window_ms).unwrap_or(30_000));
 
@@ -757,6 +774,60 @@ impl Server {
             .collect();
 
         Ok(lifelog_types::ReplayResponse { steps: proto_steps })
+    }
+
+    async fn run_retention_once(
+        &self,
+    ) -> Result<crate::retention::RetentionRunSummary, LifelogError> {
+        let policy = self.config.read().await.retention_policy_days.clone();
+        prune_once(&self.db, &self.cas, &policy, Utc::now()).await
+    }
+
+    async fn apply_system_config(&self, system_config: SystemConfig) -> Result<(), LifelogError> {
+        if let Some(new_server_config) = system_config.server {
+            new_server_config.validate()?;
+            let mut current = self.config.write().await;
+            current.default_correlation_window_ms = new_server_config.default_correlation_window_ms;
+            current.retention_policy_days = new_server_config.retention_policy_days;
+        }
+
+        if system_config.collectors.is_empty() {
+            return Ok(());
+        }
+
+        let mut updates: Vec<(
+            tokio::sync::mpsc::Sender<Result<ServerCommand, tonic::Status>>,
+            CollectorConfig,
+            String,
+        )> = Vec::new();
+        {
+            let mut registered = self.registered_collectors.write().await;
+            for (collector_id, new_cfg) in system_config.collectors {
+                if let Some(collector) = registered.iter_mut().find(|c| c.id == collector_id) {
+                    collector.latest_config = Some(new_cfg.clone());
+                    updates.push((collector.command_tx.clone(), new_cfg, collector.id.clone()));
+                }
+            }
+        }
+
+        for (tx, cfg, collector_id) in updates {
+            let payload = serde_json::to_string(&cfg).map_err(|e| LifelogError::Validation {
+                field: "collector_config".to_string(),
+                reason: format!("failed to serialize update payload: {e}"),
+            })?;
+            let cmd = ServerCommand {
+                r#type: CommandType::UpdateConfig as i32,
+                payload,
+            };
+            if tx.send(Ok(cmd)).await.is_err() {
+                tracing::warn!(
+                    collector_id = %collector_id,
+                    "collector config update command was not delivered"
+                );
+            }
+        }
+
+        Ok(())
     }
 
     async fn add_audit_log(&self, _action: &ServerAction) {
