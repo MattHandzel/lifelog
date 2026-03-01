@@ -8,10 +8,12 @@ mod storage;
 
 use base64;
 use base64::{engine::general_purpose, Engine as _};
+use image::ImageOutputFormat;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs;
+use std::io::Cursor;
 use std::path::PathBuf;
 #[cfg(target_os = "macos")]
 use std::process::Command;
@@ -1077,9 +1079,47 @@ struct FrameDataWrapper {
     processes: Option<Vec<ProcessInfoWrapper>>,
 }
 
+fn encode_image_data_url(
+    image_bytes: &[u8],
+    mime_type: &str,
+    thumbnail_mode: bool,
+) -> Result<String, String> {
+    if !thumbnail_mode {
+        return Ok(format!(
+            "data:{};base64,{}",
+            mime_type,
+            general_purpose::STANDARD.encode(image_bytes)
+        ));
+    }
+    let dynamic_image = image::load_from_memory(image_bytes).map_err(|e| {
+        format!(
+            "Failed to decode image bytes for thumbnail generation: {}",
+            e
+        )
+    })?;
+    let thumb = dynamic_image.thumbnail(512, 288);
+    let mut encoded = Cursor::new(Vec::new());
+    let is_png = mime_type.eq_ignore_ascii_case("image/png");
+    let output_format = if is_png {
+        ImageOutputFormat::Png
+    } else {
+        ImageOutputFormat::Jpeg(72)
+    };
+    thumb
+        .write_to(&mut encoded, output_format)
+        .map_err(|e| format!("Failed to encode image thumbnail: {}", e))?;
+    let output_mime = if is_png { "image/png" } else { "image/jpeg" };
+    Ok(format!(
+        "data:{};base64,{}",
+        output_mime,
+        general_purpose::STANDARD.encode(encoded.into_inner())
+    ))
+}
+
 async fn get_frame_data_async(
     grpc_client: &mut lifelog::LifelogServerServiceClient<Channel>,
     keys: Vec<LifelogDataKeyWrapper>,
+    thumbnail_mode: bool,
 ) -> Result<Vec<FrameDataWrapper>, String> {
     if keys.is_empty() {
         return Ok(Vec::new());
@@ -1186,11 +1226,11 @@ async fn get_frame_data_async(
                             sample_rate: None,
                             channels: None,
                             audio_duration_secs: None,
-                            image_data_url: Some(format!(
-                                "data:{};base64,{}",
-                                f.mime_type,
-                                general_purpose::STANDARD.encode(&f.image_bytes)
-                            )),
+                            image_data_url: Some(encode_image_data_url(
+                                &f.image_bytes,
+                                &f.mime_type,
+                                thumbnail_mode,
+                            )?),
                             width: Some(f.width),
                             height: Some(f.height),
                             mime_type: Some(f.mime_type),
@@ -1409,11 +1449,11 @@ async fn get_frame_data_async(
                             sample_rate: None,
                             channels: None,
                             audio_duration_secs: None,
-                            image_data_url: Some(format!(
-                                "data:{};base64,{}",
-                                f.mime_type,
-                                general_purpose::STANDARD.encode(&f.image_bytes)
-                            )),
+                            image_data_url: Some(encode_image_data_url(
+                                &f.image_bytes,
+                                &f.mime_type,
+                                thumbnail_mode,
+                            )?),
                             width: Some(f.width),
                             height: Some(f.height),
                             mime_type: Some(f.mime_type),
@@ -1510,7 +1550,29 @@ async fn get_frame_data(
             }
         }
     };
-    get_frame_data_async(client, keys).await
+    get_frame_data_async(client, keys, false).await
+}
+
+#[tauri::command]
+async fn get_frame_data_thumbnails(
+    state: tauri::State<'_, GrpcClientState>,
+    keys: Vec<LifelogDataKeyWrapper>,
+) -> Result<Vec<FrameDataWrapper>, String> {
+    let mut client_guard = state.client.lock().await;
+    let client = match client_guard.as_mut() {
+        Some(c) => c,
+        None => {
+            let server_addr = grpc_server_address();
+            match create_grpc_channel(&server_addr).await {
+                Ok(channel) => {
+                    *client_guard = Some(lifelog::LifelogServerServiceClient::new(channel));
+                    client_guard.as_mut().unwrap()
+                }
+                Err(e) => return Err(format!("gRPC connection failed: {}", e)),
+            }
+        }
+    };
+    get_frame_data_async(client, keys, true).await
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -1612,6 +1674,7 @@ async fn main() {
             query_timeline,
             replay,
             get_frame_data,
+            get_frame_data_thumbnails,
             get_system_state
         ])
         .run(tauri::generate_context!())

@@ -933,3 +933,18 @@ Launch-blocking requirements implied by the audit:
 - Query authoring should use progressive disclosure (simple search -> templates -> advanced DSL), even if DSL is the canonical representation.
 - Multi-device must be first-class in UI: device health, backlogs, and “what’s collecting now” must be visible.
 - Privacy must be a first-class surface: pause, per-stream toggles, retention, deletion by time range.
+
+## 20) Implemented Feature Notes
+
+### 20.1 Search Previews (March 1, 2026)
+
+- Search UI now renders richer result cards with:
+  - text snippets generated from frame content fields,
+  - query-term highlighting within snippets,
+  - image thumbnails for screen/camera modalities.
+- Thumbnail retrieval uses a dedicated interface backend command:
+  - `get_frame_data_thumbnails` (Tauri command),
+  - screen/camera image payloads are downscaled before being encoded as `data:` URLs.
+- Result card media loading is lazy for viewport efficiency:
+  - thumbnail images mount only once cards approach viewport,
+  - a skeleton placeholder is shown before image decode/load completes.
