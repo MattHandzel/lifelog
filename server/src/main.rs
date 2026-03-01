@@ -842,14 +842,26 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     if !tls_config.is_enabled() {
         return Err(lifelog_core::LifelogError::Validation {
             field: "LIFELOG_TLS_CERT_PATH/LIFELOG_TLS_KEY_PATH".to_string(),
-            reason: "must both be set; plaintext gRPC is not allowed".to_string(),
+            reason: "must both be set. Plaintext gRPC is not allowed for security reasons. \
+                     See docs/SETUP_TLS.md for how to generate certificates."
+                .to_string(),
         }
         .into());
     }
     let cert_path = tls_config.cert_path.expect("checked above");
     let key_path = tls_config.key_path.expect("checked above");
-    let cert = std::fs::read_to_string(&cert_path)?;
-    let key = std::fs::read_to_string(&key_path)?;
+    let cert = std::fs::read_to_string(&cert_path).map_err(|e| {
+        format!(
+            "Failed to read certificate at {}: {}. Ensure the path is correct and accessible.",
+            cert_path, e
+        )
+    })?;
+    let key = std::fs::read_to_string(&key_path).map_err(|e| {
+        format!(
+            "Failed to read private key at {}: {}. Ensure the path is correct and accessible.",
+            key_path, e
+        )
+    })?;
     let identity = tonic::transport::Identity::from_pem(cert, key);
     let tls = tonic::transport::ServerTlsConfig::new().identity(identity);
     builder = builder.tls_config(tls)?;
@@ -858,13 +870,15 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     let _auth_token = std::env::var("LIFELOG_AUTH_TOKEN").map_err(|_| {
         lifelog_core::LifelogError::Validation {
             field: "LIFELOG_AUTH_TOKEN".to_string(),
-            reason: "must be set".to_string(),
+            reason: "must be set. This token is required to authenticate connected collectors."
+                .to_string(),
         }
     })?;
     let _enrollment_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN").map_err(|_| {
         lifelog_core::LifelogError::Validation {
             field: "LIFELOG_ENROLLMENT_TOKEN".to_string(),
-            reason: "must be set".to_string(),
+            reason: "must be set. This token is used for initial pairing of new devices."
+                .to_string(),
         }
     })?;
 

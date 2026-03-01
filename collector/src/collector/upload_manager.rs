@@ -22,14 +22,21 @@ impl UploadManager {
         if !server_address.starts_with("https://") {
             return Err(LifelogError::Validation {
                 field: "server_address".to_string(),
-                reason: "must use https:// (plaintext gRPC is not allowed)".to_string(),
+                reason: format!(
+                    "Invalid server address '{}'. Must use 'https://' because plaintext gRPC is not allowed. \
+                     See docs/SETUP_TLS.md for how to set up TLS.",
+                    server_address
+                ),
             });
         }
 
         let mut endpoint = tonic::transport::Endpoint::from_shared(server_address.to_string())
             .map_err(|e| LifelogError::Validation {
                 field: "server_address".to_string(),
-                reason: format!("invalid URL: {}", e),
+                reason: format!(
+                    "invalid URL: {}. Ensure the server address is a valid HTTPS URL.",
+                    e
+                ),
             })?
             .connect_timeout(std::time::Duration::from_secs(10));
 
@@ -37,7 +44,10 @@ impl UploadManager {
             let ca_pem =
                 std::fs::read_to_string(&ca_path).map_err(|e| LifelogError::Validation {
                     field: "LIFELOG_TLS_CA_CERT_PATH".to_string(),
-                    reason: format!("failed to read CA cert: {}", e),
+                    reason: format!(
+                        "failed to read CA certificate at {}: {}. Ensure the path is correct.",
+                        ca_path, e
+                    ),
                 })?;
             tonic::transport::ClientTlsConfig::new()
                 .domain_name("localhost")

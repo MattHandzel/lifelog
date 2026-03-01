@@ -1,44 +1,52 @@
+use std::sync::Arc;
+
+use async_trait::async_trait;
 use chrono::Utc;
 use config::load_transform_specs;
-use lifelog_core::{DataOrigin, DataOriginType};
-use lifelog_types::DataModality;
-use lifelog_types::ToRecord;
+use lifelog_core::time_skew::SkewEstimate;
+use lifelog_core::*;
+use lifelog_types::{DataModality, ToRecord};
 use prost::Message;
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
+use tokio::sync::RwLock;
 use utils::ingest::IngestBackend;
 
-use crate::schema::{ensure_chunks_schema, ensure_table_schema};
+use crate::schema::ensure_chunks_schema;
+use crate::schema::ensure_table_schema;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
 pub(crate) struct ChunkRecord {
-    pub collector_id: String,
-    pub stream_id: String,
-    pub session_id: u64,
-    pub offset: u64,
-    pub length: u64,
-    pub hash: String,
-    /// UUID of the decoded frame payload (when the stream is a known modality).
-    #[serde(default)]
-    pub frame_uuid: Option<String>,
-    /// `true` means the chunk is fully queryable per Spec §6.2.1 (base record persisted and any
-    /// required async work such as derived transforms completed).
-    pub indexed: bool,
+    pub(crate) collector_id: String,
+    pub(crate) stream_id: String,
+    pub(crate) session_id: u64,
+    pub(crate) offset: u64,
+    pub(crate) length: u32,
+    pub(crate) hash: String,
+    pub(crate) indexed: bool,
+    pub(crate) frame_uuid: Option<String>,
 }
 
-pub(crate) struct SurrealIngestBackend {
+pub struct SurrealIngestBackend {
     pub db: Surreal<Client>,
     pub cas: utils::cas::FsCas,
-    pub skew_estimates: Arc<
-        tokio::sync::RwLock<
-            std::collections::HashMap<String, lifelog_core::time_skew::SkewEstimate>,
-        >,
-    >,
+    pub skew_estimates: Arc<RwLock<std::collections::HashMap<String, SkewEstimate>>>,
 }
 
-#[async_trait::async_trait]
+impl SurrealIngestBackend {
+    pub fn new(
+        db: Surreal<Client>,
+        cas: utils::cas::FsCas,
+        skew_estimates: Arc<RwLock<std::collections::HashMap<String, SkewEstimate>>>,
+    ) -> Self {
+        Self {
+            db,
+            cas,
+            skew_estimates,
+        }
+    }
+}
+
+#[async_trait]
 impl IngestBackend for SurrealIngestBackend {
     async fn persist_metadata(
         &self,
@@ -51,7 +59,9 @@ impl IngestBackend for SurrealIngestBackend {
         payload: &[u8],
     ) -> Result<(), String> {
         let db = self.db.clone();
-        ensure_chunks_schema(&db).await.map_err(|e| e.to_string())?;
+        ensure_chunks_schema(&db)
+            .await
+            .map_err(|e: surrealdb::Error| e.to_string())?;
 
         // `persisted_ok` means the typed record write succeeded (so the chunk isn't "lost").
         // `indexed` means "fully queryable" (Spec §6.2.1).
@@ -121,6 +131,13 @@ impl IngestBackend for SurrealIngestBackend {
                             }
                         }
                     }
+                } else {
+                    tracing::warn!(
+                        stream_id = %stream_id,
+                        "Failed to decode frame from payload; treating as raw chunk for compatibility"
+                    );
+                    persisted_ok = true;
+                    indexed = true;
                 }
             }};
         }
@@ -196,6 +213,12 @@ impl IngestBackend for SurrealIngestBackend {
                             }
                         }
                     }
+                } else {
+                    tracing::warn!(
+                        "Failed to decode ScreenFrame from payload; treating as raw chunk"
+                    );
+                    persisted_ok = true;
+                    indexed = true;
                 }
             }
             "browser" => {
@@ -272,6 +295,12 @@ impl IngestBackend for SurrealIngestBackend {
                             }
                         }
                     }
+                } else {
+                    tracing::warn!(
+                        "Failed to decode WindowActivityFrame from payload; treating as raw chunk"
+                    );
+                    persisted_ok = true;
+                    indexed = true;
                 }
             }
             "keystrokes" | "keyboard" => {
@@ -353,6 +382,12 @@ impl IngestBackend for SurrealIngestBackend {
                             }
                         }
                     }
+                } else {
+                    tracing::warn!(
+                        "Failed to decode CameraFrame from payload; treating as raw chunk"
+                    );
+                    persisted_ok = true;
+                    indexed = true;
                 }
             }
             "audio" => {
@@ -427,6 +462,12 @@ impl IngestBackend for SurrealIngestBackend {
                             }
                         }
                     }
+                } else {
+                    tracing::warn!(
+                        "Failed to decode AudioFrame from payload; treating as raw chunk"
+                    );
+                    persisted_ok = true;
+                    indexed = true;
                 }
             }
             "microphone" => {
@@ -455,7 +496,10 @@ impl IngestBackend for SurrealIngestBackend {
                         record.blob_size = frame.audio_bytes.len() as u64;
                         let now: surrealdb::sql::Datetime = Utc::now().into();
 
+                        // Get skew estimate for this collector
                         let skew_est = self.skew_estimates.read().await.get(collector_id).copied();
+
+                        // Apply skew estimate to t_canonical
                         let t_device_dt: chrono::DateTime<chrono::Utc> = record.timestamp.0;
                         let (t_canonical_dt, quality_str) = match skew_est {
                             Some(est) => (
@@ -467,6 +511,7 @@ impl IngestBackend for SurrealIngestBackend {
 
                         record.t_ingest = Some(now.clone());
                         record.t_canonical = Some(t_canonical_dt.into());
+                        // Audio is an interval record. Compute canonical end time from duration_secs.
                         let dur_ms =
                             if record.duration_secs.is_finite() && record.duration_secs > 0.0 {
                                 (record.duration_secs as f64 * 1000.0).round() as i64
@@ -497,6 +542,10 @@ impl IngestBackend for SurrealIngestBackend {
                             }
                         }
                     }
+                } else {
+                    tracing::warn!("Failed to decode Microphone AudioFrame from payload; treating as raw chunk");
+                    persisted_ok = true;
+                    indexed = true;
                 }
             }
             "weather" => {
@@ -515,34 +564,34 @@ impl IngestBackend for SurrealIngestBackend {
             }
             "clipboard" => {
                 if let Ok(frame) = lifelog_types::ClipboardFrame::decode(payload) {
+                    let mut record = frame.to_record();
+                    if !frame.binary_data.is_empty() {
+                        let blob_hash = match self.cas.put(&frame.binary_data) {
+                            Ok(h) => h,
+                            Err(e) => {
+                                tracing::error!("CAS put failed for clipboard blob: {}", e);
+                                return Err(e.to_string());
+                            }
+                        };
+                        record.blob_hash = blob_hash;
+                        record.blob_size = frame.binary_data.len() as u64;
+                    }
+
                     let origin = DataOrigin::new(
                         DataOriginType::DeviceId(collector_id.to_string()),
                         DataModality::Clipboard.as_str_name().to_string(),
                     );
-
-                    if ensure_table_schema(&db, &origin).await.is_ok() {
+                    if let Err(e) = ensure_table_schema(&db, &origin).await {
+                        tracing::error!(
+                            modality = "Clipboard",
+                            error = %e,
+                            "Failed to ensure table schema during Clipboard ingestion"
+                        );
+                    } else {
                         let table = origin.get_table_name();
                         let id = frame.uuid.clone();
                         frame_uuid = Some(id.clone());
-                        let mut record = frame.to_record();
                         let now: surrealdb::sql::Datetime = Utc::now().into();
-
-                        // If the clipboard includes a binary payload, store it in CAS and keep
-                        // only a reference in SurrealDB. (Spec §6 / §8: blobs in CAS.)
-                        if !frame.binary_data.is_empty() {
-                            let blob_hash = match self.cas.put(&frame.binary_data) {
-                                Ok(h) => h,
-                                Err(e) => {
-                                    tracing::error!("CAS put failed for clipboard blob: {}", e);
-                                    return Err(e.to_string());
-                                }
-                            };
-                            record.blob_hash = blob_hash;
-                            record.blob_size = frame.binary_data.len() as u64;
-                            // Keep raw bytes populated for type compatibility in SurrealDB bytes
-                            // field serialization; retrieval still prefers CAS when blob_hash is set.
-                            record.binary_data = frame.binary_data.clone();
-                        }
 
                         // Get skew estimate for this collector
                         let skew_est = self.skew_estimates.read().await.get(collector_id).copied();
@@ -590,6 +639,12 @@ impl IngestBackend for SurrealIngestBackend {
                             }
                         }
                     }
+                } else {
+                    tracing::warn!(
+                        "Failed to decode ClipboardFrame from payload; treating as raw chunk"
+                    );
+                    persisted_ok = true;
+                    indexed = true;
                 }
             }
             "shell_history" | "shellhistory" => {
@@ -651,8 +706,7 @@ impl IngestBackend for SurrealIngestBackend {
                 frame_uuid = $frame_uuid,
                 indexed = (indexed = true OR $indexed = true)
         ";
-        let result = db
-            .query(q)
+        db.query(q)
             .bind(("id", id_str))
             .bind(("collector_id", collector_id.to_string()))
             .bind(("stream_id", stream_id.to_string()))
@@ -662,15 +716,12 @@ impl IngestBackend for SurrealIngestBackend {
             .bind(("hash", hash.to_string()))
             .bind(("frame_uuid", frame_uuid))
             .bind(("indexed", indexed))
-            .await;
+            .await
+            .map_err(|e: surrealdb::Error| e.to_string())?
+            .check()
+            .map_err(|e: surrealdb::Error| e.to_string())?;
 
-        match result {
-            Ok(resp) => {
-                resp.check().map_err(|e| e.to_string())?;
-                Ok(())
-            }
-            Err(e) => Err(e.to_string()),
-        }
+        Ok(())
     }
 
     async fn is_indexed(

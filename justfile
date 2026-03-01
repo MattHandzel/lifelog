@@ -11,6 +11,9 @@ check:
         nix develop --command cargo check --all-targets; \
     fi
 
+# Alias for agent-specific digest checks
+check-digest: check
+
 # Run all tests (excluding Tauri UI)
 test:
     @if [ "{{IS_LLM_AGENT}}" = "1" ]; then \
@@ -18,6 +21,9 @@ test:
     else \
         nix develop --command cargo nextest run --all-targets; \
     fi
+
+# Alias for agent-specific digest tests
+test-digest: test
 
 # Run the integration validation suite
 test-e2e:
@@ -102,7 +108,7 @@ work:
     @echo "------------------------------------------------------------------------"
     @echo "🛠️  COMMAND REFERENCE:"
     @echo "------------------------------------------------------------------------"
-    @echo "1. START A FEATURE:   just use-gemini-to-develop-a-new-feature {name}"
+    @echo "1. START A FEATURE:   just use-ai-to-implement-feature {name} [ai=claude|gemini]"
     @echo "2. CHECK ON AGENTS:   just status-all"
     @echo "3. SHIP & PUSH:       just ship-feature {name}"
     @echo "4. INIT AI SESSION:   just init-session (run this first in new sessions)"
@@ -114,21 +120,28 @@ work:
 
 # Create a worktree for an agent task
 worktree-create name branch_base="main":
-    git branch agent/{{name}} {{branch_base}}
+    @just worktree-remove {{name}}
+    git branch -f agent/{{name}} {{branch_base}}
     git worktree add worktrees/feature/{{name}} agent/{{name}}
+    @echo "📦 Isolating frontend dependencies (Hardlink copy)..."
+    @mkdir -p worktrees/feature/{{name}}/interface/node_modules
+    @if [ -d "interface/node_modules" ]; then \
+        cp -al interface/node_modules/. worktrees/feature/{{name}}/interface/node_modules/; \
+    fi
     @echo "Worktree created at worktrees/feature/{{name}} on branch agent/{{name}}"
 
 # Remove a worktree and its branch (Manual Cleanup)
 worktree-remove name:
     @echo "🧹 Removing worktree and branch for '{{name}}'..."
     @git worktree remove --force worktrees/feature/{{name}} 2>/dev/null || true
+    @rm -rf worktrees/feature/{{name}}
     @git branch -D agent/{{name}} 2>/dev/null || true
 
 # List active worktrees and their current branch status
 status-all:
     @echo "=== Active Worktree Status ==="
     @git worktree list --porcelain | grep "^worktree" | cut -d' ' -f2 | while read wt; do \
-        echo "\n📍 $$wt"; \
+        echo "\n📍 $$(basename $$wt)"; \
         (cd "$$wt" && git status -s && git log -n 1 --oneline); \
     done
 
@@ -144,6 +157,9 @@ ship-feature name:
     @git merge --no-ff agent/{{name}} -m "feat: ship {{name}}"
     @echo "🚀 Pushing changes to remote..."
     @git push origin $(git branch --show-current)
+    @if [ -n "$TMUX" ]; then \
+        tmux kill-window -t "{{name}}" 2>/dev/null || true; \
+    fi
     @echo "✨ Feature '{{name}}' is LIVE."
     @echo "📌 AUDIT NOTE: Worktree preserved at worktrees/feature/{{name}}."
     @echo "💡 To clean up later, run: just worktree-remove {{name}}"
@@ -158,14 +174,23 @@ merge-agent name:
 init-session:
     @echo "=== Session Initialization Protocol ==="
     @git status
-    @git worktree list | grep $(basename $(pwd)) || true
+    @just map-repo
     @git log -n 3 --oneline
     @if [ "{{IS_LLM_AGENT}}" = "1" ]; then \
         echo "⚡ Agent Mode: Assuming repository is healthy, skipping initial check."; \
     else \
-        ./tools/ai/check_digest.sh; \
+        if [ -f "/tmp/lifelog-last-validate" ] && [ "$(( $(date +%s) - $(stat -c %Y /tmp/lifelog-last-validate) ))" -lt 600 ]; then \
+            echo "✅ Main recently validated (less than 10m ago). Skipping."; \
+        else \
+            ./tools/ai/check_digest.sh && touch /tmp/lifelog-last-validate; \
+        fi; \
     fi
     @echo "======================================="
+
+# Generate a high-signal repository discovery map for agents
+map-repo:
+    @chmod +x tools/ai/generate_discovery_map.sh
+    @./tools/ai/generate_discovery_map.sh
 
 # Get a high-signal digest of code changes
 diff-digest ref="main":
@@ -175,18 +200,42 @@ diff-digest ref="main":
 summary file:
     @./tools/ai/file_summary.sh {{file}}
 
-# Automate new feature development with Gemini
-use-gemini-to-develop-a-new-feature name plan_file=("docs/plans/" + name + "_PLAN.md") model="gemini-3.1-pro-preview":
+# Automate new feature development with AI (gemini, claude, or codex)
+# Parameters:
+#   name: The name of the feature/task
+#   ai: The AI provider to use (default: "claude")
+#   model: Optional specific model name
+#   plan_file: Path to the plan file (defaults to docs/plans/{name}_PLAN.md)
+use-ai-to-implement-feature name ai="claude" model="" plan_file=("docs/plans/" + name + "_PLAN.md"):
     @just worktree-create {{name}}
+    @just map-repo
     @cp {{plan_file}} worktrees/feature/{{name}}/PLAN.md || true
-    @printf "# Agent Task: Implement {{name}}\n\n## Objective\nImplement the feature \"{{name}}\" according to the plan.\n\n## Context\n- **Plan Document:** PLAN.md\n- **Reference:** @SPEC.md and @SPEC_TODOLIST.md\n- **Goal:** Autonomous implementation, testing, and verification.\n\n## Initialization Sequence (MANDATORY)\n1. Read \`GEMINI.md\` and \`docs/REPO_MAP.md\` to refresh architecture and file context.\n2. Read the Plan Document (PLAN.md).\n3. Check \`git status\`, \`git worktree list\`, and \`git log -n 5\` to understand the current work state.\n4. Run \`just check\` to verify the baseline is green.\n\n## Instructions\n- Work strictly within this worktree.\n- Follow the \"Research -> Strategy -> Execution\" lifecycle.\n- Prioritize empirical reproduction of any related issues before fixing.\n- Ensure all changes are verified with \`just validate\` or targeted tests.\n- If you encounter significant ambiguity, use \`ask_user\`. Otherwise, proceed autonomously.\n\n## Handoff Report (AGENT MUST COMPLETE THIS)\n(When finished, replace this section with a summary of changes, verification results, and any manual steps the user needs to take.)\n\n## Completion\n- Once the feature is implemented and verified, prepare a commit (do not push).\n- Summarize the work done in the Handoff Report above.\n" > worktrees/feature/{{name}}/AGENT_TASK.md
+    @printf "# Agent Task: Implement {{name}}\n\n## Objective\nImplement the feature \"{{name}}\" according to the plan.\n" > worktrees/feature/{{name}}/AGENT_TASK.md
     @echo "Feature '{{name}}' workspace prepared at worktrees/feature/{{name}}"
     @if [ -n "$TMUX" ]; then \
-        tmux new-window -n "{{name}}" "bash -c 'export IS_LLM_AGENT=1 && cd worktrees/feature/{{name}} && gemini --model {{model}} -y -i \"\$(cat ../../../.gemini/AGENT_SYSTEM_PROMPT.md)\n\n### TASK\n\nPlease read AGENT_TASK.md and PLAN.md and begin executing the tasks.\"; exec bash'"; \
-        echo "Opened new tmux window '{{name}}' with Gemini running (Model: {{model}})."; \
+        tmux kill-window -t "{{name}}" 2>/dev/null || true; \
+        echo "--- SYSTEM PROMPT ---" > worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        cat .gemini/AGENT_SYSTEM_PROMPT.md >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        echo "\n--- GROUND TRUTH (SPEC.md) ---" >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        cat SPEC.md >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        echo "\n--- REPO MAP ---" >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        cat docs/REPO_DISCOVERY_MAP.json >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        echo "\n--- STATUS & GAPS ---" >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        cat STATUS.md >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        echo "\n--- TASK & PLAN ---" >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        cat worktrees/feature/{{name}}/PLAN.md >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        echo "\n--- STATE HISTORY (LATEST) ---" >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        tail -n 50 STATE_HISTORY.md >> worktrees/feature/{{name}}/INITIAL_PROMPT.md 2>/dev/null || echo 'No previous history.' >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        echo "\n### INSTRUCTIONS\nYou have been provided with the full SPEC, STATUS, and PLAN. DO NOT waste turns reading these files. Begin implementation immediately. If this is a UI task, the discovery map contains component paths." >> worktrees/feature/{{name}}/INITIAL_PROMPT.md; \
+        if [ "{{ai}}" != "gemini" ] && [ "{{ai}}" != "claude" ] && [ "{{ai}}" != "codex" ]; then \
+            echo "Error: Unknown AI '{{ai}}'. Use 'gemini', 'claude' or 'codex'."; exit 1; \
+        fi; \
+        PROJECT_ROOT="$(pwd)"; \
+        tmux new-window -n "{{name}}" "bash -c 'export IS_LLM_AGENT=1 && cd worktrees/feature/{{name}} && $PROJECT_ROOT/tools/ai/start_agent.sh {{ai}} \"{{model}}\" INITIAL_PROMPT.md; exec bash'"; \
+        echo "Opened new tmux window '{{name}}' with {{ai}} running and hyper-injected context."; \
     else \
         echo "No tmux detected. Start the agent manually:"; \
-        echo "  export IS_LLM_AGENT=1 && cd worktrees/feature/{{name}} && gemini --model {{model}} -y -i \"\$(cat ../../../.gemini/AGENT_SYSTEM_PROMPT.md)\n\n### TASK\n\nPlease read AGENT_TASK.md and PLAN.md and begin executing the tasks.\""; \
+        echo "  export IS_LLM_AGENT=1 && cd worktrees/feature/{{name}} && [claude|gemini] ..."; \
     fi
 
 

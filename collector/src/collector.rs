@@ -59,11 +59,17 @@ pub fn auth_interceptor(mut req: Request<()>) -> Result<Request<()>, tonic::Stat
     let token = std::env::var("LIFELOG_AUTH_TOKEN")
         .or_else(|_| std::env::var("LIFELOG_ENROLLMENT_TOKEN"))
         .map_err(|_| {
-            tonic::Status::unauthenticated("Missing LIFELOG_AUTH_TOKEN or LIFELOG_ENROLLMENT_TOKEN")
+            tonic::Status::unauthenticated(
+                "Missing authentication token. Set LIFELOG_AUTH_TOKEN or LIFELOG_ENROLLMENT_TOKEN environment variable. \
+                 See docs/SETUP_TLS.md for details."
+            )
         })?;
     let token_str = format!("Bearer {}", token);
-    let meta = tonic::metadata::MetadataValue::try_from(token_str.as_str())
-        .map_err(|_| tonic::Status::unauthenticated("Invalid auth token format"))?;
+    let meta = tonic::metadata::MetadataValue::try_from(token_str.as_str()).map_err(|_| {
+        tonic::Status::unauthenticated(
+            "Invalid auth token format. Ensure the token contains only valid ASCII characters.",
+        )
+    })?;
     req.metadata_mut().insert("authorization", meta);
     Ok(req)
 }
@@ -72,7 +78,11 @@ fn secure_endpoint(server_address: &str) -> Result<Endpoint, LifelogError> {
     if !server_address.starts_with("https://") {
         return Err(LifelogError::Validation {
             field: "server_address".to_string(),
-            reason: "must use https:// (plaintext gRPC is not allowed)".to_string(),
+            reason: format!(
+                "Invalid server address '{}'. Must use 'https://' because plaintext gRPC is not allowed. \
+                 See docs/SETUP_TLS.md for how to set up TLS.",
+                server_address
+            ),
         });
     }
     let mut endpoint = Endpoint::from_shared(server_address.to_string())

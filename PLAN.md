@@ -1,10 +1,12 @@
-# Plan: Security Hardening (TLS, Enrollment, Auth)
+# Lifelog Project Plan (Active)
 
-## Objective
-Enforce transport security and implement a secure collector-to-server enrollment handshake.
+## Phase 0: Demo Readiness (ACTIVE)
+- [ ] **interface-security**: Implement gRPC auth interceptors and TLS certificate trust in Tauri. (AGENT: Codex - [IN PROGRESS])
+- [ ] **demo-bootstrap**: Generate TLS certs/tokens, configure persistent SurrealDB, and fix config serialization. (AGENT: Codex - [IN PROGRESS])
+- [ ] **collector-pairing**: Fix certificate CA constraints and verify end-to-end data ingest. (AGENT: Codex - [IN PROGRESS])
 
-## Phase 1: Research & Strategy
-1. **Inventory:** Review `server/src/grpc_service.rs` and the opt-in TLS logic in `Phase 5` history.
+## Phase 1: Security Hardening (Post-Demo)
+1. **Inventory:** Review `server/src/grpc_service.rs` and the opt-in TLS logic in Phase 5 history.
 2. **Interceptors:** Identify where to add gRPC interceptors for Authentication (Token-based).
 3. **Enrollment Handshake:** Design the "Token-based Pairing" flow where a collector provides a pre-shared token to receive its identity.
 
@@ -19,5 +21,7 @@ Enforce transport security and implement a secure collector-to-server enrollment
 2. Verify that unauthorized collectors are rejected with `PermissionDenied`.
 3. Verify that all traffic is encrypted (e.g., via `grpcurl` or by checking logs for TLS handshakes).
 
-## Model Recommendation
-**Gemini 3.1 Pro Preview** (Required for security-critical logic and gRPC interceptor patterns).
+## Orchestration Log
+- **Session Start**: Sunday, March 1, 2026.
+- **Goal**: Hardening the system for a demo later today.
+- **Active Agents**: 3 (Codex) managing UI, Setup, and Ingest.

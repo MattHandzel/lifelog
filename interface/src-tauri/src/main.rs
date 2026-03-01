@@ -33,12 +33,41 @@ pub mod lifelog {
 }
 
 pub struct GrpcClientState {
-    client: Arc<tokio::sync::Mutex<Option<lifelog::LifelogServerServiceClient<Channel>>>>,
+    client: Arc<
+        tokio::sync::Mutex<
+            Option<
+                lifelog::LifelogServerServiceClient<
+                    tonic::service::interceptor::InterceptedService<Channel, AuthInterceptor>,
+                >,
+            >,
+        >,
+    >,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct InterfaceRuntimeConfig {
     grpc_server_address: String,
+    auth_token: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct AuthInterceptor {
+    token: String,
+}
+
+impl tonic::service::Interceptor for AuthInterceptor {
+    fn call(
+        &mut self,
+        mut request: tonic::Request<()>,
+    ) -> Result<tonic::Request<()>, tonic::Status> {
+        if !self.token.is_empty() {
+            let token_val = format!("Bearer {}", self.token);
+            if let Ok(m) = tonic::metadata::MetadataValue::try_from(token_val) {
+                request.metadata_mut().insert("authorization", m);
+            }
+        }
+        Ok(request)
+    }
 }
 
 #[tauri::command]

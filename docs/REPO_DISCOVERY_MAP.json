@@ -1,0 +1,114 @@
+{
+  tauri_commands: [
+62:#[tauri::command]
+70:#[tauri::command]
+215:#[tauri::command]
+225:#[tauri::command]
+237:#[tauri::command]
+258:#[tauri::command]
+356:#[tauri::command]
+666:#[tauri::command]
+818:#[tauri::command]
+853:#[tauri::command]
+902:#[tauri::command]
+1049:#[tauri::command]
+1088:#[tauri::command]
+1609:#[tauri::command]
+1631:#[tauri::command]
+1665:#[tauri::command]
+  ],
+  grpc_services: [
+    "ControlStream",
+    "GetConfig",
+    "SetConfig",
+    "GetData",
+    "Query",
+    "Replay",
+    "GetState",
+    "UploadChunks",
+    "GetUploadOffset",
+    "ListModalities",
+    "PairCollector"
+  ],
+  react_components: [
+    "CameraDashboard.tsx",
+    "Header.tsx",
+    "ScreenDashboard.tsx",
+    "ui/separator.tsx",
+    "DevicesDashboard.tsx",
+    "SearchDashboard.tsx",
+    "ui/progress.tsx",
+    "SettingsDashboard.tsx",
+    "ui/slider.tsx",
+    "ResultCard.tsx",
+    "ui/switch.tsx",
+    "FeatureTabs.tsx",
+    "MicrophoneDashboard.tsx",
+    "ui/card.tsx",
+    "TextUploadDashboard.tsx",
+    "ProcessesDashboard.tsx",
+    "PlaceholderDashboard.tsx",
+    "TimelineDashboard.tsx",
+    "NetworkTopologyDashboard.tsx",
+    "ReplayDashboard.tsx",
+    "ModulesPanel.tsx",
+    "ui/label.tsx",
+    "ui/dialog.tsx",
+    "ui/button.tsx",
+    "ui/dropdown-menu.tsx",
+    "ui/tabs.tsx",
+    "ui/input.tsx",
+    "ui/select.tsx",
+    "ui/theme-toggle.tsx",
+    "Login.tsx",
+    "Sidebar.tsx",
+    "ui/tooltip.tsx",
+    "ui/spinner.tsx",
+    "ReplayFrame.tsx"
+  ],
+  rust_modules: [
+    "server/src/grpc_service.rs",
+    "server/src/retention.rs",
+    "server/src/schema.rs",
+    "server/src/replay.rs",
+    "server/src/policy.rs",
+    "server/src/main.rs",
+    "server/src/query/mod.rs",
+    "collector/src/lib.rs",
+    "server/src/query/executor.rs",
+    "collector/src/collector/upload_manager.rs",
+    "collector/src/modules/screen.rs",
+    "server/src/query/ast.rs",
+    "collector/src/modules/shell_history.rs",
+    "collector/src/modules/weather.rs",
+    "collector/src/modules/processes.rs",
+    "collector/src/modules/mod.rs",
+    "collector/src/modules/audio.rs",
+    "collector/src/modules/mouse.rs",
+    "collector/src/modules/microphone.rs",
+    "server/src/lib.rs",
+    "collector/src/modules/evdev_input_logger.rs",
+    "collector/src/modules/wayland_input_logger.rs",
+    "server/src/sync.rs",
+    "server/src/data_retrieval.rs",
+    "collector/src/modules/text_upload.rs",
+    "collector/src/modules/logger.rs",
+    "server/src/db.rs",
+    "server/src/query/llql.rs",
+    "collector/src/modules/window_activity.rs",
+    "server/src/ingest.rs",
+    "collector/src/modules/data_source.rs",
+    "collector/src/modules/camera.rs",
+    "collector/src/setup.rs",
+    "server/src/query/planner.rs",
+    "server/src/transform.rs",
+    "collector/src/collector.rs",
+    "collector/src/modules/hyprland.rs",
+    "collector/src/main.rs",
+    "collector/src/modules/keystrokes.rs",
+    "collector/src/modules/browser_history.rs",
+    "server/src/server.rs",
+    "collector/src/modules/input_logger.rs",
+    "collector/src/modules/clipboard.rs"
+  ]
+}

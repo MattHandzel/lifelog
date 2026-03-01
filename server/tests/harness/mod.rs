@@ -1,3 +1,4 @@
+use rustls::crypto::ring::default_provider;
 pub mod assertions;
 pub mod device_client;
 pub mod event_gen;
