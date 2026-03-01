@@ -12,6 +12,40 @@ pub fn pick_unused_port() -> u16 {
     portpicker::pick_unused_port().expect("pick unused port")
 }
 
+pub fn write_test_tls_materials(dir: &std::path::Path) -> (std::path::PathBuf, std::path::PathBuf) {
+    let cert_path = dir.join("test-cert.pem");
+    let key_path = dir.join("test-key.pem");
+    let status = std::process::Command::new("openssl")
+        .args([
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-sha256",
+            "-days",
+            "3650",
+            "-nodes",
+            "-keyout",
+            key_path.to_str().expect("key path utf8"),
+            "-out",
+            cert_path.to_str().expect("cert path utf8"),
+            "-subj",
+            "/CN=localhost",
+            "-addext",
+            "subjectAltName=DNS:localhost,IP:127.0.0.1",
+            "-addext",
+            "basicConstraints=critical,CA:FALSE",
+            "-addext",
+            "keyUsage=critical,digitalSignature,keyEncipherment",
+            "-addext",
+            "extendedKeyUsage=serverAuth",
+        ])
+        .status()
+        .expect("openssl must be available for integration tests");
+    assert!(status.success(), "failed to generate test TLS materials");
+    (cert_path, key_path)
+}
+
 pub fn wait_for_tcp_listen(child: &mut Child, addr: &str, timeout: Duration) -> Result<(), String> {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {

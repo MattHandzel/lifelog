@@ -4,14 +4,12 @@
 
 #![allow(clippy::expect_used, dead_code)]
 
-use lifelog_types::lifelog_server_service_client::LifelogServerServiceClient;
 use lifelog_types::GetUploadOffsetRequest;
-use tonic::transport::Channel;
 use utils::cas::FsCas;
 
 /// Assert that the upload offset for a given device/stream/session matches the expected value.
 pub async fn assert_final_offset(
-    client: &mut LifelogServerServiceClient<Channel>,
+    client: &mut crate::harness::TestClient,
     collector_id: &str,
     stream_id: &str,
     session_id: u64,
@@ -51,7 +49,7 @@ pub fn assert_cas_contains(cas: &FsCas, hashes: &[String]) {
 /// This queries the offset for each device_id against all other devices' session_ids.
 /// If cross-contamination exists, offsets would be non-zero for mismatched pairs.
 pub async fn assert_no_cross_contamination(
-    client: &mut LifelogServerServiceClient<Channel>,
+    client: &mut crate::harness::TestClient,
     device_specs: &[(String, String, u64)], // (collector_id, stream_id, session_id)
 ) {
     for (i, (cid_a, sid_a, _sess_a)) in device_specs.iter().enumerate() {

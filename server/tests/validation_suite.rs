@@ -13,6 +13,7 @@
 mod harness;
 use harness::TestContext;
 use prost::Message;
+use tonic::Request;
 
 #[tokio::test]
 #[ignore = "integration test: requires SurrealDB"]
@@ -243,6 +244,67 @@ fn it_130_ui_query_cancellation() {}
 #[test]
 #[ignore = "IT-140 (VALIDATION_SUITE.md): requires TLS + pairing enforcement in gRPC"]
 fn it_140_tls_and_pairing_enforcement() {}
+
+#[tokio::test]
+#[ignore = "integration test: requires SurrealDB"]
+async fn it_141_rejects_plaintext_grpc() {
+    let ctx = TestContext::new().await;
+    let plaintext = format!("http://127.0.0.1:{}", ctx.server_port());
+    let channel = tonic::transport::Endpoint::from_shared(plaintext)
+        .expect("valid plaintext endpoint")
+        .connect()
+        .await
+        .expect("plaintext channel can connect at TCP level");
+    let mut client =
+        lifelog_types::lifelog_server_service_client::LifelogServerServiceClient::new(channel);
+    let result = client
+        .get_state(lifelog_types::GetStateRequest::default())
+        .await;
+    assert!(
+        result.is_err(),
+        "plaintext gRPC should be rejected when server requires TLS"
+    );
+}
+
+#[tokio::test]
+#[ignore = "integration test: requires SurrealDB"]
+async fn it_142_rejects_missing_or_invalid_auth_tokens() {
+    let ctx = TestContext::new().await;
+
+    let mut unauth = ctx.raw_client();
+    let err = unauth
+        .get_state(lifelog_types::GetStateRequest::default())
+        .await
+        .expect_err("missing token should fail");
+    assert_eq!(err.code(), tonic::Code::Unauthenticated);
+
+    let mut wrong = ctx.client_with_token("wrong-token");
+    let err = wrong
+        .get_state(lifelog_types::GetStateRequest::default())
+        .await
+        .expect_err("invalid token should fail");
+    assert_eq!(err.code(), tonic::Code::Unauthenticated);
+}
+
+#[tokio::test]
+#[ignore = "integration test: requires SurrealDB"]
+async fn it_143_pairing_accepts_enrollment_token_and_client_hint() {
+    let ctx = TestContext::new().await;
+
+    let mut pair_client = ctx.client_with_token("test-enrollment-token");
+    let mut req = Request::new(lifelog_types::PairCollectorRequest {
+        enrollment_token: "test-enrollment-token".to_string(),
+    });
+    req.metadata_mut()
+        .insert("x-lifelog-client-id", "paired-device-01".parse().unwrap());
+
+    let resp = pair_client
+        .pair_collector(req)
+        .await
+        .expect("pairing should succeed")
+        .into_inner();
+    assert_eq!(resp.collector_id, "paired-device-01");
+}
 
 #[test]
 #[ignore = "IT-150 (VALIDATION_SUITE.md): requires system state observability surface"]

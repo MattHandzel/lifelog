@@ -10,13 +10,16 @@ use lifelog_types::{
 };
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use tonic::service::interceptor::InterceptedService;
 use tonic::transport::Channel;
 use tonic::Streaming;
 
 /// A simulated device that talks to the lifelog server over gRPC.
 pub struct DeviceClient {
     pub device_id: String,
-    client: LifelogServerServiceClient<Channel>,
+    client: LifelogServerServiceClient<
+        InterceptedService<Channel, crate::harness::ClientAuthInterceptor>,
+    >,
     /// Sender side of the ControlStream (kept alive to maintain the bidi stream).
     control_tx: Option<mpsc::Sender<ControlMessage>>,
     /// Receiver side of server commands from the ControlStream.
@@ -25,7 +28,12 @@ pub struct DeviceClient {
 }
 
 impl DeviceClient {
-    pub fn new(device_id: impl Into<String>, client: LifelogServerServiceClient<Channel>) -> Self {
+    pub fn new(
+        device_id: impl Into<String>,
+        client: LifelogServerServiceClient<
+            InterceptedService<Channel, crate::harness::ClientAuthInterceptor>,
+        >,
+    ) -> Self {
         Self {
             device_id: device_id.into(),
             client,
@@ -115,7 +123,11 @@ impl DeviceClient {
 
     /// Get a clone of the underlying gRPC client for advanced operations.
     #[allow(dead_code)]
-    pub fn raw_client(&self) -> LifelogServerServiceClient<Channel> {
+    pub fn raw_client(
+        &self,
+    ) -> LifelogServerServiceClient<
+        InterceptedService<Channel, crate::harness::ClientAuthInterceptor>,
+    > {
         self.client.clone()
     }
 }

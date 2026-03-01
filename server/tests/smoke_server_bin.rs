@@ -24,7 +24,7 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
     let db_port = pick_unused_port();
     let server_port = pick_unused_port();
     let db_addr = format!("127.0.0.1:{db_port}");
-    let server_addr = format!("http://127.0.0.1:{server_port}");
+    let server_addr = format!("https://localhost:{server_port}");
     let server_tcp_addr = format!("127.0.0.1:{server_port}");
 
     // Start SurrealDB (in-memory, ephemeral).
@@ -51,6 +51,8 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
 
     // Start server backend binary.
     let cas_dir = tempfile::tempdir().expect("tempdir");
+    let tls_dir = tempfile::tempdir().expect("tls tempdir");
+    let (cert_path, key_path) = bin_e2e::write_test_tls_materials(tls_dir.path());
     let mut server_child = bin_e2e::ChildGuard::new(
         Command::new(env!("CARGO_BIN_EXE_lifelog-server-backend"))
             .env("LIFELOG_HOST", "127.0.0.1")
@@ -62,6 +64,9 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
             .env("LIFELOG_DB_PASS", "root")
             // Security hardening: provide dummy auth.
             .env("LIFELOG_AUTH_TOKEN", "smoke-test-token")
+            .env("LIFELOG_ENROLLMENT_TOKEN", "smoke-enrollment-token")
+            .env("LIFELOG_TLS_CERT_PATH", &cert_path)
+            .env("LIFELOG_TLS_KEY_PATH", &key_path)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -97,6 +102,13 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
     // Connect gRPC client.
     let mut client = timeout(Duration::from_secs(10), async {
         let channel = tonic::transport::Endpoint::from_shared(server_addr.clone())?
+            .tls_config(
+                tonic::transport::ClientTlsConfig::new()
+                    .domain_name("localhost")
+                    .ca_certificate(tonic::transport::Certificate::from_pem(
+                        std::fs::read_to_string(&cert_path)?,
+                    )),
+            )?
             .connect()
             .await?;
         Ok::<_, Box<dyn std::error::Error>>(LifelogServerServiceClient::with_interceptor(
