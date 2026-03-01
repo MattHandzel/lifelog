@@ -3,16 +3,16 @@ import { BrowserRouter } from 'react-router-dom';
 import { invoke } from '@tauri-apps/api/core';
 import { Login } from './components/Login';
 import SearchDashboard from './components/SearchDashboard';
-import DevicesDashboard from './components/DevicesDashboard';
 import SettingsDashboard from './components/SettingsDashboard';
-import { LayoutDashboard, Settings, Search, Laptop, Shield } from "lucide-react";
+import { LayoutDashboard, Settings, Search, Network, Shield } from "lucide-react";
 import FeatureTabs from "./components/FeatureTabs.tsx";
 import { cn } from "./lib/utils";
 import { Switch } from "./components/ui/switch";
+import NetworkTopologyDashboard from './components/NetworkTopologyDashboard';
 
 import './App.css';
 
-type View = "dashboard" | "search" | "devices" | "settings";
+type View = "dashboard" | "search" | "network" | "settings";
 
 interface NavLinkProps {
   view: View;
@@ -120,9 +120,9 @@ function AppLayout(): JSX.Element {
               onClick={handleViewChange}
             />
             <NavLink 
-              view="devices" 
-              label="Devices" 
-              icon={Laptop} 
+              view="network" 
+              label="Network" 
+              icon={Network} 
               currentView={currentView}
               onClick={handleViewChange}
             />
@@ -174,7 +174,7 @@ function AppLayout(): JSX.Element {
         <div className="flex-1 overflow-auto">
           {currentView === "dashboard" && <FeatureTabs />}
           {currentView === "search" && <SearchDashboard />}
-          {currentView === "devices" && <DevicesDashboard />}
+          {currentView === "network" && <NetworkTopologyDashboard />}
           {currentView === "settings" && <SettingsDashboard />}
         </div>
         

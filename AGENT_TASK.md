@@ -1,7 +1,7 @@
-# Agent Task: Implement search-previews
+# Agent Task: Implement network-topology-ui
 
 ## Objective
-Implement the feature "search-previews" according to the plan.
+Implement the feature "network-topology-ui" according to the plan.
 
 ## Context
 - **Plan Document:** PLAN.md
@@ -22,28 +22,26 @@ Implement the feature "search-previews" according to the plan.
 - If you encounter significant ambiguity, use `ask_user`. Otherwise, proceed autonomously.
 
 ## Handoff Report (AGENT MUST COMPLETE THIS)
-- Implemented rich search previews in the Interface:
-  - `SearchDashboard` now performs two-step enrichment:
-    1. `query_timeline` for candidate keys.
-    2. `get_frame_data_thumbnails` for enriched frame data including text fields and image previews.
-  - Added query-term snippet extraction and term highlighting in result cards.
-  - Added file-type and source filtering plus deterministic timestamp sorting on enriched results.
-- Added lazy thumbnail rendering:
-  - `ResultCard` now uses a `Thumbnail` renderer with intersection-based lazy image mounting and loading skeleton.
-- Added backend (Tauri command) thumbnail support:
-  - New command `get_frame_data_thumbnails` in `interface/src-tauri/src/main.rs`.
-  - Thumbnail mode generates downscaled images for screen/camera payloads to reduce preview payload size.
-- Added tests:
-  - New `interface/src/test/SearchDashboard.test.tsx` covering snippet highlighting and thumbnail rendering.
-  - Updated test invoke setup to provide empty defaults for unmocked frame-data commands, preserving Timeline tests.
+### Summary of Changes
+- Implemented a new `NetworkTopologyDashboard` in the interface with:
+  - Server + collector node visualization in a topology graph.
+  - Glowing connection lines and animated per-modality pulse markers inferred from live source state.
+  - Node selection and detailed health panel (status, last seen, backlog bytes, buffer count, last upload time).
+  - Per-modality enable/disable controls (`screen`, `camera`, `microphone`, `processes`, `hyprland`) via existing `get_component_config`/`set_component_config` RPC-backed commands.
+  - Collector pause/resume action by toggling all available modalities.
+  - Alias/icon editing as explicit local UI overrides (persisted in localStorage).
+  - Force sync action wired to an RPC call with explicit user-facing warning when unavailable in current backend API.
+- Replaced the top-level sidebar view from `Devices` to `Network` and wired it to the new dashboard.
+- Added a focused frontend test: `interface/src/test/NetworkTopologyDashboard.test.tsx`.
 
-### Verification
-- Baseline check: `just check` (pass).
-- UI tests: `just test-ui` (pass after dependency install and compatibility fixes).
-- Full validation: `just validate` (pass).
+### Verification Results
+- `tools/ai/run_and_digest.sh "just check"`: pass (baseline).
+- `tools/ai/run_and_digest.sh "just test-ui"`: pass.
+- `tools/ai/run_and_digest.sh "just validate-all"`: pass.
 
 ### Manual Steps
-- None required for local development beyond existing `just` workflows.
+- Open the Interface and navigate to the `Network` view.
+- If a backend force-sync RPC is introduced later, wire it to the existing `force_collector_sync` invoke call in the dashboard.
 
 ## Completion
 - Once the feature is implemented and verified, prepare a commit (do not push).

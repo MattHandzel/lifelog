@@ -70,3 +70,48 @@
     </validation_steps>
 
 </state_snapshot>
+
+<state_snapshot>
+    <timestamp_utc>
+        2026-03-01T19:53:47Z
+    </timestamp_utc>
+
+    <overall_goal>
+        Implement the network-topology-ui feature in the Interface as an interactive server/collector dashboard.
+    </overall_goal>
+
+    <what_to_do>
+        - Replaced the top-level Devices view with a new Network view in `interface/src/App.tsx`.
+        - Added `interface/src/components/NetworkTopologyDashboard.tsx` with:
+          - topology graph (server + collector nodes),
+          - glowing connection lines and modality pulse animations,
+          - selected-node health/detail panel,
+          - per-modality toggles and pause/resume controls,
+          - local alias/icon override persistence.
+        - Added `interface/src/test/NetworkTopologyDashboard.test.tsx` to validate render and config-update command dispatch.
+        - Updated `AGENT_TASK.md` handoff report and design/spec notes.
+    </what_to_do>
+
+    <why>
+        - The plan required replacing the basic Devices list with a richer topology-based control surface.
+        - Existing backend APIs already expose system state and per-component config updates, enabling most required behavior without proto changes.
+        - Alias/icon writes and force-sync RPC were not available in current backend contracts; implemented explicit UI behavior that surfaces those limitations instead of silently falling back.
+        - Hypothesis tested: an SVG-native topology in React is sufficient for interactive glow/pulse effects and avoids introducing a new visualization dependency.
+    </why>
+
+    <how>
+        - Mapped available Tauri command surface (`get_system_state`, `get_collector_ids`, `get_component_config`, `set_component_config`).
+        - Implemented periodic topology polling and per-collector config enrichment.
+        - Derived active edge pulses from `source_states` text signals.
+        - Added action handlers for modality toggles, pause/resume all available modalities, and force-sync attempt with explicit unsupported notice.
+        - Added localStorage-backed node alias/icon override model.
+    </how>
+
+    <validation_steps>
+        - `tools/ai/run_and_digest.sh "just check"` (pass).
+        - `tools/ai/run_and_digest.sh "just test-ui"` (pass).
+        - `tools/ai/run_and_digest.sh "just validate-all"` (pass).
+        - Verified test coverage for node render and `set_component_config` dispatch in `NetworkTopologyDashboard.test.tsx`.
+    </validation_steps>
+
+</state_snapshot>
