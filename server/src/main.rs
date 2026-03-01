@@ -199,14 +199,99 @@ fn write_file(path: &Path, content: &str) -> Result<(), lifelog_core::LifelogErr
 }
 
 fn to_toml_value<T: Serialize>(value: &T) -> Result<toml::Value, lifelog_core::LifelogError> {
-    let raw = toml::to_string(value).map_err(|e| lifelog_core::LifelogError::Validation {
+    let json = serde_json::to_value(value).map_err(|e| lifelog_core::LifelogError::Validation {
         field: "toml".to_string(),
-        reason: e.to_string(),
+        reason: format!("json conversion failed: {}", e),
     })?;
-    toml::from_str::<toml::Value>(&raw).map_err(|e| lifelog_core::LifelogError::Validation {
-        field: "toml".to_string(),
-        reason: e.to_string(),
-    })
+    json_to_toml_value(json)
+}
+
+fn json_to_toml_value(value: serde_json::Value) -> Result<toml::Value, lifelog_core::LifelogError> {
+    match value {
+        serde_json::Value::Null => Err(lifelog_core::LifelogError::Validation {
+            field: "toml".to_string(),
+            reason: "null is not representable in TOML".to_string(),
+        }),
+        serde_json::Value::Bool(v) => Ok(toml::Value::Boolean(v)),
+        serde_json::Value::Number(num) => {
+            if let Some(v) = num.as_i64() {
+                return Ok(toml::Value::Integer(v));
+            }
+            if let Some(v) = num.as_u64() {
+                if v <= i64::MAX as u64 {
+                    return Ok(toml::Value::Integer(v as i64));
+                }
+            }
+            if let Some(v) = num.as_f64() {
+                return Ok(toml::Value::Float(v));
+            }
+            Err(lifelog_core::LifelogError::Validation {
+                field: "toml".to_string(),
+                reason: format!("unsupported number for TOML: {}", num),
+            })
+        }
+        serde_json::Value::String(v) => {
+            if let Some(parsed) = parse_numeric_string(v.as_str()) {
+                return Ok(parsed);
+            }
+            Ok(toml::Value::String(v))
+        }
+        serde_json::Value::Array(items) => {
+            let mut out = Vec::with_capacity(items.len());
+            for item in items {
+                out.push(json_to_toml_value(item)?);
+            }
+            Ok(toml::Value::Array(out))
+        }
+        serde_json::Value::Object(map) => {
+            let mut out = toml::value::Table::new();
+            for (k, v) in map {
+                if v.is_null() {
+                    continue;
+                }
+                out.insert(k, json_to_toml_value(v)?);
+            }
+            Ok(toml::Value::Table(out))
+        }
+    }
+}
+
+fn parse_numeric_string(s: &str) -> Option<toml::Value> {
+    if s.is_empty() {
+        return None;
+    }
+
+    let (negative, digits) = if let Some(rest) = s.strip_prefix('-') {
+        (true, rest)
+    } else {
+        (false, s)
+    };
+
+    if !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit()) {
+        if let Ok(v) = s.parse::<i64>() {
+            return Some(toml::Value::Integer(v));
+        }
+        if !negative {
+            if let Ok(v) = s.parse::<u64>() {
+                if v <= i64::MAX as u64 {
+                    return Some(toml::Value::Integer(v as i64));
+                }
+            }
+        }
+        return None;
+    }
+
+    let is_float_like = {
+        let body = if negative { digits } else { s };
+        body.contains('.') || body.contains('e') || body.contains('E')
+    };
+    if is_float_like {
+        if let Ok(v) = s.parse::<f64>() {
+            return Some(toml::Value::Float(v));
+        }
+    }
+
+    None
 }
 
 fn apply_storage_root_paths(cfg: &mut config::CollectorConfig, storage_root: &Path) {

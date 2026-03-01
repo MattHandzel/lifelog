@@ -337,3 +337,70 @@
         - Manually verified `--help` and subcommand visibility in the new `lifelog` binary.
     </validation_steps>
 </state_snapshot>
+
+<state_snapshot>
+      <time>2026-03-01T15:38:16-06:00</time>
+      <overall_goal>
+      Bootstrap demo environment with valid auth/TLS credentials, persistent storage paths, and OCR transform readiness.
+      </overall_goal>
+
+      <what_to_do>
+          - Fixed server CLI build so init/generate-token commands compile.
+          - Ran backend init flow; TLS files were generated, then init failed on TOML serialization.
+          - Completed bootstrap manually by writing ~/.config/lifelog/.env with auth/enrollment tokens, TLS paths, config path, and DB root credentials.
+          - Verified unified config includes OCR transform and persistent CAS path.
+          - Verified SurrealDB availability on 127.0.0.1:7183 with root/root auth.
+      </what_to_do>
+      <why>
+          - Hypothesis: demo bootstrap was blocked by a regresssion in server CLI dependency config and could be unblocked by enabling clap derive macros.
+          - Assumption: existing ~/.config/lifelog/lifelog-config.toml is the authoritative unified config for this demo and already contains required transform/storage sections.
+          - Manual completion was required because init currently errors with "unsupported rust type" while writing TOML.
+      </why>
+
+      <how>
+          - Updated server/Cargo.toml clap dependency to enable derive macros.
+          - Ran `lifelog-server-backend generate-token` and captured generated tokens.
+          - Wrote ~/.config/lifelog/.env with required runtime variables.
+          - Queried config and filesystem to confirm `transforms` includes enabled `ocr` and `casPath` resolves to persistent directory.
+          - Checked SurrealDB connectivity via `surreal sql` command.
+      </how>
+
+      <validation_steps>
+           - `timeout 600 just check` -> passed.
+           - `timeout 120 nix develop --command cargo run -q -p lifelog-server --bin lifelog-server-backend -- --help` -> command available including `init`.
+           - `printf 'INFO FOR ROOT;' | surreal sql --endpoint http://127.0.0.1:7183 --username root --password root --namespace main --database main --hide-welcome` -> succeeded.
+           - `rg -n "casPath|transforms|id = \"ocr\"" ~/.config/lifelog/lifelog-config.toml` -> confirmed.
+      </validation_steps>
+
+</state_snapshot>
+
+<state_snapshot>
+      <time>2026-03-01T15:59:27-06:00</time>
+      <overall_goal>
+      Fix `lifelog-server-backend init` so onboarding config generation completes without TOML serialization errors.
+      </overall_goal>
+
+      <what_to_do>
+          - Replaced failing TOML serialization path in server init config writer.
+          - Preserved numeric TOML values when protobuf-backed serde emits integers as JSON strings.
+          - Re-ran interactive init end-to-end and confirmed success.
+      </what_to_do>
+      <why>
+          - Hypothesis: `toml::to_string` on some proto-backed config types can fail with unsupported type errors in init.
+          - Initial JSON bridge fixed the panic but produced quoted numeric fields for protobuf integer JSON encodings.
+          - Added numeric-string coercion to keep generated config type-correct for TOML parsing.
+      </why>
+
+      <how>
+          - Updated `server/src/main.rs` `to_toml_value` to convert via `serde_json::Value` and recursive JSON->TOML translation.
+          - Added `parse_numeric_string` helper so values like `"300"` become TOML integers.
+          - Executed `lifelog-server-backend init` interactively with overwrite/defaults.
+      </how>
+
+      <validation_steps>
+           - `tools/ai/run_and_digest.sh "timeout 600 just check"` -> passed.
+           - `nix develop --command cargo run -q -p lifelog-server --bin lifelog-server-backend -- init` -> completed successfully.
+           - Verified generated config includes numeric `defaultCorrelationWindowMs = 30000` and expected OCR transform entry.
+      </validation_steps>
+
+</state_snapshot>
