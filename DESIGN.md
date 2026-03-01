@@ -68,3 +68,28 @@
   - snippet highlighting,
   - thumbnail rendering.
 - Verified with `just test-ui` and `just validate`.
+
+## Security Hardening (2026-03-01)
+
+### Scope
+
+- Enforced mandatory TLS for server and collector gRPC traffic.
+- Enforced mandatory bearer authentication token checks on server RPC entrypoints.
+- Wired collector pairing usage (`PairCollector`) into collector handshake when only enrollment token is present.
+- Unified collector identity usage across control/state traffic to configured collector id.
+
+### Architecture Decisions
+
+- Server startup now fails if TLS cert/key are not configured via:
+  - `LIFELOG_TLS_CERT_PATH`,
+  - `LIFELOG_TLS_KEY_PATH`.
+- Server startup now fails if token env vars are missing:
+  - `LIFELOG_AUTH_TOKEN`,
+  - `LIFELOG_ENROLLMENT_TOKEN`.
+- Collector and upload manager now reject non-`https://` server addresses.
+- Pairing keeps configured collector identity as source of truth for stream/upload consistency.
+
+### Validation
+
+- Verified compilation with `tools/ai/run_and_digest.sh "just check"` after changes.
+- `just test` was started under digest wrapper and did not complete in this environment within the session window.

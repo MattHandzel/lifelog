@@ -14,7 +14,6 @@ use crate::modules::weather::WeatherDataSource;
 use crate::modules::window_activity::WindowActivityDataSource;
 use async_trait::async_trait;
 use config;
-use mac_address::get_mac_address;
 use std::any::Any;
 use std::collections::HashMap;
 use std::fmt;
@@ -41,7 +40,9 @@ use tonic::Request;
 use lifelog_types::lifelog_server_service_client::LifelogServerServiceClient;
 use lifelog_types::to_pb_ts;
 
-use lifelog_types::{ControlMessage, RegisterCollectorRequest, ReportStateRequest};
+use lifelog_types::{
+    ControlMessage, PairCollectorRequest, RegisterCollectorRequest, ReportStateRequest,
+};
 
 pub mod upload_manager;
 
@@ -55,18 +56,41 @@ fn normalize_collector_id(id: &str) -> String {
 }
 
 pub fn auth_interceptor(mut req: Request<()>) -> Result<Request<()>, tonic::Status> {
-    if let Ok(token) = std::env::var("LIFELOG_AUTH_TOKEN") {
-        let token_str = format!("Bearer {}", token);
-        if let Ok(meta) = tonic::metadata::MetadataValue::try_from(&token_str) {
-            req.metadata_mut().insert("authorization", meta);
-        }
-    } else if let Ok(token) = std::env::var("LIFELOG_ENROLLMENT_TOKEN") {
-        let token_str = format!("Bearer {}", token);
-        if let Ok(meta) = tonic::metadata::MetadataValue::try_from(&token_str) {
-            req.metadata_mut().insert("authorization", meta);
-        }
-    }
+    let token = std::env::var("LIFELOG_AUTH_TOKEN")
+        .or_else(|_| std::env::var("LIFELOG_ENROLLMENT_TOKEN"))
+        .map_err(|_| {
+            tonic::Status::unauthenticated("Missing LIFELOG_AUTH_TOKEN or LIFELOG_ENROLLMENT_TOKEN")
+        })?;
+    let token_str = format!("Bearer {}", token);
+    let meta = tonic::metadata::MetadataValue::try_from(token_str.as_str())
+        .map_err(|_| tonic::Status::unauthenticated("Invalid auth token format"))?;
+    req.metadata_mut().insert("authorization", meta);
     Ok(req)
+}
+
+fn secure_endpoint(server_address: &str) -> Result<Endpoint, LifelogError> {
+    if !server_address.starts_with("https://") {
+        return Err(LifelogError::Validation {
+            field: "server_address".to_string(),
+            reason: "must use https:// (plaintext gRPC is not allowed)".to_string(),
+        });
+    }
+    let mut endpoint = Endpoint::from_shared(server_address.to_string())
+        .map_err(|e| LifelogError::Validation {
+            field: "server_address".to_string(),
+            reason: format!("invalid URL: {}", e),
+        })?
+        .connect_timeout(Duration::from_secs(10));
+
+    let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
+    endpoint = endpoint
+        .tls_config(tls)
+        .map_err(|e| LifelogError::Validation {
+            field: "server_address".to_string(),
+            reason: format!("TLS config error: {}", e),
+        })?;
+
+    Ok(endpoint)
 }
 
 impl<C: Send + Sync + Debug + 'static> fmt::Debug for RunningSource<C> {
@@ -188,38 +212,50 @@ impl Collector {
     pub async fn handshake(&mut self, handle: CollectorHandle) -> Result<(), LifelogError> {
         tracing::info!(addr = %self.server_address, "Attempting gRPC ControlStream connection");
 
-        if std::env::var("LIFELOG_AUTH_TOKEN").is_err() {
-            tracing::warn!(
-                "LIFELOG_AUTH_TOKEN is not set. Collector will connect without authentication."
-            );
+        if std::env::var("LIFELOG_AUTH_TOKEN").is_err()
+            && std::env::var("LIFELOG_ENROLLMENT_TOKEN").is_err()
+        {
+            return Err(LifelogError::Validation {
+                field: "LIFELOG_AUTH_TOKEN/LIFELOG_ENROLLMENT_TOKEN".to_string(),
+                reason: "one must be set for authenticated collector RPCs".to_string(),
+            });
         }
 
-        let mut endpoint = Endpoint::from_shared(self.server_address.clone())
-            .map_err(|e| LifelogError::Database(format!("Invalid server address: {}", e)))?
-            .connect_timeout(Duration::from_secs(10));
-
-        if self.server_address.starts_with("https://") {
-            let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
-            endpoint = endpoint
-                .tls_config(tls)
-                .map_err(|e| LifelogError::Database(format!("TLS config error: {}", e)))?;
-            tracing::info!("TLS enabled for server connection");
-        } else {
-            tracing::warn!("Server address is not https. Connection is plaintext!");
-        }
-
+        let endpoint = secure_endpoint(&self.server_address)?;
         let channel = endpoint.connect().await?;
         let mut client = LifelogServerServiceClient::with_interceptor(channel, auth_interceptor);
+
+        if std::env::var("LIFELOG_AUTH_TOKEN").is_err() {
+            let enrollment_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN").map_err(|_| {
+                LifelogError::Validation {
+                    field: "LIFELOG_ENROLLMENT_TOKEN".to_string(),
+                    reason: "must be set when LIFELOG_AUTH_TOKEN is not set".to_string(),
+                }
+            })?;
+            let mut pair_req = Request::new(PairCollectorRequest { enrollment_token });
+            let client_id_meta = tonic::metadata::MetadataValue::try_from(self.client_id.as_str())
+                .map_err(|_| LifelogError::Validation {
+                    field: "client_id".to_string(),
+                    reason: "contains invalid metadata characters".to_string(),
+                })?;
+            pair_req
+                .metadata_mut()
+                .insert("x-lifelog-client-id", client_id_meta);
+            let pair_resp = client.pair_collector(pair_req).await?;
+            let paired_id = normalize_collector_id(pair_resp.into_inner().collector_id.as_str());
+            if paired_id != normalize_collector_id(&self.client_id) {
+                tracing::warn!(
+                    configured = %self.client_id,
+                    paired = %paired_id,
+                    "Pairing returned a different collector identity; keeping configured id for stream/upload consistency"
+                );
+            }
+        }
 
         let (tx, rx) = mpsc::channel::<ControlMessage>(128);
         self.control_tx = Some(tx.clone());
 
-        let mac_addr = get_mac_address()
-            .ok()
-            .flatten()
-            .map(|m| m.to_string().replace(":", ""))
-            .unwrap_or_else(|| self.client_id.clone());
-        let collector_id = mac_addr.clone();
+        let collector_id = normalize_collector_id(&self.client_id);
 
         let reg_msg = ControlMessage {
             collector_id: collector_id.clone(),
@@ -715,15 +751,6 @@ impl Collector {
         let mut buffer_states = Vec::<String>::new();
         let mut total = 0;
 
-        let mac_address_variable: Option<String> = match get_mac_address() {
-            Ok(Some(mac_addr)) => {
-                tracing::debug!(mac_addr = %mac_addr, "Resolved MAC address");
-                Some(mac_addr.to_string())
-            }
-            Ok(None) => None,
-            Err(_e) => None,
-        };
-
         if let Some(running_src_trait) = self.sources.get("screen") {
             if let Some(running_screen_src) =
                 (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>()
@@ -896,10 +923,7 @@ impl Collector {
             }
         }
 
-        let dev_name = match mac_address_variable {
-            Some(s) => normalize_collector_id(&s),
-            None => normalize_collector_id(&self.client_id),
-        };
+        let dev_name = normalize_collector_id(&self.client_id);
 
         CollectorState {
             name: dev_name,
@@ -915,18 +939,14 @@ impl Collector {
 
     pub async fn report_state(&mut self) -> Result<(), LifelogError> {
         let current_state = self._get_state().await;
-        let mac_addr = get_mac_address()
-            .ok()
-            .flatten()
-            .map(|m| m.to_string().replace(":", ""))
-            .unwrap_or_else(|| self.client_id.clone());
+        let collector_id = normalize_collector_id(&self.client_id);
 
         if let Some(tx) = self.control_tx.as_ref() {
             let active_sources: Vec<String> = self.sources.keys().cloned().collect();
             tracing::info!(active_sources = ?active_sources, "Reporting status via ControlStream");
 
             let msg = ControlMessage {
-                collector_id: mac_addr.clone(),
+                collector_id: collector_id.clone(),
                 msg: Some(lifelog_types::control_message::Msg::State(
                     ReportStateRequest {
                         state: Some(current_state),
@@ -940,7 +960,7 @@ impl Collector {
 
             // Also send a clock sample for skew estimation
             let clock_msg = ControlMessage {
-                collector_id: mac_addr,
+                collector_id,
                 msg: Some(lifelog_types::control_message::Msg::ClockSample(
                     lifelog_types::ClockSample {
                         device_now: lifelog_types::to_pb_ts(chrono::Utc::now()),

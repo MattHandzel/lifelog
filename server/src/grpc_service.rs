@@ -502,6 +502,12 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         request: Request<PairCollectorRequest>,
     ) -> Result<Response<PairCollectorResponse>, Status> {
+        let client_hint = request
+            .metadata()
+            .get("x-lifelog-client-id")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.trim().replace(':', ""))
+            .filter(|s| !s.is_empty());
         let req = request.into_inner();
         let expected_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN").unwrap_or_default();
         if expected_token.is_empty() {
@@ -514,8 +520,9 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             return Err(Status::permission_denied("Invalid enrollment token"));
         }
 
-        let collector_id = lifelog_core::uuid::Uuid::new_v4().to_string();
-        tracing::info!(%collector_id, "Successfully paired new collector");
+        let collector_id =
+            client_hint.unwrap_or_else(|| lifelog_core::uuid::Uuid::new_v4().to_string());
+        tracing::info!(%collector_id, "Successfully paired collector");
 
         Ok(Response::new(PairCollectorResponse { collector_id }))
     }

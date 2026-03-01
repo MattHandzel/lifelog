@@ -1,5 +1,6 @@
 use crate::collector::Collector;
 use crate::modules::data_source::BufferedSource;
+use lifelog_core::LifelogError;
 use lifelog_types::lifelog_server_service_client::LifelogServerServiceClient;
 use lifelog_types::{Chunk, GetUploadOffsetRequest, StreamIdentity};
 use sha2::{Digest, Sha256};
@@ -17,6 +18,32 @@ pub struct UploadManager {
 }
 
 impl UploadManager {
+    fn secure_endpoint(server_address: &str) -> Result<tonic::transport::Endpoint, LifelogError> {
+        if !server_address.starts_with("https://") {
+            return Err(LifelogError::Validation {
+                field: "server_address".to_string(),
+                reason: "must use https:// (plaintext gRPC is not allowed)".to_string(),
+            });
+        }
+
+        let mut endpoint = tonic::transport::Endpoint::from_shared(server_address.to_string())
+            .map_err(|e| LifelogError::Validation {
+                field: "server_address".to_string(),
+                reason: format!("invalid URL: {}", e),
+            })?
+            .connect_timeout(std::time::Duration::from_secs(10));
+
+        let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
+        endpoint = endpoint
+            .tls_config(tls)
+            .map_err(|e| LifelogError::Validation {
+                field: "server_address".to_string(),
+                reason: format!("TLS config error: {}", e),
+            })?;
+
+        Ok(endpoint)
+    }
+
     pub fn new(server_address: String, collector_id: String) -> (Self, mpsc::Sender<()>) {
         let session_id = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -67,25 +94,17 @@ impl UploadManager {
             "UploadManager: Starting upload cycle for buffered sources"
         );
 
-        if std::env::var("LIFELOG_AUTH_TOKEN").is_err() {
-            tracing::warn!(
-                "LIFELOG_AUTH_TOKEN is not set. UploadManager will connect without authentication."
-            );
+        if std::env::var("LIFELOG_AUTH_TOKEN").is_err()
+            && std::env::var("LIFELOG_ENROLLMENT_TOKEN").is_err()
+        {
+            return Err(Box::new(LifelogError::Validation {
+                field: "LIFELOG_AUTH_TOKEN/LIFELOG_ENROLLMENT_TOKEN".to_string(),
+                reason: "one must be set for authenticated upload RPCs".to_string(),
+            }));
         }
 
-        let mut endpoint = tonic::transport::Endpoint::from_shared(self.server_address.clone())
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?
-            .connect_timeout(std::time::Duration::from_secs(10));
-
-        if self.server_address.starts_with("https://") {
-            let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
-            endpoint = endpoint
-                .tls_config(tls)
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
-        } else {
-            tracing::warn!("Server address is not https. Connection is plaintext!");
-        }
-
+        let endpoint = Self::secure_endpoint(&self.server_address)
+            .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let channel = endpoint.connect().await?;
         let mut client = LifelogServerServiceClient::with_interceptor(
             channel,
