@@ -33,7 +33,18 @@ impl UploadManager {
             })?
             .connect_timeout(std::time::Duration::from_secs(10));
 
-        let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
+        let tls = if let Ok(ca_path) = std::env::var("LIFELOG_TLS_CA_CERT_PATH") {
+            let ca_pem =
+                std::fs::read_to_string(&ca_path).map_err(|e| LifelogError::Validation {
+                    field: "LIFELOG_TLS_CA_CERT_PATH".to_string(),
+                    reason: format!("failed to read CA cert: {}", e),
+                })?;
+            tonic::transport::ClientTlsConfig::new()
+                .domain_name("localhost")
+                .ca_certificate(tonic::transport::Certificate::from_pem(ca_pem))
+        } else {
+            tonic::transport::ClientTlsConfig::new().with_native_roots()
+        };
         endpoint = endpoint
             .tls_config(tls)
             .map_err(|e| LifelogError::Validation {

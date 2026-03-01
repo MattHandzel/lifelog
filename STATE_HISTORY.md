@@ -259,3 +259,54 @@
     </validation_steps>
 
 </state_snapshot>
+
+<state_snapshot>
+    <timestamp_utc>
+        2026-03-01T20:28:54Z
+    </timestamp_utc>
+
+    <overall_goal>
+        Fix integration tests for mandatory TLS and token authentication by migrating harness/client setup and adding security invariants.
+    </overall_goal>
+
+    <what_to_do>
+        - Migrated `server/tests/harness` to run gRPC with TLS + auth interceptor.
+        - Migrated harness clients to HTTPS + TLS trust + auth metadata interception.
+        - Added security integration tests for plaintext rejection, token rejection, and pairing handshake.
+        - Updated binary e2e server test to provide TLS cert/key and enrollment token.
+        - Added collector TLS test CA support (`LIFELOG_TLS_CA_CERT_PATH`) so collector-based integration tests can trust test certs.
+    </what_to_do>
+
+    <why>
+        - Server now enforces TLS and token auth; old `http://` / unauthenticated test paths no longer represent production constraints.
+        - Security invariants must be explicitly verified in integration tests (reject plaintext, reject bad auth, allow enrollment pairing).
+        - Hypothesis validated: centralizing TLS/auth in harness removes repeated per-test migration work and keeps suites consistent.
+    </why>
+
+    <how>
+        - Updated `TestContext` to:
+          - start TLS-enabled gRPC server with auth interceptor,
+          - generate test TLS cert/key via `openssl` at runtime,
+          - expose authed client, raw client, and token-scoped client helpers.
+        - Updated harness `DeviceClient`/assertions to use the new intercepted client type.
+        - Updated `smoke_server_bin.rs` to:
+          - run server with `LIFELOG_TLS_CERT_PATH`/`LIFELOG_TLS_KEY_PATH`,
+          - set both `LIFELOG_AUTH_TOKEN` and `LIFELOG_ENROLLMENT_TOKEN`,
+          - connect via `https://localhost` with test CA cert.
+        - Updated collector secure endpoints (`collector.rs`, `upload_manager.rs`) to optionally trust a test CA from `LIFELOG_TLS_CA_CERT_PATH`.
+        - Added `validation_suite` tests:
+          - `it_141_rejects_plaintext_grpc`,
+          - `it_142_rejects_missing_or_invalid_auth_tokens`,
+          - `it_143_pairing_accepts_enrollment_token_and_client_hint`.
+    </how>
+
+    <validation_steps>
+        - `tools/ai/run_and_digest.sh "just check"` -> pass.
+        - `tools/ai/run_and_digest.sh "just test"` -> pass.
+        - `tools/ai/run_and_digest.sh "nix develop --command cargo test -p lifelog-server --test validation_suite -- --include-ignored"` -> pass.
+        - `tools/ai/run_and_digest.sh "nix develop --command cargo test -p lifelog-server --test multi_device -- --include-ignored && nix develop --command cargo test -p lifelog-server --test sync_scenarios -- --include-ignored"` -> partial:
+          - `multi_device` pass,
+          - `sync_scenarios` fail at `scenario_interleaved_multi_stream` with ingest error: `metadata not persisted, ACK withheld` (screen stream).
+    </validation_steps>
+
+</state_snapshot>
