@@ -199,36 +199,48 @@ fn write_file(path: &Path, content: &str) -> Result<(), lifelog_core::LifelogErr
 }
 
 fn to_toml_value<T: Serialize>(value: &T) -> Result<toml::Value, lifelog_core::LifelogError> {
-    fn json_to_toml(v: serde_json::Value) -> toml::Value {
-        match v {
-            serde_json::Value::Null => toml::Value::String(String::new()),
-            serde_json::Value::Bool(b) => toml::Value::Boolean(b),
-            serde_json::Value::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    toml::Value::Integer(i)
-                } else if let Some(f) = n.as_f64() {
-                    toml::Value::Float(f)
-                } else {
-                    toml::Value::String(n.to_string())
-                }
-            }
-            serde_json::Value::String(s) => toml::Value::String(s),
-            serde_json::Value::Array(items) => {
-                toml::Value::Array(items.into_iter().map(json_to_toml).collect())
-            }
-            serde_json::Value::Object(map) => toml::Value::Table(
-                map.into_iter()
-                    .map(|(k, v)| (k, json_to_toml(v)))
-                    .collect::<toml::map::Map<String, toml::Value>>(),
-            ),
-        }
-    }
-
     let json = serde_json::to_value(value).map_err(|e| lifelog_core::LifelogError::Validation {
         field: "toml".to_string(),
-        reason: e.to_string(),
+        reason: format!("json conversion failed: {}", e),
     })?;
-    Ok(json_to_toml(json))
+    json_to_toml_value(json)
+}
+
+fn json_to_toml_value(value: serde_json::Value) -> Result<toml::Value, lifelog_core::LifelogError> {
+    match value {
+        serde_json::Value::Null => Err(lifelog_core::LifelogError::Validation {
+            field: "toml".to_string(),
+            reason: "null is not representable in TOML".to_string(),
+        }),
+        serde_json::Value::Bool(v) => Ok(toml::Value::Boolean(v)),
+        serde_json::Value::Number(num) => {
+            if let Some(v) = num.as_i64() {
+                return Ok(toml::Value::Integer(v));
+            }
+            if let Some(v) = num.as_f64() {
+                return Ok(toml::Value::Float(v));
+            }
+            Err(lifelog_core::LifelogError::Validation {
+                field: "toml".to_string(),
+                reason: format!("invalid number: {}", num),
+            })
+        }
+        serde_json::Value::String(v) => Ok(toml::Value::String(v)),
+        serde_json::Value::Array(arr) => {
+            let mut out = Vec::with_capacity(arr.len());
+            for v in arr {
+                out.push(json_to_toml_value(v)?);
+            }
+            Ok(toml::Value::Array(out))
+        }
+        serde_json::Value::Object(map) => {
+            let mut out = toml::map::Map::new();
+            for (k, v) in map {
+                out.insert(k, json_to_toml_value(v)?);
+            }
+            Ok(toml::Value::Table(out))
+        }
+    }
 }
 
 fn apply_storage_root_paths(cfg: &mut config::CollectorConfig, storage_root: &Path) {
@@ -686,16 +698,13 @@ async fn run_join(server_url: String) -> Result<(), lifelog_core::LifelogError> 
         "Server certificate SHA256 fingerprint for {} is:\n{}",
         normalized_url, fingerprint
     );
-    let trust = match std::env::var("LIFELOG_JOIN_TRUST_CERT") {
-        Ok(v) => matches!(v.to_ascii_lowercase().as_str(), "1" | "true" | "yes"),
-        Err(_) => inquire::Confirm::new("Trust this server certificate and continue pairing?")
-            .with_default(false)
-            .prompt()
-            .map_err(|e| lifelog_core::LifelogError::Validation {
-                field: "join_confirm".to_string(),
-                reason: e.to_string(),
-            })?,
-    };
+    let trust = inquire::Confirm::new("Trust this server certificate and continue pairing?")
+        .with_default(false)
+        .prompt()
+        .map_err(|e| lifelog_core::LifelogError::Validation {
+            field: "join_confirm".to_string(),
+            reason: e.to_string(),
+        })?;
     if !trust {
         return Err(lifelog_core::LifelogError::Validation {
             field: "join".to_string(),
@@ -705,38 +714,29 @@ async fn run_join(server_url: String) -> Result<(), lifelog_core::LifelogError> 
     let server_cert_pem = der_to_pem(server_cert_der.as_slice());
     write_file(paths.server_ca_path.as_path(), server_cert_pem.as_str())?;
 
-    let enrollment_token = match std::env::var("LIFELOG_ENROLLMENT_TOKEN") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => inquire::Password::new("Enrollment token")
-            .without_confirmation()
-            .with_display_mode(inquire::PasswordDisplayMode::Masked)
-            .prompt()
-            .map_err(|e| lifelog_core::LifelogError::Validation {
-                field: "enrollment_token".to_string(),
-                reason: e.to_string(),
-            })?,
-    };
+    let enrollment_token = inquire::Password::new("Enrollment token")
+        .without_confirmation()
+        .with_display_mode(inquire::PasswordDisplayMode::Masked)
+        .prompt()
+        .map_err(|e| lifelog_core::LifelogError::Validation {
+            field: "enrollment_token".to_string(),
+            reason: e.to_string(),
+        })?;
     let client_hint_default = sanitize_collector_id(default_device_name().as_str());
-    let client_hint = match std::env::var("LIFELOG_CLIENT_HINT") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => inquire::Text::new("Collector client hint")
-            .with_default(client_hint_default.as_str())
-            .prompt()
-            .map_err(|e| lifelog_core::LifelogError::Validation {
-                field: "client_hint".to_string(),
-                reason: e.to_string(),
-            })?,
-    };
-    let alias = match std::env::var("LIFELOG_COLLECTOR_ALIAS") {
-        Ok(v) if !v.trim().is_empty() => v,
-        _ => inquire::Text::new("Collector alias")
-            .with_default(client_hint.as_str())
-            .prompt()
-            .map_err(|e| lifelog_core::LifelogError::Validation {
-                field: "collector_alias".to_string(),
-                reason: e.to_string(),
-            })?,
-    };
+    let client_hint = inquire::Text::new("Collector client hint")
+        .with_default(client_hint_default.as_str())
+        .prompt()
+        .map_err(|e| lifelog_core::LifelogError::Validation {
+            field: "client_hint".to_string(),
+            reason: e.to_string(),
+        })?;
+    let alias = inquire::Text::new("Collector alias")
+        .with_default(client_hint.as_str())
+        .prompt()
+        .map_err(|e| lifelog_core::LifelogError::Validation {
+            field: "collector_alias".to_string(),
+            reason: e.to_string(),
+        })?;
 
     let paired_id = pair_collector(
         normalized_url.as_str(),
@@ -857,7 +857,7 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
                         tracing::info!(
                             deleted_records = summary.deleted_records,
                             deleted_blobs = summary.deleted_blobs,
-                            "retention prune completed"
+                            "retention pruncompleted"
                         );
                     }
                 }
@@ -933,7 +933,6 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let _ = rustls::crypto::ring::default_provider().install_default();
     let cli = Cli::parse();
 
     match cli.command.unwrap_or(Commands::Serve) {
