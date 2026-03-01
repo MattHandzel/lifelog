@@ -310,3 +310,41 @@
     </validation_steps>
 
 </state_snapshot>
+
+<state_snapshot>
+    <timestamp_utc>
+        2026-03-01T20:50:46Z
+    </timestamp_utc>
+
+    <overall_goal>
+        Enable keystroke capture by default in collector configuration and verify ingest/search readiness.
+    </overall_goal>
+
+    <what_to_do>
+        - Enabled `keyboard` by default in generated collector config (`create_default_config`).
+        - Added `[collectors.laptop.keyboard]` to shipped laptop config templates with `enabled = true`.
+        - Verified collector keystroke module has no TLS-specific gating in module startup path.
+        - Verified server schema includes BM25 text index for keystrokes.
+    </what_to_do>
+
+    <why>
+        - Keystroke module was implemented but not enabled in default templates, so feature was effectively off in fresh setups.
+        - Spec/plan requires keystrokes available as a first-class modality and searchable by text.
+        - Hypothesis: enabling keyboard defaults plus existing schema/indexes is sufficient for functional capture + query path.
+    </why>
+
+    <how>
+        - Updated `common/config/src/lib.rs` `create_default_config()` to set `keyboard.enabled = true`.
+        - Updated `lifelog-config.toml` and `deploy/config/lifelog-config.laptop.toml` to include `collectors.laptop.keyboard` block.
+        - Audited `collector/src/modules/keystrokes.rs` and source wiring in `collector/src/collector.rs`.
+        - Audited `server/src/schema.rs` for keystroke BM25 DDL.
+    </how>
+
+    <validation_steps>
+        - `tools/ai/run_and_digest.sh "nix develop --command cargo test -p config"` -> pass.
+        - `tools/ai/run_and_digest.sh "just check"` -> pass.
+        - `tools/ai/run_and_digest.sh "nix develop --command cargo test -p lifelog-server --test smoke_server_bin -- --nocapture"` -> pass.
+        - Verified schema includes `DEFINE INDEX {table}_text_search ... BM25` for `DataModality::Keystrokes`.
+    </validation_steps>
+
+</state_snapshot>

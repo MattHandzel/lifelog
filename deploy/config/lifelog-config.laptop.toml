@@ -54,6 +54,11 @@ logWorkspace = true
 logActiveMonitor = true
 logDevices = true
 
+[collectors.laptop.keyboard]
+enabled = true
+interval = 1.0
+outputDir = "~/lifelog/data/keystrokes"
+
 [server]
 host = "0.0.0.0"
 port = 7182

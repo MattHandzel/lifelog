@@ -300,7 +300,7 @@ pub fn create_default_config() -> CollectorConfig {
             backend: "auto".to_string(),
         }),
         keyboard: Some(KeyboardConfig {
-            enabled: false,
+            enabled: true,
             interval: 1.0,
             output_dir: lifelog_dir.join("keystrokes").display().to_string(),
         }),
