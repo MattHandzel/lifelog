@@ -337,3 +337,72 @@
         - Manually verified `--help` and subcommand visibility in the new `lifelog` binary.
     </validation_steps>
 </state_snapshot>
+<state_snapshot>
+      <overall_goal>
+      Deploy a collector and pair it with a hardened TLS/auth server for demo validation.
+      </overall_goal>
+
+      <what_to_do>
+          - Added missing CLI/build/runtime pieces needed to run `join` and hardened startup.
+          - Validated cert trust file creation at ~/.config/lifelog/tls/server-ca.pem.
+          - Validated runtime pairing path: collector -> PairCollector -> Register over TLS.
+          - Remaining: full ingest verification for screen/process uploads on this hardened path.
+      </what_to_do>
+      <why>
+          - Pairing path was blocked by build/runtime defects (clap derive, rustls provider, config loading, non-TTY join prompts).
+          - Fixed blockers to produce a deterministic, automatable pairing flow.
+          - Assumption tested: collector can pair without `join` via startup PairCollector when enrollment token is set.
+      </why>
+
+      <how>
+          - Updated server clap dependency to include derive macros.
+          - Installed rustls crypto provider at process start.
+          - Added robust fallback parsing in unified server config loading.
+          - Added env-driven non-interactive `join` inputs for deployment shells.
+          - Ran ephemeral TLS/auth server + collector session and inspected logs for pairing/register evidence.
+      </how>
+
+      <validation_steps>
+           - just check -> pass.
+           - Hardened server startup on 0.0.0.0:7443 with TLS/auth/db env -> pass.
+           - CA cert saved and verified at ~/.config/lifelog/tls/server-ca.pem -> pass.
+           - Collector runtime logs show "Attempting gRPC ControlStream connection" and "ControlStream established" -> pass.
+           - Server logs show "Successfully paired collector" and "Registering collector" -> pass.
+           - Full upload/index verification remains blocked in this run (sync loop currently stubbed; screen source failed to capture in environment).
+      </validation_steps>
+
+</state_snapshot>
+<state_snapshot>
+      <overall_goal>
+      Complete hardened collector pairing flow and validate post-join collector connectivity.
+      </overall_goal>
+
+      <what_to_do>
+          - Fixed `join` TOML serialization failure.
+          - Re-validated join end-to-end against TLS/auth server.
+          - Re-validated post-join collector control-channel connectivity to hardened server.
+          - Remaining: durable UploadChunks/OCR indexing proof in an environment with active capture + non-stub sync pull path.
+      </what_to_do>
+      <why>
+          - `join` was blocked by `unsupported rust type` during unified config write.
+          - Pairing validation requires deterministic non-interactive flow and explicit TLS trust path checks.
+          - Connectivity must be proven after join using generated local env/config outputs.
+      </why>
+
+      <how>
+          - Replaced direct TOML serialization in `to_toml_value` with serde_json->toml value conversion.
+          - Ran hardened server on :7443 and executed `join` with env-driven inputs.
+          - Verified generated files under `~/.config/lifelog` and then ran collector against TLS endpoint.
+          - Collected and reviewed collector/server logs for control registration and transport behavior.
+      </how>
+
+      <validation_steps>
+           - just check -> pass.
+           - `join https://localhost:7443` -> success (`Collector paired successfully`).
+           - `~/.config/lifelog/tls/server-ca.pem` exists after join.
+           - Collector log shows ControlStream established and periodic ReportState on TLS endpoint.
+           - Server log shows collector registration on TLS endpoint.
+           - Upload/index proof not observed due current sync loop stub and local capture errors (screen capture binary/permissions constraints).
+      </validation_steps>
+
+</state_snapshot>
