@@ -9,6 +9,7 @@ vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(async (cmd: string, args?: unknown) => {
     const handler = invokeHandlers.get(cmd);
     if (handler) return handler(args);
+    if (cmd === 'get_frame_data' || cmd === 'get_frame_data_thumbnails') return [];
     console.warn(`[test] Unhandled invoke: ${cmd}`);
     return undefined;
   }),

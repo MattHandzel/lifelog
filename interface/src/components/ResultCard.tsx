@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { Image, FileAudio, File, Mouse, Cloud, Monitor, Cpu, Clipboard, Globe, Terminal, Activity } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 
@@ -13,6 +14,8 @@ export interface SearchResult {
   size?: number;
   duration?: number;
   metadata?: Record<string, unknown>;
+  snippet?: string;
+  highlightTerms?: string[];
 }
 
 export interface ProcessInfoWrapper {
@@ -66,6 +69,80 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
 }
 
+function displayNameFromUuid(uuid: string): string {
+  return uuid.length > 16 ? `${uuid.slice(0, 16)}...` : uuid;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function renderHighlightedSnippet(snippet: string, terms: string[]): JSX.Element {
+  const cleanedTerms = Array.from(new Set(terms.map((t) => t.trim().toLowerCase()).filter(Boolean)));
+  if (cleanedTerms.length === 0) {
+    return <>{snippet}</>;
+  }
+  const matcher = new RegExp(`(${cleanedTerms.map(escapeRegExp).join('|')})`, 'ig');
+  const parts = snippet.split(matcher);
+  const termSet = new Set(cleanedTerms);
+  return (
+    <>
+      {parts.map((part, index) => (
+        termSet.has(part.toLowerCase())
+          ? <mark key={`${part}-${index}`} className="bg-[#4C8BF5]/30 text-[#F9FAFB] rounded px-0.5">{part}</mark>
+          : <span key={`${part}-${index}`}>{part}</span>
+      ))}
+    </>
+  );
+}
+
+function Thumbnail({ src, alt }: { src: string; alt: string }): JSX.Element {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [visible, setVisible] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    const node = containerRef.current;
+    if (!node) {
+      return;
+    }
+    if (typeof IntersectionObserver === 'undefined') {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { rootMargin: '200px 0px' },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div ref={containerRef} className="aspect-video bg-[#0F111A] relative overflow-hidden">
+      {visible ? (
+        <>
+          <img
+            src={src}
+            alt={alt}
+            loading="lazy"
+            onLoad={() => setLoaded(true)}
+            className={`w-full h-full object-cover transition-opacity duration-200 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          />
+          {!loaded && <div className="absolute inset-0 animate-pulse bg-[#151a28]" />}
+        </>
+      ) : (
+        <div className="absolute inset-0 animate-pulse bg-[#151a28]" />
+      )}
+    </div>
+  );
+}
+
 function ModalityIcon({ modality }: { modality: string }): JSX.Element {
   const lower = modality.toLowerCase();
   if (lower === 'screen' || lower === 'camera') return <Image className="w-5 h-5 text-blue-400" />;
@@ -86,9 +163,7 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
 
   if ((lower === 'screen' || lower === 'camera') && result.preview) {
     return (
-      <div className="aspect-video bg-[#0F111A] flex items-center justify-center overflow-hidden">
-        <img src={result.preview} alt={result.name} className="w-full h-full object-cover" />
-      </div>
+      <Thumbnail src={result.preview} alt={result.name} />
     );
   }
 
@@ -203,7 +278,7 @@ function frameToResult(frame: FrameDataWrapper): SearchResult {
   return {
     id: frame.uuid,
     type: modalityLower === 'audio' || modalityLower === 'microphone' ? 'audio' : 'file',
-    name: frame.title ?? frame.text ?? frame.uuid,
+    name: frame.title ?? frame.text ?? displayNameFromUuid(frame.uuid),
     path: frame.url ?? frame.command ?? frame.working_dir ?? frame.uuid,
     timestamp: (frame.timestamp ?? 0) * 1000,
     source: frame.modality,
@@ -238,7 +313,8 @@ export default function ResultCard({ result, frame }: ResultCardProps): JSX.Elem
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="font-medium text-[#F9FAFB] truncate" title={effectiveResult.name}>
-              {effectiveResult.modality} · {effectiveResult.name}
+              <span>{effectiveResult.modality} · </span>
+              <span>{effectiveResult.name}</span>
             </h3>
             <div className="text-sm text-[#9CA3AF] mt-1 space-y-0.5">
               <p className="truncate" title={effectiveResult.source}>
@@ -247,6 +323,11 @@ export default function ResultCard({ result, frame }: ResultCardProps): JSX.Elem
               <p>{formatDate(effectiveResult.timestamp)}</p>
               {effectiveResult.size != null && <p>{formatFileSize(effectiveResult.size)}</p>}
             </div>
+            {effectiveResult.snippet && (
+              <p className="text-sm text-[#D1D5DB] mt-2 line-clamp-3">
+                {renderHighlightedSnippet(effectiveResult.snippet, effectiveResult.highlightTerms ?? [])}
+              </p>
+            )}
             <div className="mt-2">
               <ModalityDetails result={effectiveResult} />
             </div>

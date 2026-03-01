@@ -35,3 +35,38 @@
         - Manually verified `cargo run -p lifelog-server -- generate-token` outputs a token.
     </validation_steps>
 </state_snapshot>
+
+<state_snapshot>
+    <overall_goal>
+        Implement search previews (snippets + thumbnails) for the Search dashboard.
+    </overall_goal>
+
+    <what_to_do>
+        - Added enriched search result rendering in `SearchDashboard` by combining `query_timeline` + `get_frame_data_thumbnails`.
+        - Added snippet extraction and query-term highlighting on result cards.
+        - Added lazy thumbnail rendering with loading skeleton in `ResultCard`.
+        - Added backend thumbnail command in Tauri (`get_frame_data_thumbnails`) that downscales screen/camera images.
+        - Added focused UI tests for snippet highlighting and thumbnail display.
+    </what_to_do>
+    <why>
+        - Search results previously lacked context and visual cues, making retrieval slower.
+        - Downscaled thumbnails reduce payload size for preview use-cases.
+        - Lazy media rendering limits work for off-screen cards and improves perceived responsiveness.
+        - Frontend-side snippet generation avoided proto/interface churn while meeting feature goals.
+    </why>
+
+    <how>
+        - Updated `interface/src/components/SearchDashboard.tsx` to enrich timeline keys with frame data and build snippet-ready result models.
+        - Updated `interface/src/components/ResultCard.tsx` with a lazy `Thumbnail` component and `mark`-based term highlighting.
+        - Updated `interface/src-tauri/src/main.rs` with thumbnail encoding/downscale path and new command wiring.
+        - Added `interface/src/test/SearchDashboard.test.tsx`.
+        - Updated `interface/src/test/setup.ts` for frame-data command test defaults.
+    </how>
+
+    <validation_steps>
+        - `tools/ai/run_and_digest.sh "just check"` (pass).
+        - `tools/ai/run_and_digest.sh "just test-ui"` (pass, after dependency install and fixes).
+        - `tools/ai/run_and_digest.sh "just validate"` (pass).
+    </validation_steps>
+
+</state_snapshot>

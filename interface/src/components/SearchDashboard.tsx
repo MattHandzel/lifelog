@@ -3,7 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { Search, Filter, ArrowUpDown, Loader, Calendar } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
-import ResultCard, { type SearchResult } from './ResultCard';
+import ResultCard, { type FrameDataWrapper, type SearchResult } from './ResultCard';
 
 import {
   DropdownMenu,
@@ -38,6 +38,92 @@ const MODALITY_TYPE_MAP: Record<string, SearchResult['type']> = {
   hyprland: 'file',
 };
 
+interface TimelineEntry {
+  uuid: string;
+  origin: string;
+  modality: string;
+  timestamp: number | null;
+}
+
+interface LifelogDataKeyWrapper {
+  uuid: string;
+  origin: string;
+}
+
+function extractSnippetSource(frame: FrameDataWrapper | undefined): string {
+  if (!frame) return '';
+  return [
+    frame.text ?? '',
+    frame.title ?? '',
+    frame.url ?? '',
+    frame.command ?? '',
+    frame.window_title ?? '',
+    frame.application ?? '',
+    frame.working_dir ?? '',
+  ].join(' ').replace(/\s+/g, ' ').trim();
+}
+
+function createSnippet(raw: string, queryTerms: string[]): string | undefined {
+  const text = raw.trim();
+  if (!text) return undefined;
+  const maxChars = 180;
+  if (queryTerms.length === 0) {
+    return text.length > maxChars ? `${text.slice(0, maxChars)}...` : text;
+  }
+  const lower = text.toLowerCase();
+  const firstHit = queryTerms
+    .map((term) => ({ term, index: lower.indexOf(term.toLowerCase()) }))
+    .filter((hit) => hit.index >= 0)
+    .sort((a, b) => a.index - b.index)[0];
+  if (!firstHit) {
+    return text.length > maxChars ? `${text.slice(0, maxChars)}...` : text;
+  }
+  const start = Math.max(0, firstHit.index - 55);
+  const end = Math.min(text.length, firstHit.index + firstHit.term.length + 95);
+  const prefix = start > 0 ? '...' : '';
+  const suffix = end < text.length ? '...' : '';
+  return `${prefix}${text.slice(start, end)}${suffix}`;
+}
+
+function buildSearchResult(
+  entry: TimelineEntry,
+  frame: FrameDataWrapper | undefined,
+  queryTerms: string[],
+): SearchResult {
+  const modality = (frame?.modality ?? entry.modality).trim();
+  const modalityLower = modality.toLowerCase();
+  const timestampSeconds = frame?.timestamp ?? entry.timestamp ?? 0;
+  const snippet = createSnippet(extractSnippetSource(frame), queryTerms);
+  return {
+    id: entry.uuid,
+    type: MODALITY_TYPE_MAP[modalityLower] ?? 'file',
+    name: frame?.title ?? frame?.window_title ?? entry.uuid.substring(0, 8),
+    path: frame?.url ?? frame?.working_dir ?? entry.origin,
+    timestamp: timestampSeconds * 1000,
+    source: entry.origin,
+    modality,
+    preview: frame?.image_data_url ?? undefined,
+    duration: frame?.audio_duration_secs ?? frame?.duration_secs ?? undefined,
+    metadata: {
+      url: frame?.url ?? null,
+      title: frame?.title ?? null,
+      command: frame?.command ?? null,
+      application: frame?.application ?? null,
+      visit_count: frame?.visit_count ?? null,
+      processes_count: frame?.processes?.length ?? 0,
+    },
+    snippet,
+    highlightTerms: queryTerms,
+  };
+}
+
+function matchesSourceFilter(result: SearchResult, sourceFilter: string): boolean {
+  if (sourceFilter === 'all') return true;
+  const sourceLower = result.source.toLowerCase();
+  const modalityLower = result.modality.toLowerCase();
+  return sourceLower.includes(sourceFilter) || modalityLower.includes(sourceFilter);
+}
+
 export default function SearchDashboard(): JSX.Element {
   const [searchQuery, setSearchQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -52,21 +138,28 @@ export default function SearchDashboard(): JSX.Element {
     if (!searchQuery.trim()) return;
     setIsLoading(true);
     try {
-      const entries = await invoke<Array<{uuid: string; origin: string; modality: string; timestamp: number | null}>>('query_timeline', {
+      const queryTerms = searchQuery
+        .trim()
+        .split(/\s+/)
+        .map((term) => term.toLowerCase())
+        .filter(Boolean);
+      const entries = await invoke<TimelineEntry[]>('query_timeline', {
         textQuery: [searchQuery],
       });
-      setResults(entries.map(function (e) {
-        const modalityLower = e.modality.toLowerCase();
-        return {
-          id: e.uuid,
-          type: MODALITY_TYPE_MAP[modalityLower] ?? 'file',
-          name: e.uuid.substring(0, 8),
-          path: e.origin,
-          timestamp: e.timestamp || 0,
-          source: e.origin,
-          modality: e.modality,
-        };
+      const keys: LifelogDataKeyWrapper[] = entries.map((entry) => ({
+        uuid: entry.uuid,
+        origin: entry.origin,
       }));
+      const frames = keys.length > 0
+        ? await invoke<FrameDataWrapper[]>('get_frame_data_thumbnails', { keys })
+        : [];
+      const frameByUuid = new Map(frames.map((frame) => [frame.uuid, frame]));
+      const mapped = entries.map((entry) => buildSearchResult(entry, frameByUuid.get(entry.uuid), queryTerms));
+      const filtered = mapped
+        .filter((result) => fileTypeFilter === 'all' || result.type === fileTypeFilter)
+        .filter((result) => matchesSourceFilter(result, sourceFilter))
+        .sort((a, b) => sortOrder === 'desc' ? b.timestamp - a.timestamp : a.timestamp - b.timestamp);
+      setResults(filtered);
     } catch (error) {
       console.error('Search failed:', error);
       setResults([]);
