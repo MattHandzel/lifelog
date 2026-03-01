@@ -50,6 +50,7 @@ validate:
 
 # Internal recipe for raw validation
 validate-raw:
+    nix develop --command cargo fmt
     nix develop --command cargo fmt -- --check
     nix develop --command cargo check --all-targets
     nix develop --command cargo test --all-targets
