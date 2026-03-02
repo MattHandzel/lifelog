@@ -146,6 +146,21 @@ pub fn load_server_config_from_unified() -> Option<ServerConfig> {
         }
     }
 
+    let transforms = if let Ok(v) = env::var("LIFELOG_TRANSFORMS_JSON") {
+        if !v.trim().is_empty() {
+            serde_json::from_str::<Vec<lifelog_types::TransformSpec>>(&v).unwrap_or_default()
+        } else {
+            Vec::new()
+        }
+    } else if let Some(transforms_val) = root.get("transforms") {
+        toml::from_str::<Vec<lifelog_types::TransformSpec>>(
+            &toml::to_string(transforms_val).unwrap_or_default(),
+        )
+        .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
     Some(ServerConfig {
         host: get_str("host", "host")?,
         port: get_u32("port", "port")?,
@@ -159,6 +174,7 @@ pub fn load_server_config_from_unified() -> Option<ServerConfig> {
         )
         .unwrap_or(30_000),
         retention_policy_days,
+        transforms,
     })
 }
 
@@ -211,45 +227,6 @@ pub fn load_config() -> CollectorConfig {
         "Loaded collector config from unified lifelog-config.toml"
     );
     cfg
-}
-
-fn snake_to_camel_key(key: &str) -> String {
-    let mut out = String::with_capacity(key.len());
-    let mut upper = false;
-    for ch in key.chars() {
-        if ch == '_' {
-            upper = true;
-            continue;
-        }
-        if upper {
-            out.extend(ch.to_uppercase());
-            upper = false;
-        } else {
-            out.push(ch);
-        }
-    }
-    out
-}
-
-fn normalize_toml_keys(value: toml::Value) -> toml::Value {
-    match value {
-        toml::Value::Table(tbl) => {
-            let mut out = toml::map::Map::new();
-            for (key, val) in tbl {
-                let normalized_key = if key.contains('_') {
-                    snake_to_camel_key(&key)
-                } else {
-                    key
-                };
-                out.insert(normalized_key, normalize_toml_keys(val));
-            }
-            toml::Value::Table(out)
-        }
-        toml::Value::Array(items) => {
-            toml::Value::Array(items.into_iter().map(normalize_toml_keys).collect())
-        }
-        other => other,
-    }
 }
 
 pub fn create_default_config() -> CollectorConfig {

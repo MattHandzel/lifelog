@@ -1,9 +1,9 @@
 # Lifelog Project Plan (Active)
 
 ## Phase 0: Demo Readiness (ACTIVE)
-- [ ] **interface-security**: Implement gRPC auth interceptors and TLS certificate trust in Tauri. (AGENT: Codex - [IN PROGRESS])
-- [ ] **demo-bootstrap**: Generate TLS certs/tokens, configure persistent SurrealDB, and fix config serialization. (AGENT: Codex - [IN PROGRESS])
-- [ ] **collector-pairing**: Fix certificate CA constraints and verify end-to-end data ingest. (AGENT: Codex - [IN PROGRESS])
+- [ ] **interface-security**: Implement gRPC auth interceptors and TLS certificate trust in Tauri. (AGENT: Codex - [IN PROGRESS - RESET])
+- [x] **demo-bootstrap**: Generate TLS certs/tokens, configure persistent SurrealDB, and fix config serialization. (SHIPPED)
+- [x] **collector-pairing**: Fix certificate CA constraints and verify end-to-end data ingest. (SHIPPED)
 
 ## Phase 1: Security Hardening (Post-Demo)
 1. **Inventory:** Review `server/src/grpc_service.rs` and the opt-in TLS logic in Phase 5 history.
@@ -22,6 +22,5 @@
 3. Verify that all traffic is encrypted (e.g., via `grpcurl` or by checking logs for TLS handshakes).
 
 ## Orchestration Log
-- **Session Start**: Sunday, March 1, 2026.
-- **Goal**: Hardening the system for a demo later today.
-- **Active Agents**: 3 (Codex) managing UI, Setup, and Ingest.
+- **2026-03-01 16:30**: Shipped bootstrap and pairing. Hardened setup is now in main.
+- **2026-03-01 16:32**: Reset interface-security agent to work on top of the new hardened base.

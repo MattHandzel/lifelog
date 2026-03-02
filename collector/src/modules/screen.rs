@@ -278,15 +278,27 @@ impl ScreenLogger {
         }
         #[cfg(not(target_os = "macos"))]
         {
-            Command::new(&self.config.program)
-                .arg("-t")
-                .arg("png")
+            let status = Command::new(&self.config.program)
                 .arg(&out)
                 .status()
-                .map_err(LifelogError::Io)?;
+                .map_err(|e| {
+                    tracing::error!(program = %self.config.program, error = %e, "Failed to start screenshot program");
+                    LifelogError::Io(e)
+                })?;
+
+            if !status.success() {
+                tracing::error!(program = %self.config.program, status = ?status, path = %out, "Screenshot program exited with error");
+                return Err(LifelogError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    format!("Screenshot program failed with status {:?}", status),
+                )));
+            }
         }
 
-        let image_data = tokio::fs::read(&out).await.map_err(LifelogError::Io)?;
+        let image_data = tokio::fs::read(&out).await.map_err(|e| {
+            tracing::error!(path = %out, error = %e, "Failed to read captured screenshot file");
+            LifelogError::Io(e)
+        })?;
 
         if let Err(e) = tokio::fs::remove_file(&out).await {
             tracing::warn!(error = %e, "Failed to delete temporary screenshot");

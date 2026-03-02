@@ -1,7 +1,7 @@
 use crate::policy::*;
 use chrono::Utc;
 use config::ServerPolicyConfig;
-use config::{load_transform_specs, ServerConfig, SystemConfig};
+use config::{ServerConfig, SystemConfig};
 use lifelog_core::*;
 use lifelog_types::*;
 use lifelog_types::{CollectorState, SystemState};
@@ -345,7 +345,7 @@ impl Server {
         };
 
         let mut transforms: Vec<LifelogTransform> = Vec::new();
-        for spec in load_transform_specs() {
+        for spec in &config.transforms {
             if !spec.enabled {
                 continue;
             }
@@ -365,7 +365,7 @@ impl Server {
                     };
 
                     let ocr_config = data_modalities::ocr::OcrConfig {
-                        language: spec.language.unwrap_or_else(|| "eng".to_string()),
+                        language: spec.language.clone().unwrap_or_else(|| "eng".to_string()),
                         engine_path: None,
                     };
 
@@ -879,6 +879,15 @@ impl Server {
                 let cas_clone = self.cas.clone();
                 let transforms = self.transforms.clone().read().await.to_vec();
                 tokio::spawn(async move {
+                    let available_origins =
+                        match crate::db::get_origins_from_db(&db_connection).await {
+                            Ok(o) => o,
+                            Err(e) => {
+                                tracing::error!("Failed to get origins for transform loop: {}", e);
+                                return;
+                            }
+                        };
+
                     for transform in transforms {
                         let id = transform.id();
                         let watermark = match crate::db::get_watermark(&db_connection, &id).await {
@@ -889,37 +898,60 @@ impl Server {
                             }
                         };
 
-                        let keys = match crate::data_retrieval::get_keys_after_timestamp(
-                            &db_connection,
-                            &transform.source(),
-                            watermark,
-                            50,
-                        )
-                        .await
-                        {
-                            Ok(k) => k,
-                            Err(e) => {
-                                tracing::error!("Failed to get keys for {}: {}", id, e);
+                        let source_pattern = transform.source();
+                        let targets =
+                            if let DataOriginType::DeviceId(ref id) = source_pattern.origin {
+                                if id == "*" {
+                                    available_origins
+                                        .iter()
+                                        .filter(|o| o.modality_name == source_pattern.modality_name)
+                                        .cloned()
+                                        .collect::<Vec<_>>()
+                                } else {
+                                    vec![source_pattern.clone()]
+                                }
+                            } else {
+                                vec![source_pattern.clone()]
+                            };
+
+                        for target_origin in targets {
+                            let keys = match crate::data_retrieval::get_keys_after_timestamp(
+                                &db_connection,
+                                &target_origin,
+                                watermark,
+                                50,
+                            )
+                            .await
+                            {
+                                Ok(k) => k,
+                                Err(e) => {
+                                    tracing::error!(
+                                        "Failed to get keys for {} from {}: {}",
+                                        id,
+                                        target_origin,
+                                        e
+                                    );
+                                    continue;
+                                }
+                            };
+
+                            if keys.is_empty() {
                                 continue;
                             }
-                        };
 
-                        if keys.is_empty() {
-                            continue;
-                        }
-
-                        if let Some(last_ts) = crate::transform::transform_data_single(
-                            &db_connection,
-                            &cas_clone,
-                            &keys,
-                            &transform,
-                        )
-                        .await
-                        {
-                            if let Err(e) =
-                                crate::db::set_watermark(&db_connection, &id, last_ts).await
+                            if let Some(last_ts) = crate::transform::transform_data_single(
+                                &db_connection,
+                                &cas_clone,
+                                &keys,
+                                &transform,
+                            )
+                            .await
                             {
-                                tracing::error!("Failed to set watermark for {}: {}", id, e);
+                                if let Err(e) =
+                                    crate::db::set_watermark(&db_connection, &id, last_ts).await
+                                {
+                                    tracing::error!("Failed to set watermark for {}: {}", id, e);
+                                }
                             }
                         }
                     }

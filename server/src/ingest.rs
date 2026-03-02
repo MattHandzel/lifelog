@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use config::load_transform_specs;
 use lifelog_core::time_skew::SkewEstimate;
 use lifelog_core::*;
 use lifelog_types::{DataModality, ToRecord};
@@ -30,6 +29,7 @@ pub struct SurrealIngestBackend {
     pub db: Surreal<Client>,
     pub cas: utils::cas::FsCas,
     pub skew_estimates: Arc<RwLock<std::collections::HashMap<String, SkewEstimate>>>,
+    pub transforms: Vec<lifelog_types::TransformSpec>,
 }
 
 impl SurrealIngestBackend {
@@ -37,11 +37,13 @@ impl SurrealIngestBackend {
         db: Surreal<Client>,
         cas: utils::cas::FsCas,
         skew_estimates: Arc<RwLock<std::collections::HashMap<String, SkewEstimate>>>,
+        transforms: Vec<lifelog_types::TransformSpec>,
     ) -> Self {
         Self {
             db,
             cas,
             skew_estimates,
+            transforms,
         }
     }
 }
@@ -198,7 +200,7 @@ impl IngestBackend for SurrealIngestBackend {
                                     persisted_ok = true;
                                     // If OCR transforms are enabled, keep ACK pinned until the
                                     // derived record is produced; otherwise screen is queryable now.
-                                    let ocr_enabled = load_transform_specs().iter().any(|spec| {
+                                    let ocr_enabled = self.transforms.iter().any(|spec| {
                                         spec.enabled && spec.id.eq_ignore_ascii_case("ocr")
                                     });
                                     indexed = !ocr_enabled;

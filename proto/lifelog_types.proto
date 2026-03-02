@@ -499,6 +499,13 @@ enum ServerActionType {
   RegisterActor = 5;
 }
 
+message TransformSpec {
+  string id = 1;
+  bool enabled = 2;
+  string source_origin = 3;
+  optional string language = 4;
+}
+
 message ServerConfig {
   string host = 1;
   uint32 port = 2;
@@ -511,6 +518,7 @@ message ServerConfig {
   uint64 default_correlation_window_ms = 7;
   // Per-modality retention in days. 0 means keep forever.
   map<string, uint32> retention_policy_days = 8;
+  repeated TransformSpec transforms = 9;
 }
 
 message ServerState {

@@ -234,10 +234,12 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 stream_id_str = Some(stream_id.stream_id.clone());
 
                 let server = self.server.server.read().await;
+                let transforms = server.config.read().await.transforms.clone();
                 let backend = SurrealIngestBackend {
                     db: server.db.clone(),
                     cas: server.cas.clone(),
                     skew_estimates: server.skew_estimates.clone(),
+                    transforms,
                 };
                 ingester = Some(ChunkIngester::new(
                     backend,

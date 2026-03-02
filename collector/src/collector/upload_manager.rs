@@ -90,6 +90,7 @@ impl UploadManager {
             // Wait for trigger or timeout (periodic sync)
             let _ = tokio::time::timeout(Duration::from_secs(30), self.trigger_rx.recv()).await;
 
+            tracing::info!("UploadManager: Starting upload cycle (triggered or periodic)");
             if let Err(e) = self.perform_upload_cycle(collector.clone()).await {
                 tracing::error!(error = %e, "UploadManager: Upload cycle failed");
             }

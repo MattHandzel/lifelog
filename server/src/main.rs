@@ -364,7 +364,7 @@ fn write_unified_config(
     root.insert("server".to_string(), to_toml_value(server_cfg)?);
 
     if !root.contains_key("transforms") {
-        let transforms = vec![config::TransformSpec {
+        let transforms = vec![lifelog_types::TransformSpec {
             id: "ocr".to_string(),
             enabled: true,
             source_origin: "*:screen".to_string(),
@@ -933,6 +933,8 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Install default crypto provider for rustls 0.23+
+    let _ = rustls::crypto::ring::default_provider().install_default();
     let cli = Cli::parse();
 
     match cli.command.unwrap_or(Commands::Serve) {

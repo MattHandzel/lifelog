@@ -1,2 +1,13 @@
 #V2
 SELECT count() AS n FROM upload_chunks WHERE stream_id = 'processes' GROUP ALL;
+SELECT origin, count() AS n FROM data GROUP BY origin;
+SELECT count() AS n FROM upload_chunks WHERE stream_id = 'processes' GROUP ALL;
+SELECT origin, count() AS n FROM data GROUP BY origin;
+SELECT count() FROM `matts-server:Processes`;
+INFO FOR DB;
+SELECT count() FROM `matts-server:Processes`;
+SELECT count() AS n FROM upload_chunks WHERE stream_id = 'processes' GROUP ALL;
+INFO FOR DB;
+SELECT count() AS n FROM upload_chunks WHERE stream_id = 'processes' GROUP ALL;
+INFO FOR DB;
+SELECT count() AS n FROM upload_chunks WHERE stream_id = 'processes' GROUP ALL;

@@ -1,6 +1,6 @@
 <state_snapshot>
     <overall_goal>
-        Implement optional security-hardening (TLS, Enrollment, Auth) as per PLAN.md.
+        Implement security hardening (TLS, Enrollment, Auth) as per PLAN.md.
     </overall_goal>
 
     <what_to_do>
@@ -202,6 +202,7 @@
           - Ran hardened server on :7443 and executed `join` with env-driven inputs.
           - Verified generated files under `~/.config/lifelog` and then ran collector against TLS endpoint.
           - Collected and reviewed collector/server logs for control registration and transport behavior.
+          - Upload/index proof not observed due current sync loop stub and local capture errors (screen capture binary/permissions constraints).
       </how>
 
       <validation_steps>
@@ -210,7 +211,43 @@
            - `~/.config/lifelog/tls/server-ca.pem` exists after join.
            - Collector log shows ControlStream established and periodic ReportState on TLS endpoint.
            - Server log shows collector registration on TLS endpoint.
-           - Upload/index proof not observed due current sync loop stub and local capture errors (screen capture binary/permissions constraints).
+      </validation_steps>
+
+</state_snapshot>
+
+<state_snapshot>
+      <time>2026-03-01T18:30:00-06:00</time>
+      <overall_goal>
+          Vigorously test the software end-to-end and ensure server readiness for demo.
+      </overall_goal>
+
+      <what_to_do>
+          - Validated server setup, TLS generation, and bearer token auth.
+          - Fixed Transform configuration parsing (camelCase/snake_case mismatch).
+          - Integrated TransformSpec into formal Protobuf schema and ServerConfig.
+          - Fixed wildcard origin resolution in the transform engine (*:screen -> active origins).
+          - Hardened integration test harness to respect transform environment variables.
+          - Verified SurrealDB schema, ingestion paths, and ACK gating.
+      </what_to_do>
+      <why>
+          - Transforms were failing to load from unified config due to field name mismatches.
+          - Wildcard resolution was a critical blocker for processing data from new collectors.
+          - Moving transforms to proto ensures a single source of truth for the entire system.
+      </why>
+
+      <how>
+          - Modified proto/lifelog_types.proto to include TransformSpec.
+          - Updated common/config/src/lib.rs and server_config.rs to handle unified loading and env overrides.
+          - Updated server/src/server.rs transform loop to resolve wildcard origins using available origins from DB.
+          - Updated server/src/ingest.rs and grpc_service.rs to propagate transforms to the ingestion backend.
+          - Fixed server/tests/harness/mod.rs to propagate env-based config to TestContext.
+      </how>
+
+      <validation_steps>
+           - Ran just check-digest: PASS.
+           - Ran just test-e2e-exclusive: 21/21 PASS (including it_081_ack_implies_queryable).
+           - Verified SurrealDB info for DB: Analyzers and tables present.
+           - Generated DEMO_READINESS_REPORT.md.
       </validation_steps>
 
 </state_snapshot>

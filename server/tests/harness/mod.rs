@@ -173,6 +173,13 @@ impl TestContext {
         std::env::set_var("LIFELOG_ENROLLMENT_TOKEN", "test-enrollment-token");
         std::env::set_var("LIFELOG_TLS_CA_CERT_PATH", &tls_cert_path);
 
+        let mut transforms = Vec::new();
+        if let Ok(v) = std::env::var("LIFELOG_TRANSFORMS_JSON") {
+            if !v.trim().is_empty() {
+                transforms = serde_json::from_str(&v).unwrap_or_default();
+            }
+        }
+
         let config = ServerConfig {
             host: "127.0.0.1".to_string(),
             port: server_port as u32,
@@ -182,6 +189,7 @@ impl TestContext {
             cas_path: cas_path.display().to_string(),
             default_correlation_window_ms: 30_000,
             retention_policy_days: std::collections::HashMap::new(),
+            transforms,
         };
 
         let server = timeout(Duration::from_secs(30), Server::new(&config))
