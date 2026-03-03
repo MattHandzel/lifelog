@@ -171,6 +171,7 @@
             surrealdb
             sqlx-cli
             postgresql
+            cargo-tauri
           ]
           ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             linuxPackages.v4l2loopback
@@ -249,6 +250,7 @@
             cargo-nextest
             nodejs_22
             nodePackages.npm
+            cargo-tauri
             protobuf
           ]
           ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
