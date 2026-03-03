@@ -9,6 +9,8 @@ pub enum ExecutionPlan {
         table: String,
         origin: DataOrigin,
         sql: String,
+        filter: Option<Expression>,
+        limit: usize,
     },
     /// Multiple queries to be executed.
     MultiQuery(Vec<ExecutionPlan>),
@@ -21,9 +23,11 @@ pub enum ExecutionPlan {
         target_table: String,
         target_origin: DataOrigin,
         target_base_where: String,
+        target_base_filter: Option<Expression>,
         during_terms: Vec<DuringTermPlan>,
         max_source_intervals: usize,
         max_time_clauses: usize,
+        target_limit: usize,
     },
     /// Placeholder for multi-stage plans.
     #[allow(dead_code)]
@@ -35,6 +39,7 @@ pub struct DuringSourcePlan {
     pub source_table: String,
     pub source_origin: DataOrigin,
     pub sql: String,
+    pub filter: Expression,
 }
 
 #[derive(Debug, PartialEq)]
@@ -120,14 +125,19 @@ impl Planner {
 
     fn plan_conjunctive_for_origin(
         ctx: &OriginPlanContext<'_>,
-        sql_terms: Vec<String>,
+        filter_terms: Vec<Expression>,
         temporal_terms: Vec<TemporalTerm>,
     ) -> ExecutionPlan {
-        let target_base_where = if sql_terms.is_empty() {
+        let target_base_where = if filter_terms.is_empty() {
             "true".to_string()
         } else {
-            sql_terms.join(" AND ")
+            filter_terms
+                .iter()
+                .map(Self::compile_expression_sql)
+                .collect::<Vec<_>>()
+                .join(" AND ")
         };
+        let target_base_filter = Self::combine_with_and(filter_terms);
 
         if temporal_terms.is_empty() {
             let sql = format!(
@@ -138,6 +148,8 @@ impl Planner {
                 table: ctx.table.to_string(),
                 origin: ctx.origin.clone(),
                 sql,
+                filter: target_base_filter,
+                limit: ctx.plan.max_target_uuids,
             };
         }
 
@@ -158,6 +170,8 @@ impl Planner {
                     table: ctx.table.to_string(),
                     origin: ctx.origin.clone(),
                     sql,
+                    filter: None,
+                    limit: 0,
                 };
             }
 
@@ -181,6 +195,7 @@ impl Planner {
                         source_table,
                         source_origin,
                         sql,
+                        filter: term.predicate.clone(),
                     }
                 })
                 .collect();
@@ -195,9 +210,11 @@ impl Planner {
             target_table: ctx.table.to_string(),
             target_origin: ctx.origin.clone(),
             target_base_where,
+            target_base_filter,
             during_terms,
             max_source_intervals: ctx.plan.max_source_intervals,
             max_time_clauses: ctx.plan.max_time_clauses,
+            target_limit: ctx.plan.max_target_uuids,
         }
     }
 
@@ -246,8 +263,10 @@ impl Planner {
     /// one or more top-level temporal join terms (`WITHIN(...)` and/or `DURING(...)`).
     ///
     /// Current limitation (intentional): `WITHIN` cannot appear under `OR` / `NOT`.
-    fn compile_conjunctive(expr: &Expression) -> Result<(Vec<String>, Vec<TemporalTerm>), String> {
-        let mut sql_terms: Vec<String> = Vec::new();
+    fn compile_conjunctive(
+        expr: &Expression,
+    ) -> Result<(Vec<Expression>, Vec<TemporalTerm>), String> {
+        let mut filter_terms: Vec<Expression> = Vec::new();
         let mut temporal_terms: Vec<TemporalTerm> = Vec::new();
 
         // Flatten nested ANDs iteratively to keep stack shallow.
@@ -298,13 +317,13 @@ impl Planner {
                                 .to_string(),
                         );
                     }
-                    sql_terms.push(Self::compile_expression_sql(node));
+                    filter_terms.push(node.clone());
                 }
-                _ => sql_terms.push(Self::compile_expression_sql(node)),
+                _ => filter_terms.push(node.clone()),
             }
         }
 
-        Ok((sql_terms, temporal_terms))
+        Ok((filter_terms, temporal_terms))
     }
 
     fn multi(plans: Vec<ExecutionPlan>) -> ExecutionPlan {
@@ -465,6 +484,15 @@ impl Planner {
 
     fn quote_string(s: &str) -> String {
         format!("'{}'", s.replace('\'', "\\'"))
+    }
+
+    fn combine_with_and(terms: Vec<Expression>) -> Option<Expression> {
+        let mut iter = terms.into_iter();
+        let mut acc = iter.next()?;
+        for term in iter {
+            acc = Expression::And(Box::new(acc), Box::new(term));
+        }
+        Some(acc)
     }
 }
 
