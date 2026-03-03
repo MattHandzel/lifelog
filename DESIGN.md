@@ -149,3 +149,28 @@
 
 - `just check-digest`: pass.
 - `tools/ai/run_and_digest.sh "nix develop --command cargo test -p lifelog-server postgres::tests --lib"`: pass.
+
+## PostgreSQL Migration Phase 2 (Ingestion Rewrite) (2026-03-03)
+
+### Scope
+
+- Rewrote the server ingest path to support PostgreSQL as an ingest backend for chunk streaming.
+- Preserved existing Surreal ingest/query runtime as fallback to avoid partial cutover regressions.
+
+### Architecture Decisions
+
+- Added `PostgresIngestBackend` implementing `utils::ingest::IngestBackend`.
+- Added `HybridIngestBackend` delegator (`Surreal` or `Postgres`) so `UploadChunks` can route at runtime without changing the collector protocol.
+- PostgreSQL ingest writes decoded frame payloads directly via parameterized SQL (no `ToRecord` in Postgres path).
+- Idempotency strategy for chunk metadata:
+  - `INSERT ... ON CONFLICT (id) DO UPDATE SET indexed = (upload_chunks.indexed OR EXCLUDED.indexed)`.
+- ACK gate semantics preserved:
+  - `screen` chunks remain pinned (`indexed=false`) when OCR transform is enabled.
+  - other mapped streams set `indexed=true` once persisted.
+- CAS remains filesystem-backed; Postgres records store `blob_hash` and `blob_size` references.
+- Postgres ingest activation is explicit through `LIFELOG_POSTGRES_INGEST_URL` (+ optional `LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS`).
+
+### Validation
+
+- `just check-digest`: pass.
+- `tools/ai/run_and_digest.sh "just test"`: pass.

@@ -1,4 +1,4 @@
-use crate::ingest::SurrealIngestBackend;
+use crate::ingest::{HybridIngestBackend, PostgresIngestBackend, SurrealIngestBackend};
 use crate::server::ServerHandle;
 use chrono::Utc;
 use futures_core::Stream;
@@ -216,7 +216,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Ack>, Status> {
         let mut stream = request.into_inner();
-        let mut ingester: Option<ChunkIngester<SurrealIngestBackend>> = None;
+        let mut ingester: Option<ChunkIngester<HybridIngestBackend>> = None;
         let mut last_stream: Option<lifelog_types::StreamIdentity> = None;
         let mut stream_id_str: Option<String> = None;
         let mut last_acked_offset = 0;
@@ -235,11 +235,20 @@ impl LifelogServerService for GRPCServerLifelogServerService {
 
                 let server = self.server.server.read().await;
                 let transforms = server.config.read().await.transforms.clone();
-                let backend = SurrealIngestBackend {
-                    db: server.db.clone(),
-                    cas: server.cas.clone(),
-                    skew_estimates: server.skew_estimates.clone(),
-                    transforms,
+                let backend = if let Some(pool) = server.postgres_pool.clone() {
+                    HybridIngestBackend::Postgres(PostgresIngestBackend {
+                        pool,
+                        cas: server.cas.clone(),
+                        skew_estimates: server.skew_estimates.clone(),
+                        transforms,
+                    })
+                } else {
+                    HybridIngestBackend::Surreal(SurrealIngestBackend {
+                        db: server.db.clone(),
+                        cas: server.cas.clone(),
+                        skew_estimates: server.skew_estimates.clone(),
+                        transforms,
+                    })
                 };
                 ingester = Some(ChunkIngester::new(
                     backend,
@@ -292,26 +301,58 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             .stream
             .as_ref()
             .ok_or_else(|| Status::invalid_argument("missing stream identity"))?;
-        let db = self.server.server.read().await.db.clone();
+        let (postgres_pool, db) = {
+            let server = self.server.server.read().await;
+            (server.postgres_pool.clone(), server.db.clone())
+        };
 
-        let mut response = db.query("SELECT * FROM upload_chunks WHERE collector_id = $c AND stream_id = $s AND session_id = $sess ORDER BY offset DESC LIMIT 1")
-            .bind(("c", stream_id.collector_id.clone()))
-            .bind(("s", stream_id.stream_id.clone()))
-            .bind(("sess", stream_id.session_id))
-            .await
-            .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
+        let offset = if let Some(pool) = postgres_pool {
+            let client = pool
+                .get()
+                .await
+                .map_err(|e| Status::internal(format!("Postgres pool error: {e}")))?;
+            let row = client
+                .query_opt(
+                    "SELECT offset, length
+                     FROM upload_chunks
+                     WHERE collector_id = $1 AND stream_id = $2 AND session_id = $3
+                     ORDER BY offset DESC
+                     LIMIT 1",
+                    &[
+                        &stream_id.collector_id,
+                        &stream_id.stream_id,
+                        &(stream_id.session_id as i64),
+                    ],
+                )
+                .await
+                .map_err(|e| Status::internal(format!("Postgres query error: {e}")))?;
 
-        #[derive(serde::Deserialize)]
-        struct RawOffset {
-            offset: u64,
-            length: u64,
-        }
+            row.map(|r| {
+                let offset: i64 = r.get(0);
+                let length: i32 = r.get(1);
+                offset as u64 + length as u64
+            })
+            .unwrap_or(0)
+        } else {
+            let mut response = db
+                .query("SELECT * FROM upload_chunks WHERE collector_id = $c AND stream_id = $s AND session_id = $sess ORDER BY offset DESC LIMIT 1")
+                .bind(("c", stream_id.collector_id.clone()))
+                .bind(("s", stream_id.stream_id.clone()))
+                .bind(("sess", stream_id.session_id))
+                .await
+                .map_err(|e| Status::internal(format!("Database error: {}", e)))?;
 
-        let results: Vec<RawOffset> = response
-            .take(0)
-            .map_err(|e| Status::internal(format!("Database take error: {}", e)))?;
+            #[derive(serde::Deserialize)]
+            struct RawOffset {
+                offset: u64,
+                length: u64,
+            }
 
-        let offset = results.first().map(|r| r.offset + r.length).unwrap_or(0);
+            let results: Vec<RawOffset> = response
+                .take(0)
+                .map_err(|e| Status::internal(format!("Database take error: {}", e)))?;
+            results.first().map(|r| r.offset + r.length).unwrap_or(0)
+        };
 
         Ok(Response::new(GetUploadOffsetResponse { offset }))
     }
