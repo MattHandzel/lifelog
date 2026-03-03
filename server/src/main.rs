@@ -44,6 +44,9 @@ enum Commands {
     Join {
         /// Server URL, e.g. https://my-server:7182
         server_url: String,
+        /// Skip interactive confirmation and use environment variables
+        #[arg(short, long)]
+        yes: bool,
     },
 }
 
@@ -688,7 +691,7 @@ async fn run_init() -> Result<(), lifelog_core::LifelogError> {
     Ok(())
 }
 
-async fn run_join(server_url: String) -> Result<(), lifelog_core::LifelogError> {
+async fn run_join(server_url: String, yes: bool) -> Result<(), lifelog_core::LifelogError> {
     let (normalized_url, host, port) = parse_server_url(server_url.as_str())?;
     let paths = onboarding_paths()?;
     fs::create_dir_all(paths.config_dir.clone())?;
@@ -698,45 +701,67 @@ async fn run_join(server_url: String) -> Result<(), lifelog_core::LifelogError> 
         "Server certificate SHA256 fingerprint for {} is:\n{}",
         normalized_url, fingerprint
     );
-    let trust = inquire::Confirm::new("Trust this server certificate and continue pairing?")
-        .with_default(false)
-        .prompt()
-        .map_err(|e| lifelog_core::LifelogError::Validation {
-            field: "join_confirm".to_string(),
-            reason: e.to_string(),
-        })?;
-    if !trust {
-        return Err(lifelog_core::LifelogError::Validation {
-            field: "join".to_string(),
-            reason: "aborted: certificate not trusted".to_string(),
-        });
+
+    if !yes {
+        let trust = inquire::Confirm::new("Trust this server certificate and continue pairing?")
+            .with_default(false)
+            .prompt()
+            .map_err(|e| lifelog_core::LifelogError::Validation {
+                field: "join_confirm".to_string(),
+                reason: e.to_string(),
+            })?;
+        if !trust {
+            return Err(lifelog_core::LifelogError::Validation {
+                field: "join".to_string(),
+                reason: "aborted: certificate not trusted".to_string(),
+            });
+        }
+    } else {
+        println!("Non-interactive mode: Trusting certificate automatically.");
     }
+
     let server_cert_pem = der_to_pem(server_cert_der.as_slice());
     write_file(paths.server_ca_path.as_path(), server_cert_pem.as_str())?;
 
-    let enrollment_token = inquire::Password::new("Enrollment token")
-        .without_confirmation()
-        .with_display_mode(inquire::PasswordDisplayMode::Masked)
-        .prompt()
-        .map_err(|e| lifelog_core::LifelogError::Validation {
-            field: "enrollment_token".to_string(),
-            reason: e.to_string(),
-        })?;
+    let enrollment_token = if yes {
+        std::env::var("LIFELOG_ENROLLMENT_TOKEN").map_err(|_| {
+            lifelog_core::LifelogError::Validation {
+                field: "enrollment_token".to_string(),
+                reason: "LIFELOG_ENROLLMENT_TOKEN env var must be set in non-interactive mode"
+                    .to_string(),
+            }
+        })?
+    } else {
+        inquire::Password::new("Enrollment token")
+            .without_confirmation()
+            .with_display_mode(inquire::PasswordDisplayMode::Masked)
+            .prompt()
+            .map_err(|e| lifelog_core::LifelogError::Validation {
+                field: "enrollment_token".to_string(),
+                reason: e.to_string(),
+            })?
+    };
+
     let client_hint_default = sanitize_collector_id(default_device_name().as_str());
-    let client_hint = inquire::Text::new("Collector client hint")
-        .with_default(client_hint_default.as_str())
-        .prompt()
-        .map_err(|e| lifelog_core::LifelogError::Validation {
-            field: "client_hint".to_string(),
-            reason: e.to_string(),
-        })?;
-    let alias = inquire::Text::new("Collector alias")
-        .with_default(client_hint.as_str())
-        .prompt()
-        .map_err(|e| lifelog_core::LifelogError::Validation {
-            field: "collector_alias".to_string(),
-            reason: e.to_string(),
-        })?;
+    let (client_hint, alias) = if yes {
+        (client_hint_default.clone(), client_hint_default)
+    } else {
+        let client_hint = inquire::Text::new("Collector client hint")
+            .with_default(client_hint_default.as_str())
+            .prompt()
+            .map_err(|e| lifelog_core::LifelogError::Validation {
+                field: "client_hint".to_string(),
+                reason: e.to_string(),
+            })?;
+        let alias = inquire::Text::new("Collector alias")
+            .with_default(client_hint.as_str())
+            .prompt()
+            .map_err(|e| lifelog_core::LifelogError::Validation {
+                field: "collector_alias".to_string(),
+                reason: e.to_string(),
+            })?;
+        (client_hint, alias)
+    };
 
     let paired_id = pair_collector(
         normalized_url.as_str(),
@@ -947,6 +972,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(())
         }
         Commands::Init => run_init().await.map_err(Into::into),
-        Commands::Join { server_url } => run_join(server_url).await.map_err(Into::into),
+        Commands::Join { server_url, yes } => run_join(server_url, yes).await.map_err(Into::into),
     }
 }
