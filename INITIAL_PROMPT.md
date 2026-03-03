@@ -1141,86 +1141,86 @@ Launch-blocking requirements implied by the audit:
     "PairCollector"
   ],
   react_components: [
-    "CameraDashboard.tsx",
-    "ScreenDashboard.tsx",
-    "ui/select.tsx",
-    "ModulesPanel.tsx",
-    "TimelineDashboard.tsx",
-    "Login.tsx",
-    "NetworkTopologyDashboard.tsx",
-    "ReplayFrame.tsx",
-    "Sidebar.tsx",
-    "ui/separator.tsx",
-    "ProcessesDashboard.tsx",
-    "ResultCard.tsx",
-    "ui/label.tsx",
-    "MicrophoneDashboard.tsx",
-    "DevicesDashboard.tsx",
-    "ui/slider.tsx",
-    "ui/dropdown-menu.tsx",
-    "ReplayDashboard.tsx",
-    "SearchDashboard.tsx",
-    "ui/button.tsx",
-    "Header.tsx",
-    "ui/tabs.tsx",
-    "FeatureTabs.tsx",
-    "PlaceholderDashboard.tsx",
-    "TextUploadDashboard.tsx",
-    "ui/spinner.tsx",
-    "ui/input.tsx",
-    "ui/switch.tsx",
-    "SettingsDashboard.tsx",
-    "ui/tooltip.tsx",
-    "ui/card.tsx",
     "ui/theme-toggle.tsx",
+    "TextUploadDashboard.tsx",
+    "CameraDashboard.tsx",
+    "Header.tsx",
+    "ui/label.tsx",
+    "ui/separator.tsx",
+    "ReplayFrame.tsx",
+    "ReplayDashboard.tsx",
+    "FeatureTabs.tsx",
+    "DevicesDashboard.tsx",
+    "ScreenDashboard.tsx",
+    "NetworkTopologyDashboard.tsx",
+    "ui/dialog.tsx",
     "ui/progress.tsx",
-    "ui/dialog.tsx"
+    "ui/tooltip.tsx",
+    "ui/switch.tsx",
+    "ui/select.tsx",
+    "Sidebar.tsx",
+    "ui/slider.tsx",
+    "ModulesPanel.tsx",
+    "MicrophoneDashboard.tsx",
+    "ui/input.tsx",
+    "ProcessesDashboard.tsx",
+    "SettingsDashboard.tsx",
+    "ui/spinner.tsx",
+    "Login.tsx",
+    "ResultCard.tsx",
+    "ui/tabs.tsx",
+    "ui/card.tsx",
+    "SearchDashboard.tsx",
+    "PlaceholderDashboard.tsx",
+    "TimelineDashboard.tsx",
+    "ui/button.tsx",
+    "ui/dropdown-menu.tsx"
   ],
   rust_modules: [
-    "collector/src/lib.rs",
-    "server/src/replay.rs",
-    "collector/src/setup.rs",
-    "server/src/sync.rs",
-    "collector/src/collector.rs",
-    "collector/src/main.rs",
-    "collector/src/modules/clipboard.rs",
-    "server/src/grpc_service.rs",
-    "collector/src/modules/audio.rs",
-    "collector/src/modules/screen.rs",
     "server/src/retention.rs",
-    "server/src/transform.rs",
-    "collector/src/modules/mouse.rs",
     "server/src/policy.rs",
-    "collector/src/modules/evdev_input_logger.rs",
-    "server/src/lib.rs",
-    "collector/src/modules/camera.rs",
-    "server/src/db.rs",
-    "collector/src/modules/microphone.rs",
-    "server/src/main.rs",
-    "collector/src/modules/text_upload.rs",
-    "server/src/query/executor.rs",
-    "collector/src/modules/data_source.rs",
-    "server/src/server.rs",
-    "collector/src/modules/window_activity.rs",
-    "server/src/ingest.rs",
-    "server/src/schema.rs",
-    "collector/src/modules/browser_history.rs",
-    "server/src/query/planner.rs",
+    "server/src/transform.rs",
+    "server/src/grpc_service.rs",
+    "server/src/replay.rs",
     "server/src/data_retrieval.rs",
-    "server/src/query/mod.rs",
-    "collector/src/collector/upload_manager.rs",
-    "server/src/query/llql.rs",
     "server/src/postgres.rs",
-    "server/src/query/ast.rs",
-    "collector/src/modules/shell_history.rs",
-    "collector/src/modules/processes.rs",
-    "collector/src/modules/keystrokes.rs",
+    "collector/src/main.rs",
     "collector/src/modules/mod.rs",
+    "collector/src/modules/mouse.rs",
+    "collector/src/modules/microphone.rs",
+    "collector/src/modules/text_upload.rs",
+    "collector/src/collector.rs",
+    "server/src/main.rs",
     "collector/src/modules/logger.rs",
-    "collector/src/modules/weather.rs",
+    "collector/src/setup.rs",
+    "collector/src/modules/data_source.rs",
+    "server/src/lib.rs",
+    "collector/src/lib.rs",
+    "collector/src/modules/evdev_input_logger.rs",
     "collector/src/modules/input_logger.rs",
+    "collector/src/modules/processes.rs",
+    "collector/src/modules/camera.rs",
+    "collector/src/modules/browser_history.rs",
+    "server/src/sync.rs",
+    "collector/src/modules/window_activity.rs",
+    "collector/src/modules/clipboard.rs",
+    "collector/src/modules/weather.rs",
+    "collector/src/modules/shell_history.rs",
+    "server/src/query/ast.rs",
     "collector/src/modules/wayland_input_logger.rs",
-    "collector/src/modules/hyprland.rs"
+    "collector/src/modules/audio.rs",
+    "server/src/query/planner.rs",
+    "server/src/query/llql.rs",
+    "server/src/ingest.rs",
+    "server/src/query/executor.rs",
+    "collector/src/modules/hyprland.rs",
+    "collector/src/modules/keystrokes.rs",
+    "collector/src/modules/screen.rs",
+    "server/src/query/mod.rs",
+    "server/src/schema.rs",
+    "server/src/db.rs",
+    "server/src/server.rs",
+    "collector/src/collector/upload_manager.rs"
   ]
 }
 \n--- STATUS & GAPS ---
@@ -1285,61 +1285,21 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 
 - None.
 \n--- TASK & PLAN ---
-# PostgreSQL Migration Phase 3: Query Execution & AST Translation
+# PostgreSQL Migration Phase 4: Operations, Deployment, & Finalization
 
-**Objective:** Translate the complex temporal overlap logic currently handled in Rust into native PostgreSQL engine operations for high performance.
+**Objective:** Ensure a smooth transition for existing development environments and production deployments, and remove SurrealDB dependencies where no longer needed.
 
-- [ ] **Task 3.1: Table Queries & Full-Text Search**
-  - Update `ExecutionPlan::TableQuery` in `server/src/query/executor.rs` (or equivalent) to generate PostgreSQL SQL.
-  - Translate text searches from SurrealDB's `SEARCH ANALYZER` to PostgreSQL's `to_tsvector` and `@@` operator using GIN indexes.
-- [ ] **Task 3.2: Temporal DuringQuery Translation**
-  - Implement native PostgreSQL range overlap logic (`&&` operator on `TSTZRANGE`).
-  - Instead of pulling all intervals into Rust, perform an `INNER JOIN` in the database where time ranges overlap.
-- [ ] **Task 3.3: Replay/Timeline Alignment**
-  - Update `Replay` RPC logic to query PostgreSQL.
-  - Ensure results are ordered by the lower bound of the `time_range`.
-- [ ] **Task 3.4: Hybrid Query Routing**
-  - Just like with Ingestion, implement a router that decides whether to send a query to SurrealDB or PostgreSQL based on the configured backend or availability of data.
-  - This allows incremental migration of query capabilities.\n--- STATE HISTORY (LATEST) ---
-
-      <how>
-          - Added `server/src/postgres.rs` with postgres URI detection, pool construction, and ordered migration execution.
-          - Added first SQL migration `server/migrations/20260303143000_init_postgres.sql` with unified modality tables, upload chunk metadata, catalog/watermarks, and indexes.
-          - Added `just sqlx-migrate-add` and `just sqlx-migrate-run` recipes.
-          - Added devshell packages in `flake.nix` for migration tooling.
-          - Added module export in `server/src/lib.rs`.
-      </how>
-
-      <validation_steps>
-           - `just check-digest` (pass).
-           - `tools/ai/run_and_digest.sh "nix develop --command cargo test -p lifelog-server postgres::tests --lib"` (pass).
-      </validation_steps>
-
-</state_snapshot>
-
-<state_snapshot>
-      <overall_goal>
-      Implement Phase 2 PostgreSQL migration for ingestion so collector chunk uploads are persisted idempotently in PostgreSQL with ACK gating preserved.
-      </overall_goal>
-
-      <what_to_do>
-          - Added a PostgreSQL-backed ingest implementation for `UploadChunks`.
-          - Removed Surreal-specific `ToRecord` mapping from the new Postgres ingest path by decoding protobuf frames directly and executing typed SQL inserts.
-          - Preserved durable ACK behavior via `upload_chunks.indexed` and idempotent upserts.
-          - Kept Surreal ingest/query runtime intact as default path for non-Postgres sessions.
-      </what_to_do>
-      <why>
-          - Phase 2 requires moving ingest semantics (throughput/idempotency/ACK correctness) onto PostgreSQL before full query/transform cutover.
-          - Hypothesis: a dual backend switch at gRPC ingest boundary enables incremental migration with low regression risk.
-          - Assumption tested: server can safely prefer Postgres ingest only when explicitly configured, and retain existing Surreal path otherwise.
-      </why>
-
-      <how>
-          - Added `PostgresIngestBackend` in `server/src/ingest.rs` implementing `IngestBackend`.
-          - Added `HybridIngestBackend` delegator (`Surreal` | `Postgres`) for runtime backend selection in gRPC upload handling.
-          - Implemented parameterized SQL inserts for `screen_records`, `browser_records`, `ocr_records`, `audio_records`, `clipboard_records`, `shell_history_records`, `keystroke_records`.
-          - Implemented idempotent chunk metadata persistence in PostgreSQL with:
-            `INSERT ... ON CONFLICT (id) DO UPDATE SET indexed = (upload_chunks.indexed OR EXCLUDED.indexed)`.
+- [ ] **Task 4.1: NixOS & Systemd Updates**
+  - Update `flake.nix` to provision PostgreSQL (`services.postgresql.enable = true`) and automatically create the `lifelog` database/user.
+  - Update `deploy/systemd/lifelog-server.service` and other related systemd files to depend on postgres instead of surrealdb (or both during transition).
+- [ ] **Task 4.2: Config & Documentation**
+  - Update `lifelog-config.toml` examples to use PostgreSQL as the default.
+  - Update `USAGE.md` and `README.md` to reflect the new PostgreSQL requirement.
+- [ ] **Task 4.3: Health & Metrics**
+  - Ensure `ReportState` and observability endpoints correctly reflect PostgreSQL pool metrics (active connections, idle connections).
+- [ ] **Task 4.4: Final Clean-up (Strategic)**
+  - If Phase 1-3 are fully verified, consider making PostgreSQL the mandatory default and marking SurrealDB for removal in a future release.
+  - Clean up any temporary "Hybrid" logic if it's no longer serving a purpose.\n--- STATE HISTORY (LATEST) ---
           - Preserved CAS linkage by storing `blob_hash`/`blob_size` in Postgres modality tables.
           - Added optional Postgres ingest pool bootstrap in `Server::new` from `LIFELOG_POSTGRES_INGEST_URL` plus migration run.
           - Updated `GetUploadOffset` RPC to query PostgreSQL when ingest pool is enabled.
@@ -1347,6 +1307,45 @@ Phase 6: Query Engine Completion (correlation + replay) and UI integration.
 
       <validation_steps>
            - `just check-digest` (pass).
+           - `tools/ai/run_and_digest.sh "just test"` (pass).
+      </validation_steps>
+
+</state_snapshot>
+
+<state_snapshot>
+      <overall_goal>
+      Implement Phase 3 PostgreSQL migration for query execution by translating AST/plans to native PostgreSQL operations, adding temporal overlap SQL execution, and routing query/replay between SurrealDB and PostgreSQL.
+      </overall_goal>
+
+      <what_to_do>
+          - Added PostgreSQL execution for `ExecutionPlan::TableQuery` with native filtering and FTS translation.
+          - Added PostgreSQL-native temporal execution for `ExecutionPlan::DuringQuery` using range overlap checks in SQL (`time_range && ...`) with source-term `EXISTS` joins.
+          - Added hybrid query routing in server query path based on plan compatibility and configured Postgres pool.
+          - Added hybrid origin discovery (Surreal catalog + Postgres distinct collector/origin scan).
+          - Updated replay to use PostgreSQL range queries for migrated modalities (screen/context) with Surreal fallback for non-migrated modalities.
+          - Refactored planner plans to carry backend-agnostic filters (`Expression`) alongside existing Surreal SQL strings.
+      </what_to_do>
+      <why>
+          - Phase 3 requires moving temporal overlap work from Rust interval materialization into PostgreSQL execution for performance and reduced memory overhead.
+          - Hypothesis: keeping the existing planner shape while adding AST-bearing plan fields enables dual-engine execution with minimal regression risk.
+          - Assumption tested: a plan-level compatibility check allows safe per-query/per-plan backend routing for incremental migration.
+      </why>
+
+      <how>
+          - Reworked `ExecutionPlan` variants in `server/src/query/planner.rs` to include filter expressions and explicit limits used by Postgres execution.
+          - Implemented `execute_postgres(...)` and `plan_is_postgres_compatible(...)` in `server/src/query/executor.rs`.
+          - Implemented Postgres expression compilation:
+            - `Expression::TimeRange` -> `time_range && tstzrange(...)`
+            - `Expression::Contains` -> `search_document @@ websearch_to_tsquery('english', ...)` on supported tables.
+          - Implemented temporal translation with SQL `EXISTS` source subqueries and overlap checks against expanded source ranges.
+          - Updated `process_query` in `server/src/server.rs` to route plans to Postgres when compatible; otherwise use Surreal executor.
+          - Added Postgres-origin introspection and merged origin availability for selector resolution.
+          - Updated replay screen/context fetches to query Postgres tables ordered by `lower(time_range)` where supported.
+      </how>
+
+      <validation_steps>
+           - `just check-digest` (pass).
+           - `tools/ai/run_and_digest.sh "nix develop --command cargo test -p lifelog-server plans_temporal_or_via_dnf_union --lib"` (pass).
            - `tools/ai/run_and_digest.sh "just test"` (pass).
       </validation_steps>
 

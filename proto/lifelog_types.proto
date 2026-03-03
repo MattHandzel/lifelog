@@ -533,6 +533,11 @@ message ServerState {
   uint64 total_frames_stored = 9;
   uint64 disk_usage_bytes = 10;
   google.protobuf.Timestamp uptime_since = 11;
+  bool postgres_pool_enabled = 12;
+  uint32 postgres_pool_max_size = 13;
+  uint32 postgres_pool_size = 14;
+  uint32 postgres_pool_available = 15;
+  uint32 postgres_pool_waiting = 16;
 }
 
 message SystemConfig {

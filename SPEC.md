@@ -976,3 +976,14 @@ Launch-blocking requirements implied by the audit:
   - server applies server policy updates live (`default_correlation_window_ms`, `retention_policy_days`),
   - collector updates are propagated over `ControlStream` via `UpdateConfig` command payloads.
 - Interface Settings now includes `Privacy & Storage` controls for `screen`, `audio`, and `text` retention days, wired through existing `get_component_config` / `set_component_config`.
+
+### 20.4 PostgreSQL Ops Defaults (March 3, 2026)
+
+- Deployment units now set PostgreSQL ingest environment by default:
+  - `LIFELOG_POSTGRES_INGEST_URL=postgresql://lifelog@127.0.0.1:5432/lifelog`
+  - `LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS=16`
+- Server units now depend on `postgresql.service` (while retaining `lifelog-surrealdb.service` during hybrid transition).
+- Nix flake now exports `nixosModules.lifelog-postgres` that enables PostgreSQL and auto-provisions a `lifelog` DB/user by default.
+- `GetState` observability payload now includes PostgreSQL pool status:
+  - enabled flag,
+  - max/pool/available/waiting connection counts.

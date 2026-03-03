@@ -52,7 +52,7 @@ export interface GetSystemConfigResponse {
 }
 
 export interface SetSystemConfigRequest {
-  config?: CollectorConfig | undefined;
+  config?: SystemConfig | undefined;
 }
 
 export interface SetSystemConfigResponse {
@@ -210,4 +210,34 @@ export interface ControlMessage {
   heartbeat?: string | undefined;
   suggestUpload?: SuggestUploadRequest | undefined;
   clockSample?: ClockSample | undefined;
+}
+
+export interface FieldDescriptor {
+  name: string;
+  ty: string;
+  display: string;
+  primary: boolean;
+  searchable: boolean;
+}
+
+export interface ModalityDescriptor {
+  name: string;
+  streamId: string;
+  category: string;
+  fields: FieldDescriptor[];
+}
+
+export interface ListModalitiesRequest {
+}
+
+export interface ListModalitiesResponse {
+  modalities: ModalityDescriptor[];
+}
+
+export interface PairCollectorRequest {
+  enrollmentToken: string;
+}
+
+export interface PairCollectorResponse {
+  collectorId: string;
 }

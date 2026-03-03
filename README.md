@@ -19,14 +19,24 @@ For coding agents (Claude Code, etc.), the repo includes a small context surface
 - Rustc (1.86)
 - Cargo 1.82.0
 - [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) for OCR
+- PostgreSQL 16+ (required for migrated ingest/query paths)
 
-Run `cargo build --release` to build the project. This will create binaries in `target/release/` folder. It will create three binaries, one for the server, one for the collector and one for the interface. The server binary is `lifelog-server`, the client binary is `lifelog-collector` and the interface binary is `lifelog-interface`.
+Run `nix develop --command cargo build --release` to build the project. This will create binaries in `target/release/` folder. It will create three binaries, one for the server, one for the collector and one for the interface. The server binary is `lifelog-server`, the client binary is `lifelog-collector` and the interface binary is `lifelog-interface`.
 
-Optionally, if you would like to only build a specific binary, you can run `cargo build --release -p <binary_name>` where `<binary_name>` is one of the three binaries mentioned above.
+Optionally, if you would like to only build a specific binary, you can run `nix develop --command cargo build --release -p <binary_name>` where `<binary_name>` is one of the three binaries mentioned above.
 
 ##### NixOS
 
-If you are on NixOS I have graciously provided the `flake.nix` to include in your configuration. 😀
+If you are on NixOS, include this flake and enable the provided module:
+
+```nix
+{
+  imports = [ inputs.lifelog.nixosModules.lifelog-postgres ];
+  services.lifelog.postgres.enable = true;
+}
+```
+
+This provisions PostgreSQL and auto-creates a `lifelog` DB/user by default.
 
 ## Persistent Deployment
 

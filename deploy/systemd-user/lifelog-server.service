@@ -1,7 +1,7 @@
 [Unit]
 Description=Lifelog Server Backend (user)
-After=network-online.target lifelog-surrealdb.service
-Wants=network-online.target lifelog-surrealdb.service
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=simple
@@ -11,6 +11,8 @@ Environment=LIFELOG_HOST=0.0.0.0
 Environment=LIFELOG_DB_ENDPOINT=127.0.0.1:7183
 Environment=LIFELOG_DB_USER=root
 Environment=LIFELOG_DB_PASS=root
+Environment=LIFELOG_POSTGRES_INGEST_URL=postgresql://lifelog@127.0.0.1:5432/lifelog
+Environment=LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS=16
 Environment=LIFELOG_CONFIG_PATH=%h/Projects/lifelog/lifelog-config.toml
 Environment=RUST_LOG=info
 ExecStart=/usr/bin/env bash -lc 'exec nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend'

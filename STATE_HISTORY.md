@@ -103,3 +103,38 @@
       </validation_steps>
 
 </state_snapshot>
+
+<state_snapshot>
+      <overall_goal>
+      Complete PostgreSQL Migration Phase 4 by updating operations/deployment defaults, docs/config guidance, and observability to surface PostgreSQL pool health while retaining safe hybrid fallback.
+      </overall_goal>
+
+      <what_to_do>
+          - Added NixOS module support in flake outputs to provision PostgreSQL and auto-create lifelog database/user.
+          - Updated server systemd units to depend on PostgreSQL and export Postgres ingest env vars.
+          - Updated deployment installer script to enable `postgresql.service` when present.
+          - Extended `ServerState`/`GetState` to report Postgres pool metrics (enabled/max/size/available/waiting).
+          - Updated README/USAGE/deploy config comments to document PostgreSQL-first hybrid operation.
+          - Updated DESIGN.md and SPEC.md with Phase 4 decisions/implemented notes.
+      </what_to_do>
+      <why>
+          - Phase 4 requires operational migration readiness (services, deployment docs, and health visibility), not only query/ingest runtime changes.
+          - Hypothesis: making deployment Postgres-first while keeping Surreal service wiring avoids regressions for non-migrated paths.
+          - Assumption tested: pool metrics exposed in `GetState` are sufficient to make Postgres health observable through existing state APIs.
+      </why>
+
+      <how>
+          - Added `nixosModules.lifelog-postgres` in `flake.nix` with `services.lifelog.postgres.*` options and `services.postgresql.ensureDatabases/ensureUsers` provisioning.
+          - Added/updated unit envs (`LIFELOG_POSTGRES_INGEST_URL`, `LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS`) and `postgresql.service` ordering in server service files.
+          - Modified `scripts/install_persistent_services.sh` to enable system PostgreSQL unit when available.
+          - Added proto fields to `ServerState` for Postgres pool metrics and populated them in `server/src/server.rs::get_state` using deadpool status.
+          - Regenerated interface proto TS types to include the new `ServerState` fields.
+      </how>
+
+      <validation_steps>
+           - `just check-digest` (pass).
+           - `tools/ai/run_and_digest.sh "just test"` (pass).
+           - `cd interface && ./scripts/gen-proto-types.sh` (pass).
+      </validation_steps>
+
+</state_snapshot>

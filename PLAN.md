@@ -1,16 +1,15 @@
-# PostgreSQL Migration Phase 3: Query Execution & AST Translation
+# PostgreSQL Migration Phase 4: Operations, Deployment, & Finalization
 
-**Objective:** Translate the complex temporal overlap logic currently handled in Rust into native PostgreSQL engine operations for high performance.
+**Objective:** Ensure a smooth transition for existing development environments and production deployments, and remove SurrealDB dependencies where no longer needed.
 
-- [ ] **Task 3.1: Table Queries & Full-Text Search**
-  - Update `ExecutionPlan::TableQuery` in `server/src/query/executor.rs` (or equivalent) to generate PostgreSQL SQL.
-  - Translate text searches from SurrealDB's `SEARCH ANALYZER` to PostgreSQL's `to_tsvector` and `@@` operator using GIN indexes.
-- [ ] **Task 3.2: Temporal DuringQuery Translation**
-  - Implement native PostgreSQL range overlap logic (`&&` operator on `TSTZRANGE`).
-  - Instead of pulling all intervals into Rust, perform an `INNER JOIN` in the database where time ranges overlap.
-- [ ] **Task 3.3: Replay/Timeline Alignment**
-  - Update `Replay` RPC logic to query PostgreSQL.
-  - Ensure results are ordered by the lower bound of the `time_range`.
-- [ ] **Task 3.4: Hybrid Query Routing**
-  - Just like with Ingestion, implement a router that decides whether to send a query to SurrealDB or PostgreSQL based on the configured backend or availability of data.
-  - This allows incremental migration of query capabilities.
+- [ ] **Task 4.1: NixOS & Systemd Updates**
+  - Update `flake.nix` to provision PostgreSQL (`services.postgresql.enable = true`) and automatically create the `lifelog` database/user.
+  - Update `deploy/systemd/lifelog-server.service` and other related systemd files to depend on postgres instead of surrealdb (or both during transition).
+- [ ] **Task 4.2: Config & Documentation**
+  - Update `lifelog-config.toml` examples to use PostgreSQL as the default.
+  - Update `USAGE.md` and `README.md` to reflect the new PostgreSQL requirement.
+- [ ] **Task 4.3: Health & Metrics**
+  - Ensure `ReportState` and observability endpoints correctly reflect PostgreSQL pool metrics (active connections, idle connections).
+- [ ] **Task 4.4: Final Clean-up (Strategic)**
+  - If Phase 1-3 are fully verified, consider making PostgreSQL the mandatory default and marking SurrealDB for removal in a future release.
+  - Clean up any temporary "Hybrid" logic if it's no longer serving a purpose.

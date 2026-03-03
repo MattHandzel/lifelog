@@ -174,3 +174,31 @@
 
 - `just check-digest`: pass.
 - `tools/ai/run_and_digest.sh "just test"`: pass.
+
+## PostgreSQL Migration Phase 4 (Operations & Deployment) (2026-03-03)
+
+### Scope
+
+- Switched deployment defaults to PostgreSQL-first operation while preserving SurrealDB during hybrid transition.
+- Added PostgreSQL pool observability to server state responses.
+- Updated operational docs/config examples to reflect PostgreSQL as the primary dependency.
+
+### Architecture Decisions
+
+- Added a NixOS module in `flake.nix` (`nixosModules.lifelog-postgres`) that:
+  - enables `services.postgresql`,
+  - auto-creates `lifelog` database and `lifelog` role (configurable).
+- Updated server systemd units to:
+  - depend on `postgresql.service`,
+  - export `LIFELOG_POSTGRES_INGEST_URL` and `LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS`.
+- Kept `lifelog-surrealdb.service` dependency/env in place for transition safety.
+- Extended `ServerState` with PostgreSQL pool metrics sourced from `deadpool-postgres` status:
+  - enabled flag,
+  - max size,
+  - current pool size,
+  - available connections,
+  - waiting requests.
+
+### Validation
+
+- `tools/ai/run_and_digest.sh "just check-digest"`: pass.
