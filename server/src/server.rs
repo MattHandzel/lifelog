@@ -110,14 +110,14 @@ impl ServerHandle {
         for key in keys {
             let core_key = LifelogFrameKey::new(
                 key.uuid.parse().unwrap_or_default(),
-                DataOrigin::tryfrom_string(key.origin).unwrap_or_else(|_| {
+                DataOrigin::tryfrom_string(key.origin.clone()).unwrap_or_else(|_| {
                     DataOrigin::new(
                         DataOriginType::DeviceId("unknown".to_string()),
                         "unknown".to_string(),
                     )
                 }),
             );
-            if let Ok(d) = get_data_by_key(
+            match get_data_by_key(
                 &server.db,
                 server.postgres_pool.as_ref(),
                 &server.cas,
@@ -125,7 +125,15 @@ impl ServerHandle {
             )
             .await
             {
-                data.push(d);
+                Ok(d) => data.push(d),
+                Err(e) => {
+                    tracing::error!(
+                        uuid = %key.uuid,
+                        origin = %key.origin,
+                        error = %e,
+                        "Failed to get data by key"
+                    );
+                }
             }
         }
         Ok(data)

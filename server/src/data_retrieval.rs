@@ -50,12 +50,28 @@ pub(crate) async fn get_data_by_key_postgres(
     cas: &FsCas,
     key: &LifelogFrameKey,
 ) -> Result<lifelog_types::LifelogData, LifelogError> {
-    let modality = DataModality::from_str_name(&key.origin.modality_name).ok_or_else(|| {
-        LifelogError::Database(format!(
-            "Invalid modality name: {}",
-            key.origin.modality_name
-        ))
-    })?;
+    let lower_name = key.origin.modality_name.to_lowercase();
+    let modality = match lower_name.as_str() {
+        "screen" => DataModality::Screen,
+        "browser" => DataModality::Browser,
+        "ocr" => DataModality::Ocr,
+        "audio" | "microphone" => DataModality::Audio,
+        "keystrokes" | "keyboard" => DataModality::Keystrokes,
+        "clipboard" => DataModality::Clipboard,
+        "shell_history" | "shellhistory" => DataModality::ShellHistory,
+        "window_activity" | "windowactivity" => DataModality::WindowActivity,
+        "mouse" => DataModality::Mouse,
+        "processes" => DataModality::Processes,
+        "camera" => DataModality::Camera,
+        "weather" => DataModality::Weather,
+        "hyprland" => DataModality::Hyprland,
+        _ => {
+            return Err(LifelogError::Database(format!(
+                "Unsupported or invalid modality name for Postgres: {}",
+                key.origin.modality_name
+            )))
+        }
+    };
 
     let client = pool
         .get()
@@ -113,12 +129,28 @@ pub(crate) async fn get_data_by_key_surreal(
     let table = key.origin.get_table_name();
     let id = key.uuid.to_string();
 
-    let modality = DataModality::from_str_name(&key.origin.modality_name).ok_or_else(|| {
-        LifelogError::Database(format!(
-            "Invalid modality name: {}",
-            key.origin.modality_name
-        ))
-    })?;
+    let lower_name = key.origin.modality_name.to_lowercase();
+    let modality = match lower_name.as_str() {
+        "screen" => DataModality::Screen,
+        "browser" => DataModality::Browser,
+        "ocr" => DataModality::Ocr,
+        "audio" | "microphone" => DataModality::Audio,
+        "keystrokes" | "keyboard" => DataModality::Keystrokes,
+        "clipboard" => DataModality::Clipboard,
+        "shell_history" | "shellhistory" => DataModality::ShellHistory,
+        "window_activity" | "windowactivity" => DataModality::WindowActivity,
+        "mouse" => DataModality::Mouse,
+        "processes" => DataModality::Processes,
+        "camera" => DataModality::Camera,
+        "weather" => DataModality::Weather,
+        "hyprland" => DataModality::Hyprland,
+        _ => {
+            return Err(LifelogError::Database(format!(
+                "Invalid modality name: {}",
+                key.origin.modality_name
+            )))
+        }
+    };
 
     match modality {
         DataModality::Screen => {
