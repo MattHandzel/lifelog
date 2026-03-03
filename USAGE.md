@@ -7,6 +7,7 @@ This guide covers installation, configuration, running the system, and testing.
 - Nix with flakes enabled
 - Git
 - Linux desktop environment (for most collector modalities)
+- PostgreSQL (required for migrated ingest/query paths)
 - Optional for OCR-heavy tests/features: Tesseract
 
 Clone and enter the repo:
@@ -81,13 +82,14 @@ export LIFELOG_COLLECTOR_ID=laptop
 
 If `LIFELOG_COLLECTOR_ID` is unset, `runtime.collectorId` must be present. There is no fallback selection.
 
-The backend still supports these environment variables for runtime overrides/secrets:
+The backend supports these environment variables for runtime overrides/secrets:
 
-The current backend uses these environment variables:
-
-- `LIFELOG_DB_ENDPOINT` (default from code: `127.0.0.1:7183`)
-- `LIFELOG_DB_USER` (required)
-- `LIFELOG_DB_PASS` (required)
+- `LIFELOG_POSTGRES_INGEST_URL` (recommended default): PostgreSQL DSN, e.g. `postgresql://lifelog@127.0.0.1:5432/lifelog`
+- `LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS` (optional, default `16`)
+- Transitional SurrealDB variables (still required for non-migrated paths during hybrid phase):
+  - `LIFELOG_DB_ENDPOINT` (default from code: `127.0.0.1:7183`)
+  - `LIFELOG_DB_USER` (required in hybrid mode)
+  - `LIFELOG_DB_PASS` (required in hybrid mode)
 - Optional:
   - `LIFELOG_HOST` (default `127.0.0.1`)
   - `LIFELOG_PORT` (default `7182`)
@@ -97,20 +99,41 @@ The current backend uses these environment variables:
 Example:
 
 ```bash
+export LIFELOG_POSTGRES_INGEST_URL=postgresql://lifelog@127.0.0.1:5432/lifelog
+export LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS=16
 export LIFELOG_DB_ENDPOINT=127.0.0.1:7183
 export LIFELOG_DB_USER=root
 export LIFELOG_DB_PASS=root
 ```
 
-## 4. Start SurrealDB
+## 4. Start PostgreSQL (Default)
 
-Run SurrealDB in a separate terminal:
+If using NixOS, prefer enabling PostgreSQL via the flake module:
 
-```bash
-nix develop --command surreal start --bind 127.0.0.1:7183 memory
+```nix
+{
+  imports = [ inputs.lifelog.nixosModules.lifelog-postgres ];
+  services.lifelog.postgres.enable = true;
+}
 ```
 
-Or for persistent local storage:
+For local non-NixOS dev, start PostgreSQL in a separate terminal:
+
+```bash
+nix develop --command bash -lc '
+  mkdir -p /tmp/lifelog-pg &&
+  if [ ! -f /tmp/lifelog-pg/PG_VERSION ]; then
+    initdb -D /tmp/lifelog-pg
+  fi &&
+  pg_ctl -D /tmp/lifelog-pg -o "-p 5432" -l /tmp/lifelog-pg.log start &&
+  psql -h 127.0.0.1 -p 5432 -d postgres -c "DO \$\$BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '\''lifelog'\'') THEN CREATE ROLE lifelog LOGIN; END IF; END\$\$;" &&
+  psql -h 127.0.0.1 -p 5432 -d postgres -c "SELECT '\''CREATE DATABASE lifelog OWNER lifelog'\'' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '\''lifelog'\'')\\gexec"
+'
+```
+
+### 4.1 SurrealDB (Transitional Hybrid Mode)
+
+Current server still keeps a SurrealDB path for non-migrated modalities. Run SurrealDB if your deployment still uses hybrid mode:
 
 ```bash
 nix develop --command surreal start --bind 127.0.0.1:7183 file:/tmp/lifelog-surreal.db
@@ -229,14 +252,16 @@ just install-services
 Then start services:
 
 ```bash
-sudo systemctl start surrealdb
+sudo systemctl start postgresql
 sudo systemctl start lifelog-server
 sudo systemctl start lifelog-collector
 ```
 
 ## 10. Troubleshooting
 
-- Server fails at startup with DB auth error:
+- Server fails at startup with PostgreSQL connection error:
+  - Ensure `LIFELOG_POSTGRES_INGEST_URL` points to a running PostgreSQL instance.
+- Server fails at startup with Surreal auth error in hybrid mode:
   - Ensure `LIFELOG_DB_USER` and `LIFELOG_DB_PASS` are exported in the server terminal.
 - Collector starts but does not upload:
   - Verify server is reachable at `http://<host>:<port>` and config `id` is set.
@@ -255,6 +280,7 @@ This section is for a split setup:
 ### 11.1 Files Added for Persistence
 
 - Remote system services:
+  - `postgresql.service` (system PostgreSQL)
   - `deploy/systemd/lifelog-surrealdb.service`
   - `deploy/systemd/lifelog-server.service`
 - Remote user-service fallback (for hosts where `/etc/systemd/system` is read-only):
@@ -280,7 +306,7 @@ nix develop --command bash -lc 'scripts/install_persistent_services.sh'
 ```
 
 What this does:
-- Installs and enables remote boot services (`lifelog-surrealdb`, `lifelog-server`)
+- Installs and enables remote boot services (`postgresql` when present, `lifelog-surrealdb`, `lifelog-server`)
   - Uses system-level units when writable, otherwise user-level units + linger
 - Installs local user collector service + validation timer
 - Enables linger (`loginctl enable-linger`) so user services survive reboot/login boundaries
@@ -293,9 +319,9 @@ What this does:
 Remote server host:
 
 ```bash
-ssh matth@server.matthandzel.com 'sudo systemctl status lifelog-surrealdb lifelog-server --no-pager'
-ssh matth@server.matthandzel.com 'sudo systemctl restart lifelog-surrealdb lifelog-server'
-ssh matth@server.matthandzel.com 'sudo journalctl -u lifelog-surrealdb -u lifelog-server -f'
+ssh matth@server.matthandzel.com 'sudo systemctl status postgresql lifelog-surrealdb lifelog-server --no-pager'
+ssh matth@server.matthandzel.com 'sudo systemctl restart postgresql lifelog-surrealdb lifelog-server'
+ssh matth@server.matthandzel.com 'sudo journalctl -u postgresql -u lifelog-surrealdb -u lifelog-server -f'
 ```
 
 If using remote user-level fallback:
@@ -368,9 +394,10 @@ These values are intentionally specific to one environment and should be paramet
   - file: `deploy/config/lifelog-config.laptop.toml`
 
 - Database credentials:
+  - `LIFELOG_POSTGRES_INGEST_URL=postgresql://lifelog@127.0.0.1:5432/lifelog`
   - `LIFELOG_DB_USER=root`
   - `LIFELOG_DB_PASS=root`
-  - change for any non-dev/shared deployment.
+  - change all values for any non-dev/shared deployment.
 
 - Service style fallback:
   - Installer currently tries system services first, then falls back to user services if `/etc/systemd/system` is not writable.

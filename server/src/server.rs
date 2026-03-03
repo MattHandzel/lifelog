@@ -425,6 +425,11 @@ impl Server {
                 disk_usage_bytes: 0,
                 pending_actions: vec![],
                 timestamp_of_last_sync: None,
+                postgres_pool_enabled: false,
+                postgres_pool_max_size: 0,
+                postgres_pool_size: 0,
+                postgres_pool_available: 0,
+                postgres_pool_waiting: 0,
             }),
         };
 
@@ -507,7 +512,24 @@ impl Server {
     }
 
     async fn get_state(&self) -> SystemState {
-        self.state.read().await.clone()
+        let mut state = self.state.read().await.clone();
+        if let Some(server_state) = state.server_state.as_mut() {
+            if let Some(pool) = &self.postgres_pool {
+                let pool_status = pool.status();
+                server_state.postgres_pool_enabled = true;
+                server_state.postgres_pool_max_size = pool_status.max_size as u32;
+                server_state.postgres_pool_size = pool_status.size as u32;
+                server_state.postgres_pool_available = pool_status.available as u32;
+                server_state.postgres_pool_waiting = pool_status.waiting as u32;
+            } else {
+                server_state.postgres_pool_enabled = false;
+                server_state.postgres_pool_max_size = 0;
+                server_state.postgres_pool_size = 0;
+                server_state.postgres_pool_available = 0;
+                server_state.postgres_pool_waiting = 0;
+            }
+        }
+        state
     }
 
     async fn get_config(&self) -> SystemConfig {

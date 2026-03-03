@@ -45,6 +45,7 @@ export enum DataModality {
   Camera = 10,
   Weather = 11,
   Hyprland = 12,
+  Microphone = 13,
   UNRECOGNIZED = -1,
 }
 
@@ -148,6 +149,8 @@ export interface CollectorConfig {
   clipboard?: ClipboardConfig | undefined;
   shellHistory?: ShellHistoryConfig | undefined;
   mouse?: MouseConfig | undefined;
+  windowActivity?: WindowActivityConfig | undefined;
+  keyboard?: KeyboardConfig | undefined;
 }
 
 export interface CollectorState {
@@ -286,6 +289,14 @@ export interface MouseConfig {
   enabled: boolean;
   interval: number;
   outputDir: string;
+}
+
+export interface WindowActivityConfig {
+  enabled: boolean;
+  interval: number;
+  outputDir: string;
+  /** "auto" (default), "x11", or "hyprctl". */
+  backend: string;
 }
 
 export interface NetworkConfig {
@@ -498,6 +509,13 @@ export enum MouseFrame_MouseButton {
   UNRECOGNIZED = -1,
 }
 
+export interface TransformSpec {
+  id: string;
+  enabled: boolean;
+  sourceOrigin: string;
+  language?: string | undefined;
+}
+
 export interface ServerConfig {
   host: string;
   port: number;
@@ -510,6 +528,14 @@ export interface ServerConfig {
    * an explicit temporal window.
    */
   defaultCorrelationWindowMs: number;
+  /** Per-modality retention in days. 0 means keep forever. */
+  retentionPolicyDays: { [key: string]: number };
+  transforms: TransformSpec[];
+}
+
+export interface ServerConfig_RetentionPolicyDaysEntry {
+  key: string;
+  value: number;
 }
 
 export interface ServerState {
@@ -524,6 +550,11 @@ export interface ServerState {
   totalFramesStored: number;
   diskUsageBytes: number;
   uptimeSince?: Date | undefined;
+  postgresPoolEnabled: boolean;
+  postgresPoolMaxSize: number;
+  postgresPoolSize: number;
+  postgresPoolAvailable: number;
+  postgresPoolWaiting: number;
 }
 
 export interface SystemConfig {
