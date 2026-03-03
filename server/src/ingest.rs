@@ -893,7 +893,7 @@ impl IngestBackend for PostgresIngestBackend {
             .await
             .map_err(|e| format!("postgres pool get failed: {e}"))?;
         let now = Utc::now();
-        let now_s = now.to_rfc3339();
+        let now_s = now;
 
         match lower_stream_id.as_str() {
             "screen" => {
@@ -918,8 +918,8 @@ impl IngestBackend for PostgresIngestBackend {
                                 t_device, t_ingest, t_canonical, t_end, time_quality,
                                 width, height, blob_hash, blob_size, mime_type
                             ) VALUES (
-                                $1, $2, $3, tstzrange($4::timestamptz, $5::timestamptz, '[)'),
-                                $6::timestamptz, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10,
+                                $1, $2, $3, tstzrange($4, $5, '[)'),
+                                $6, $7, $8, $9, $10,
                                 $11, $12, $13, $14, $15
                             )
                             ON CONFLICT (id) DO NOTHING",
@@ -927,12 +927,12 @@ impl IngestBackend for PostgresIngestBackend {
                                 &to_uuid(&frame.uuid),
                                 &collector_id,
                                 &stream_id,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
-                                &t_device.to_rfc3339(),
-                                &now_s,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
+                                &t_canonical,
+                                &t_end,
+                                &t_device,
+                                &now,
+                                &t_canonical,
+                                &t_end,
                                 &time_quality,
                                 &(frame.width as i64),
                                 &(frame.height as i64),
@@ -973,8 +973,8 @@ impl IngestBackend for PostgresIngestBackend {
                                 t_device, t_ingest, t_canonical, t_end, time_quality,
                                 url, title, visit_count
                             ) VALUES (
-                                $1, $2, $3, tstzrange($4::timestamptz, $5::timestamptz, '[)'),
-                                $6::timestamptz, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10,
+                                $1, $2, $3, tstzrange($4, $5, '[)'),
+                                $6, $7, $8, $9, $10,
                                 $11, $12, $13
                             )
                             ON CONFLICT (id) DO NOTHING",
@@ -982,12 +982,12 @@ impl IngestBackend for PostgresIngestBackend {
                                 &to_uuid(&frame.uuid),
                                 &collector_id,
                                 &stream_id,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
-                                &t_device.to_rfc3339(),
-                                &now_s,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
+                                &t_canonical,
+                                &t_end,
+                                &t_device,
+                                &now,
+                                &t_canonical,
+                                &t_end,
                                 &time_quality,
                                 &frame.url,
                                 &frame.title,
@@ -1021,20 +1021,20 @@ impl IngestBackend for PostgresIngestBackend {
                                 id, collector_id, stream_id, source_frame_uuid, time_range,
                                 t_device, t_ingest, t_canonical, t_end, time_quality, text
                             ) VALUES (
-                                $1, $2, $3, NULL, tstzrange($4::timestamptz, $5::timestamptz, '[)'),
-                                $6::timestamptz, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10, $11
+                                $1, $2, $3, NULL, tstzrange($4, $5, '[)'),
+                                $6, $7, $8, $9, $10, $11
                             )
                             ON CONFLICT (id) DO NOTHING",
                             &[
                                 &to_uuid(&frame.uuid),
                                 &collector_id,
                                 &stream_id,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
-                                &t_device.to_rfc3339(),
-                                &now_s,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
+                                &t_canonical,
+                                &t_end,
+                                &t_device,
+                                &now,
+                                &t_canonical,
+                                &t_end,
                                 &time_quality,
                                 &frame.text,
                             ],
@@ -1078,8 +1078,8 @@ impl IngestBackend for PostgresIngestBackend {
                                 t_device, t_ingest, t_canonical, t_end, time_quality,
                                 blob_hash, blob_size, codec, sample_rate, channels, duration_secs
                             ) VALUES (
-                                $1, $2, $3, tstzrange($4::timestamptz, $5::timestamptz, '[)'),
-                                $6::timestamptz, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10,
+                                $1, $2, $3, tstzrange($4, $5, '[)'),
+                                $6, $7, $8, $9, $10,
                                 $11, $12, $13, $14, $15, $16
                             )
                             ON CONFLICT (id) DO NOTHING",
@@ -1087,12 +1087,12 @@ impl IngestBackend for PostgresIngestBackend {
                                 &to_uuid(&frame.uuid),
                                 &collector_id,
                                 &stream_id,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
-                                &t_device.to_rfc3339(),
-                                &now_s,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
+                                &t_canonical,
+                                &t_end,
+                                &t_device,
+                                &now,
+                                &t_canonical,
+                                &t_end,
                                 &time_quality,
                                 &blob_hash,
                                 &(frame.audio_bytes.len() as i64),
@@ -1142,8 +1142,8 @@ impl IngestBackend for PostgresIngestBackend {
                                 t_device, t_ingest, t_canonical, t_end, time_quality,
                                 text, blob_hash, blob_size, mime_type
                             ) VALUES (
-                                $1, $2, $3, tstzrange($4::timestamptz, $5::timestamptz, '[)'),
-                                $6::timestamptz, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10,
+                                $1, $2, $3, tstzrange($4, $5, '[)'),
+                                $6, $7, $8, $9, $10,
                                 $11, $12, $13, $14
                             )
                             ON CONFLICT (id) DO NOTHING",
@@ -1151,12 +1151,12 @@ impl IngestBackend for PostgresIngestBackend {
                                 &to_uuid(&frame.uuid),
                                 &collector_id,
                                 &stream_id,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
-                                &t_device.to_rfc3339(),
-                                &now_s,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
+                                &t_canonical,
+                                &t_end,
+                                &t_device,
+                                &now,
+                                &t_canonical,
+                                &t_end,
                                 &time_quality,
                                 &text,
                                 &blob_hash,
@@ -1194,8 +1194,8 @@ impl IngestBackend for PostgresIngestBackend {
                                 t_device, t_ingest, t_canonical, t_end, time_quality,
                                 command, working_dir, exit_code
                             ) VALUES (
-                                $1, $2, $3, tstzrange($4::timestamptz, $5::timestamptz, '[)'),
-                                $6::timestamptz, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10,
+                                $1, $2, $3, tstzrange($4, $5, '[)'),
+                                $6, $7, $8, $9, $10,
                                 $11, $12, $13
                             )
                             ON CONFLICT (id) DO NOTHING",
@@ -1203,12 +1203,12 @@ impl IngestBackend for PostgresIngestBackend {
                                 &to_uuid(&frame.uuid),
                                 &collector_id,
                                 &stream_id,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
-                                &t_device.to_rfc3339(),
-                                &now_s,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
+                                &t_canonical,
+                                &t_end,
+                                &t_device,
+                                &now,
+                                &t_canonical,
+                                &t_end,
                                 &time_quality,
                                 &frame.command,
                                 &working_dir,
@@ -1247,8 +1247,8 @@ impl IngestBackend for PostgresIngestBackend {
                                 t_device, t_ingest, t_canonical, t_end, time_quality,
                                 text, application, window_title
                             ) VALUES (
-                                $1, $2, $3, tstzrange($4::timestamptz, $5::timestamptz, '[)'),
-                                $6::timestamptz, $7::timestamptz, $8::timestamptz, $9::timestamptz, $10,
+                                $1, $2, $3, tstzrange($4, $5, '[)'),
+                                $6, $7, $8, $9, $10,
                                 $11, $12, $13
                             )
                             ON CONFLICT (id) DO NOTHING",
@@ -1256,12 +1256,12 @@ impl IngestBackend for PostgresIngestBackend {
                                 &to_uuid(&frame.uuid),
                                 &collector_id,
                                 &stream_id,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
-                                &t_device.to_rfc3339(),
-                                &now_s,
-                                &t_canonical.to_rfc3339(),
-                                &t_end.to_rfc3339(),
+                                &t_canonical,
+                                &t_end,
+                                &t_device,
+                                &now,
+                                &t_canonical,
+                                &t_end,
                                 &time_quality,
                                 &frame.text,
                                 &application,
