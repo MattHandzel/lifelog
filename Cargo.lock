@@ -4137,6 +4137,7 @@ dependencies = [
  "lifelog-core",
  "lifelog-types",
  "once_cell",
+ "pbjson-types",
  "portpicker",
  "pretty_assertions",
  "proptest",

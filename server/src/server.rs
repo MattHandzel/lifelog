@@ -1,4 +1,5 @@
 use crate::policy::*;
+use crate::postgres::{connect_pool, run_migrations, PostgresPool};
 use chrono::Utc;
 use config::ServerPolicyConfig;
 use config::{ServerConfig, SystemConfig};
@@ -35,6 +36,7 @@ type SkewSamples = HashMap<String, Vec<(chrono::DateTime<Utc>, chrono::DateTime<
 #[derive(Debug, Clone)]
 pub struct Server {
     pub(crate) db: Surreal<Client>,
+    pub(crate) postgres_pool: Option<PostgresPool>,
     pub(crate) cas: FsCas,
     pub(crate) config: Arc<RwLock<ServerConfig>>,
     pub(crate) state: Arc<RwLock<SystemState>>,
@@ -316,6 +318,22 @@ impl Server {
             .map_err(|e| LifelogError::Database(e.to_string()))?;
 
         crate::schema::run_startup_migrations(&db).await?;
+        let postgres_pool = match std::env::var("LIFELOG_POSTGRES_INGEST_URL") {
+            Ok(url) if !url.trim().is_empty() => {
+                let max_connections = std::env::var("LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS")
+                    .ok()
+                    .and_then(|v| v.parse::<usize>().ok())
+                    .unwrap_or(16);
+                let pool = connect_pool(&url, max_connections).await?;
+                run_migrations(&pool).await?;
+                tracing::info!(
+                    max_connections,
+                    "Postgres ingest backend enabled via LIFELOG_POSTGRES_INGEST_URL"
+                );
+                Some(pool)
+            }
+            _ => None,
+        };
 
         let cas = FsCas::new(&config.cas_path);
 
@@ -380,6 +398,7 @@ impl Server {
 
         Ok(Server {
             db,
+            postgres_pool,
             cas,
             config: Arc::new(RwLock::new(config.clone())),
             state: Arc::new(RwLock::new(system_state)),
