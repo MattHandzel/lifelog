@@ -14,6 +14,14 @@ check:
 # Alias for agent-specific digest checks
 check-digest: check
 
+# Create a new SQLx migration (server crate)
+sqlx-migrate-add name:
+    nix develop --command sh -c 'cd server && sqlx migrate add {{name}}'
+
+# Apply SQLx migrations (server crate)
+sqlx-migrate-run database_url:
+    DATABASE_URL={{database_url}} nix develop --command sh -c 'cd server && sqlx migrate run'
+
 # Run all tests (excluding Tauri UI)
 test:
     @if [ "{{IS_LLM_AGENT}}" = "1" ]; then \

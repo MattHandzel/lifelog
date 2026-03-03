@@ -7,6 +7,7 @@ pub(crate) mod data_retrieval;
 pub mod db;
 pub mod grpc_service;
 pub(crate) mod ingest;
+pub mod postgres;
 pub mod query;
 pub(crate) mod replay;
 pub(crate) mod retention;
