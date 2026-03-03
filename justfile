@@ -149,9 +149,9 @@ worktree-remove name:
 # List active worktrees and their current branch status
 status-all:
     @echo "=== Active Worktree Status ==="
-    @git worktree list --porcelain | grep "^worktree" | cut -d' ' -f2 | while read wt; do \
-        echo "\n📍 $$(basename $$wt)"; \
-        (cd "$$wt" && git status -s && git log -n 1 --oneline); \
+    @git worktree list | while read wt branch commit; do \
+        echo "\n📍 $(basename $wt) ($branch)"; \
+        (cd "$wt" && git status -s && git log -n 1 --oneline); \
     done
 
 

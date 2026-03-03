@@ -97,8 +97,10 @@ fn secure_endpoint(server_address: &str) -> Result<Endpoint, LifelogError> {
             field: "LIFELOG_TLS_CA_CERT_PATH".to_string(),
             reason: format!("failed to read CA cert: {}", e),
         })?;
+        let server_name =
+            std::env::var("LIFELOG_TLS_SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
         tonic::transport::ClientTlsConfig::new()
-            .domain_name("localhost")
+            .domain_name(server_name)
             .ca_certificate(tonic::transport::Certificate::from_pem(ca_pem))
     } else {
         tonic::transport::ClientTlsConfig::new().with_native_roots()

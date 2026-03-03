@@ -3,17 +3,17 @@ CREATE TABLE IF NOT EXISTS upload_chunks (
     collector_id TEXT NOT NULL,
     stream_id TEXT NOT NULL,
     session_id BIGINT NOT NULL,
-    offset BIGINT NOT NULL,
+    "offset" BIGINT NOT NULL,
     length INTEGER NOT NULL,
     hash TEXT NOT NULL,
     indexed BOOLEAN NOT NULL DEFAULT FALSE,
     frame_uuid TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (collector_id, stream_id, session_id, offset)
+    UNIQUE (collector_id, stream_id, session_id, "offset")
 );
 
 CREATE INDEX IF NOT EXISTS idx_upload_chunks_resume
-    ON upload_chunks (collector_id, stream_id, session_id, offset DESC);
+    ON upload_chunks (collector_id, stream_id, session_id, "offset" DESC);
 CREATE INDEX IF NOT EXISTS idx_upload_chunks_frame_uuid
     ON upload_chunks (frame_uuid);
 

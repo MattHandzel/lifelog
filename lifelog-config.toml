@@ -1,0 +1,12 @@
+[server]
+host = "0.0.0.0"
+port = 7182
+databaseEndpoint = "127.0.0.1:7183"
+databaseName = "main"
+serverName = "LifelogServer"
+casPath = "/home/matth/lifelog/cas"
+defaultCorrelationWindowMs = 30000
+
+transforms = [
+  { id = "ocr", enabled = true, sourceOrigin = "*:screen", language = "eng" }
+]
