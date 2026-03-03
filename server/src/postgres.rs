@@ -19,6 +19,7 @@ pub async fn connect_pool(
     database_url: &str,
     max_connections: usize,
 ) -> Result<PostgresPool, LifelogError> {
+    tracing::debug!("Connecting to Postgres with URI: {}", database_url);
     let cfg =
         tokio_postgres::Config::from_str(database_url).map_err(|e| LifelogError::Validation {
             field: "database_endpoint".to_string(),
@@ -35,10 +36,15 @@ pub async fn connect_pool(
 }
 
 pub async fn run_migrations(pool: &PostgresPool) -> Result<(), LifelogError> {
-    let mut client = pool
-        .get()
-        .await
-        .map_err(|e| LifelogError::Database(format!("postgres pool get failed: {e}")))?;
+    let mut client = match pool.get().await {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::error!("Postgres pool get failed during migrations: {e}");
+            return Err(LifelogError::Database(format!(
+                "postgres pool get failed: {e}"
+            )));
+        }
+    };
     client
         .batch_execute(
             "CREATE TABLE IF NOT EXISTS schema_migrations (

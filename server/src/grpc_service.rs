@@ -313,10 +313,10 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 .map_err(|e| Status::internal(format!("Postgres pool error: {e}")))?;
             let row = client
                 .query_opt(
-                    "SELECT offset, length
+                    "SELECT \"offset\", length
                      FROM upload_chunks
                      WHERE collector_id = $1 AND stream_id = $2 AND session_id = $3
-                     ORDER BY offset DESC
+                     ORDER BY \"offset\" DESC
                      LIMIT 1",
                     &[
                         &stream_id.collector_id,

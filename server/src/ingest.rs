@@ -1310,7 +1310,7 @@ impl IngestBackend for PostgresIngestBackend {
         client
             .execute(
                 "INSERT INTO upload_chunks (
-                    id, collector_id, stream_id, session_id, offset, length, hash, frame_uuid, indexed
+                    id, collector_id, stream_id, session_id, \"offset\", length, hash, frame_uuid, indexed
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                 ON CONFLICT (id) DO UPDATE
                 SET indexed = (upload_chunks.indexed OR EXCLUDED.indexed)",
