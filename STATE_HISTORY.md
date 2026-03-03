@@ -64,3 +64,42 @@
       </validation_steps>
 
 </state_snapshot>
+
+<state_snapshot>
+      <overall_goal>
+      Implement Phase 3 PostgreSQL migration for query execution by translating AST/plans to native PostgreSQL operations, adding temporal overlap SQL execution, and routing query/replay between SurrealDB and PostgreSQL.
+      </overall_goal>
+
+      <what_to_do>
+          - Added PostgreSQL execution for `ExecutionPlan::TableQuery` with native filtering and FTS translation.
+          - Added PostgreSQL-native temporal execution for `ExecutionPlan::DuringQuery` using range overlap checks in SQL (`time_range && ...`) with source-term `EXISTS` joins.
+          - Added hybrid query routing in server query path based on plan compatibility and configured Postgres pool.
+          - Added hybrid origin discovery (Surreal catalog + Postgres distinct collector/origin scan).
+          - Updated replay to use PostgreSQL range queries for migrated modalities (screen/context) with Surreal fallback for non-migrated modalities.
+          - Refactored planner plans to carry backend-agnostic filters (`Expression`) alongside existing Surreal SQL strings.
+      </what_to_do>
+      <why>
+          - Phase 3 requires moving temporal overlap work from Rust interval materialization into PostgreSQL execution for performance and reduced memory overhead.
+          - Hypothesis: keeping the existing planner shape while adding AST-bearing plan fields enables dual-engine execution with minimal regression risk.
+          - Assumption tested: a plan-level compatibility check allows safe per-query/per-plan backend routing for incremental migration.
+      </why>
+
+      <how>
+          - Reworked `ExecutionPlan` variants in `server/src/query/planner.rs` to include filter expressions and explicit limits used by Postgres execution.
+          - Implemented `execute_postgres(...)` and `plan_is_postgres_compatible(...)` in `server/src/query/executor.rs`.
+          - Implemented Postgres expression compilation:
+            - `Expression::TimeRange` -> `time_range && tstzrange(...)`
+            - `Expression::Contains` -> `search_document @@ websearch_to_tsquery('english', ...)` on supported tables.
+          - Implemented temporal translation with SQL `EXISTS` source subqueries and overlap checks against expanded source ranges.
+          - Updated `process_query` in `server/src/server.rs` to route plans to Postgres when compatible; otherwise use Surreal executor.
+          - Added Postgres-origin introspection and merged origin availability for selector resolution.
+          - Updated replay screen/context fetches to query Postgres tables ordered by `lower(time_range)` where supported.
+      </how>
+
+      <validation_steps>
+           - `just check-digest` (pass).
+           - `tools/ai/run_and_digest.sh "nix develop --command cargo test -p lifelog-server plans_temporal_or_via_dnf_union --lib"` (pass).
+           - `tools/ai/run_and_digest.sh "just test"` (pass).
+      </validation_steps>
+
+</state_snapshot>

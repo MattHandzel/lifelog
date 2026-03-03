@@ -289,6 +289,79 @@ impl Server {
         out
     }
 
+    fn postgres_table_for_modality(modality: &str) -> Option<&'static str> {
+        match modality {
+            "Screen" => Some("screen_records"),
+            "Browser" => Some("browser_records"),
+            "Ocr" => Some("ocr_records"),
+            "Audio" => Some("audio_records"),
+            "Clipboard" => Some("clipboard_records"),
+            "ShellHistory" => Some("shell_history_records"),
+            "Keystrokes" => Some("keystroke_records"),
+            _ => None,
+        }
+    }
+
+    fn collector_id_from_origin(origin: &DataOrigin) -> Option<&str> {
+        match &origin.origin {
+            DataOriginType::DeviceId(id) => Some(id.as_str()),
+            DataOriginType::DataOrigin(parent) => Self::collector_id_from_origin(parent),
+        }
+    }
+
+    async fn get_origins_from_postgres(
+        pool: &PostgresPool,
+    ) -> Result<Vec<DataOrigin>, LifelogError> {
+        let client = pool
+            .get()
+            .await
+            .map_err(|e| LifelogError::Database(format!("postgres pool get failed: {e}")))?;
+
+        let modality_tables = [
+            ("Screen", "screen_records"),
+            ("Browser", "browser_records"),
+            ("Ocr", "ocr_records"),
+            ("Audio", "audio_records"),
+            ("Clipboard", "clipboard_records"),
+            ("ShellHistory", "shell_history_records"),
+            ("Keystrokes", "keystroke_records"),
+        ];
+
+        let mut out = Vec::new();
+        let mut seen = HashSet::new();
+        for (modality, table) in modality_tables {
+            let sql = format!("SELECT DISTINCT collector_id FROM {table}");
+            let rows = client.query(sql.as_str(), &[]).await.map_err(|e| {
+                LifelogError::Database(format!("postgres origin query failed for {table}: {e}"))
+            })?;
+            for row in rows {
+                let collector_id: String = row.get("collector_id");
+                let origin =
+                    DataOrigin::new(DataOriginType::DeviceId(collector_id), modality.into());
+                let key = origin.get_table_name();
+                if seen.insert(key) {
+                    out.push(origin);
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    async fn get_available_origins_hybrid(&self) -> Result<Vec<DataOrigin>, LifelogError> {
+        let mut origins = get_origins_from_db(&self.db).await?;
+        if let Some(pool) = &self.postgres_pool {
+            let pg_origins = Self::get_origins_from_postgres(pool).await?;
+            let mut seen: HashSet<String> = origins.iter().map(|o| o.get_table_name()).collect();
+            for origin in pg_origins {
+                let key = origin.get_table_name();
+                if seen.insert(key) {
+                    origins.push(origin);
+                }
+            }
+        }
+        Ok(origins)
+    }
+
     pub async fn new(config: &ServerConfig) -> Result<Self, LifelogError> {
         // NOTE: `surrealdb::engine::remote::ws::Ws` expects an address like `127.0.0.1:8000`
         // (tests use this form). Prefixing with `ws://` can hang depending on driver/version.
@@ -466,7 +539,7 @@ impl Server {
     ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
         let mut keys: Vec<LifelogFrameKey> = vec![];
 
-        let available_origins = get_origins_from_db(&self.db).await?;
+        let available_origins = self.get_available_origins_hybrid().await?;
         let scoped_origins: Vec<DataOrigin> = if query_msg.search_origins.is_empty() {
             available_origins.clone()
         } else {
@@ -498,9 +571,16 @@ impl Server {
             };
 
             let plan = crate::query::planner::Planner::plan(&ast_query, &scoped_origins);
-            return crate::query::executor::execute(&self.db, plan)
-                .await
-                .map_err(|e| LifelogError::Database(format!("query execution failed: {e}")));
+            let res = if let Some(pool) = &self.postgres_pool {
+                if crate::query::executor::plan_is_postgres_compatible(&plan) {
+                    crate::query::executor::execute_postgres(pool, plan).await
+                } else {
+                    crate::query::executor::execute(&self.db, plan).await
+                }
+            } else {
+                crate::query::executor::execute(&self.db, plan).await
+            };
+            return res.map_err(|e| LifelogError::Database(format!("query execution failed: {e}")));
         }
 
         for origin in scoped_origins {
@@ -581,7 +661,16 @@ impl Server {
 
             // Pass the full catalog so temporal operators like WITHIN can resolve other streams.
             let plan = crate::query::planner::Planner::plan(&query, &available_origins);
-            match crate::query::executor::execute(&self.db, plan).await {
+            let query_result = if let Some(pool) = &self.postgres_pool {
+                if crate::query::executor::plan_is_postgres_compatible(&plan) {
+                    crate::query::executor::execute_postgres(pool, plan).await
+                } else {
+                    crate::query::executor::execute(&self.db, plan).await
+                }
+            } else {
+                crate::query::executor::execute(&self.db, plan).await
+            };
+            match query_result {
                 Ok(res) => keys.extend(res),
                 Err(e) => tracing::error!("Query execution failed for {}: {}", table, e),
             }
@@ -634,7 +723,7 @@ impl Server {
         let pad_ms = req.context_pad_ms.min(5 * 60 * 1000); // hard cap at 5 minutes
         let pad = chrono::Duration::milliseconds(pad_ms as i64);
 
-        let available_origins = get_origins_from_db(&self.db).await?;
+        let available_origins = self.get_available_origins_hybrid().await?;
 
         let screen_origin = if req.screen_origin.trim().is_empty() {
             available_origins
@@ -668,27 +757,92 @@ impl Server {
             t_canonical: Option<surrealdb::sql::Datetime>,
         }
 
-        let screen_table = screen_origin.get_table_name();
-        let sql = format!(
-            "SELECT uuid, t_canonical FROM `{}` WHERE t_canonical >= d'{}' AND t_canonical < d'{}' ORDER BY t_canonical ASC LIMIT {};",
-            screen_table,
-            start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
-            end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
-            max_steps
-        );
-        let mut resp = self
-            .db
-            .query(sql)
-            .await
-            .map_err(|e| LifelogError::Database(format!("replay screen query failed: {e}")))?;
-        let rows: Vec<ScreenRow> = resp
-            .take(0)
-            .map_err(|e| LifelogError::Database(format!("replay screen take failed: {e}")))?;
+        #[derive(Debug)]
+        struct PgScreenRow {
+            uuid: String,
+            t_canonical: Option<chrono::DateTime<Utc>>,
+        }
 
-        let screen_frames: Vec<(String, chrono::DateTime<Utc>)> = rows
-            .into_iter()
-            .filter_map(|r| Some((r.uuid, r.t_canonical?.0)))
-            .collect();
+        let screen_frames: Vec<(String, chrono::DateTime<Utc>)> = if let Some(pool) =
+            &self.postgres_pool
+        {
+            if let Some(table) = Self::postgres_table_for_modality(&screen_origin.modality_name) {
+                let collector_id =
+                    Self::collector_id_from_origin(&screen_origin).ok_or_else(|| {
+                        LifelogError::Validation {
+                            field: "screen_origin".to_string(),
+                            reason: "screen origin must include collector identity".to_string(),
+                        }
+                    })?;
+                let sql = format!(
+                        "SELECT id::text AS id, t_canonical::text AS t_canonical FROM {table} WHERE collector_id = $1 AND time_range && tstzrange($2::timestamptz, $3::timestamptz, '[)') ORDER BY lower(time_range) ASC LIMIT $4"
+                    );
+                let client = pool.get().await.map_err(|e| {
+                    LifelogError::Database(format!("postgres pool get failed: {e}"))
+                })?;
+                let rows = client
+                    .query(
+                        sql.as_str(),
+                        &[
+                            &collector_id,
+                            &start.to_rfc3339(),
+                            &end.to_rfc3339(),
+                            &(max_steps as i64),
+                        ],
+                    )
+                    .await
+                    .map_err(|e| {
+                        LifelogError::Database(format!("replay postgres screen query failed: {e}"))
+                    })?;
+                rows.into_iter()
+                    .map(|r| PgScreenRow {
+                        uuid: r.get("id"),
+                        t_canonical: r
+                            .get::<_, Option<String>>("t_canonical")
+                            .and_then(|ts| chrono::DateTime::parse_from_rfc3339(&ts).ok())
+                            .map(|dt| dt.with_timezone(&Utc)),
+                    })
+                    .filter_map(|r| Some((r.uuid, r.t_canonical?)))
+                    .collect()
+            } else {
+                let screen_table = screen_origin.get_table_name();
+                let sql = format!(
+                        "SELECT uuid, t_canonical FROM `{}` WHERE t_canonical >= d'{}' AND t_canonical < d'{}' ORDER BY t_canonical ASC LIMIT {};",
+                        screen_table,
+                        start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                        end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                        max_steps
+                    );
+                let mut resp = self.db.query(sql).await.map_err(|e| {
+                    LifelogError::Database(format!("replay screen query failed: {e}"))
+                })?;
+                let rows: Vec<ScreenRow> = resp.take(0).map_err(|e| {
+                    LifelogError::Database(format!("replay screen take failed: {e}"))
+                })?;
+                rows.into_iter()
+                    .filter_map(|r| Some((r.uuid, r.t_canonical?.0)))
+                    .collect()
+            }
+        } else {
+            let screen_table = screen_origin.get_table_name();
+            let sql = format!(
+                    "SELECT uuid, t_canonical FROM `{}` WHERE t_canonical >= d'{}' AND t_canonical < d'{}' ORDER BY t_canonical ASC LIMIT {};",
+                    screen_table,
+                    start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                    end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
+                    max_steps
+                );
+            let mut resp =
+                self.db.query(sql).await.map_err(|e| {
+                    LifelogError::Database(format!("replay screen query failed: {e}"))
+                })?;
+            let rows: Vec<ScreenRow> = resp
+                .take(0)
+                .map_err(|e| LifelogError::Database(format!("replay screen take failed: {e}")))?;
+            rows.into_iter()
+                .filter_map(|r| Some((r.uuid, r.t_canonical?.0)))
+                .collect()
+        };
 
         let mut steps =
             crate::replay::build_replay_steps_for_screen(screen_frames, screen_origin.clone(), end);
@@ -712,6 +866,13 @@ impl Server {
             uuid: String,
             t_canonical: Option<surrealdb::sql::Datetime>,
             t_end: Option<surrealdb::sql::Datetime>,
+        }
+
+        #[derive(Debug)]
+        struct PgCtxRow {
+            uuid: String,
+            t_canonical: Option<chrono::DateTime<Utc>>,
+            t_end: Option<chrono::DateTime<Utc>>,
         }
 
         let mut ctx_records: Vec<crate::replay::IntervalKey> = Vec::new();
@@ -743,6 +904,73 @@ impl Server {
             };
 
             for origin in resolved {
+                if let Some(pool) = &self.postgres_pool {
+                    if let Some(table) = Self::postgres_table_for_modality(&origin.modality_name) {
+                        let collector_id =
+                            Self::collector_id_from_origin(&origin).ok_or_else(|| {
+                                LifelogError::Validation {
+                                    field: "context_origins".to_string(),
+                                    reason: format!(
+                                        "origin '{}' must include collector identity",
+                                        origin.get_table_name()
+                                    ),
+                                }
+                            })?;
+                        let sql = format!(
+                            "SELECT id::text AS id, t_canonical::text AS t_canonical, t_end::text AS t_end FROM {table} WHERE collector_id = $1 AND time_range && tstzrange($2::timestamptz, $3::timestamptz, '[]') ORDER BY lower(time_range) ASC LIMIT $4"
+                        );
+                        let client = pool.get().await.map_err(|e| {
+                            LifelogError::Database(format!("postgres pool get failed: {e}"))
+                        })?;
+                        let rows = client
+                            .query(
+                                sql.as_str(),
+                                &[
+                                    &collector_id,
+                                    &window_start.to_rfc3339(),
+                                    &window_end.to_rfc3339(),
+                                    &(per_origin_limit as i64),
+                                ],
+                            )
+                            .await
+                            .map_err(|e| {
+                                LifelogError::Database(format!(
+                                    "replay postgres context query failed for {table}: {e}"
+                                ))
+                            })?;
+                        let pg_rows: Vec<PgCtxRow> = rows
+                            .into_iter()
+                            .map(|r| PgCtxRow {
+                                uuid: r.get("id"),
+                                t_canonical: r
+                                    .get::<_, Option<String>>("t_canonical")
+                                    .and_then(|ts| chrono::DateTime::parse_from_rfc3339(&ts).ok())
+                                    .map(|dt| dt.with_timezone(&Utc)),
+                                t_end: r
+                                    .get::<_, Option<String>>("t_end")
+                                    .and_then(|ts| chrono::DateTime::parse_from_rfc3339(&ts).ok())
+                                    .map(|dt| dt.with_timezone(&Utc)),
+                            })
+                            .collect();
+                        for r in pg_rows {
+                            let Some(t0) = r.t_canonical else { continue };
+                            let start = t0;
+                            let end = r.t_end.unwrap_or(start);
+                            if let Ok(uuid) = r.uuid.parse() {
+                                ctx_records.push(crate::replay::IntervalKey {
+                                    key: LifelogFrameKey {
+                                        uuid,
+                                        origin: origin.clone(),
+                                    },
+                                    start,
+                                    end,
+                                });
+                            }
+                        }
+                        continue;
+                    }
+                }
+
                 let table = origin.get_table_name();
                 let sql = format!(
                     "SELECT uuid, t_canonical, t_end FROM `{}` WHERE t_canonical <= d'{}' AND t_end >= d'{}' ORDER BY t_canonical ASC LIMIT {};",

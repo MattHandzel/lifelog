@@ -1,14 +1,16 @@
-# PostgreSQL Migration Phase 2: Ingestion Layer Rewrite
+# PostgreSQL Migration Phase 3: Query Execution & AST Translation
 
-**Objective:** Ensure the collector can stream gigabytes of data reliably and idempotently into PostgreSQL.
+**Objective:** Translate the complex temporal overlap logic currently handled in Rust into native PostgreSQL engine operations for high performance.
 
-- [ ] **Task 2.1: Refactor IngestBackend**
-  - Create `PostgresIngestBackend` implementing the `IngestBackend` trait.
-- [ ] **Task 2.2: Data Mapping & ToRecord Removal**
-  - Remove the custom `ToRecord` trait implementations and JSON serialization overhead if no longer needed.
-  - Map Protobuf payloads directly into Postgres parameterized queries (using `tokio-postgres` as established in Phase 1). This guarantees strict type mapping.
-- [ ] **Task 2.3: Idempotency Logic**
-  - Replace SurrealDB's `UPSERT` with PostgreSQL's `ON CONFLICT (id) DO UPDATE SET indexed = EXCLUDED.indexed`.
-  - Ensure the "ACK Gate" (Spec §6.2.1) logic is preserved: `indexed` only becomes `true` when derived transforms (like OCR) are completed, or immediately if disabled.
-- [ ] **Task 2.4: Blob/CAS Integrity**
-  - The CAS (Content-Addressed Store) logic remains on the filesystem. Ensure the `blob_hash` is correctly written as a `VARCHAR` in Postgres and linked to the metadata.
+- [ ] **Task 3.1: Table Queries & Full-Text Search**
+  - Update `ExecutionPlan::TableQuery` in `server/src/query/executor.rs` (or equivalent) to generate PostgreSQL SQL.
+  - Translate text searches from SurrealDB's `SEARCH ANALYZER` to PostgreSQL's `to_tsvector` and `@@` operator using GIN indexes.
+- [ ] **Task 3.2: Temporal DuringQuery Translation**
+  - Implement native PostgreSQL range overlap logic (`&&` operator on `TSTZRANGE`).
+  - Instead of pulling all intervals into Rust, perform an `INNER JOIN` in the database where time ranges overlap.
+- [ ] **Task 3.3: Replay/Timeline Alignment**
+  - Update `Replay` RPC logic to query PostgreSQL.
+  - Ensure results are ordered by the lower bound of the `time_range`.
+- [ ] **Task 3.4: Hybrid Query Routing**
+  - Just like with Ingestion, implement a router that decides whether to send a query to SurrealDB or PostgreSQL based on the configured backend or availability of data.
+  - This allows incremental migration of query capabilities.
