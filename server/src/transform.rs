@@ -8,6 +8,7 @@ use surrealdb::Surreal;
 use utils::cas::FsCas;
 
 use crate::data_retrieval::get_data_by_key;
+use crate::postgres::PostgresPool;
 
 fn time_quality_str(q: i32) -> &'static str {
     match lifelog_types::TimeQuality::try_from(q).unwrap_or(lifelog_types::TimeQuality::Unknown) {
@@ -68,6 +69,7 @@ impl From<OcrTransform> for LifelogTransform {
 
 pub(crate) async fn transform_data_single(
     db: &Surreal<Client>,
+    postgres_pool: Option<&PostgresPool>,
     cas: &FsCas,
     keys: &[LifelogFrameKey],
     transform: &LifelogTransform,
@@ -76,7 +78,7 @@ pub(crate) async fn transform_data_single(
 
     for key in keys {
         let data_to_transform: lifelog_types::LifelogData =
-            match get_data_by_key(db, cas, key).await {
+            match get_data_by_key(db, postgres_pool, cas, key).await {
                 Ok(data) => data,
                 Err(e) => {
                     tracing::error!(uuid = %key.uuid, error = %e, "Failed to get data by key");

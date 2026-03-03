@@ -117,7 +117,14 @@ impl ServerHandle {
                     )
                 }),
             );
-            if let Ok(d) = get_data_by_key(&server.db, &server.cas, &core_key).await {
+            if let Ok(d) = get_data_by_key(
+                &server.db,
+                server.postgres_pool.as_ref(),
+                &server.cas,
+                &core_key,
+            )
+            .await
+            {
                 data.push(d);
             }
         }
@@ -1146,6 +1153,7 @@ impl Server {
                 let state_clone = self.state.clone();
                 let db_connection = self.db.clone();
                 let cas_clone = self.cas.clone();
+                let pool_clone = self.postgres_pool.clone();
                 let transforms = self.transforms.clone().read().await.to_vec();
                 tokio::spawn(async move {
                     let available_origins =
@@ -1210,6 +1218,7 @@ impl Server {
 
                             if let Some(last_ts) = crate::transform::transform_data_single(
                                 &db_connection,
+                                pool_clone.as_ref(),
                                 &cas_clone,
                                 &keys,
                                 &transform,

@@ -1,8 +1,10 @@
+use crate::postgres::PostgresPool;
 use lifelog_core::uuid::Uuid;
 use lifelog_core::*;
 use lifelog_types::DataModality;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
+use tokio_postgres::Row;
 use utils::cas::FsCas;
 
 fn time_quality_from_opt_str(s: Option<&str>) -> lifelog_types::TimeQuality {
@@ -29,6 +31,81 @@ fn validate_table_name(name: String) -> Result<String, LifelogError> {
 }
 
 pub(crate) async fn get_data_by_key(
+    db: &Surreal<Client>,
+    postgres_pool: Option<&PostgresPool>,
+    cas: &FsCas,
+    key: &LifelogFrameKey,
+) -> Result<lifelog_types::LifelogData, LifelogError> {
+    if let Some(pool) = postgres_pool {
+        if let Ok(data) = get_data_by_key_postgres(pool, cas, key).await {
+            return Ok(data);
+        }
+    }
+    // Fallback to Surreal
+    get_data_by_key_surreal(db, cas, key).await
+}
+
+pub(crate) async fn get_data_by_key_postgres(
+    pool: &PostgresPool,
+    cas: &FsCas,
+    key: &LifelogFrameKey,
+) -> Result<lifelog_types::LifelogData, LifelogError> {
+    let modality = DataModality::from_str_name(&key.origin.modality_name).ok_or_else(|| {
+        LifelogError::Database(format!(
+            "Invalid modality name: {}",
+            key.origin.modality_name
+        ))
+    })?;
+
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| LifelogError::Database(format!("postgres pool get failed: {e}")))?;
+
+    match modality {
+        DataModality::Screen => {
+            let row = client
+                .query_opt(
+                    "SELECT id, t_device, t_ingest, t_canonical, t_end, time_quality, width, height, blob_hash, mime_type
+                     FROM screen_records WHERE id = $1",
+                    &[&key.uuid],
+                )
+                .await
+                .map_err(|e| LifelogError::Database(format!("postgres select screen_records: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found in postgres: screen_records:{}", key.uuid)))?;
+
+            let blob_hash: String = row.get(8);
+            let image_bytes = cas.get(&blob_hash).map_err(|e| {
+                LifelogError::Database(format!("CAS read for {}: {}", blob_hash, e))
+            })?;
+
+            let frame = lifelog_types::ScreenFrame {
+                uuid: row.get::<_, uuid::Uuid>(0).to_string(),
+                timestamp: lifelog_types::to_pb_ts(row.get(1)),
+                width: row.get::<_, i64>(6) as u32,
+                height: row.get::<_, i64>(7) as u32,
+                image_bytes,
+                mime_type: row.get(9),
+                t_device: lifelog_types::to_pb_ts(row.get(1)),
+                t_ingest: lifelog_types::to_pb_ts(row.get(2)),
+                t_canonical: lifelog_types::to_pb_ts(row.get(3)),
+                t_end: lifelog_types::to_pb_ts(row.get(4)),
+                time_quality: time_quality_from_opt_str(row.get(5)) as i32,
+                record_type: lifelog_types::RecordType::Point as i32,
+            };
+
+            Ok(lifelog_types::LifelogData {
+                payload: Some(lifelog_types::lifelog_data::Payload::Screenframe(frame)),
+            })
+        }
+        _ => Err(LifelogError::Database(format!(
+            "Postgres GetData not yet implemented for modality: {:?}",
+            modality
+        ))),
+    }
+}
+
+pub(crate) async fn get_data_by_key_surreal(
     db: &Surreal<Client>,
     cas: &FsCas,
     key: &LifelogFrameKey,
