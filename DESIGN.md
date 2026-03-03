@@ -122,3 +122,30 @@
 - `tools/ai/run_and_digest.sh "just check"`: pass.
 - `tools/ai/run_and_digest.sh "just test"`: pass.
 - `tools/ai/run_and_digest.sh "cd interface && npm run build"`: pass.
+
+## PostgreSQL Migration Phase 1 Scaffold (2026-03-03)
+
+### Scope
+
+- Added initial PostgreSQL migration assets and runtime helper module in `server/`.
+- Kept SurrealDB runtime paths intact to avoid partial cutover regressions while landing scaffolding.
+
+### Architecture Decisions
+
+- Added a new server-local PostgreSQL helper module (`server/src/postgres.rs`) with:
+  - URI detection helper (`postgres://` / `postgresql://`).
+  - Connection pooling via `deadpool-postgres`.
+  - Ordered SQL migration execution from `server/migrations/`.
+- Added first static migration file (`20260303143000_init_postgres.sql`) containing:
+  - `upload_chunks` idempotency/resume metadata table.
+  - `catalog` and `transform_watermarks` metadata tables.
+  - Initial unified modality tables (`screen_records`, `browser_records`, `ocr_records`, `audio_records`, `clipboard_records`, `shell_history_records`, `keystroke_records`).
+  - `TSTZRANGE` + GIST temporal indexes and TSVECTOR + GIN text indexes for search-capable modalities.
+- Added `just` recipes for SQL migration workflow:
+  - `just sqlx-migrate-add <name>`
+  - `just sqlx-migrate-run <database_url>`
+
+### Validation
+
+- `just check-digest`: pass.
+- `tools/ai/run_and_digest.sh "nix develop --command cargo test -p lifelog-server postgres::tests --lib"`: pass.

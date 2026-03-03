@@ -169,6 +169,8 @@
             cargo-nextest
             bacon
             surrealdb
+            sqlx-cli
+            postgresql
           ]
           ++ pkgs.lib.optionals pkgs.stdenv.isLinux [
             linuxPackages.v4l2loopback
