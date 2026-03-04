@@ -423,7 +423,12 @@ impl Server {
     pub async fn new(config: &ServerConfig) -> Result<Self, LifelogError> {
         // NOTE: `surrealdb::engine::remote::ws::Ws` expects an address like `127.0.0.1:8000`
         // (tests use this form). Prefixing with `ws://` can hang depending on driver/version.
-        let db = Surreal::new::<Ws>(&config.database_endpoint)
+        let endpoint = if config.database_endpoint.contains("://") {
+            config.database_endpoint.clone()
+        } else {
+            format!("ws://{}", config.database_endpoint)
+        };
+        let db = Surreal::new::<Ws>(&endpoint)
             .await
             .map_err(|e| LifelogError::Database(e.to_string()))?;
 
