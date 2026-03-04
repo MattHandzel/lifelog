@@ -90,6 +90,10 @@ fn main() -> Result<(), Box<dyn Error>> {
             "lifelog.KeyboardConfig",
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
+        .type_attribute(
+            "lifelog.Embedding",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
         .compile_protos(
             &[
                 "../../proto/lifelog.proto",       // Path relative to build.rs
