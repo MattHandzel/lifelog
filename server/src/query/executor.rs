@@ -486,14 +486,14 @@ fn extract_collector_id(origin: &DataOrigin) -> Option<&str> {
 }
 
 fn pg_table_for_origin(origin: &DataOrigin) -> Option<&'static str> {
-    match origin.modality_name.as_str() {
-        "Screen" => Some("screen_records"),
-        "Browser" => Some("browser_records"),
-        "Ocr" => Some("ocr_records"),
-        "Audio" => Some("audio_records"),
-        "Clipboard" => Some("clipboard_records"),
-        "ShellHistory" => Some("shell_history_records"),
-        "Keystrokes" => Some("keystroke_records"),
+    match origin.modality_name.to_lowercase().as_str() {
+        "screen" => Some("screen_records"),
+        "browser" => Some("browser_records"),
+        "ocr" => Some("ocr_records"),
+        "audio" | "microphone" => Some("audio_records"),
+        "clipboard" => Some("clipboard_records"),
+        "shell_history" | "shellhistory" => Some("shell_history_records"),
+        "keystrokes" | "keyboard" => Some("keystroke_records"),
         _ => None,
     }
 }
