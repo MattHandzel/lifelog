@@ -94,6 +94,46 @@ fn main() -> Result<(), Box<dyn Error>> {
             "lifelog.Embedding",
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
+        .type_attribute(
+            "lifelog.PairCollectorResponse",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.GetSystemConfigResponse",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.QueryResponse",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.GetDataResponse",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.ListModalitiesResponse",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.GetStateResponse",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.ReplayResponse",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.ReplayStep",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.LifelogData",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.ScreenFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
         .compile_protos(
             &[
                 "../../proto/lifelog.proto",       // Path relative to build.rs
