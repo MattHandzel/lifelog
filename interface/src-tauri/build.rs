@@ -11,6 +11,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         .build_server(false) // We don't need server code in the interface
         .file_descriptor_set_path(out_dir.join("lifelog_descriptor.bin")) // Store the descriptor set
         .type_attribute(".", "#[derive(serde::Serialize, serde::Deserialize)]") // Add serde derive attributes to generated message types
+        .extern_path(".google.protobuf.Timestamp", "::pbjson_types::Timestamp")
         .compile_protos(
             &[
                 "../../proto/lifelog.proto",       // Path relative to build.rs
