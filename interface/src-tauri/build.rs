@@ -95,6 +95,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
         .type_attribute(
+            "lifelog.Timerange",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.ProcessInfo",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
             "lifelog.PairCollectorResponse",
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
