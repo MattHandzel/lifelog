@@ -332,6 +332,7 @@ async fn execute_postgres_table_query(
     let sql = format!(
         "SELECT t.id::text AS id FROM {table} t WHERE ({origin_scope}) AND ({filter_sql}) ORDER BY lower(t.time_range) ASC LIMIT {limit}"
     );
+    tracing::debug!("Postgres TableQuery SQL: {}", sql);
 
     let client = pool.get().await?;
     let rows = timeout(DEFAULT_DB_QUERY_TIMEOUT, client.query(sql.as_str(), &[])).await??;
