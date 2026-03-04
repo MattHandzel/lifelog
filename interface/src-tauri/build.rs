@@ -139,6 +139,14 @@ fn main() -> Result<(), Box<dyn Error>> {
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
         .type_attribute(
+            "lifelog.lifelog_data.Payload",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.RecordType",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
             "lifelog.ScreenFrame",
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
