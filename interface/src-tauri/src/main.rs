@@ -273,7 +273,7 @@ async fn set_component_config(
 async fn query_screenshot_keys(
     state: tauri::State<'_, GrpcClientState>,
     collector_id: String,
-) -> Result<Vec<String>, String> {
+) -> Result<Vec<LifelogDataKeyWrapper>, String> {
     let mut client_guard = state.client.lock().await;
     let client = if let Some(c) = client_guard.as_mut() {
         c
@@ -292,7 +292,7 @@ async fn query_screenshot_keys(
     };
     let req = lifelog::QueryRequest { query: Some(query) };
     match client.query(req).await {
-        Ok(resp) => Ok(resp.into_inner().keys.into_iter().map(|k| k.uuid).collect()),
+        Ok(resp) => Ok(resp.into_inner().keys.into_iter().map(Into::into).collect()),
         Err(e) => Err(format!("gRPC error: {}", e)),
     }
 }
@@ -300,14 +300,13 @@ async fn query_screenshot_keys(
 #[tauri::command]
 async fn get_screenshots_data(
     state: tauri::State<'_, GrpcClientState>,
-    uuids: Vec<String>,
-    collector_id: String,
+    keys: Vec<LifelogDataKeyWrapper>,
 ) -> Result<Vec<Value>, String> {
-    let keys = uuids
+    let grpc_keys = keys
         .into_iter()
-        .map(|u| lifelog::LifelogDataKey {
-            uuid: u,
-            origin: format!("{}:screen", collector_id),
+        .map(|k| lifelog::LifelogDataKey {
+            uuid: k.uuid,
+            origin: k.origin,
         })
         .collect();
 
@@ -322,7 +321,7 @@ async fn get_screenshots_data(
         client_guard.as_mut().unwrap()
     };
 
-    let req = lifelog::GetDataRequest { keys };
+    let req = lifelog::GetDataRequest { keys: grpc_keys };
     match client.get_data(req).await {
         Ok(resp) => {
             let data = resp.into_inner().data;
