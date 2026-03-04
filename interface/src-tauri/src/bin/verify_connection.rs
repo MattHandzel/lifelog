@@ -1,15 +1,13 @@
+use lifelog_interface_lib::lifelog;
 use std::time::Duration;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
-
-pub mod lifelog {
-    tonic::include_proto!("lifelog");
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "https://100.118.206.104:7182";
     let ca_path = "/home/matth/.config/lifelog/tls/server-ca.pem";
-    let token = std::env::var("LIFELOG_AUTH_TOKEN")?;
+    let token = std::env::var("LIFELOG_AUTH_TOKEN")
+        .unwrap_or_else(|_| "a8e8b1dd3a2c4f31b97ae82e3879ea05".to_string());
 
     println!("[CHECK] Connecting to {}...", addr);
     println!("[CHECK] Using CA: {}", ca_path);
@@ -27,16 +25,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .connect()
         .await?;
 
-    let mut client =
-        lifelog::lifelog_server_service_client::LifelogServerServiceClient::with_interceptor(
-            channel,
-            move |mut req: tonic::Request<()>| {
-                let val = format!("Bearer {}", token);
-                req.metadata_mut()
-                    .insert("authorization", val.parse().unwrap());
-                Ok(req)
-            },
-        );
+    let mut client = lifelog::LifelogServerServiceClient::with_interceptor(
+        channel,
+        move |mut req: tonic::Request<()>| {
+            let val = format!("Bearer {}", token);
+            req.metadata_mut()
+                .insert("authorization", val.parse().unwrap());
+            Ok(req)
+        },
+    );
 
     match client.get_state(lifelog::GetStateRequest {}).await {
         Ok(_) => println!("[CHECK] SUCCESS: gRPC connection verified and authenticated!"),

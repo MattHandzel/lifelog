@@ -4,11 +4,10 @@
     windows_subsystem = "windows"
 )]
 
-mod storage;
-
 use base64;
 use base64::{engine::general_purpose, Engine as _};
 use image::ImageOutputFormat;
+use lifelog_interface_lib::{google, lifelog};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -20,17 +19,6 @@ use std::process::Command;
 use std::sync::Arc;
 use tokio::time::{timeout, Duration};
 use tonic::transport::Channel;
-
-pub mod google {
-    pub mod protobuf {
-        tonic::include_proto!("google.protobuf");
-    }
-}
-
-pub mod lifelog {
-    tonic::include_proto!("lifelog");
-    pub use lifelog_server_service_client::LifelogServerServiceClient;
-}
 
 #[derive(Clone)]
 pub struct AuthInterceptor {

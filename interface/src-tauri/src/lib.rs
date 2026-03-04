@@ -12,6 +12,17 @@ pub mod embed {
 pub mod prelude;
 pub mod setup;
 pub mod storage;
+
+pub mod google {
+    pub mod protobuf {
+        tonic::include_proto!("google.protobuf");
+    }
+}
+
+pub mod lifelog {
+    tonic::include_proto!("lifelog");
+    pub use lifelog_server_service_client::LifelogServerServiceClient;
+}
 // pub mod utils; - Using common utils crate instead
 
 // Re-export commonly used items
