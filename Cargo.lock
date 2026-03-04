@@ -4098,6 +4098,7 @@ dependencies = [
  "rocket",
  "rscam",
  "rusqlite",
+ "rustls 0.21.12",
  "serde",
  "serde_json",
  "sha2",

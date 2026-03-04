@@ -139,52 +139,29 @@ fn get_auth_token() -> String {
         .unwrap_or_default()
 }
 
-// DANGER: Insecure verifier for self-signed certs in demo mode
-struct DangerNoVerify;
-impl rustls::client::ServerCertVerifier for DangerNoVerify {
-    fn verify_server_cert(
-        &self,
-        _end_entity: &rustls::Certificate,
-        _intermediates: &[rustls::Certificate],
-        _server_name: &rustls::ServerName,
-        _scts: &mut dyn Iterator<Item = &[u8]>,
-        _ocsp_response: &[u8],
-        _now: std::time::SystemTime,
-    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
-        Ok(rustls::client::ServerCertVerified::assertion())
-    }
-}
-
 async fn create_grpc_channel(addr: &str) -> Result<Channel, tonic::transport::Error> {
     let addr_static: &'static str = Box::leak(addr.to_string().into_boxed_str());
     let mut endpoint = Channel::from_static(addr_static);
     if addr.starts_with("https://") {
-        if std::env::var("LIFELOG_TLS_DANGER_SKIP_VERIFY").is_ok() {
-            println!("[GRPC] DANGER: Skipping TLS verification via custom verifier");
-            let mut crypto = rustls::ClientConfig::builder()
-                .with_safe_defaults()
-                .with_custom_certificate_verifier(Arc::new(DangerNoVerify))
-                .with_no_client_auth();
-            // Match ALPN for h2
-            crypto.alpn_protocols = vec![b"h2".to_vec()];
-
-            let tls = tonic::transport::ClientTlsConfig::new().rustls_client_config(crypto);
-            endpoint = endpoint.tls_config(tls)?;
+        let ca_path = "/home/matth/.config/lifelog/tls/server-ca.pem";
+        let mut tls = if let Ok(pem) = std::fs::read_to_string(ca_path) {
+            println!("[GRPC] Using CA cert from {}", ca_path);
+            let ca = tonic::transport::Certificate::from_pem(pem);
+            tonic::transport::ClientTlsConfig::new()
+                .ca_certificate(ca)
+                .domain_name("server.matthandzel.com")
         } else {
-            let ca_path = "/home/matth/.config/lifelog/tls/server-ca.pem";
-            if let Ok(pem) = std::fs::read_to_string(ca_path) {
-                println!("[GRPC] Using CA cert from {}", ca_path);
-                let ca = tonic::transport::Certificate::from_pem(pem);
-                let tls = tonic::transport::ClientTlsConfig::new()
-                    .ca_certificate(ca)
-                    .domain_name("server.matthandzel.com");
-                endpoint = endpoint.tls_config(tls)?;
-            } else {
-                println!("[GRPC] WARNING: CA cert not found, falling back to native roots");
-                let tls = tonic::transport::ClientTlsConfig::new().with_native_roots();
-                endpoint = endpoint.tls_config(tls)?;
-            }
+            println!("[GRPC] WARNING: CA cert not found, using native roots");
+            tonic::transport::ClientTlsConfig::new().with_native_roots()
+        };
+
+        if std::env::var("LIFELOG_TLS_DANGER_SKIP_VERIFY").is_ok() {
+            println!("[GRPC] DANGER: Using insecure connector (if supported by transport)");
+            // Note: In tonic 0.13, we don't have a simple skip_verify without full rustls config
+            // but the CA approach above is correct for self-signed.
         }
+
+        endpoint = endpoint.tls_config(tls)?;
     }
     endpoint.connect().await
 }
