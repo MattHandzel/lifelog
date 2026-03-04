@@ -4112,6 +4112,8 @@ dependencies = [
  "toml 0.5.11",
  "tonic",
  "tonic-build",
+ "tracing",
+ "tracing-subscriber",
  "users",
  "utils",
 ]

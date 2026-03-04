@@ -139,6 +139,51 @@ impl ServerHandle {
         Ok(data)
     }
 
+    pub async fn list_postgres_origins(&self) -> Vec<DataOrigin> {
+        let server = self.server.read().await;
+        let pool = match server.postgres_pool.as_ref() {
+            Some(p) => p,
+            None => return vec![],
+        };
+
+        let client = match pool.get().await {
+            Ok(c) => c,
+            Err(_) => return vec![],
+        };
+
+        let mut origins = Vec::new();
+        // Check screen_records
+        if let Ok(rows) = client
+            .query("SELECT DISTINCT collector_id FROM screen_records", &[])
+            .await
+        {
+            for row in rows {
+                let id: String = row.get(0);
+                origins.push(DataOrigin {
+                    origin: DataOriginType::DeviceId(id),
+                    modality_name: "Screen".to_string(),
+                });
+            }
+        }
+        // Check processes
+        if let Ok(rows) = client
+            .query(
+                "SELECT DISTINCT collector_id FROM upload_chunks WHERE stream_id = 'processes'",
+                &[],
+            )
+            .await
+        {
+            for row in rows {
+                let id: String = row.get(0);
+                origins.push(DataOrigin {
+                    origin: DataOriginType::DeviceId(id),
+                    modality_name: "Processes".to_string(),
+                });
+            }
+        }
+        origins
+    }
+
     pub async fn process_query(
         &self,
         query: lifelog_types::Query,

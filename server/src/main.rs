@@ -815,7 +815,9 @@ async fn run_join(server_url: String, yes: bool) -> Result<(), lifelog_core::Lif
 }
 
 async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     let mut config = config::load_server_config_from_unified().unwrap_or_else(|| {
         panic!(

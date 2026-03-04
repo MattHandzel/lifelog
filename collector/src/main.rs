@@ -15,7 +15,9 @@ struct Cli {
 #[tokio::main]
 #[allow(clippy::expect_used)]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tracing_subscriber::fmt::init();
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
 
     // TODO: How to make it so that when the computer suspends all loggers are restarted so the
     // time is aligned

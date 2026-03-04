@@ -744,6 +744,10 @@ async fn get_system_state(
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::fmt()
+        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .init();
+
     let grpc_client_state = GrpcClientState {
         client: Arc::new(tokio::sync::Mutex::new(None)),
     };

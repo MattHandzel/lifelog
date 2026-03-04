@@ -548,6 +548,25 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             ),
         ];
 
+        let mut modalities = modalities;
+
+        // Add dynamically discovered Postgres origins
+        let pg_origins = self.server.list_postgres_origins().await;
+        for origin in pg_origins {
+            let device_id = match &origin.origin {
+                lifelog_core::DataOriginType::DeviceId(id) => id.clone(),
+                _ => "unknown".to_string(),
+            };
+            let stream_id = format!("{}:{}", device_id, origin.modality_name.to_lowercase());
+            let name = format!("{} ({})", origin.modality_name, device_id);
+            modalities.push(modality(
+                &name,
+                &stream_id,
+                "remote",
+                vec![field("timestamp", "timestamp", "Captured At", true, false)],
+            ));
+        }
+
         Ok(Response::new(ListModalitiesResponse { modalities }))
     }
 

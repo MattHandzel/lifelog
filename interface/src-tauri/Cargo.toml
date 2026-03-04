@@ -65,6 +65,8 @@ crossbeam-channel = "0.5"
 rdev = "0.5"
 anyhow = { workspace = true }
 log = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 image = "0.24"
 cpal = "0.15.3"
 bincode = "1.3"
