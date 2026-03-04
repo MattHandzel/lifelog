@@ -332,9 +332,20 @@ async fn query_screenshot_keys(
         ..Default::default()
     };
     let req = lifelog::QueryRequest { query: Some(query) };
+    println!("[GRPC] query_screenshot_keys request: {:?}", req);
     match client.query(req).await {
-        Ok(resp) => Ok(resp.into_inner().keys.into_iter().map(Into::into).collect()),
-        Err(e) => Err(format!("gRPC error: {}", e)),
+        Ok(resp) => {
+            let keys = resp.into_inner().keys;
+            println!(
+                "[GRPC] query_screenshot_keys response count: {}",
+                keys.len()
+            );
+            Ok(keys.into_iter().map(Into::into).collect())
+        }
+        Err(e) => {
+            println!("[GRPC] query_screenshot_keys error: {}", e);
+            Err(format!("gRPC error: {}", e))
+        }
     }
 }
 
@@ -343,6 +354,10 @@ async fn get_screenshots_data(
     state: tauri::State<'_, GrpcClientState>,
     keys: Vec<LifelogDataKeyWrapper>,
 ) -> Result<Vec<Value>, String> {
+    println!(
+        "[GRPC] get_screenshots_data requested for {} keys",
+        keys.len()
+    );
     let grpc_keys = keys
         .into_iter()
         .map(|k| lifelog::LifelogDataKey {
@@ -366,21 +381,28 @@ async fn get_screenshots_data(
     match client.get_data(req).await {
         Ok(resp) => {
             let data = resp.into_inner().data;
+            println!("[GRPC] get_screenshots_data response count: {}", data.len());
             let mut results = Vec::new();
             for d in data {
                 if let Some(lifelog::lifelog_data::Payload::Screenframe(f)) = d.payload {
+                    let base64_image = general_purpose::STANDARD.encode(&f.image_bytes);
+                    let data_url = format!("data:image/jpeg;base64,{}", base64_image);
                     results.push(serde_json::json!({
                         "uuid": f.uuid,
                         "width": f.width,
                         "height": f.height,
                         "mime_type": f.mime_type,
-                        "image_bytes": general_purpose::STANDARD.encode(&f.image_bytes),
+                        "dataUrl": data_url,
+                        "timestamp": f.timestamp.map(|ts| ts.seconds),
                     }));
                 }
             }
             Ok(results)
         }
-        Err(e) => Err(format!("gRPC error: {}", e)),
+        Err(e) => {
+            println!("[GRPC] get_screenshots_data error: {}", e);
+            Err(format!("gRPC error: {}", e))
+        }
     }
 }
 
@@ -405,18 +427,27 @@ async fn get_collector_ids(
     {
         Ok(resp) => {
             let mut ids = std::collections::HashSet::new();
-            for m in resp.into_inner().modalities {
-                ids.insert(
-                    m.stream_id
-                        .split(':')
-                        .next()
-                        .unwrap_or("unknown")
-                        .to_string(),
-                );
+            let modalities = resp.into_inner().modalities;
+            println!(
+                "[GRPC] get_collector_ids: received {} modalities",
+                modalities.len()
+            );
+            for m in modalities {
+                let id = m
+                    .stream_id
+                    .split(':')
+                    .next()
+                    .unwrap_or("unknown")
+                    .to_string();
+                println!("[GRPC] get_collector_ids: found collector_id {}", id);
+                ids.insert(id);
             }
             Ok(ids.into_iter().collect())
         }
-        Err(e) => Err(format!("Failed to list collectors: {}", e)),
+        Err(e) => {
+            println!("[GRPC] get_collector_ids error: {}", e);
+            Err(format!("Failed to list collectors: {}", e))
+        }
     }
 }
 
@@ -620,7 +651,7 @@ struct FrameDataWrapper {
     sample_rate: Option<u32>,
     channels: Option<u32>,
     audio_duration_secs: Option<f32>,
-    image_data_url: Option<String>,
+    dataUrl: Option<String>,
     width: Option<u32>,
     height: Option<u32>,
     mime_type: Option<String>,
@@ -628,7 +659,7 @@ struct FrameDataWrapper {
     processes: Option<Vec<ProcessInfoWrapper>>,
 }
 
-fn encode_image_data_url(
+fn encode_dataUrl(
     image_bytes: &[u8],
     _mime_type: &str,
     thumbnail_mode: bool,
@@ -672,7 +703,7 @@ async fn get_frame_data_async(
                             uuid: f.uuid,
                             modality: "Screen".into(),
                             timestamp: f.timestamp.map(|ts| ts.seconds),
-                            image_data_url: Some(encode_image_data_url(
+                            dataUrl: Some(encode_dataUrl(
                                 &f.image_bytes,
                                 &f.mime_type,
                                 thumbnail_mode,

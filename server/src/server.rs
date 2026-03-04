@@ -165,16 +165,14 @@ impl ServerHandle {
                 });
             }
         }
-        // Check processes
+        // Check all unique collectors in upload_chunks
         if let Ok(rows) = client
-            .query(
-                "SELECT DISTINCT collector_id FROM upload_chunks WHERE stream_id = 'processes'",
-                &[],
-            )
+            .query("SELECT DISTINCT collector_id FROM upload_chunks", &[])
             .await
         {
             for row in rows {
                 let id: String = row.get(0);
+                // Also report as Processes if we see it
                 origins.push(DataOrigin {
                     origin: DataOriginType::DeviceId(id),
                     modality_name: "Processes".to_string(),
