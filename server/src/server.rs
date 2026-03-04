@@ -37,7 +37,7 @@ type SkewSamples = HashMap<String, Vec<(chrono::DateTime<Utc>, chrono::DateTime<
 pub struct Server {
     pub(crate) db: Surreal<Client>,
     pub(crate) postgres_pool: Option<PostgresPool>,
-    pub(crate) cas: FsCas,
+    pub(crate) cas: Arc<FsCas>,
     pub(crate) config: Arc<RwLock<ServerConfig>>,
     pub(crate) state: Arc<RwLock<SystemState>>,
     pub(crate) registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
@@ -466,7 +466,8 @@ impl Server {
             _ => None,
         };
 
-        let cas = FsCas::new(&config.cas_path);
+        let cas = Arc::new(FsCas::new(&config.cas_path));
+        crate::media_proxy::start_media_proxy(cas.clone(), 7183).await;
 
         let system_state = SystemState {
             collector_states: HashMap::new(),

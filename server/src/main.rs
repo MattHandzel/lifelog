@@ -2,6 +2,7 @@ use base64::Engine;
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
 use config::TlsConfig;
+use hyper::header;
 use lifelog_core::uuid::Uuid;
 use lifelog_server::grpc_service::GRPCServerLifelogServerService;
 use lifelog_server::server::Server as LifelogServer;
@@ -24,6 +25,7 @@ use tonic::metadata::MetadataValue;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig, Endpoint, Server as TonicServer};
 use tonic::{Request, Status};
 use tonic_reflection::server::Builder;
+use tower_http::cors::{Any, CorsLayer};
 
 #[derive(Parser)]
 #[command(author, version, about = "Lifelog Server Backend", long_about = None)]

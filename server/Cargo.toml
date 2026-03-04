@@ -16,6 +16,9 @@ name = "lifelog"
 path = "src/main.rs"
 
 [dependencies]
+axum = "0.8"
+tower-http = { version = "0.6", features = ["cors"] }
+hyper = { version = "1.0", features = ["full"] }
 config = { path = "../common/config" }
 utils = { path = "../common/utils" }
 lifelog-core = {path = "../common/lifelog-core/"}

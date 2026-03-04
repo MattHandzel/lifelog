@@ -238,21 +238,21 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 let backend = if let Some(pool) = server.postgres_pool.clone() {
                     HybridIngestBackend::Postgres(PostgresIngestBackend {
                         pool,
-                        cas: server.cas.clone(),
+                        cas: (*server.cas).clone(),
                         skew_estimates: server.skew_estimates.clone(),
                         transforms,
                     })
                 } else {
                     HybridIngestBackend::Surreal(SurrealIngestBackend {
                         db: server.db.clone(),
-                        cas: server.cas.clone(),
+                        cas: (*server.cas).clone(),
                         skew_estimates: server.skew_estimates.clone(),
                         transforms,
                     })
                 };
                 ingester = Some(ChunkIngester::new(
                     backend,
-                    server.cas.clone(),
+                    (*server.cas).clone(),
                     stream_id.collector_id.clone(),
                     stream_id.stream_id.clone(),
                     stream_id.session_id,
