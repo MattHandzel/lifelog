@@ -164,7 +164,6 @@
             protobuf
             pkg-config
             cmake
-            mold
             sccache
             cargo-nextest
             bacon
@@ -245,7 +244,6 @@
             sqlite
             pkg-config
             cmake
-            mold
             sccache
             cargo-nextest
             nodejs_22
