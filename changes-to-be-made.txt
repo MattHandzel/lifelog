@@ -1,0 +1,136 @@
+
+Here is a list of changes I want to be made, please critique me on these changes:
+
+- When doing lifelog-server generate_token we generate a new token, but we don't set it, the CLI should probably also ask the user if they want to set it, or if they want to retrieve the previous enrollment token to enroll their device
+
+- Should we generate a new enrollment token for every collector and invalidate previous tokens for security?
+
+- A principle I want to add to the spec is everything should be able to be used non-interactively (for scripts and agents to work with)
+
+- The interface should be designed such that it is able to be entirely verified/tested in a headless way. The only errors that should exist should be with the browser.
+
+
+- why does the server init command set anything related to microphone capture? this fundamentally doesn't make sense.
+
+- This function is no longer necessary because everything is in a database or CAS storage.
+
+```
+fn apply_storage_root_paths(cfg: &mut config::CollectorConfig, storage_root: &Path) {
+    let data_dir = storage_root.join("data");
+    if let Some(screen) = cfg.screen.as_mut() {
+        screen.output_dir = data_dir.join("screen").display().to_string();
+    }
+    if let Some(browser) = cfg.browser.as_mut() {
+        browser.output_file = data_dir
+            .join("browser")
+            .join("last_query_chrome_micros.txt")
+            .display()
+            .to_string();
+        browser.input_file = "~/.config/google-chrome/Default/History".to_string();
+        browser.browser_type = "chrome".to_string();
+    }
+    if let Some(camera) = cfg.camera.as_mut() {
+        camera.output_dir = data_dir.join("camera").display().to_string();
+    }
+    if let Some(microphone) = cfg.microphone.as_mut() {
+        microphone.output_dir = data_dir.join("microphone").display().to_string();
+    }
+    if let Some(processes) = cfg.processes.as_mut() {
+        processes.output_dir = data_dir.join("processes").display().to_string();
+    }
+    if let Some(hyprland) = cfg.hyprland.as_mut() {
+        hyprland.output_dir = data_dir.join("hyprland").display().to_string();
+    }
+    if let Some(weather) = cfg.weather.as_mut() {
+        weather.output_dir = data_dir.join("weather").display().to_string();
+    }
+    if let Some(wifi) = cfg.wifi.as_mut() {
+        wifi.output_dir = data_dir.join("wifi").display().to_string();
+    }
+    if let Some(clipboard) = cfg.clipboard.as_mut() {
+        clipboard.output_dir = data_dir.join("clipboard").display().to_string();
+    }
+    if let Some(shell_history) = cfg.shell_history.as_mut() {
+        shell_history.output_dir = data_dir.join("shell_history").display().to_string();
+    }
+    if let Some(mouse) = cfg.mouse.as_mut() {
+        mouse.output_dir = data_dir.join("mouse").display().to_string();
+    }
+    if let Some(window_activity) = cfg.window_activity.as_mut() {
+        window_activity.output_dir = data_dir.join("window_activity").display().to_string();
+    }
+    if let Some(keyboard) = cfg.keyboard.as_mut() {
+        keyboard.output_dir = data_dir.join("keystrokes").display().to_string();
+    }
+}
+```
+
+- we shouldn't be explicitly asking to enable microphone capture in the init setup. There should be a cli for the collector and a cli for the server. The cli for the collector to init the collector should allow the user to select what data modalities they want to record, what transforms they want to have. This is actually a larger part of the project, how can we allow the user to configure the collectors data modalities. 
+    let enable_microphone = inquire::Confirm::new("Enable microphone capture?")
+        .with_default(false)
+        .prompt()
+        .map_err(|e| lifelog_core::LifelogError::Validation {
+            field: "microphone".to_string(),
+            reason: e.to_string(),
+        })?;
+
+
+- lets do a refactor of the code base and reorganize things. for example ```fn sanitize_collector_id(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    for ch in raw.chars() {
+        if ch.is_ascii_alphanumeric() {
+            out.push(ch.to_ascii_lowercase());
+        } else if matches!(ch, '-' | '_') {
+            out.push(ch);
+        }
+    }
+    if out.is_empty() {
+        "collector".to_string()
+    } else {
+        out
+    }
+}
+```
+
+ should not be in main.rs, it instead should be in a utils file or something like this. We want to use the DRY principle. 
+
+
+
+- why is the best way to have an env file? i do not understand this design decision. why does the env file have things such as the lifelog config path, i think this instead should be passed in with a cli flag or it should be like tmux where you can point tmux to a specific config, and then in future runs of tmux it reads from that new config position
+
+
+- the join command should be moved to the collector cli
+**It should be moved to the collector CLI.** The server binary should only contain `serve`, `generate-token`, and `init`. The `join` command, along with its helper functions (`parse_server_url`, `fetch_server_cert_fingerprint`, `pair_collector`, `der_to_pem`, `sha256_fingerprint`, `InsecureServerCertVerifier`, etc.) belong in the collector binary since that's the component being enrolled.
+
+
+- why are things such as LIFELOG_RETENTION_INTERVAL_SECS an environment variable? instead, it should be a part of the server's config. here is how i want the config to be. the server should have access to the lifelog-config.toml file. this file should have all of the server's configuration. each collector (device) should have its own lifelog-config.toml file that contains its configuration. Howeveer, the same data model should be used for all configs on all devices to simplify the program.
+- othert hings like lifelog_host, lifelog_port, etc. should all be coming from the config, instead of being passed in as env. make a note of this for the proejct, all configuration should be coming from the config file, and not from env variables. The only thing that should be coming from env variables are secrets such as database passwords, api keys, etc.
+
+
+- by default, we do not have a retention interval. we store everything for forever, but we can configurate it. retention should be measured in days/weeks/months/years and not seconds.
+
+
+- I want all the tables in postgres to be of the type:
+  - MAC_ADDRESS_OF_COLLECTOR{SEPERATOR}DATA_MODALITY{SEPERATOR}
+
+- if there are transforms, they should go to:
+  - MAC_ADDRESS_OF_COLLECTOR{SEPERATOR}DATA_MODALITY{SEPERATOR}TRANSFORM_NAME({SEPERATOR}TRANSFORM_NAME). we are able to do transforms on top of transforms on top of data modalities. they are flexible.
+
+
+- Right now, we have a replay functionality. The replay function is actually ONLY on the interface end, it should not be on the server end. Replays are just the interface requesting a sequences of data modality points from the server and then constructing the video that way. I don't want the replay to be highly copulted to the server. the server is NOT the server for the interface, but it is a server that coordinates the lifelogging software and runs and applys transforms on the data.
+
+
+- The frontend interface should be able to show the server state
+
+- server/migrations/ should be database/migrations
+
+- Right now, there is a hybrid ingest backend. I want this to be completely refactored. I want to completely migrate to postgres instead of surrealdb. ensure all commands are refactored to work with postgres instead.
+
+- in general, you should never have a function that is made specifically for one data modality, i.e. `pub(crate) fn build_replay_steps_for_screen`. we do not want the replay functionality to be part of the server, but we also never want to have a function thats built for one data modality. it should always be generalized.
+
+
+- I want to add another transform and ensure OCR transform and speech to text transform works. SSTTransform should be its name, it should be configurable for a speech to text server or for a speech to text service.
+
+- I want to have an abstraction where transforms are about to specify what data modalities they are able to be applied to, (for ocr this might be screen or camera, for example). I want to allow the ocr transforms to have configuration for this
+
+- Okay, this is silly. right now, there is SurrealDB and PostgresSQL. There should only be PostgresSQL and it should be used as the main DB

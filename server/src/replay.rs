@@ -21,6 +21,7 @@ fn dt_key(dt: DateTime<Utc>) -> (i64, u32) {
     (dt.timestamp(), dt.timestamp_subsec_nanos())
 }
 
+// FIX: in general, you should never have a function that is made specifically for one data modality, i.e. `pub(crate) fn build_replay_steps_for_screen`. we do not want the replay functionality to be part of the server, but we also never want to have a function thats built for one data modality. it should always be generalized.
 pub(crate) fn build_replay_steps_for_screen(
     mut screen_frames: Vec<(String, DateTime<Utc>)>,
     screen_origin: DataOrigin,

@@ -12,6 +12,75 @@ For coding agents (Claude Code, etc.), the repo includes a small context surface
 4. Run noisy commands through `tools/ai/run_and_digest.sh` and share only the digest.
 5. Summarize diffs with `tools/ai/git_diff_digest.sh`.
 
+## RepoAtlas
+
+RepoAtlas is a local analyzer for:
+- journey discovery from entrypoints
+- decision auditing from code evidence
+- drift detection against an expected architecture model
+
+Run it for this repo:
+
+```bash
+just repoatlas
+```
+
+`just repoatlas` now does:
+1. static graph extraction (source of truth)
+2. LLM-assisted visualization composition (`view_config.json`) from static outputs
+3. rule-based icon/style mapping for nodes (deterministic)
+
+Set visualization agent backend/model via env vars:
+
+```bash
+REPOATLAS_AGENT=codex REPOATLAS_MODEL=gpt-5 just repoatlas
+```
+
+Static-only mode (no LLM overlay):
+
+```bash
+just repoatlas-static
+```
+
+Run it for any repository path:
+
+```bash
+python3 tools/repoatlas/repoatlas.py \
+  --repo /path/to/target/repo \
+  --expected /path/to/expected_arch.json \
+  --out /path/to/output-dir \
+  --max-hops 4
+```
+
+Then compose visualization config:
+
+```bash
+python3 tools/repoatlas/viz_compose.py \
+  --repo /path/to/target/repo \
+  --graph /path/to/output-dir/graph.json \
+  --journeys /path/to/output-dir/journeys.json \
+  --decisions /path/to/output-dir/decisions.json \
+  --drift /path/to/output-dir/drift.json \
+  --out /path/to/output-dir/view_config.json \
+  --agent codex --model gpt-5 --require-llm
+```
+
+Expected architecture model: `repoatlas/expected_arch.json` (JSON by default; YAML also supported if `pyyaml` is installed).
+Outputs:
+- `graph.json`
+- `journeys.json`
+- `decisions.json`
+- `drift.json`
+- `report.md`
+- `view_config.json` (viewer styles/icons/layout hints)
+
+Interactive viewer:
+
+```bash
+just repoatlas-view
+# open http://127.0.0.1:8123/tools/repoatlas/viewer/index.html
+```
+
 ## Installation
 
 #### Build Dependencies

@@ -202,6 +202,24 @@ map-repo:
     @chmod +x tools/ai/generate_discovery_map.sh
     @./tools/ai/generate_discovery_map.sh
 
+# Run RepoAtlas static analysis + LLM-assisted visualization composition
+repoatlas:
+    python3 tools/repoatlas/repoatlas.py --repo . --expected repoatlas/expected_arch.json --out docs/repoatlas --max-hops 4
+    python3 tools/repoatlas/viz_compose.py --repo . --graph docs/repoatlas/graph.json --journeys docs/repoatlas/journeys.json --decisions docs/repoatlas/decisions.json --drift docs/repoatlas/drift.json --out docs/repoatlas/view_config.json --agent ${REPOATLAS_AGENT:-codex} --model "${REPOATLAS_MODEL:-}" --require-llm
+
+# Static-only mode (no LLM overlay)
+repoatlas-static:
+    python3 tools/repoatlas/repoatlas.py --repo . --expected repoatlas/expected_arch.json --out docs/repoatlas --max-hops 4
+    python3 tools/repoatlas/viz_compose.py --repo . --graph docs/repoatlas/graph.json --journeys docs/repoatlas/journeys.json --decisions docs/repoatlas/decisions.json --drift docs/repoatlas/drift.json --out docs/repoatlas/view_config.json
+
+# Legacy: LLM multi-agent graph construction
+repoatlas-agent-graph:
+    python3 tools/repoatlas/repoatlas_agents.py --repo . --expected repoatlas/expected_arch.json --out docs/repoatlas --agent ${REPOATLAS_AGENT:-codex} --model "${REPOATLAS_MODEL:-}" --max-hops 4
+
+# Serve the interactive graph explorer
+repoatlas-view:
+    python3 tools/repoatlas/viewer/serve_viewer.py --root . --host ${HOST:-127.0.0.1} --port ${PORT:-8123}
+
 # Get a high-signal digest of code changes
 diff-digest ref="main":
     @./tools/ai/git_diff_digest.sh {{ref}}

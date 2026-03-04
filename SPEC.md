@@ -26,7 +26,7 @@ The following is confirmed implemented in this repository/runtime:
 
 ## 0. Definitions
 
-- **Backend**: the central authority that schedules ingestion, stores data durably, runs transforms, and serves the UI/API.
+- **Backend**: the central authority that schedules ingestion, stores data durably, runs transforms, and serves the API.
 - **Collector**: a device program that captures raw streams, buffers them durably, and follows backend control.
 - **Stream**: an ordered sequence of records from a single source and modality (e.g., “laptop screen”, “desktop audio”).
 - **Record**: an immutable item in a stream. Records are either point events or time intervals.
@@ -64,7 +64,11 @@ After initial setup, no manual “organize/tag/save” is required. Failures are
 
 All ingestion, storage, processing, and queries execute on user-controlled machines by default. No cloud sync in v1.
 
-### 1.5 Core Principle: Extreme Extensibility and Environment Agnosticism
+### 1.5 Deployment Model (Decision)
+
+v1 is designed for individual operators who run their own server and collectors in self-hosted deployments.
+
+### 1.6 Core Principle: Extreme Extensibility and Environment Agnosticism
 
 The system must be designed as a **platform for diverse environments**, not a hardcoded tool for a specific setup.
 
@@ -181,8 +185,8 @@ Implementation note: this repo represents `Δt_default` as `ServerConfig.default
    - decides when to pull data,
    - stores durably,
    - runs transforms/indexing,
-   - serves API and UI.
-3. **Interface** is a web UI served by the backend, usable from desktop and phone.
+   - serves gRPC APIs.
+3. **Interface** is an independently deployed client (desktop/mobile/web) that connects to backend gRPC APIs.
 
 ### 5.2 Control Plane vs Data Plane
 
@@ -210,8 +214,7 @@ v1 uses **gRPC-only** for all external interfaces:
 
 - Collector <-> Backend: gRPC.
 - UI client <-> Backend: gRPC.
-
-No separate REST “logger server” is part of the v1 architecture. If an HTTP gateway is added later, it must be a façade over the same canonical backend, not a second backend with its own storage.
+No HTTP/REST API is part of this project.
 
 ---
 
@@ -230,12 +233,11 @@ v1 is required to implement “store everything, don’t lose anything” as exp
 The backend must only acknowledge data as “delivered” when:
 
 - metadata is persisted, and
-- blobs are persisted (or content-addressed and verified), and
-- **all baseline indexes required for full queryability are updated** (see Section 6.2.1).
+- blobs are persisted (or content-addressed and verified).
 
-#### 6.2.1 Baseline Index Set (Decision: ACK implies “fully queryable”)
+#### 6.2.1 Baseline Index Set (Decision: post-ACK queryability pipeline)
 
-v1 treats ACK as “fully queryable”. Therefore, ACK requires completion of:
+v1 treats ACK as **durable-only**. Baseline indexing/queryability is asynchronous after ACK:
 
 - **Time-range index** for all ingested records (per stream).
 - **Text search index** for all configured searchable text fields, including at minimum:
@@ -246,9 +248,8 @@ v1 treats ACK as “fully queryable”. Therefore, ACK requires completion of:
   - keystroke captured text (if enabled; see Section 12.4).
 - **Required derived transforms** needed to satisfy the above baseline indexes.
   - In v1, this is conditional:
-    - if OCR transform is enabled for Screen, Screen ingestion is not ACKed as queryable until the OCR-derived
-      record for the same frame UUID has been persisted;
-    - if OCR transform is disabled, Screen records are ACKed/queryable after base persistence/indexing.
+    - if OCR transform is enabled for Screen, screen queryability depends on OCR-derived record persistence;
+    - if OCR transform is disabled, screen records become queryable after base persistence/indexing.
 
 Vector/embedding indexes are explicitly not baseline for ACK in v1.
 
@@ -272,7 +273,7 @@ This spec is transport-agnostic, but v1 should use gRPC/Protobuf-style typed API
 
 ### 7.1 Collector Enrollment and Identity
 
-- Each collector has a stable `collector_id` (device identity).
+- Each collector has a stable `collector_id` derived from device MAC identity.
 - Enrollment must prevent arbitrary devices from registering (pairing model required; see Security).
 
 ### 7.1.1 Unified Config Schema (Required)
@@ -290,10 +291,11 @@ Required shape:
 
 Collectors must select their profile by:
 
-1. `LIFELOG_COLLECTOR_ID` (if set),
-2. else `runtime.collectorId`.
+1. `runtime.collectorId` in `lifelog-config.toml`.
 
-If neither is set, startup must fail (no implicit/default profile selection).
+If not set, startup must fail (no implicit/default profile selection).
+
+Configuration resolution must be config-file only. Environment variables are not a supported runtime configuration surface.
 
 No legacy single-collector config shape is part of this requirement.
 
@@ -351,11 +353,11 @@ Collectors must not depend on backend storage details. Backend must implement st
 
 ### 8.0 Hot Store Database (Decision)
 
-v1 uses **SurrealDB** as the hot metadata store, with the following constraints derived from repo analysis:
+v1 uses **PostgreSQL** as the only metadata store.
 
 - Do not store large blobs inline in DB rows (use filesystem CAS).
 - Define explicit indexes required for timeline and text search (Section 6.2.1).
-- Avoid “table discovery via `INFO FOR DB`” as a runtime catalog mechanism; maintain an explicit stream/origin catalog table for stable query planning.
+- Maintain an explicit stream/origin catalog table for stable query planning.
 - Query execution must not devolve into full-table scans for transforms or queries (incremental cursors required; Section 9.2).
 
 ### 8.1 Metadata Store
@@ -450,7 +452,6 @@ Implementation note (as of 2026-02-10):
 - Current limitation: temporal joins are only supported under conjunctions (`AND`), not under `OR`/`NOT`, and temporal operators are not supported inside temporal predicates.
 - Interim API bridge: the backend accepts **LLQL JSON** embedded in `Query.text` via a `llql:` / `llql-json:` prefix, which is parsed into the typed AST and executed (enables cross-modal queries without a protobuf change).
 - Interface support: the Timeline UI has an LLQL mode that submits `llql:` / `llql-json:` queries via `Query.text`.
-- Replay now has a dedicated RPC (`Replay`) that returns ordered steps with aligned context keys, and the interface has a Replay view wired to it.
 
 ### 10.2 Canonical Example (Must Work)
 
@@ -465,15 +466,15 @@ This must be expressible and must return:
 
 Implementation note (as of 2026-02-10): verified end-to-end via LLQL JSON integration test (`server/tests/canonical_llql_example.rs`).
 
-### 10.3 Replay Queries
+### 10.3 Replay Construction (Client-Owned)
 
-Replay is a query mode that returns ordered steps:
+Replay is composed in the interface/client layer from general-purpose backend query primitives:
 
-- default step granularity: screen capture interval
-- includes aligned context from other streams (keystrokes/clipboard/window/audio markers) within correlation window
-- **Replay Context Scope**: Aligned context (e.g., keystrokes, clipboard events) should be **filtered to the active window** during that frame whenever possible (Section 18.9).
+- client fetches ordered point/interval records for selected modalities and time windows,
+- client aligns context streams (keystrokes/clipboard/window/audio markers) using correlation rules,
+- **Replay Context Scope**: aligned context (e.g., keystrokes, clipboard events) should be filtered to the active window during that frame whenever possible (Section 18.9).
 
-Replay must be able to drive a UI that “walks forward” through time.
+Replay must be able to drive a UI that “walks forward” through time without requiring a dedicated server replay RPC.
 
 #### 10.3.1 Replay Semantics for Screen Point Records (Decision)
 
@@ -487,9 +488,9 @@ For the last frame in a replay window, the interval end is:
 
 ---
 
-## 11. Interface (Web UI served by backend)
+## 11. Interface (Independently Deployed Client)
 
-The interface is read-only in v1 (browsing, search, replay). It is served by the backend and must work on:
+The interface is an independently deployed client application (not served by the backend process). In v1 it supports recall workflows (browsing, search, replay) plus explicit device/config controls and must work on:
 
 - desktop browser (primary),
 - phone browser (secondary).
@@ -546,8 +547,11 @@ v1 cannot be “perfect privacy”, but it must not be structurally unsafe.
 
 ### 12.2 Enrollment / Pairing
 
-- Collector registration must require user-authorized pairing (exact mechanism TBD):
-  - options: pre-shared token, QR code, mTLS cert issuance.
+- Collector registration must require user-authorized pairing via one-time enrollment tokens.
+- Enrollment token policy:
+  - each token is bound to a single collector enrollment,
+  - token is invalidated immediately after successful enrollment,
+  - token reuse must fail explicitly.
 
 ### 12.3 Minimal Safety Rails
 
@@ -659,7 +663,7 @@ This section merges in constraints and discrepancies discovered by re-reading th
 - There is an implemented **gRPC backend** (`server/`) that:
   - registers collectors,
   - periodically pulls buffered data from collectors,
-  - writes data into SurrealDB,
+  - writes data into PostgreSQL storage,
   - runs an OCR transform into derived tables,
   - serves Query/GetData/GetState style RPCs.
 - There is an implemented **gRPC collector** (`collector/`) that:
@@ -667,8 +671,8 @@ This section merges in constraints and discrepancies discovered by re-reading th
   - streams buffered data to the backend on request,
   - reports its state.
 - There is an **interface** (`interface/`) with two integration directions:
-  - gRPC calls for system config (per `grpc-frontend.md` and `interface/src-tauri/src/main.rs`).
-  - HTTP calls to `/api/loggers/...` endpoints assumed to exist at `http://localhost:8080` (per `server/README.md` and UI code).
+  - gRPC calls for system config/query/state.
+  - legacy HTTP endpoint assumptions exist in some artifacts and must be removed.
 
 ### 16.2 Known Divergences vs This Spec
 
@@ -684,8 +688,8 @@ These are “must fix” to align implementation with this document:
    - payloads and modality enum currently cover only screen/browser/ocr.
 5. **Proto correctness issues exist**:
    - some message definitions appear malformed/incomplete (e.g., data key shape); v1 requires a cleaned protocol contract.
-6. **API surface is split (gRPC vs planned REST)**:
-   - UI expects REST logger endpoints, while core backend is gRPC; v1 must choose and unify the interface-facing API surface (recommended: one backend that serves UI + collector transport).
+6. **API surface cleanup is required**:
+   - remove remaining HTTP/REST interface assumptions; project standard is gRPC-only for all clients.
 7. **Blob storage is not separated** in the current backend:
    - screen frames store image bytes inline in DB rows; v1 requires metadata/blob separation.
 
@@ -693,8 +697,8 @@ These are “must fix” to align implementation with this document:
 
 In addition to milestones in Section 15, the repo analysis implies these concrete tasks:
 
-- Decide and implement the **single canonical backend API surface** for the UI:
-  - either migrate UI fully to the gRPC backend, or implement an HTTP façade on the same backend process. Do not keep two unrelated backends.
+- Enforce a **single canonical backend API surface** for the UI:
+  - gRPC-only. Remove HTTP façade/endpoints and corresponding client dependencies.
 - Redesign the collector-backend relationship for **NAT-safe backend authority**:
   - long-lived control channel initiated by collector; backend issues pull commands over it.
 - Replace in-memory buffers with **disk-backed WAL/queue** in collectors for v1-required streams.
@@ -830,8 +834,8 @@ This section records decisions you’ve made so far so they cannot silently drif
 
 ### 18.3 Delivery and Indexing Semantics
 
-- ACK implies **persistence and durability** (Section 6.2).
-- Indexing strategy: **Relaxed/Background Indexing** (Section 6.2.1). (ACK is sent as soon as metadata/blobs are persisted; indexing happens as a background task, with a small latency before records are searchable.)
+- ACK implies **durability** (Section 6.2).
+- Indexing strategy: **Relaxed/Background Indexing**. ACK is sent after durable persistence; indexing and transform-derived queryability complete asynchronously.
 
 ### 18.4 API Surface
 
@@ -839,7 +843,7 @@ This section records decisions you’ve made so far so they cannot silently drif
 
 ### 18.5 Storage
 
-- Hot store DB: **SurrealDB** (Section 8.0).
+- Hot store DB: **PostgreSQL** (Section 8.0).
 - Blob store: **filesystem content-addressed store (CAS)** (Section 8.2.1).
 - Cold tier (future): **hybrid hot/cold** with optional Parquet export later (Section 8.2.1).
 
@@ -858,7 +862,7 @@ This section records decisions you’ve made so far so they cannot silently drif
 
 - Operating System: **NixOS** (Systemd user services for collectors).
 - Shell Support: **Bash, Zsh, and Fish** must be supported on Day 1.
-- Enrollment/Pairing: **Token-based Authentication** (Default choice for v1).
+- Enrollment/Pairing: **One-time token per collector enrollment** (default and required for v1).
 
 ---
 
@@ -871,7 +875,7 @@ This section incorporates the major findings from the generated reviews. It is i
 - Replay semantics must be explicitly defined for point-based frames (resolved in Section 10.3.1).
 - Cross-device time semantics required canonical “timeline time” and skew handling (resolved in Section 4.0/4.2.1).
 - Chunk framing/offset definition was missing (resolved for offset unit in Section 7.3.1). TODO: Identify what is a good practical maximum chunk size, best hashing algorithm for these goals, and canonicalization rules.
-- ACK coupled to indexing is a strong coupling; you chose “fully queryable ACK” (Section 6.2.1). This implies ingestion backpressure must be engineered intentionally.
+- ACK is decoupled from indexing in the selected durable-only model; ingestion durability is prioritized and queryability may lag briefly behind ACK.
 - Backend-pull vs collector-push must be explicit: collectors push bulk data only within backend-authorized sessions (Section 5.2 + 7).
 - Keystroke capture policy is a security/product blocker (chosen, high-risk; Section 12.4).
 - Security requirements must be concrete for multi-device operation (expanded in Section 12 and reinforced below).
@@ -881,9 +885,9 @@ This section incorporates the major findings from the generated reviews. It is i
 
 - Current repo query engine is stubbed (returns all keys). v1 requires real query planning and indexes.
 - Transform model currently full-scans and does in-memory set diffs; v1 requires incremental transform cursors/checkpoints.
-- SurrealDB can work but must be used with:
+- PostgreSQL is the selected metadata store and must be used with:
   - explicit time/text indexes,
-  - stable catalog (not `INFO FOR DB`),
+  - stable catalog tables,
   - blob separation.
 - Consider hot/cold tiering: Parquet + DuckDB is a strong cold-tier option later (aligned with your hybrid decision).
 
@@ -923,7 +927,7 @@ To satisfy “passive capture, zero maintenance”:
 Launch-blocking requirements implied by the audit:
 
 - TLS everywhere (collector/backend and UI/backend).
-- Secure pairing/enrollment (mTLS recommended); device identity must be cryptographic, not MAC-based.
+- Secure pairing/enrollment is mandatory; project decision uses MAC-derived collector identity plus one-time enrollment tokens.
 - Remove hard-coded DB root credentials; use secrets management.
 - Authentication + authorization on all query/config/data APIs.
 - Disable gRPC reflection in production (or gate behind auth).
@@ -953,10 +957,8 @@ Launch-blocking requirements implied by the audit:
 
 ### 20.2 Security Hardening (March 1, 2026)
 
-- gRPC TLS is now enforced for server startup:
-  - server fails fast when `LIFELOG_TLS_CERT_PATH` or `LIFELOG_TLS_KEY_PATH` is missing.
-- gRPC authentication token configuration is now enforced on server startup:
-  - `LIFELOG_AUTH_TOKEN` and `LIFELOG_ENROLLMENT_TOKEN` must be present.
+- gRPC TLS is enforced for server startup via config-defined certificate/key paths.
+- gRPC authentication token configuration is enforced on server startup via config-defined auth/enrollment settings.
 - Server-side auth interceptor rejects missing/invalid `Authorization: Bearer ...` metadata.
 - Collector control/upload paths now enforce secure transport:
   - collector and upload manager reject non-`https://` server URLs.
@@ -967,7 +969,7 @@ Launch-blocking requirements implied by the audit:
 ### 20.3 Retention Controls (March 1, 2026)
 
 - `ServerConfig` now includes `retention_policy_days` (`map<string,uint32>`), where `0` means keep forever.
-- Server now runs a retention worker loop (daily by default; configurable via `LIFELOG_RETENTION_INTERVAL_SECS`) that:
+- Server now runs a retention worker loop (daily by default; configurable via server config) that:
   - prunes stale records per modality policy using canonical time when present,
   - collects candidate `blob_hash` values from deleted records,
   - deletes orphan CAS blobs only when no remaining metadata row references the hash.
@@ -979,11 +981,30 @@ Launch-blocking requirements implied by the audit:
 
 ### 20.4 PostgreSQL Ops Defaults (March 3, 2026)
 
-- Deployment units now set PostgreSQL ingest environment by default:
-  - `LIFELOG_POSTGRES_INGEST_URL=postgresql://lifelog@127.0.0.1:5432/lifelog`
-  - `LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS=16`
-- Server units now depend on `postgresql.service` (while retaining `lifelog-surrealdb.service` during hybrid transition).
+- Deployment defaults now target PostgreSQL with config-defined connection settings and pool sizing.
+- Server units now depend on `postgresql.service`.
 - Nix flake now exports `nixosModules.lifelog-postgres` that enables PostgreSQL and auto-provisions a `lifelog` DB/user by default.
 - `GetState` observability payload now includes PostgreSQL pool status:
   - enabled flag,
   - max/pool/available/waiting connection counts.
+
+### 20.5 Project-Wide Directional Constraints (March 4, 2026)
+
+These directives capture high-level product and architecture intent from the latest refactor analysis.
+They are recorded here as normative direction for upcoming refactors and should be reconciled against
+older decisions in Section 18 where conflicts exist.
+
+- **Automation-first CLI**: Every workflow (init, enroll, configure, run, inspect) must be runnable non-interactively for scripting/agent usage.
+- **Headless-verifiable interface**: Core interface behavior must be testable in headless automation; browser-only failures should be limited to rendering/runtime concerns.
+- **Config-first runtime policy**:
+  - All runtime settings must live in `lifelog-config.toml`.
+  - Environment variables are not part of the supported runtime configuration model.
+- **CLI boundary clarity**:
+  - Server CLI scope is backend lifecycle/admin (`serve`, `generate-token`, `init`).
+  - Collector enrollment/join behavior belongs to collector CLI.
+- **Single database target**: PostgreSQL is the only supported backend.
+- **Replay ownership boundary**: Replay composition belongs to the interface/client layer; backend should expose generalized data/time query primitives rather than modality-specific replay assembly.
+- **Generalized modality architecture**:
+  - Avoid modality-specific one-off functions in core server logic.
+  - Transforms must declare compatible source modalities and support configurable modality routing.
+  - Transform chaining over derived streams should remain first-class.
