@@ -26,7 +26,6 @@ use tonic::transport::{Certificate, Channel, ClientTlsConfig, Endpoint, Server a
 use tonic::{Request, Status};
 use tonic_reflection::server::Builder;
 use tower_http::cors::{Any, CorsLayer};
-
 #[derive(Parser)]
 #[command(author, version, about = "Lifelog Server Backend", long_about = None)]
 struct Cli {
