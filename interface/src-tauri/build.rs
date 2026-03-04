@@ -142,6 +142,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             "lifelog.ScreenFrame",
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
+        .extern_path(".google.protobuf.Timestamp", "::pbjson_types::Timestamp")
         .compile_protos(
             &[
                 "../../proto/lifelog.proto",       // Path relative to build.rs
