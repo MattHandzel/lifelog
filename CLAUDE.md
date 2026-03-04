@@ -52,7 +52,8 @@ See @README.md for project overview.
   - `server/tests/ocr_pipeline.rs`: End-to-end transformation test.
   - `server/tests/cross_modal_query.rs`: Unified search verification.
   - `server/tests/performance_suite.rs`: Throughput and latency baselines.
-- **Seesion End**: At the end of the session, commit, push, and merge your changes into main.
+- **Session End**: At the end of the session, commit, push, and merge your changes into main.
+- **Update**: At the end of the session, update all documents that need to be updated, this means checking out things on TODOLISTS, removing temporary files you made. Lets keep the repository up-to-date, clean, and tidy.
 
 ## IMPORTANT: Anti-Patterns
 
