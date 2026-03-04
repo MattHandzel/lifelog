@@ -4090,7 +4090,6 @@ dependencies = [
  "hyprland",
  "image 0.24.9",
  "log",
- "prost",
  "prost-build",
  "prost-types",
  "rdev",
