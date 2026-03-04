@@ -241,8 +241,8 @@ struct ReplayStepWrapper {
 
 #[tauri::command]
 async fn get_component_config(
-    _collector_id: String,
-    _component_type: String,
+    collector_id: String,
+    component_type: String,
 ) -> Result<Value, String> {
     let server_addr = grpc_server_address();
     let channel = create_grpc_channel(&server_addr)
@@ -254,7 +254,29 @@ async fn get_component_config(
     match client.get_config(req).await {
         Ok(resp) => {
             let config = resp.into_inner().config.ok_or("Missing config")?;
-            Ok(serde_json::json!(config))
+            let collector_cfg = config
+                .collectors
+                .get(&collector_id)
+                .ok_or_else(|| format!("Collector {} not found in config", collector_id))?;
+
+            let component_val = match component_type.to_lowercase().as_str() {
+                "browser" => serde_json::to_value(&collector_cfg.browser),
+                "screen" => serde_json::to_value(&collector_cfg.screen),
+                "camera" => serde_json::to_value(&collector_cfg.camera),
+                "microphone" => serde_json::to_value(&collector_cfg.microphone),
+                "processes" => serde_json::to_value(&collector_cfg.processes),
+                "hyprland" => serde_json::to_value(&collector_cfg.hyprland),
+                "weather" => serde_json::to_value(&collector_cfg.weather),
+                "wifi" => serde_json::to_value(&collector_cfg.wifi),
+                "clipboard" => serde_json::to_value(&collector_cfg.clipboard),
+                "shell_history" => serde_json::to_value(&collector_cfg.shell_history),
+                "mouse" => serde_json::to_value(&collector_cfg.mouse),
+                "window_activity" => serde_json::to_value(&collector_cfg.window_activity),
+                "keyboard" => serde_json::to_value(&collector_cfg.keyboard),
+                _ => return Err(format!("Unknown component type: {}", component_type)),
+            };
+
+            component_val.map_err(|e| format!("Failed to serialize component config: {}", e))
         }
         Err(e) => Err(format!("gRPC error: {}", e)),
     }
