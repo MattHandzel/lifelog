@@ -57,9 +57,9 @@ jobs:
       - name: Run integration tests
         timeout-minutes: 10
         run: |
-          nix develop --command cargo test -p lifelog-server --test validation_suite -- --nocapture
-          nix develop --command cargo test -p lifelog-server --test multi_device -- --nocapture
-          nix develop --command cargo test -p lifelog-server --test sync_scenarios -- --nocapture
+          nix develop --command cargo test -p lifelog-server --test validation_suite -- --nocapture --include-ignored
+          nix develop --command cargo test -p lifelog-server --test multi_device -- --nocapture --include-ignored
+          nix develop --command cargo test -p lifelog-server --test sync_scenarios -- --nocapture --include-ignored
 
       - name: Upload test artifacts
         if: failure()

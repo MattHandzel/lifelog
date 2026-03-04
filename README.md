@@ -21,7 +21,7 @@ For coding agents (Claude Code, etc.), the repo includes a small context surface
 - [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) for OCR
 - PostgreSQL 16+ (required for migrated ingest/query paths)
 
-Run `nix develop --command cargo build --release` to build the project. This will create binaries in `target/release/` folder. It will create three binaries, one for the server, one for the collector and one for the interface. The server binary is `lifelog-server`, the client binary is `lifelog-collector` and the interface binary is `lifelog-interface`.
+Run `nix develop --command cargo build --release` to build the project. This will create binaries in `target/release/` folder. It will create three binaries, one for the server, one for the collector and one for the interface. The server binary is `lifelog-server-backend`, the client binary is `lifelog-collector` and the interface binary is `lifelog-server-frontend`.
 
 Optionally, if you would like to only build a specific binary, you can run `nix develop --command cargo build --release -p <binary_name>` where `<binary_name>` is one of the three binaries mentioned above.
 
@@ -54,7 +54,7 @@ A Server is a component that is a local (but can be remote) server that receives
 
 The server also is able to do transformations on data (such as OCR) which allows better retrieval of data. It also has a web interface to allow the user to manage the collectors, view the data, and query their data.
 
-#### Collectors [./docs/collectors.md]
+#### Collectors [./docs/collector.md]
 
 A collector is a component that runs on the device and collects data from various data sources. It is responsible for defining the data sources available on the device, logging data from those sources, and responding to requests from the server.
 

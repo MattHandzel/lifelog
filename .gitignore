@@ -75,3 +75,6 @@ lifelog_data/
 expanded.rs
 expanded_config.rs
 worktrees/
+*.pem
+key.pem
+cert.pem

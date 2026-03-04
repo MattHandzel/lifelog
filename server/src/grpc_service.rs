@@ -15,6 +15,28 @@ pub struct GRPCServerLifelogServerService {
     pub server: ServerHandle,
 }
 
+impl GRPCServerLifelogServerService {
+    fn check_auth(&self, metadata: &tonic::metadata::MetadataMap) -> Result<(), Status> {
+        let auth_token = std::env::var("LIFELOG_AUTH_TOKEN")
+            .map_err(|_| Status::internal("LIFELOG_AUTH_TOKEN must be configured"))?;
+
+        match metadata.get("authorization") {
+            Some(t) => {
+                let token_str = t.to_str().unwrap_or_default();
+                if token_str == format!("Bearer {}", auth_token) {
+                    return Ok(());
+                }
+                tracing::warn!("Invalid authentication token provided");
+                Err(Status::unauthenticated("Invalid token"))
+            }
+            None => {
+                tracing::warn!("Unauthenticated connection attempt (no token provided)");
+                Err(Status::unauthenticated("No token provided"))
+            }
+        }
+    }
+}
+
 #[tonic::async_trait]
 impl LifelogServerService for GRPCServerLifelogServerService {
     type ControlStreamStream = Pin<Box<dyn Stream<Item = Result<ServerCommand, Status>> + Send>>;
@@ -23,6 +45,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         request: Request<Streaming<ControlMessage>>,
     ) -> Result<Response<Self::ControlStreamStream>, Status> {
+        self.check_auth(request.metadata())?;
         let mut stream = request.into_inner();
         let (tx, rx) = tokio::sync::mpsc::channel(128);
         let server_handle = self.server.clone();
@@ -117,8 +140,9 @@ impl LifelogServerService for GRPCServerLifelogServerService {
 
     async fn get_config(
         &self,
-        _request: Request<GetSystemConfigRequest>,
+        request: Request<GetSystemConfigRequest>,
     ) -> Result<Response<GetSystemConfigResponse>, Status> {
+        self.check_auth(request.metadata())?;
         let config = self.server.get_config().await;
         Ok(Response::new(GetSystemConfigResponse {
             config: Some(config),
@@ -129,6 +153,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         request: Request<SetSystemConfigRequest>,
     ) -> Result<Response<SetSystemConfigResponse>, Status> {
+        self.check_auth(request.metadata())?;
         tracing::info!("Received set config request");
         let system_config = request
             .into_inner()
@@ -147,6 +172,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         request: Request<QueryRequest>,
     ) -> Result<Response<QueryResponse>, Status> {
+        self.check_auth(request.metadata())?;
         let query_message = request.into_inner().query.unwrap_or_default();
         tracing::info!(query = ?query_message, "Received query request");
 
@@ -171,6 +197,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         request: Request<ReplayRequest>,
     ) -> Result<Response<ReplayResponse>, Status> {
+        self.check_auth(request.metadata())?;
         let req = request.into_inner();
         tracing::info!(req = ?req, "Received replay request");
 
@@ -187,6 +214,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         request: Request<GetDataRequest>,
     ) -> Result<Response<GetDataResponse>, Status> {
+        self.check_auth(request.metadata())?;
         let inner_request = request.into_inner();
         tracing::info!(count = inner_request.keys.len(), "Received GetDataRequest");
 
@@ -204,8 +232,9 @@ impl LifelogServerService for GRPCServerLifelogServerService {
 
     async fn get_state(
         &self,
-        _request: Request<GetStateRequest>,
+        request: Request<GetStateRequest>,
     ) -> Result<Response<GetSystemStateResponse>, Status> {
+        self.check_auth(request.metadata())?;
         tracing::debug!("Received get state request");
         let state = self.server.get_state().await;
         Ok(Response::new(GetSystemStateResponse { state: Some(state) }))
@@ -215,6 +244,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         request: Request<Streaming<Chunk>>,
     ) -> Result<Response<Ack>, Status> {
+        self.check_auth(request.metadata())?;
         let mut stream = request.into_inner();
         let mut ingester: Option<ChunkIngester<HybridIngestBackend>> = None;
         let mut last_stream: Option<lifelog_types::StreamIdentity> = None;
@@ -296,6 +326,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
         &self,
         request: Request<GetUploadOffsetRequest>,
     ) -> Result<Response<GetUploadOffsetResponse>, Status> {
+        self.check_auth(request.metadata())?;
         let _inner = request.into_inner();
         let stream_id = _inner
             .stream
@@ -359,8 +390,9 @@ impl LifelogServerService for GRPCServerLifelogServerService {
 
     async fn list_modalities(
         &self,
-        _request: Request<ListModalitiesRequest>,
+        request: Request<ListModalitiesRequest>,
     ) -> Result<Response<ListModalitiesResponse>, Status> {
+        self.check_auth(request.metadata())?;
         use lifelog_types::{FieldDescriptor, ModalityDescriptor};
 
         fn field(

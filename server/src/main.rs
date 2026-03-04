@@ -108,31 +108,6 @@ struct OnboardingPaths {
     server_ca_path: PathBuf,
 }
 
-fn check_auth(req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
-    let auth_token = std::env::var("LIFELOG_AUTH_TOKEN")
-        .map_err(|_| tonic::Status::internal("LIFELOG_AUTH_TOKEN must be configured"))?;
-    let enrollment_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN")
-        .map_err(|_| tonic::Status::internal("LIFELOG_ENROLLMENT_TOKEN must be configured"))?;
-
-    match req.metadata().get("authorization") {
-        Some(t) => {
-            let token_str = t.to_str().unwrap_or_default();
-            if token_str == format!("Bearer {}", auth_token) {
-                return Ok(req);
-            }
-            if token_str == format!("Bearer {}", enrollment_token) {
-                return Ok(req);
-            }
-            tracing::warn!("Invalid authentication token provided");
-            Err(tonic::Status::unauthenticated("Invalid token"))
-        }
-        None => {
-            tracing::warn!("Unauthenticated connection attempt (no token provided)");
-            Err(tonic::Status::unauthenticated("No token provided"))
-        }
-    }
-}
-
 fn onboarding_paths() -> Result<OnboardingPaths, lifelog_core::LifelogError> {
     let home = directories::BaseDirs::new()
         .map(|d| d.home_dir().to_path_buf())
@@ -946,11 +921,10 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     builder
         .add_service(reflection_service)
         .add_service(health_service)
-        .add_service(LifelogServerServiceServer::with_interceptor(
+        .add_service(LifelogServerServiceServer::new(
             GRPCServerLifelogServerService {
                 server: server_handle2,
             },
-            check_auth,
         ))
         .serve(addr)
         .await?;
