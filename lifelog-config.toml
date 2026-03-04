@@ -1,12 +1,26 @@
 [server]
 host = "0.0.0.0"
 port = 7182
-databaseEndpoint = "127.0.0.1:7183"
+databaseEndpoint = "100.118.206.104:7182"
 databaseName = "main"
 serverName = "LifelogServer"
 casPath = "/home/matth/lifelog/cas"
 defaultCorrelationWindowMs = 30000
 
-transforms = [
-  { id = "ocr", enabled = true, sourceOrigin = "*:screen", language = "eng" }
-]
+[collectors.matts-laptop]
+host = "100.118.206.104"
+id = "matts-laptop"
+port = 7190
+timestampFormat = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+[collectors.matts-laptop.screen]
+enabled = true
+interval = 10.0
+outputDir = "/home/matth/lifelog/data/screen"
+program = "grim"
+
+[[transforms]]
+id = "ocr"
+enabled = true
+sourceOrigin = "*:screen"
+language = "eng"

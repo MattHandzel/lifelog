@@ -254,25 +254,44 @@ async fn get_component_config(
     match client.get_config(req).await {
         Ok(resp) => {
             let config = resp.into_inner().config.ok_or("Missing config")?;
-            let collector_cfg = config
-                .collectors
-                .get(&collector_id)
-                .ok_or_else(|| format!("Collector {} not found in config", collector_id))?;
+            let collector_cfg_opt = config.collectors.get(&collector_id);
 
             let component_val = match component_type.to_lowercase().as_str() {
-                "browser" => serde_json::to_value(&collector_cfg.browser),
-                "screen" => serde_json::to_value(&collector_cfg.screen),
-                "camera" => serde_json::to_value(&collector_cfg.camera),
-                "microphone" => serde_json::to_value(&collector_cfg.microphone),
-                "processes" => serde_json::to_value(&collector_cfg.processes),
-                "hyprland" => serde_json::to_value(&collector_cfg.hyprland),
-                "weather" => serde_json::to_value(&collector_cfg.weather),
-                "wifi" => serde_json::to_value(&collector_cfg.wifi),
-                "clipboard" => serde_json::to_value(&collector_cfg.clipboard),
-                "shell_history" => serde_json::to_value(&collector_cfg.shell_history),
-                "mouse" => serde_json::to_value(&collector_cfg.mouse),
-                "window_activity" => serde_json::to_value(&collector_cfg.window_activity),
-                "keyboard" => serde_json::to_value(&collector_cfg.keyboard),
+                "browser" => {
+                    serde_json::to_value(&collector_cfg_opt.and_then(|c| c.browser.as_ref()))
+                }
+                "screen" => {
+                    serde_json::to_value(&collector_cfg_opt.and_then(|c| c.screen.as_ref()))
+                }
+                "camera" => {
+                    serde_json::to_value(&collector_cfg_opt.and_then(|c| c.camera.as_ref()))
+                }
+                "microphone" => {
+                    serde_json::to_value(&collector_cfg_opt.and_then(|c| c.microphone.as_ref()))
+                }
+                "processes" => {
+                    serde_json::to_value(&collector_cfg_opt.and_then(|c| c.processes.as_ref()))
+                }
+                "hyprland" => {
+                    serde_json::to_value(&collector_cfg_opt.and_then(|c| c.hyprland.as_ref()))
+                }
+                "weather" => {
+                    serde_json::to_value(&collector_cfg_opt.and_then(|c| c.weather.as_ref()))
+                }
+                "wifi" => serde_json::to_value(&collector_cfg_opt.and_then(|c| c.wifi.as_ref())),
+                "clipboard" => {
+                    serde_json::to_value(&collector_cfg_opt.and_then(|c| c.clipboard.as_ref()))
+                }
+                "shell_history" => {
+                    serde_json::to_value(&collector_cfg_opt.and_then(|c| c.shell_history.as_ref()))
+                }
+                "mouse" => serde_json::to_value(&collector_cfg_opt.and_then(|c| c.mouse.as_ref())),
+                "window_activity" => serde_json::to_value(
+                    &collector_cfg_opt.and_then(|c| c.window_activity.as_ref()),
+                ),
+                "keyboard" => {
+                    serde_json::to_value(&collector_cfg_opt.and_then(|c| c.keyboard.as_ref()))
+                }
                 _ => return Err(format!("Unknown component type: {}", component_type)),
             };
 
