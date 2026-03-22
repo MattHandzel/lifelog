@@ -20,6 +20,7 @@ use crate::db::get_origins_from_db;
 use crate::retention::prune_once;
 use crate::sync::sync_data_with_collectors;
 use crate::transform::LifelogTransform;
+use crate::transform::{dag::TransformDag, TransformExecutor};
 
 pub type ServerAction = lifelog_core::ServerAction<
     lifelog_types::QueryRequest,
@@ -43,6 +44,8 @@ pub struct Server {
     pub(crate) registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
     pub(crate) policy: Arc<RwLock<ServerPolicy>>,
     transforms: Arc<RwLock<Vec<LifelogTransform>>>,
+    pub(crate) transform_dag: Arc<TransformDag>,
+    pub(crate) http_client: reqwest::Client,
     pub(crate) skew_estimates: Arc<RwLock<HashMap<String, lifelog_core::time_skew::SkewEstimate>>>,
     pub(crate) skew_samples: Arc<RwLock<SkewSamples>>,
 }
@@ -499,38 +502,94 @@ impl Server {
         };
 
         let mut transforms: Vec<LifelogTransform> = Vec::new();
+        let mut executors: Vec<Arc<dyn TransformExecutor>> = Vec::new();
+
         for spec in &config.transforms {
             if !spec.enabled {
                 continue;
             }
 
-            match spec.id.as_str() {
-                "ocr" => {
-                    let source = match DataOrigin::tryfrom_string(spec.source_origin.clone()) {
-                        Ok(s) => s,
-                        Err(e) => {
-                            tracing::warn!(
-                                source_origin = %spec.source_origin,
-                                error = %e,
-                                "Skipping invalid OCR transform source_origin"
-                            );
-                            continue;
-                        }
-                    };
+            let transform_type = if spec.transform_type.is_empty() {
+                spec.id.as_str()
+            } else {
+                spec.transform_type.as_str()
+            };
 
+            let source = match DataOrigin::tryfrom_string(spec.source_origin.clone()) {
+                Ok(s) => s,
+                Err(e) => {
+                    tracing::warn!(
+                        source_origin = %spec.source_origin,
+                        error = %e,
+                        "Skipping transform with invalid source_origin"
+                    );
+                    continue;
+                }
+            };
+
+            match transform_type {
+                "ocr" => {
                     let ocr_config = data_modalities::ocr::OcrConfig {
                         language: spec.language.clone().unwrap_or_else(|| "eng".to_string()),
                         engine_path: None,
                     };
-
-                    let ocr_transform = data_modalities::ocr::OcrTransform::new(source, ocr_config);
+                    let ocr_transform =
+                        data_modalities::ocr::OcrTransform::new(source.clone(), ocr_config.clone());
                     transforms.push(ocr_transform.into());
+
+                    let executor = crate::transform::ocr::OcrExecutor::new(source, ocr_config)
+                        .with_id(spec.id.clone());
+                    executors.push(Arc::new(executor));
+                }
+                "stt" => {
+                    let executor = crate::transform::stt::SttExecutor::new(
+                        spec.id.clone(),
+                        source,
+                        spec.service_endpoint.clone(),
+                        &spec.params,
+                    );
+                    executors.push(Arc::new(executor));
+                    tracing::info!(
+                        id = %spec.id,
+                        endpoint = %spec.service_endpoint,
+                        "Registered STT transform"
+                    );
+                }
+                "llm" => {
+                    let executor = crate::transform::llm::LlmExecutor::new(
+                        spec.id.clone(),
+                        source,
+                        spec.service_endpoint.clone(),
+                        &spec.params,
+                    );
+                    executors.push(Arc::new(executor));
+                    tracing::info!(
+                        id = %spec.id,
+                        endpoint = %spec.service_endpoint,
+                        "Registered LLM transform"
+                    );
                 }
                 other => {
-                    tracing::warn!(transform_id = %other, "Unknown transform id; skipping");
+                    tracing::warn!(transform_id = %other, "Unknown transform type; skipping");
                 }
             }
         }
+
+        let transform_dag = match TransformDag::new(executors) {
+            Ok(dag) => {
+                tracing::info!(?dag, "Transform DAG constructed");
+                Arc::new(dag)
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "Transform DAG has cycles, falling back to empty DAG");
+                Arc::new(TransformDag::new(vec![]).expect("empty DAG"))
+            }
+        };
+
+        let http_client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(120))
+            .build()
+            .map_err(|e| LifelogError::Other(e.into()))?;
 
         Ok(Server {
             db,
@@ -541,6 +600,8 @@ impl Server {
             registered_collectors: Arc::new(RwLock::new(vec![])),
             policy: Arc::new(RwLock::new(ServerPolicy::new(policy_config))),
             transforms: Arc::new(RwLock::new(transforms)),
+            transform_dag,
+            http_client,
             skew_estimates: Arc::new(RwLock::new(HashMap::new())),
             skew_samples: Arc::new(RwLock::new(HashMap::new())),
         })
@@ -579,6 +640,29 @@ impl Server {
                 server_state.postgres_pool_size = pool_status.size as u32;
                 server_state.postgres_pool_available = pool_status.available as u32;
                 server_state.postgres_pool_waiting = pool_status.waiting as u32;
+
+                if let Ok(client) = pool.get().await {
+                    let count_sql = "\
+                        SELECT COALESCE(SUM(cnt), 0)::BIGINT AS total FROM ( \
+                            SELECT COUNT(*) AS cnt FROM screen_records \
+                            UNION ALL SELECT COUNT(*) FROM browser_records \
+                            UNION ALL SELECT COUNT(*) FROM ocr_records \
+                            UNION ALL SELECT COUNT(*) FROM audio_records \
+                            UNION ALL SELECT COUNT(*) FROM clipboard_records \
+                            UNION ALL SELECT COUNT(*) FROM shell_history_records \
+                            UNION ALL SELECT COUNT(*) FROM keystroke_records \
+                        ) sub";
+                    if let Ok(row) = client.query_one(count_sql, &[]).await {
+                        let total: i64 = row.get(0);
+                        server_state.total_frames_stored = total as u64;
+                    }
+
+                    let size_sql = "SELECT pg_database_size(current_database())::BIGINT";
+                    if let Ok(row) = client.query_one(size_sql, &[]).await {
+                        let size: i64 = row.get(0);
+                        server_state.disk_usage_bytes = size as u64;
+                    }
+                }
             } else {
                 server_state.postgres_pool_enabled = false;
                 server_state.postgres_pool_max_size = 0;

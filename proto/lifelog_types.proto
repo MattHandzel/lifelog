@@ -145,6 +145,8 @@ enum DataModality {
   Weather = 11;
   Hyprland = 12;
   Microphone = 13;
+  Transcription = 14;
+  VectorEmbedding = 15;
 }
 
 message GeoConfig {
@@ -402,6 +404,36 @@ message AudioFrame {
   RecordType record_type = 13;
 }
 
+message TranscriptionFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string text = 3;
+  string source_uuid = 4;
+  string model = 5;
+  float confidence = 6;
+  google.protobuf.Timestamp t_device = 7;
+  google.protobuf.Timestamp t_ingest = 8;
+  google.protobuf.Timestamp t_canonical = 9;
+  google.protobuf.Timestamp t_end = 10;
+  TimeQuality time_quality = 11;
+  RecordType record_type = 12;
+}
+
+message EmbeddingFrame {
+  string uuid = 1;
+  google.protobuf.Timestamp timestamp = 2;
+  string source_uuid = 3;
+  string model = 4;
+  repeated float vector = 5;
+  uint32 dimensions = 6;
+  google.protobuf.Timestamp t_device = 7;
+  google.protobuf.Timestamp t_ingest = 8;
+  google.protobuf.Timestamp t_canonical = 9;
+  google.protobuf.Timestamp t_end = 10;
+  TimeQuality time_quality = 11;
+  RecordType record_type = 12;
+}
+
 message KeystrokeFrame {
   string uuid = 1;
   google.protobuf.Timestamp timestamp = 2;
@@ -504,6 +536,11 @@ message TransformSpec {
   bool enabled = 2;
   string source_origin = 3;
   optional string language = 4;
+  string transform_type = 5;
+  string service_endpoint = 6;
+  map<string, string> params = 7;
+  uint32 priority = 8;
+  string destination_modality = 9;
 }
 
 message ServerConfig {
@@ -598,5 +635,7 @@ message LifelogData {
     CameraFrame cameraframe = 11;
     WeatherFrame weatherframe = 12;
     HyprlandFrame hyprlandframe = 13;
+    TranscriptionFrame transcriptionframe = 14;
+    EmbeddingFrame embeddingframe = 15;
   }
 }

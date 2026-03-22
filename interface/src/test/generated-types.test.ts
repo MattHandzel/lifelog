@@ -53,6 +53,11 @@ describe('Proto-generated types compile-time checks', () => {
       version: '0.1.0',
       totalFramesStored: 1000,
       diskUsageBytes: 500000,
+      postgresPoolEnabled: true,
+      postgresPoolMaxSize: 10,
+      postgresPoolSize: 5,
+      postgresPoolAvailable: 3,
+      postgresPoolWaiting: 0,
     };
     expect(state.totalFramesStored).toBe(1000);
     expect(state.diskUsageBytes).toBe(500000);

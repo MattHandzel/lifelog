@@ -347,6 +347,11 @@ fn write_unified_config(
             enabled: true,
             source_origin: "*:screen".to_string(),
             language: Some("eng".to_string()),
+            transform_type: String::new(),
+            service_endpoint: String::new(),
+            params: Default::default(),
+            priority: 0,
+            destination_modality: String::new(),
         }];
         root.insert("transforms".to_string(), to_toml_value(&transforms)?);
     }

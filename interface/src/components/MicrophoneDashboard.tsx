@@ -30,15 +30,14 @@ interface AudioFile {
 }
 
 const MicrophoneDashboard: React.FC = function (): JSX.Element {
-  // Dashboard states
   const [isRecording] = useState<boolean>(false);
   const [isPaused] = useState<boolean>(false);
   const [recordings, setRecordings] = useState<AudioFile[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [activeCollectorId, setActiveCollectorId] = useState<string | null>(null);
 
-  // Settings state from the backend
-  const [settings, _setSettings] = useState<MicrophoneSettings>({
+  const [settings, setSettings] = useState<MicrophoneSettings>({
     enabled: false,
     chunk_duration_secs: 60,
     output_dir: '',
@@ -46,7 +45,7 @@ const MicrophoneDashboard: React.FC = function (): JSX.Element {
     sample_rate: 44100,
     bits_per_sample: 16,
     timestamp_format: '%Y-%m-%d_%H-%M-%S',
-    capture_interval_secs: 300, // Default 5 minutes
+    capture_interval_secs: 300,
   });
 
   // Temporary settings for the settings panel (card)
@@ -65,8 +64,20 @@ const MicrophoneDashboard: React.FC = function (): JSX.Element {
   const statusCheckInterval = useRef<number | null>(null);
 
   useEffect(function () {
-    loadSettings();
-    fetchRecordings();
+    async function init(): Promise<void> {
+      try {
+        const ids = await invoke<string[]>('get_collector_ids');
+        const resolvedId = ids.length > 0 ? ids[0] : null;
+        setActiveCollectorId(resolvedId);
+        if (resolvedId) {
+          loadSettingsFromBackend(resolvedId);
+        }
+      } catch (err) {
+        console.error('[MicrophoneDashboard] Failed to discover collector:', err);
+      }
+      fetchRecordings();
+    }
+    init();
 
     return function () {
       if (statusCheckInterval.current) {
@@ -83,14 +94,53 @@ const MicrophoneDashboard: React.FC = function (): JSX.Element {
     }
   }, [tempSettings.captureInterval]);
 
-  async function loadSettings(): Promise<void> {
-    console.warn('Microphone settings: not yet implemented via gRPC');
+  async function loadSettingsFromBackend(collectorId: string): Promise<void> {
     setErrorMessage(null);
+    try {
+      const result = await invoke('get_component_config', {
+        collectorId,
+        componentType: 'microphone',
+      });
+      if (result && typeof result === 'object') {
+        const loaded = result as MicrophoneSettings;
+        setSettings(loaded);
+        setTempSettings({
+          autoCapture: loaded.enabled,
+          recordingDuration: loaded.chunk_duration_secs,
+          captureInterval: loaded.capture_interval_secs,
+        });
+      }
+    } catch (err) {
+      console.error('[MicrophoneDashboard] Failed to load settings:', err);
+    }
   }
 
   async function saveSettings(): Promise<void> {
-    console.warn('Microphone settings save: not yet implemented via gRPC');
-    setIsSavingSettings(false);
+    if (!activeCollectorId) {
+      setErrorMessage('No collector found — cannot save settings.');
+      return;
+    }
+    setIsSavingSettings(true);
+    try {
+      const updatedConfig: MicrophoneSettings = {
+        ...settings,
+        enabled: tempSettings.autoCapture,
+        chunk_duration_secs: tempSettings.recordingDuration,
+        capture_interval_secs: tempSettings.captureInterval,
+      };
+      await invoke('set_component_config', {
+        collectorId: activeCollectorId,
+        componentType: 'microphone',
+        configValue: updatedConfig,
+      });
+      setSettings(updatedConfig);
+      setShowSettings(false);
+    } catch (err) {
+      console.error('[MicrophoneDashboard] Failed to save settings:', err);
+      setErrorMessage(`Failed to save settings: ${err}`);
+    } finally {
+      setIsSavingSettings(false);
+    }
   }
 
   async function fetchRecordings(): Promise<void> {
@@ -135,18 +185,15 @@ const MicrophoneDashboard: React.FC = function (): JSX.Element {
   }
 
   async function handleStartRecording(): Promise<void> {
-    console.warn('Microphone start recording: not yet implemented via gRPC');
-    setErrorMessage(null);
+    setErrorMessage('Manual recording control requires a running collector with microphone module enabled. Use auto-recording via Settings, or open the directory to manage recordings directly.');
   }
 
   async function handlePauseRecording(): Promise<void> {
-    console.warn('Microphone pause/resume recording: not yet implemented via gRPC');
-    setErrorMessage(null);
+    setErrorMessage('Manual recording control is not yet available. The collector handles recording automatically when enabled.');
   }
 
   async function handleStopRecording(): Promise<void> {
-    console.warn('Microphone stop recording: not yet implemented via gRPC');
-    setErrorMessage(null);
+    setErrorMessage('Manual recording control is not yet available. The collector handles recording automatically when enabled.');
   }
 
   async function handleOpenTerminalForRecording(): Promise<void> {
@@ -182,8 +229,27 @@ const MicrophoneDashboard: React.FC = function (): JSX.Element {
     return Math.floor(tempSettings.captureInterval * 0.8);
   }
 
-  async function handlePlayRecording(_audioFile: AudioFile): Promise<void> {
-    console.warn('Microphone play recording: not yet implemented via gRPC');
+  async function handlePlayRecording(audioFile: AudioFile): Promise<void> {
+    try {
+      const keys = [{ uuid: audioFile.path, origin: 'Audio' }];
+      const frames = await invoke<Array<{
+        uuid: string; audio_data_url: string | null;
+      }>>('get_frame_data', { keys });
+      if (frames.length > 0 && frames[0].audio_data_url) {
+        setRecordings(function (prev) {
+          return prev.map(function (r) {
+            return r.path === audioFile.path
+              ? { ...r, audio_data_url: frames[0].audio_data_url ?? undefined }
+              : r;
+          });
+        });
+      } else {
+        setErrorMessage('Audio data not available for this recording.');
+      }
+    } catch (err) {
+      console.error('[MicrophoneDashboard] Failed to load audio data:', err);
+      setErrorMessage(`Failed to load audio: ${err}`);
+    }
   }
 
   function formatFileSize(bytes: number): string {

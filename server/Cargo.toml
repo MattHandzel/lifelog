@@ -56,6 +56,7 @@ rustls = "0.23"
 sha2 = "0.10"
 base64 = "0.22"
 directories = { workspace = true }
+reqwest = { workspace = true }
 
 [build-dependencies]
 tonic-build = {workspace = true}

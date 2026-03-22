@@ -134,6 +134,28 @@ mod helpers {
 
     #[cfg(feature = "surrealdb")]
     #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+    pub struct TranscriptionRecord {
+        pub uuid: String,
+        pub timestamp: surrealdb::sql::Datetime,
+        pub text: String,
+        #[serde(default)]
+        pub source_uuid: Option<String>,
+        #[serde(default)]
+        pub model: Option<String>,
+        #[serde(default)]
+        pub confidence: Option<f32>,
+        #[serde(default)]
+        pub t_ingest: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_canonical: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub t_end: Option<surrealdb::sql::Datetime>,
+        #[serde(default)]
+        pub time_quality: Option<String>,
+    }
+
+    #[cfg(feature = "surrealdb")]
+    #[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
     pub struct ProcessRecord {
         pub uuid: String,
         pub timestamp: surrealdb::sql::Datetime,

@@ -1,7 +1,59 @@
+pub mod dag;
+pub mod llm;
+pub mod ocr;
+pub mod stt;
+pub mod watermark;
+pub mod writer;
+
+use async_trait::async_trait;
+use lifelog_core::{DataOrigin, LifelogFrameKey};
+use lifelog_types::LifelogData;
+
+#[derive(Debug, thiserror::Error)]
+pub enum TransformPipelineError {
+    #[error("service unavailable: {endpoint}")]
+    ServiceUnavailable { endpoint: String },
+    #[error("service error: {0}")]
+    ServiceError(String),
+    #[error("data error: {0}")]
+    DataError(String),
+    #[error("unsupported input modality for transform {transform}: {modality}")]
+    UnsupportedModality { transform: String, modality: String },
+    #[error("cycle detected in transform DAG: {0}")]
+    CycleDetected(String),
+}
+
+pub enum TransformOutput {
+    Ocr(lifelog_types::OcrFrame),
+    Transcription(lifelog_types::TranscriptionFrame),
+    Embedding(lifelog_types::EmbeddingFrame),
+}
+
+#[async_trait]
+pub trait TransformExecutor: Send + Sync {
+    fn id(&self) -> &str;
+    fn source_modality(&self) -> &str;
+    fn destination_modality(&self) -> &str;
+    fn priority(&self) -> u8;
+    fn is_async(&self) -> bool;
+    fn matches_origin(&self, key_origin: &DataOrigin) -> bool;
+    fn source(&self) -> DataOrigin;
+    fn destination(&self) -> DataOrigin;
+
+    async fn execute(
+        &self,
+        http: &reqwest::Client,
+        data: &LifelogData,
+        key: &LifelogFrameKey,
+    ) -> Result<TransformOutput, TransformPipelineError>;
+}
+
+// Re-export the legacy transform code for backward compatibility during migration.
+// The old LifelogTransform enum and transform_data_single are preserved here
+// so existing server.rs code continues to work while we wire up the new pipeline.
+
 use data_modalities::ocr::OcrTransform;
-use lifelog_core::{
-    DataOrigin, DataOriginType, DateTime, LifelogFrameKey, LifelogImage, Transform, Utc,
-};
+use lifelog_core::{DataOriginType, DateTime, LifelogImage, Transform, Utc};
 use lifelog_types::ToRecord;
 use surrealdb::engine::remote::ws::Client;
 use surrealdb::Surreal;
@@ -52,7 +104,7 @@ impl LifelogTransform {
                 }
 
                 match &src.origin {
-                    // Wildcard source supports transforms over all collector IDs
+                    DataOriginType::DataOrigin(o) if matches!(&**o, _) => src == *key_origin,
                     DataOriginType::DeviceId(device_id) if device_id == "*" => true,
                     _ => src == *key_origin,
                 }
@@ -112,17 +164,13 @@ pub(crate) async fn transform_data_single(
                             record.t_end = Some(lifelog_types::to_dt(src_t_end).into());
                             record.time_quality = Some(src_quality);
 
-                            // Ensure destination table exists
                             let _ = crate::schema::ensure_table_schema(db, &destination).await;
 
-                            // Use native upsert to avoid serialization issues
                             let _ = db
                                 .upsert::<Option<lifelog_types::OcrRecord>>((&table, &id))
                                 .content(record)
                                 .await;
 
-                            // Spec §6.2.1: durable ACK implies queryable, including derived outputs.
-                            // The ingest pipeline pins Screen chunk ACK until OCR for the same uuid exists.
                             let _ = db
                                 .query(
                                     "UPDATE upload_chunks SET indexed = true WHERE frame_uuid = $uuid AND (stream_id = 'screen' OR stream_id = 'Screen')",

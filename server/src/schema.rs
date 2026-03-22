@@ -315,6 +315,27 @@ static SCHEMAS: &[TableSchema] = &[
             DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
         "#,
     },
+    TableSchema {
+        modality: DataModality::Transcription,
+        fields_ddl: r#"
+            DEFINE FIELD uuid          ON `{table}` TYPE string;
+            DEFINE FIELD timestamp     ON `{table}` TYPE datetime;
+            DEFINE FIELD text          ON `{table}` TYPE string;
+            DEFINE FIELD source_uuid   ON `{table}` TYPE option<string>;
+            DEFINE FIELD model         ON `{table}` TYPE option<string>;
+            DEFINE FIELD confidence    ON `{table}` TYPE option<float>;
+            DEFINE FIELD t_ingest      ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_canonical   ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD t_end         ON `{table}` TYPE option<datetime>;
+            DEFINE FIELD time_quality  ON `{table}` TYPE option<string>;
+        "#,
+        indexes_ddl: r#"
+            DEFINE INDEX `{table}_ts_idx` ON `{table}` FIELDS timestamp;
+            DEFINE INDEX `{table}_tcanon_idx` ON `{table}` FIELDS t_canonical;
+            DEFINE INDEX `{table}_tend_idx` ON `{table}` FIELDS t_end;
+            DEFINE INDEX `{table}_text_idx` ON `{table}` FIELDS text SEARCH ANALYZER lifelog_text BM25;
+        "#,
+    },
 ];
 
 /// Upload chunks metadata table schema.

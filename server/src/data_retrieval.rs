@@ -630,6 +630,9 @@ pub(crate) async fn get_data_by_key_surreal(
                 payload: Some(lifelog_types::lifelog_data::Payload::Audioframe(frame)),
             })
         }
+        DataModality::Transcription | DataModality::VectorEmbedding => Err(LifelogError::Database(
+            format!("retrieval for modality {:?} not yet implemented", modality),
+        )),
     }
 }
 
