@@ -46,6 +46,8 @@ export enum DataModality {
   Weather = 11,
   Hyprland = 12,
   Microphone = 13,
+  Transcription = 14,
+  VectorEmbedding = 15,
   UNRECOGNIZED = -1,
 }
 
@@ -419,6 +421,36 @@ export interface AudioFrame {
   recordType: RecordType;
 }
 
+export interface TranscriptionFrame {
+  uuid: string;
+  timestamp?: Date | undefined;
+  text: string;
+  sourceUuid: string;
+  model: string;
+  confidence: number;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
+  recordType: RecordType;
+}
+
+export interface EmbeddingFrame {
+  uuid: string;
+  timestamp?: Date | undefined;
+  sourceUuid: string;
+  model: string;
+  vector: number[];
+  dimensions: number;
+  tDevice?: Date | undefined;
+  tIngest?: Date | undefined;
+  tCanonical?: Date | undefined;
+  tEnd?: Date | undefined;
+  timeQuality: TimeQuality;
+  recordType: RecordType;
+}
+
 export interface KeystrokeFrame {
   uuid: string;
   timestamp?: Date | undefined;
@@ -514,6 +546,16 @@ export interface TransformSpec {
   enabled: boolean;
   sourceOrigin: string;
   language?: string | undefined;
+  transformType: string;
+  serviceEndpoint: string;
+  params: { [key: string]: string };
+  priority: number;
+  destinationModality: string;
+}
+
+export interface TransformSpec_ParamsEntry {
+  key: string;
+  value: string;
 }
 
 export interface ServerConfig {
@@ -629,4 +671,6 @@ export interface LifelogData {
   cameraframe?: CameraFrame | undefined;
   weatherframe?: WeatherFrame | undefined;
   hyprlandframe?: HyprlandFrame | undefined;
+  transcriptionframe?: TranscriptionFrame | undefined;
+  embeddingframe?: EmbeddingFrame | undefined;
 }

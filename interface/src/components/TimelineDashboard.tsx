@@ -58,6 +58,7 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
           audio_data_url: null, codec: null, sample_rate: null, channels: null, audio_duration_secs: null,
           image_data_url: null, width: null, height: null, mime_type: null,
           camera_device: null, processes: null,
+          transcription_model: null, transcription_confidence: null, source_frame_uuid: null,
         });
         setFrames(ordered);
       } else {
@@ -205,6 +206,7 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
                 audio_data_url: null, codec: null, sample_rate: null, channels: null, audio_duration_secs: null,
                 image_data_url: null, width: null, height: null, mime_type: null,
                 camera_device: null, processes: null,
+          transcription_model: null, transcription_confidence: null, source_frame_uuid: null,
               }))).map((frame) => (
                 <ResultCard key={frame.uuid} frame={frame} />
               ))}

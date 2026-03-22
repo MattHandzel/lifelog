@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, FileAudio, File, Mouse, Cloud, Monitor, Cpu, Clipboard, Globe, Terminal, Activity } from 'lucide-react';
+import { Image, FileAudio, File, Mouse, Cloud, Monitor, Cpu, Clipboard, Globe, Terminal, Activity, MessageSquareText } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 
 export interface SearchResult {
@@ -57,6 +57,9 @@ export interface FrameDataWrapper {
   mime_type: string | null;
   camera_device: string | null;
   processes: ProcessInfoWrapper[] | null;
+  transcription_model: string | null;
+  transcription_confidence: number | null;
+  source_frame_uuid: string | null;
 }
 
 function formatDate(timestamp: number): string {
@@ -155,6 +158,7 @@ function ModalityIcon({ modality }: { modality: string }): JSX.Element {
   if (lower === 'browser') return <Globe className="w-5 h-5 text-cyan-400" />;
   if (lower === 'shellhistory' || lower === 'shell_history') return <Terminal className="w-5 h-5 text-rose-400" />;
   if (lower === 'keystrokes') return <Activity className="w-5 h-5 text-pink-400" />;
+  if (lower === 'transcription') return <MessageSquareText className="w-5 h-5 text-emerald-400" />;
   return <File className="w-5 h-5 text-gray-400" />;
 }
 
@@ -176,6 +180,16 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
             {Math.floor(result.duration / 60)}:{(result.duration % 60).toString().padStart(2, '0')}
           </span>
         )}
+      </div>
+    );
+  }
+
+  if (lower === 'transcription') {
+    const text = result.snippet || (result.metadata?.text as string) || '';
+    return (
+      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
+        <MessageSquareText className="w-6 h-6 text-emerald-400 shrink-0" />
+        <p className="text-xs text-[#D1D5DB] line-clamp-4 leading-relaxed">{text}</p>
       </div>
     );
   }
@@ -264,6 +278,16 @@ function ModalityDetails({ result }: { result: SearchResult }): JSX.Element {
     );
   }
 
+  if (lower === 'transcription') {
+    return (
+      <div className="text-sm text-[#9CA3AF] space-y-0.5">
+        {meta.model != null && <p className="text-xs">Model: {String(meta.model)}</p>}
+        {meta.confidence != null && <p className="text-xs">Confidence: {(Number(meta.confidence) * 100).toFixed(0)}%</p>}
+        {meta.text != null && <p className="line-clamp-3 text-xs leading-relaxed">{String(meta.text)}</p>}
+      </div>
+    );
+  }
+
   return <></>;
 }
 
@@ -292,6 +316,10 @@ function frameToResult(frame: FrameDataWrapper): SearchResult {
       application: frame.application,
       visit_count: frame.visit_count,
       processes_count: frame.processes?.length ?? 0,
+      text: frame.text,
+      model: frame.transcription_model,
+      confidence: frame.transcription_confidence,
+      source_frame_uuid: frame.source_frame_uuid,
     },
   };
 }

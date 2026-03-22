@@ -36,6 +36,7 @@ const MODALITY_TYPE_MAP: Record<string, SearchResult['type']> = {
   processes: 'file',
   weather: 'file',
   hyprland: 'file',
+  transcription: 'file',
 };
 
 interface TimelineEntry {

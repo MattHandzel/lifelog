@@ -658,6 +658,9 @@ struct FrameDataWrapper {
     mime_type: Option<String>,
     camera_device: Option<String>,
     processes: Option<Vec<ProcessInfoWrapper>>,
+    transcription_model: Option<String>,
+    transcription_confidence: Option<f32>,
+    source_frame_uuid: Option<String>,
 }
 
 fn encode_dataUrl(
@@ -712,6 +715,28 @@ async fn get_frame_data_async(
                             width: Some(f.width),
                             height: Some(f.height),
                             mime_type: Some(f.mime_type),
+                            ..Default::default()
+                        },
+                        lifelog::lifelog_data::Payload::Transcriptionframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Transcription".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            text: Some(f.text),
+                            transcription_model: if f.model.is_empty() {
+                                None
+                            } else {
+                                Some(f.model)
+                            },
+                            transcription_confidence: if f.confidence > 0.0 {
+                                Some(f.confidence)
+                            } else {
+                                None
+                            },
+                            source_frame_uuid: if f.source_uuid.is_empty() {
+                                None
+                            } else {
+                                Some(f.source_uuid)
+                            },
                             ..Default::default()
                         },
                         _ => FrameDataWrapper::default(),
