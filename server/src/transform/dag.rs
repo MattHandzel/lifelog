@@ -45,14 +45,6 @@ impl TransformDag {
             .unwrap_or_default()
     }
 
-    pub fn downstream(&self, transform_idx: usize) -> Vec<usize> {
-        let dest = self.transforms[transform_idx].destination_modality();
-        self.by_source_modality
-            .get(dest)
-            .cloned()
-            .unwrap_or_default()
-    }
-
     pub fn all_transforms(&self) -> &[Arc<dyn TransformExecutor>] {
         &self.transforms
     }

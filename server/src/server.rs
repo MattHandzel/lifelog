@@ -19,7 +19,6 @@ use crate::data_retrieval::get_data_by_key;
 use crate::db::get_origins_from_db;
 use crate::retention::prune_once;
 use crate::sync::sync_data_with_collectors;
-use crate::transform::LifelogTransform;
 use crate::transform::{dag::TransformDag, TransformExecutor};
 
 pub type ServerAction = lifelog_core::ServerAction<
@@ -43,8 +42,6 @@ pub struct Server {
     pub(crate) state: Arc<RwLock<SystemState>>,
     pub(crate) registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
     pub(crate) policy: Arc<RwLock<ServerPolicy>>,
-    #[allow(dead_code)]
-    transforms: Arc<RwLock<Vec<LifelogTransform>>>,
     pub(crate) transform_dag: Arc<TransformDag>,
     pub(crate) http_client: reqwest::Client,
     pub(crate) skew_estimates: Arc<RwLock<HashMap<String, lifelog_core::time_skew::SkewEstimate>>>,
@@ -502,7 +499,6 @@ impl Server {
             max_threads: UsageType::RealValue(10, lifelog_core::Unit::Count),
         };
 
-        let mut transforms: Vec<LifelogTransform> = Vec::new();
         let mut executors: Vec<Arc<dyn TransformExecutor>> = Vec::new();
 
         for spec in &config.transforms {
@@ -534,10 +530,6 @@ impl Server {
                         language: spec.language.clone().unwrap_or_else(|| "eng".to_string()),
                         engine_path: None,
                     };
-                    let ocr_transform =
-                        data_modalities::ocr::OcrTransform::new(source.clone(), ocr_config.clone());
-                    transforms.push(ocr_transform.into());
-
                     let executor = crate::transform::ocr::OcrExecutor::new(source, ocr_config)
                         .with_id(spec.id.clone());
                     executors.push(Arc::new(executor));
@@ -600,7 +592,6 @@ impl Server {
             state: Arc::new(RwLock::new(system_state)),
             registered_collectors: Arc::new(RwLock::new(vec![])),
             policy: Arc::new(RwLock::new(ServerPolicy::new(policy_config))),
-            transforms: Arc::new(RwLock::new(transforms)),
             transform_dag,
             http_client,
             skew_estimates: Arc::new(RwLock::new(HashMap::new())),
