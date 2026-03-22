@@ -65,6 +65,7 @@ pub(crate) async fn get_data_by_key_postgres(
         "camera" => DataModality::Camera,
         "weather" => DataModality::Weather,
         "hyprland" => DataModality::Hyprland,
+        "transcription" => DataModality::Transcription,
         _ => {
             return Err(LifelogError::Database(format!(
                 "Unsupported or invalid modality name for Postgres: {}",
@@ -114,6 +115,38 @@ pub(crate) async fn get_data_by_key_postgres(
                 payload: Some(lifelog_types::lifelog_data::Payload::Screenframe(frame)),
             })
         }
+        DataModality::Transcription => {
+            let row = client
+                .query_opt(
+                    "SELECT id, t_device, t_ingest, t_canonical, t_end, time_quality, text, source_frame_uuid, model, confidence
+                     FROM transcription_records WHERE id = $1",
+                    &[&key.uuid],
+                )
+                .await
+                .map_err(|e| LifelogError::Database(format!("postgres select transcription_records: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found in postgres: transcription_records:{}", key.uuid)))?;
+
+            let frame = lifelog_types::TranscriptionFrame {
+                uuid: row.get::<_, uuid::Uuid>(0).to_string(),
+                timestamp: lifelog_types::to_pb_ts(row.get(1)),
+                text: row.get(6),
+                source_uuid: row.get::<_, Option<String>>(7).unwrap_or_default(),
+                model: row.get::<_, Option<String>>(8).unwrap_or_default(),
+                confidence: row.get::<_, Option<f32>>(9).unwrap_or(0.0),
+                t_device: lifelog_types::to_pb_ts(row.get(1)),
+                t_ingest: lifelog_types::to_pb_ts(row.get(2)),
+                t_canonical: lifelog_types::to_pb_ts(row.get(3)),
+                t_end: lifelog_types::to_pb_ts(row.get(4)),
+                time_quality: time_quality_from_opt_str(row.get(5)) as i32,
+                record_type: lifelog_types::RecordType::Interval as i32,
+            };
+
+            Ok(lifelog_types::LifelogData {
+                payload: Some(lifelog_types::lifelog_data::Payload::Transcriptionframe(
+                    frame,
+                )),
+            })
+        }
         _ => Err(LifelogError::Database(format!(
             "Postgres GetData not yet implemented for modality: {:?}",
             modality
@@ -144,6 +177,7 @@ pub(crate) async fn get_data_by_key_surreal(
         "camera" => DataModality::Camera,
         "weather" => DataModality::Weather,
         "hyprland" => DataModality::Hyprland,
+        "transcription" => DataModality::Transcription,
         _ => {
             return Err(LifelogError::Database(format!(
                 "Invalid modality name: {}",
@@ -630,9 +664,45 @@ pub(crate) async fn get_data_by_key_surreal(
                 payload: Some(lifelog_types::lifelog_data::Payload::Audioframe(frame)),
             })
         }
-        DataModality::Transcription | DataModality::VectorEmbedding => Err(LifelogError::Database(
-            format!("retrieval for modality {:?} not yet implemented", modality),
-        )),
+        DataModality::Transcription => {
+            let frame_record: lifelog_types::TranscriptionRecord = db
+                .select((&table, &*id))
+                .await
+                .map_err(|e| LifelogError::Database(format!("select {table}:{id}: {e}")))?
+                .ok_or_else(|| LifelogError::Database(format!("record not found: {table}:{id}")))?;
+
+            let frame = lifelog_types::TranscriptionFrame {
+                uuid: frame_record.uuid,
+                timestamp: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                text: frame_record.text,
+                source_uuid: frame_record.source_uuid.unwrap_or_default(),
+                model: frame_record.model.unwrap_or_default(),
+                confidence: frame_record.confidence.unwrap_or(0.0),
+                t_device: lifelog_types::to_pb_ts(frame_record.timestamp.0),
+                t_ingest: frame_record
+                    .t_ingest
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_canonical: frame_record
+                    .t_canonical
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                t_end: frame_record
+                    .t_end
+                    .and_then(|t| lifelog_types::to_pb_ts(t.0)),
+                time_quality: time_quality_from_opt_str(frame_record.time_quality.as_deref())
+                    as i32,
+                record_type: lifelog_types::RecordType::Interval as i32,
+            };
+
+            Ok(lifelog_types::LifelogData {
+                payload: Some(lifelog_types::lifelog_data::Payload::Transcriptionframe(
+                    frame,
+                )),
+            })
+        }
+        DataModality::VectorEmbedding => Err(LifelogError::Database(format!(
+            "retrieval for modality {:?} not yet implemented",
+            modality
+        ))),
     }
 }
 
@@ -678,4 +748,76 @@ pub(crate) async fn get_keys_after_timestamp(
         })
         .collect();
     Ok(keys)
+}
+
+fn modality_to_postgres_table(modality_name: &str) -> Option<&'static str> {
+    match modality_name.to_lowercase().as_str() {
+        "screen" => Some("screen_records"),
+        "browser" => Some("browser_records"),
+        "ocr" => Some("ocr_records"),
+        "audio" | "microphone" => Some("audio_records"),
+        "keystrokes" | "keyboard" => Some("keystroke_records"),
+        "clipboard" => Some("clipboard_records"),
+        "shell_history" | "shellhistory" => Some("shell_history_records"),
+        "camera" => Some("camera_records"),
+        "weather" => Some("weather_records"),
+        "mouse" => Some("mouse_records"),
+        "window_activity" | "windowactivity" => Some("window_activity_records"),
+        "transcription" => Some("transcription_records"),
+        _ => None,
+    }
+}
+
+pub(crate) async fn get_keys_after_timestamp_postgres(
+    pool: &PostgresPool,
+    origin: &DataOrigin,
+    after: DateTime<Utc>,
+    limit: usize,
+) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+    let table = match modality_to_postgres_table(&origin.modality_name) {
+        Some(t) => t,
+        None => return Ok(vec![]),
+    };
+
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| LifelogError::Database(format!("pool: {e}")))?;
+
+    let sql =
+        format!("SELECT id FROM {table} WHERE t_canonical > $1 ORDER BY t_canonical ASC LIMIT $2");
+    let rows = client
+        .query(&sql, &[&after, &(limit as i64)])
+        .await
+        .map_err(|e| LifelogError::Database(format!("postgres keys query: {e}")))?;
+
+    let keys = rows
+        .iter()
+        .filter_map(|row| {
+            let uuid: uuid::Uuid = row.get(0);
+            Some(LifelogFrameKey::new(
+                lifelog_core::Uuid::from_bytes(*uuid.as_bytes()),
+                origin.clone(),
+            ))
+        })
+        .collect();
+
+    Ok(keys)
+}
+
+pub(crate) async fn get_keys_after(
+    db: &Surreal<Client>,
+    postgres_pool: Option<&PostgresPool>,
+    origin: &DataOrigin,
+    after: DateTime<Utc>,
+    limit: usize,
+) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+    if let Some(pool) = postgres_pool {
+        if let Ok(keys) = get_keys_after_timestamp_postgres(pool, origin, after, limit).await {
+            if !keys.is_empty() {
+                return Ok(keys);
+            }
+        }
+    }
+    get_keys_after_timestamp(db, origin, after, limit).await
 }

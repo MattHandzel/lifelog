@@ -3,6 +3,7 @@ pub mod llm;
 pub mod ocr;
 pub mod stt;
 pub mod watermark;
+pub mod worker;
 pub mod writer;
 
 use async_trait::async_trait;

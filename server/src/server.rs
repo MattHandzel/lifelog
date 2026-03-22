@@ -43,6 +43,7 @@ pub struct Server {
     pub(crate) state: Arc<RwLock<SystemState>>,
     pub(crate) registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
     pub(crate) policy: Arc<RwLock<ServerPolicy>>,
+    #[allow(dead_code)]
     transforms: Arc<RwLock<Vec<LifelogTransform>>>,
     pub(crate) transform_dag: Arc<TransformDag>,
     pub(crate) http_client: reqwest::Client,
@@ -1289,84 +1290,35 @@ impl Server {
                 let db_connection = self.db.clone();
                 let cas_clone = self.cas.clone();
                 let pool_clone = self.postgres_pool.clone();
-                let transforms = self.transforms.clone().read().await.to_vec();
+                let dag = self.transform_dag.clone();
+                let http = self.http_client.clone();
+
                 tokio::spawn(async move {
-                    let available_origins =
-                        match crate::db::get_origins_from_db(&db_connection).await {
-                            Ok(o) => o,
-                            Err(e) => {
-                                tracing::error!("Failed to get origins for transform loop: {}", e);
-                                return;
-                            }
-                        };
+                    let watermarks: std::sync::Arc<
+                        dyn crate::transform::watermark::WatermarkStore,
+                    > = match &pool_clone {
+                        Some(p) => std::sync::Arc::new(
+                            crate::transform::watermark::PostgresWatermarkStore::new(p.clone()),
+                        ),
+                        None => std::sync::Arc::new(
+                            crate::transform::watermark::SurrealWatermarkStore::new(
+                                db_connection.clone(),
+                            ),
+                        ),
+                    };
 
-                    for transform in transforms {
-                        let id = transform.id();
-                        let watermark = match crate::db::get_watermark(&db_connection, &id).await {
-                            Ok(w) => w,
-                            Err(e) => {
-                                tracing::error!("Failed to get watermark for {}: {}", id, e);
-                                continue;
-                            }
-                        };
+                    let worker = crate::transform::worker::PipelineWorker::new(
+                        dag,
+                        watermarks,
+                        db_connection,
+                        pool_clone,
+                        cas_clone,
+                        http,
+                        50,
+                    );
 
-                        let source_pattern = transform.source();
-                        let targets =
-                            if let DataOriginType::DeviceId(ref id) = source_pattern.origin {
-                                if id == "*" {
-                                    available_origins
-                                        .iter()
-                                        .filter(|o| o.modality_name == source_pattern.modality_name)
-                                        .cloned()
-                                        .collect::<Vec<_>>()
-                                } else {
-                                    vec![source_pattern.clone()]
-                                }
-                            } else {
-                                vec![source_pattern.clone()]
-                            };
-
-                        for target_origin in targets {
-                            let keys = match crate::data_retrieval::get_keys_after_timestamp(
-                                &db_connection,
-                                &target_origin,
-                                watermark,
-                                50,
-                            )
-                            .await
-                            {
-                                Ok(k) => k,
-                                Err(e) => {
-                                    tracing::error!(
-                                        "Failed to get keys for {} from {}: {}",
-                                        id,
-                                        target_origin,
-                                        e
-                                    );
-                                    continue;
-                                }
-                            };
-
-                            if keys.is_empty() {
-                                continue;
-                            }
-
-                            if let Some(last_ts) = crate::transform::transform_data_single(
-                                &db_connection,
-                                pool_clone.as_ref(),
-                                &cas_clone,
-                                &keys,
-                                &transform,
-                            )
-                            .await
-                            {
-                                if let Err(e) =
-                                    crate::db::set_watermark(&db_connection, &id, last_ts).await
-                                {
-                                    tracing::error!("Failed to set watermark for {}: {}", id, e);
-                                }
-                            }
-                        }
+                    if let Err(e) = worker.poll_once().await {
+                        tracing::error!(error = %e, "Transform pipeline error");
                     }
 
                     let mut state = state_clone.write().await;

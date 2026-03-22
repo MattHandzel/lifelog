@@ -14,6 +14,65 @@ pub struct SourceTimestamps {
     pub time_quality: String,
 }
 
+fn tq_str(q: i32) -> String {
+    match lifelog_types::TimeQuality::try_from(q).unwrap_or(lifelog_types::TimeQuality::Unknown) {
+        lifelog_types::TimeQuality::Good => "good",
+        lifelog_types::TimeQuality::Degraded => "degraded",
+        lifelog_types::TimeQuality::Unknown => "unknown",
+    }
+    .to_string()
+}
+
+pub fn extract_source_timestamps(data: &lifelog_types::LifelogData) -> SourceTimestamps {
+    use lifelog_types::lifelog_data::Payload;
+    let default = SourceTimestamps {
+        t_canonical: None,
+        t_end: None,
+        time_quality: "unknown".to_string(),
+    };
+    let payload = match &data.payload {
+        Some(p) => p,
+        None => return default,
+    };
+    match payload {
+        Payload::Screenframe(f) => SourceTimestamps {
+            t_canonical: f.t_canonical.or(f.timestamp),
+            t_end: f.t_end.or(f.t_canonical).or(f.timestamp),
+            time_quality: tq_str(f.time_quality),
+        },
+        Payload::Audioframe(f) => SourceTimestamps {
+            t_canonical: f.t_canonical.or(f.timestamp),
+            t_end: f.t_end.or(f.t_canonical).or(f.timestamp),
+            time_quality: tq_str(f.time_quality),
+        },
+        Payload::Ocrframe(f) => SourceTimestamps {
+            t_canonical: f.t_canonical.or(f.timestamp),
+            t_end: f.t_end.or(f.t_canonical).or(f.timestamp),
+            time_quality: tq_str(f.time_quality),
+        },
+        Payload::Transcriptionframe(f) => SourceTimestamps {
+            t_canonical: f.t_canonical.or(f.timestamp),
+            t_end: f.t_end.or(f.t_canonical).or(f.timestamp),
+            time_quality: tq_str(f.time_quality),
+        },
+        Payload::Browserframe(f) => SourceTimestamps {
+            t_canonical: f.t_canonical.or(f.timestamp),
+            t_end: f.t_end.or(f.t_canonical).or(f.timestamp),
+            time_quality: tq_str(f.time_quality),
+        },
+        Payload::Keystrokeframe(f) => SourceTimestamps {
+            t_canonical: f.t_canonical.or(f.timestamp),
+            t_end: f.t_end.or(f.t_canonical).or(f.timestamp),
+            time_quality: tq_str(f.time_quality),
+        },
+        _ => SourceTimestamps {
+            t_canonical: None,
+            t_end: None,
+            time_quality: "unknown".to_string(),
+        },
+    }
+}
+
 pub async fn write_transform_output(
     db: &Surreal<Client>,
     _postgres_pool: Option<&PostgresPool>,
