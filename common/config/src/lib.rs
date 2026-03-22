@@ -101,13 +101,51 @@ pub fn load_collector_config_from_unified() -> Option<CollectorConfig> {
     collector_from_unified_root(&root)
 }
 
+fn parse_transforms_from_root(root: &toml::Value) -> Vec<lifelog_types::TransformSpec> {
+    if let Ok(v) = env::var("LIFELOG_TRANSFORMS_JSON") {
+        if !v.trim().is_empty() {
+            return serde_json::from_str::<Vec<lifelog_types::TransformSpec>>(&v)
+                .unwrap_or_default();
+        }
+        return Vec::new();
+    }
+
+    let root_table = match root.as_table() {
+        Some(t) => t,
+        None => return Vec::new(),
+    };
+    let Some(transforms_val) = root_table.get("transforms") else {
+        return Vec::new();
+    };
+
+    #[derive(serde::Deserialize)]
+    struct Wrapper {
+        transforms: Vec<lifelog_types::TransformSpec>,
+    }
+    let mut wrapper_table = toml::value::Table::new();
+    wrapper_table.insert("transforms".to_string(), transforms_val.clone());
+    match toml::from_str::<Wrapper>(&toml::to_string(&wrapper_table).unwrap_or_default()) {
+        Ok(w) => {
+            tracing::info!(count = w.transforms.len(), "Parsed transforms from config");
+            w.transforms
+        }
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to parse [[transforms]] from config");
+            Vec::new()
+        }
+    }
+}
+
 pub fn load_server_config_from_unified() -> Option<ServerConfig> {
     let path = env::var("LIFELOG_CONFIG_PATH")
         .map(PathBuf::from)
         .unwrap_or_else(|_| default_lifelog_config_path());
     let root = load_toml_from_path(&path)?;
     let server = root.get("server")?.clone();
-    if let Ok(cfg) = toml::from_str::<ServerConfig>(&toml::to_string(&server).ok()?) {
+    if let Ok(mut cfg) = toml::from_str::<ServerConfig>(&toml::to_string(&server).ok()?) {
+        if cfg.transforms.is_empty() {
+            cfg.transforms = parse_transforms_from_root(&root);
+        }
         return Some(cfg);
     }
 
@@ -146,20 +184,7 @@ pub fn load_server_config_from_unified() -> Option<ServerConfig> {
         }
     }
 
-    let transforms = if let Ok(v) = env::var("LIFELOG_TRANSFORMS_JSON") {
-        if !v.trim().is_empty() {
-            serde_json::from_str::<Vec<lifelog_types::TransformSpec>>(&v).unwrap_or_default()
-        } else {
-            Vec::new()
-        }
-    } else if let Some(transforms_val) = root.get("transforms") {
-        toml::from_str::<Vec<lifelog_types::TransformSpec>>(
-            &toml::to_string(transforms_val).unwrap_or_default(),
-        )
-        .unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    let transforms = parse_transforms_from_root(&root);
 
     Some(ServerConfig {
         host: get_str("host", "host")?,
