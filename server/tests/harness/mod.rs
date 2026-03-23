@@ -148,7 +148,8 @@ impl TestContext {
         std::env::set_var("LIFELOG_ENROLLMENT_TOKEN", "test-enrollment-token");
         std::env::set_var("LIFELOG_TLS_CA_CERT_PATH", &tls_cert_path);
 
-        let test_db_name = format!("lifelog_test_{}", server_port);
+        let test_db_name = std::env::var("LIFELOG_TEST_DB")
+            .unwrap_or_else(|_| format!("lifelog_test_{}", server_port));
         let pg_admin_url = std::env::var("LIFELOG_TEST_PG_URL")
             .unwrap_or_else(|_| "host=/run/postgresql dbname=postgres".into());
         {

@@ -23,6 +23,7 @@ dist
 dist-ssr
 *.local
 target/
+target-wt/
 
 # Editor directories and files
 .vscode/*

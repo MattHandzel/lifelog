@@ -3,6 +3,11 @@
 # --- Context Engineering ---
 IS_LLM_AGENT := env_var_or_default("IS_LLM_AGENT", "0")
 
+# --- Per-worktree isolation ---
+# Worktrees get a .env with CARGO_TARGET_DIR, LIFELOG_TEST_DB, LIFELOG_PORT.
+# `just` silently skips when .env is absent (main repo).
+set dotenv-load := true
+
 # Run all checks (excluding Tauri UI)
 check:
     @if [ "{{IS_LLM_AGENT}}" = "1" ]; then \
@@ -138,7 +143,13 @@ worktree-create name branch_base="main":
     @if [ -d "interface/node_modules" ]; then \
         cp -al interface/node_modules/. worktrees/feature/{{name}}/interface/node_modules/; \
     fi
+    @echo "🔧 Writing per-worktree .env for build isolation..."
+    @printf 'CARGO_TARGET_DIR=target-wt\nLIFELOG_TEST_DB=lifelog_test_%s\nLIFELOG_PORT=0\n' "{{name}}" \
+        > worktrees/feature/{{name}}/.env
     @echo "Worktree created at worktrees/feature/{{name}} on branch agent/{{name}}"
+    @echo "  CARGO_TARGET_DIR = target-wt (isolated)"
+    @echo "  LIFELOG_TEST_DB  = lifelog_test_{{name}}"
+    @echo "  LIFELOG_PORT     = 0 (auto-assign)"
 
 # Remove a worktree and its branch (Manual Cleanup)
 worktree-remove name:
