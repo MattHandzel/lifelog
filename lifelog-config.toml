@@ -90,3 +90,13 @@ priority = 2
 [transforms.params]
 model = "gemma3:4b-it-qat"
 system_prompt = "Clean up this speech-to-text transcription. Fix grammar, remove filler words, and format into readable paragraphs. Return only the cleaned text."
+
+[[transforms]]
+id = "activity-classifier"
+enabled = true
+transformType = "activity-classifier"
+sourceOrigin = "*:Ocr"
+serviceEndpoint = "http://localhost:11434"
+priority = 3
+[transforms.params]
+model = "gemma3:4b-it-qat"

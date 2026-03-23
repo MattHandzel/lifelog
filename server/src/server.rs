@@ -433,6 +433,20 @@ impl Server {
                         "Registered LLM transform"
                     );
                 }
+                "activity-classifier" => {
+                    let executor = crate::transform::activity::ActivityClassifierExecutor::new(
+                        spec.id.clone(),
+                        source,
+                        spec.service_endpoint.clone(),
+                        &spec.params,
+                    );
+                    executors.push(Arc::new(executor));
+                    tracing::info!(
+                        id = %spec.id,
+                        endpoint = %spec.service_endpoint,
+                        "Registered activity classifier transform"
+                    );
+                }
                 other => {
                     tracing::warn!(transform_id = %other, "Unknown transform type; skipping");
                 }

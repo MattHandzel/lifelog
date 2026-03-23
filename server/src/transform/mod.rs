@@ -1,3 +1,4 @@
+pub mod activity;
 pub mod dag;
 pub mod llm;
 pub mod ocr;
