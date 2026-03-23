@@ -1,5 +1,4 @@
 use chrono::{DateTime, Utc};
-use prost::Message;
 use serde_json::{json, Value as JsonValue};
 use uuid::Uuid;
 

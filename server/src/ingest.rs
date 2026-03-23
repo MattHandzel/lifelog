@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use lifelog_core::time_skew::SkewEstimate;
-use pbjson_types::Timestamp as PbTimestamp;
 use prost::Message;
 use tokio::sync::RwLock;
 use utils::ingest::IngestBackend;

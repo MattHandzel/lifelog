@@ -73,7 +73,7 @@ async fn test_ocr_transformation_pipeline() {
         ))),
         DataModality::Ocr.as_str_name().to_string(),
     );
-    let table = destination_origin.get_table_name();
+    let _table = destination_origin.get_table_name();
 
     let (pg_client, pg_conn) = tokio_postgres::connect(&ctx.pg_url, tokio_postgres::NoTls)
         .await

@@ -947,7 +947,7 @@ impl Server {
         //println!("Adding audit log for action: {:?}", action);
     }
 
-    async fn do_action(&self, action: ServerAction, state: SystemState) {
+    async fn do_action(&self, action: ServerAction, _state: SystemState) {
         match action {
             ServerAction::Sleep(duration) => {
                 tokio::time::sleep(duration).await;
