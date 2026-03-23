@@ -5,6 +5,7 @@ pub mod server;
 // Internal modules (accessible to server.rs and each other within the crate)
 pub(crate) mod data_retrieval;
 pub mod db;
+pub mod frames;
 pub mod grpc_service;
 pub(crate) mod ingest;
 pub mod postgres;
