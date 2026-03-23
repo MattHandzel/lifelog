@@ -118,28 +118,71 @@ impl TransformExecutor for LlmExecutor {
             "stream": false
         });
 
-        let resp = http
-            .post(&url)
-            .json(&body)
-            .timeout(std::time::Duration::from_secs(self.timeout_secs))
-            .send()
-            .await
-            .map_err(|e| TransformPipelineError::ServiceUnavailable {
-                endpoint: format!("{url}: {e}"),
-            })?;
+        let json = {
+            let mut last_err = None;
+            let mut result = None;
+            for attempt in 0..3u32 {
+                if attempt > 0 {
+                    tokio::time::sleep(std::time::Duration::from_secs(1 << attempt)).await;
+                }
 
-        if !resp.status().is_success() {
-            let status = resp.status();
-            let text = resp.text().await.unwrap_or_default();
-            return Err(TransformPipelineError::ServiceError(format!(
-                "ollama {status}: {text}"
-            )));
-        }
+                let resp = match http
+                    .post(&url)
+                    .json(&body)
+                    .timeout(std::time::Duration::from_secs(self.timeout_secs))
+                    .send()
+                    .await
+                {
+                    Ok(r) => r,
+                    Err(e) => {
+                        tracing::warn!(
+                            attempt = attempt + 1,
+                            error = %e,
+                            "LLM request failed, retrying"
+                        );
+                        last_err = Some(TransformPipelineError::ServiceUnavailable {
+                            endpoint: format!("{url}: {e}"),
+                        });
+                        continue;
+                    }
+                };
 
-        let json: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| TransformPipelineError::ServiceError(format!("json: {e}")))?;
+                if !resp.status().is_success() {
+                    let status = resp.status();
+                    let text = resp.text().await.unwrap_or_default();
+                    tracing::warn!(
+                        attempt = attempt + 1,
+                        status = %status,
+                        "LLM request returned error, retrying"
+                    );
+                    last_err = Some(TransformPipelineError::ServiceError(format!(
+                        "ollama {status}: {text}"
+                    )));
+                    continue;
+                }
+
+                match resp.json::<serde_json::Value>().await {
+                    Ok(j) => {
+                        result = Some(j);
+                        break;
+                    }
+                    Err(e) => {
+                        last_err = Some(TransformPipelineError::ServiceError(format!("json: {e}")));
+                        continue;
+                    }
+                }
+            }
+            match result {
+                Some(j) => j,
+                None => {
+                    return Err(last_err.unwrap_or_else(|| {
+                        TransformPipelineError::ServiceError(
+                            "LLM request failed after 3 attempts".into(),
+                        )
+                    }));
+                }
+            }
+        };
 
         let cleaned_text = json["message"]["content"]
             .as_str()
