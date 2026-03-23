@@ -1,7 +1,6 @@
 use base64::Engine;
 use chrono::{DateTime, Utc};
 use clap::{Parser, Subcommand};
-use config::TlsConfig;
 use lifelog_core::uuid::Uuid;
 use lifelog_server::grpc_service::GRPCServerLifelogServerService;
 use lifelog_server::server::Server as LifelogServer;
@@ -933,20 +932,18 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let tls_config = TlsConfig::from_env();
+    let deploy_config = config::load_server_deploy_config();
+    let tls_config = deploy_config.tls;
     let mut builder = TonicServer::builder()
         .accept_http1(true)
         .layer(tonic_web::GrpcWebLayer::new());
 
-    let allow_plaintext = std::env::var("LIFELOG_ALLOW_PLAINTEXT")
-        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
-        .unwrap_or(false);
-
-    if !tls_config.is_enabled() && !allow_plaintext {
+    if !tls_config.is_enabled() && !deploy_config.allow_plaintext {
         return Err(lifelog_core::LifelogError::Validation {
-            field: "LIFELOG_TLS_CERT_PATH/LIFELOG_TLS_KEY_PATH".to_string(),
-            reason: "must both be set. Plaintext gRPC is not allowed for security reasons. \
-                     Set LIFELOG_ALLOW_PLAINTEXT=1 for trusted networks (e.g. Tailscale). \
+            field: "tls_cert_path/tls_key_path".to_string(),
+            reason: "must both be set in [server] config or as env vars. \
+                     Plaintext gRPC is not allowed for security reasons. \
+                     Set allow_plaintext = true in config or LIFELOG_ALLOW_PLAINTEXT=1 for trusted networks. \
                      See docs/SETUP_TLS.md for how to generate certificates."
                 .to_string(),
         }
@@ -954,7 +951,7 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     if !tls_config.is_enabled() {
-        tracing::warn!("Running WITHOUT TLS (LIFELOG_ALLOW_PLAINTEXT=1). Only safe on encrypted networks like Tailscale.");
+        tracing::warn!("Running WITHOUT TLS (allow_plaintext=true). Only safe on encrypted networks like Tailscale.");
     }
 
     if let (Some(cert_path), Some(key_path)) = (&tls_config.cert_path, &tls_config.key_path) {

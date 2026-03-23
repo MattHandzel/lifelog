@@ -317,27 +317,22 @@ impl Server {
     }
 
     pub async fn new(config: &ServerConfig) -> Result<Self, LifelogError> {
-        let postgres_url = std::env::var("LIFELOG_POSTGRES_INGEST_URL").map_err(|_| {
+        let deploy = config::load_server_deploy_config();
+        let postgres_url = deploy.postgres_url.ok_or_else(|| {
             LifelogError::Database(
-                "LIFELOG_POSTGRES_INGEST_URL must be set — PostgreSQL is required".to_string(),
+                "postgres_url must be set in [server] config or LIFELOG_POSTGRES_INGEST_URL env var"
+                    .to_string(),
             )
         })?;
         if postgres_url.trim().is_empty() {
             return Err(LifelogError::Database(
-                "LIFELOG_POSTGRES_INGEST_URL must not be empty — PostgreSQL is required"
-                    .to_string(),
+                "postgres_url must not be empty".to_string(),
             ));
         }
-        let max_connections = std::env::var("LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS")
-            .ok()
-            .and_then(|v| v.parse::<usize>().ok())
-            .unwrap_or(16);
+        let max_connections = deploy.postgres_max_connections.unwrap_or(16);
         let postgres_pool = connect_pool(&postgres_url, max_connections).await?;
         run_migrations(&postgres_pool).await?;
-        tracing::info!(
-            max_connections,
-            "Postgres backend enabled via LIFELOG_POSTGRES_INGEST_URL"
-        );
+        tracing::info!(max_connections, "Postgres backend enabled");
 
         let cas = FsCas::new(&config.cas_path);
 

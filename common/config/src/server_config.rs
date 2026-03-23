@@ -12,8 +12,6 @@ pub struct TlsConfig {
 }
 
 impl TlsConfig {
-    /// Load TLS config from environment variables.
-    /// Returns a config with TLS enabled only if both cert and key paths are set.
     pub fn from_env() -> Self {
         Self {
             cert_path: std::env::var("LIFELOG_TLS_CERT_PATH").ok(),
@@ -21,9 +19,30 @@ impl TlsConfig {
         }
     }
 
-    /// Returns true if both cert and key paths are configured.
     pub fn is_enabled(&self) -> bool {
         self.cert_path.is_some() && self.key_path.is_some()
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ServerDeployConfig {
+    pub postgres_url: Option<String>,
+    pub tls: TlsConfig,
+    pub allow_plaintext: bool,
+    pub postgres_max_connections: Option<usize>,
+}
+
+pub fn resolve_file_ref(value: &str) -> String {
+    if let Some(path) = value.strip_prefix('@') {
+        match std::fs::read_to_string(path) {
+            Ok(contents) => contents.trim().to_string(),
+            Err(e) => {
+                tracing::warn!(path = %path, error = %e, "Failed to read file reference");
+                value.to_string()
+            }
+        }
+    } else {
+        value.to_string()
     }
 }
 
@@ -113,5 +132,30 @@ pub fn normalize_toml_keys(value: toml::Value) -> toml::Value {
             toml::Value::Array(items.into_iter().map(normalize_toml_keys).collect())
         }
         other => other,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resolve_file_ref_plain_value() {
+        assert_eq!(resolve_file_ref("hello"), "hello");
+    }
+
+    #[test]
+    fn resolve_file_ref_missing_file() {
+        let result = resolve_file_ref("@/nonexistent/path/12345");
+        assert_eq!(result, "@/nonexistent/path/12345");
+    }
+
+    #[test]
+    fn resolve_file_ref_reads_file() {
+        let dir = std::env::temp_dir().join("lifelog_test_file_ref");
+        std::fs::write(&dir, "secret_value\n").unwrap();
+        let result = resolve_file_ref(&format!("@{}", dir.display()));
+        assert_eq!(result, "secret_value");
+        std::fs::remove_file(&dir).ok();
     }
 }

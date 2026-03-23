@@ -9,6 +9,68 @@ mod server_config;
 pub use policy_config::*;
 pub use server_config::*;
 
+pub fn load_server_deploy_config() -> ServerDeployConfig {
+    let path = env::var("LIFELOG_CONFIG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| default_lifelog_config_path());
+    let root = load_toml_from_path(&path);
+
+    let toml_server = root.as_ref().and_then(|r| r.get("server"));
+
+    let toml_str = |key1: &str, key2: &str| -> Option<String> {
+        toml_server
+            .and_then(|s| s.get(key1).or_else(|| s.get(key2)))
+            .and_then(|v| v.as_str())
+            .map(|s| resolve_file_ref(s))
+    };
+
+    let toml_bool = |key1: &str, key2: &str| -> Option<bool> {
+        toml_server
+            .and_then(|s| s.get(key1).or_else(|| s.get(key2)))
+            .and_then(|v| v.as_bool())
+    };
+
+    let toml_u64 = |key1: &str, key2: &str| -> Option<usize> {
+        toml_server
+            .and_then(|s| s.get(key1).or_else(|| s.get(key2)))
+            .and_then(|v| v.as_integer())
+            .and_then(|n| usize::try_from(n).ok())
+    };
+
+    let postgres_url = env::var("LIFELOG_POSTGRES_INGEST_URL")
+        .ok()
+        .or_else(|| toml_str("postgresUrl", "postgres_url"));
+
+    let cert_path = env::var("LIFELOG_TLS_CERT_PATH")
+        .ok()
+        .or_else(|| toml_str("tlsCertPath", "tls_cert_path"));
+
+    let key_path = env::var("LIFELOG_TLS_KEY_PATH")
+        .ok()
+        .or_else(|| toml_str("tlsKeyPath", "tls_key_path"));
+
+    let allow_plaintext = env::var("LIFELOG_ALLOW_PLAINTEXT")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .or_else(|| toml_bool("allowPlaintext", "allow_plaintext"))
+        .unwrap_or(false);
+
+    let postgres_max_connections = env::var("LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .or_else(|| toml_u64("postgresMaxConnections", "postgres_max_connections"));
+
+    ServerDeployConfig {
+        postgres_url,
+        tls: TlsConfig {
+            cert_path,
+            key_path,
+        },
+        allow_plaintext,
+        postgres_max_connections,
+    }
+}
+
 pub fn load_network_policy_from_unified() -> NetworkPolicy {
     let path = env::var("LIFELOG_CONFIG_PATH")
         .map(PathBuf::from)
@@ -182,6 +244,12 @@ fn inject_privacy_levels(specs: &mut [lifelog_types::TransformSpec], transforms_
                     value = %level,
                     "Unknown privacy_level value, using default 'standard'"
                 );
+            }
+        }
+
+        for (_, value) in spec.params.iter_mut() {
+            if value.starts_with('@') {
+                *value = resolve_file_ref(value);
             }
         }
     }
