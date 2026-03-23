@@ -9,10 +9,8 @@ use lifelog_server::server::ServerHandle as LifelogServerHandle;
 use lifelog_types::lifelog_server_service_client::LifelogServerServiceClient;
 use lifelog_types::lifelog_server_service_server::LifelogServerServiceServer;
 use lifelog_types::{PairCollectorRequest, FILE_DESCRIPTOR_SET};
-use rustls::client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier};
-use rustls::DigitallySignedStruct;
+use rustls::client::danger::{ServerCertVerified, ServerCertVerifier};
 use rustls::Error as RustlsError;
-use rustls::SignatureScheme;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::fs;
@@ -51,9 +49,19 @@ enum Commands {
 }
 
 #[derive(Debug)]
-struct InsecureServerCertVerifier;
+struct TofuCertVerifier {
+    provider: Arc<rustls::crypto::CryptoProvider>,
+}
 
-impl ServerCertVerifier for InsecureServerCertVerifier {
+impl TofuCertVerifier {
+    fn new() -> Self {
+        Self {
+            provider: Arc::new(rustls::crypto::ring::default_provider()),
+        }
+    }
+}
+
+impl ServerCertVerifier for TofuCertVerifier {
     fn verify_server_cert(
         &self,
         _end_entity: &rustls::pki_types::CertificateDer<'_>,
@@ -67,34 +75,36 @@ impl ServerCertVerifier for InsecureServerCertVerifier {
 
     fn verify_tls12_signature(
         &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, RustlsError> {
-        Ok(HandshakeSignatureValid::assertion())
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, RustlsError> {
+        rustls::crypto::verify_tls12_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
     fn verify_tls13_signature(
         &self,
-        _message: &[u8],
-        _cert: &rustls::pki_types::CertificateDer<'_>,
-        _dss: &DigitallySignedStruct,
-    ) -> Result<HandshakeSignatureValid, RustlsError> {
-        Ok(HandshakeSignatureValid::assertion())
+        message: &[u8],
+        cert: &rustls::pki_types::CertificateDer<'_>,
+        dss: &rustls::DigitallySignedStruct,
+    ) -> Result<rustls::client::danger::HandshakeSignatureValid, RustlsError> {
+        rustls::crypto::verify_tls13_signature(
+            message,
+            cert,
+            dss,
+            &self.provider.signature_verification_algorithms,
+        )
     }
 
-    fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
-        vec![
-            SignatureScheme::RSA_PKCS1_SHA256,
-            SignatureScheme::RSA_PKCS1_SHA384,
-            SignatureScheme::RSA_PKCS1_SHA512,
-            SignatureScheme::RSA_PSS_SHA256,
-            SignatureScheme::RSA_PSS_SHA384,
-            SignatureScheme::RSA_PSS_SHA512,
-            SignatureScheme::ECDSA_NISTP256_SHA256,
-            SignatureScheme::ECDSA_NISTP384_SHA384,
-            SignatureScheme::ED25519,
-        ]
+    fn supported_verify_schemes(&self) -> Vec<rustls::SignatureScheme> {
+        self.provider
+            .signature_verification_algorithms
+            .supported_schemes()
     }
 }
 
@@ -469,7 +479,7 @@ async fn fetch_server_cert_fingerprint(
     let stream = TcpStream::connect((host, port)).await?;
     let rustls_cfg = rustls::ClientConfig::builder()
         .dangerous()
-        .with_custom_certificate_verifier(Arc::new(InsecureServerCertVerifier))
+        .with_custom_certificate_verifier(Arc::new(TofuCertVerifier::new()))
         .with_no_client_auth();
     let connector = TlsConnector::from(Arc::new(rustls_cfg));
     let server_name = rustls::pki_types::ServerName::try_from(host.to_string()).map_err(|_| {

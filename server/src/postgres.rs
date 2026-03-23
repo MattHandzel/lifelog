@@ -94,10 +94,7 @@ pub async fn run_migrations(pool: &PostgresPool) -> Result<(), LifelogError> {
             .await
             .map_err(|e| LifelogError::Database(format!("migration tx begin failed: {e}")))?;
         tx.batch_execute(migration.sql).await.map_err(|e| {
-            LifelogError::Database(format!(
-                "apply migration {} failed: {e}",
-                migration.version
-            ))
+            LifelogError::Database(format!("apply migration {} failed: {e}", migration.version))
         })?;
         tx.execute(
             "INSERT INTO schema_migrations(version) VALUES ($1)",
