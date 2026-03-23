@@ -16,6 +16,7 @@ pub fn load_server_deploy_config() -> ServerDeployConfig {
     let root = load_toml_from_path(&path);
 
     let toml_server = root.as_ref().and_then(|r| r.get("server"));
+    let toml_postgres = root.as_ref().and_then(|r| r.get("postgres"));
 
     let toml_str = |key1: &str, key2: &str| -> Option<String> {
         toml_server
@@ -58,7 +59,13 @@ pub fn load_server_deploy_config() -> ServerDeployConfig {
     let postgres_max_connections = env::var("LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS")
         .ok()
         .and_then(|v| v.parse::<usize>().ok())
-        .or_else(|| toml_u64("postgresMaxConnections", "postgres_max_connections"));
+        .or_else(|| toml_u64("postgresMaxConnections", "postgres_max_connections"))
+        .or_else(|| {
+            toml_postgres
+                .and_then(|s| s.get("maxConnections").or_else(|| s.get("max_connections")))
+                .and_then(|v| v.as_integer())
+                .and_then(|n| usize::try_from(n).ok())
+        });
 
     ServerDeployConfig {
         postgres_url,

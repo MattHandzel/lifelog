@@ -40,6 +40,14 @@ The file contents are read at startup, trimmed, and used as the value.
 | `allowPlaintext` | bool | `false` | `LIFELOG_ALLOW_PLAINTEXT` | Allow unencrypted gRPC |
 | `allowedHosts` | string[] | `[]` | — | External hosts transforms may contact. Empty = local-only |
 
+## `[postgres]`
+
+Optional section. Settings here are fallbacks for postgres-related keys not set under `[server]`.
+
+| Key | Type | Default | Env Override | Description |
+|-----|------|---------|-------------|-------------|
+| `maxConnections` | usize | `16` | `LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS` | Connection pool size (also settable as `server.postgresMaxConnections`) |
+
 ## `[[transforms]]`
 
 Each transform is an entry in the `[[transforms]]` array.
