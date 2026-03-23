@@ -28,7 +28,7 @@ in {
   config = lib.mkIf cfg.enable {
     services.postgresql = {
       enable = true;
-      package = cfg.package;
+      package = lib.mkDefault cfg.package;
       ensureDatabases = [cfg.database];
       ensureUsers = [
         {
