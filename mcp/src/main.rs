@@ -97,7 +97,7 @@ async fn create_pool(database_url: &str) -> Result<Pool> {
     };
     let mgr = deadpool_postgres::Manager::from_config(cfg, NoTls, mgr_cfg);
     let pool = Pool::builder(mgr).max_size(4).build()?;
-    pool.get().await?;
+    let _ = pool.get().await?;
     Ok(pool)
 }
 
