@@ -6,9 +6,7 @@ use std::collections::VecDeque;
 pub enum ExecutionPlan {
     /// A query targeted at a specific table/origin.
     TableQuery {
-        table: String,
         origin: DataOrigin,
-        sql: String,
         filter: Option<Expression>,
         limit: usize,
     },
@@ -20,13 +18,9 @@ pub enum ExecutionPlan {
     /// Phase 2: query the target table for UUIDs whose timestamps fall within any interval,
     /// in addition to the target base predicate.
     DuringQuery {
-        target_table: String,
         target_origin: DataOrigin,
-        target_base_where: String,
         target_base_filter: Option<Expression>,
         during_terms: Vec<DuringTermPlan>,
-        max_source_intervals: usize,
-        max_time_clauses: usize,
         target_limit: usize,
     },
     /// Placeholder for multi-stage plans.
@@ -36,9 +30,7 @@ pub enum ExecutionPlan {
 
 #[derive(Debug, PartialEq)]
 pub struct DuringSourcePlan {
-    pub source_table: String,
     pub source_origin: DataOrigin,
-    pub sql: String,
     pub filter: Expression,
 }
 
@@ -58,24 +50,18 @@ impl Planner {
             return ExecutionPlan::MultiQuery(vec![]);
         }
 
-        const DEFAULT_MAX_SOURCE_INTERVALS: usize = 200;
-        const DEFAULT_MAX_TIME_CLAUSES: usize = 50;
         const DEFAULT_MAX_TARGET_UUIDS: usize = 1_000;
 
         let plan_ctx = PlanContext {
             available_origins,
-            max_source_intervals: DEFAULT_MAX_SOURCE_INTERVALS,
-            max_time_clauses: DEFAULT_MAX_TIME_CLAUSES,
             max_target_uuids: DEFAULT_MAX_TARGET_UUIDS,
         };
 
         let plans = origins
             .into_iter()
             .map(|origin| {
-                let table = origin.get_table_name();
                 let origin_ctx = OriginPlanContext {
                     plan: &plan_ctx,
-                    table: &table,
                     origin: &origin,
                 };
                 // If the query has temporal operators under boolean ORs, plan by converting the
@@ -128,35 +114,16 @@ impl Planner {
         filter_terms: Vec<Expression>,
         temporal_terms: Vec<TemporalTerm>,
     ) -> ExecutionPlan {
-        let target_base_where = if filter_terms.is_empty() {
-            "true".to_string()
-        } else {
-            filter_terms
-                .iter()
-                .map(Self::compile_expression_sql)
-                .collect::<Vec<_>>()
-                .join(" AND ")
-        };
         let target_base_filter = Self::combine_with_and(filter_terms);
 
         if temporal_terms.is_empty() {
-            let sql = format!(
-                "SELECT uuid FROM `{}` WHERE {} LIMIT {};",
-                ctx.table, target_base_where, ctx.plan.max_target_uuids
-            );
             return ExecutionPlan::TableQuery {
-                table: ctx.table.to_string(),
                 origin: ctx.origin.clone(),
-                sql,
                 filter: target_base_filter,
                 limit: ctx.plan.max_target_uuids,
             };
         }
 
-        // Temporal terms: build one interval set per term, then intersect at execution time.
-        //
-        // Note: `WITHIN(...)` is treated as a point-interval term; if the source stream is
-        // interval-valued (has `t_end`), the whole interval is expanded by `window` and used.
         let mut during_terms = Vec::new();
         for t in temporal_terms {
             let term = match t {
@@ -165,11 +132,8 @@ impl Planner {
 
             let source_origins = Self::resolve_selector(&term.stream, ctx.plan.available_origins);
             if source_origins.is_empty() {
-                let sql = format!("SELECT uuid FROM `{}` WHERE false;", ctx.table);
                 return ExecutionPlan::TableQuery {
-                    table: ctx.table.to_string(),
                     origin: ctx.origin.clone(),
-                    sql,
                     filter: None,
                     limit: 0,
                 };
@@ -182,21 +146,11 @@ impl Planner {
                 );
             }
 
-            let source_where = Self::compile_expression_sql(&term.predicate);
             let source_plans = source_origins
                 .into_iter()
-                .map(|source_origin| {
-                    let source_table = source_origin.get_table_name();
-                    let sql = format!(
-                        "SELECT t_canonical, t_end FROM `{}` WHERE {} ORDER BY t_canonical DESC LIMIT {};",
-                        source_table, source_where, ctx.plan.max_source_intervals
-                    );
-                    DuringSourcePlan {
-                        source_table,
-                        source_origin,
-                        sql,
-                        filter: term.predicate.clone(),
-                    }
+                .map(|source_origin| DuringSourcePlan {
+                    source_origin,
+                    filter: term.predicate.clone(),
                 })
                 .collect();
 
@@ -207,54 +161,10 @@ impl Planner {
         }
 
         ExecutionPlan::DuringQuery {
-            target_table: ctx.table.to_string(),
             target_origin: ctx.origin.clone(),
-            target_base_where,
             target_base_filter,
             during_terms,
-            max_source_intervals: ctx.plan.max_source_intervals,
-            max_time_clauses: ctx.plan.max_time_clauses,
             target_limit: ctx.plan.max_target_uuids,
-        }
-    }
-
-    /// Compiles an expression that contains *no* temporal join operators (`WITHIN`, `DURING`) to SQL.
-    pub fn compile_expression_sql(expr: &Expression) -> String {
-        match expr {
-            Expression::And(left, right) => {
-                format!(
-                    "({}) AND ({})",
-                    Self::compile_expression_sql(left),
-                    Self::compile_expression_sql(right)
-                )
-            }
-            Expression::Or(left, right) => {
-                format!(
-                    "({}) OR ({})",
-                    Self::compile_expression_sql(left),
-                    Self::compile_expression_sql(right)
-                )
-            }
-            Expression::Not(inner) => {
-                format!("!({})", Self::compile_expression_sql(inner))
-            }
-            Expression::Eq(field, value) => {
-                format!("{} = {}", field, Self::compile_value(value))
-            }
-            Expression::Contains(field, text) => {
-                // Use @@ for BM25 full-text search on indexed fields
-                format!("{} @@ {}", field, Self::quote_string(text))
-            }
-            Expression::TimeRange(start, end) => {
-                format!(
-                    "t_canonical >= d'{}' AND t_canonical < d'{}'",
-                    start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
-                    end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true)
-                )
-            }
-            Expression::Within { .. } => "false /* WITHIN handled at plan level */".to_string(),
-            Expression::During { .. } => "false /* DURING handled at plan level */".to_string(),
-            Expression::Overlaps { .. } => "false /* OVERLAPS handled at plan level */".to_string(),
         }
     }
 
@@ -472,19 +382,6 @@ impl Planner {
         }
     }
 
-    fn compile_value(val: &Value) -> String {
-        match val {
-            Value::String(s) => Self::quote_string(s),
-            Value::Int(i) => i.to_string(),
-            Value::Float(f) => f.to_string(),
-            Value::Bool(b) => b.to_string(),
-        }
-    }
-
-    fn quote_string(s: &str) -> String {
-        format!("'{}'", s.replace('\'', "\\'"))
-    }
-
     fn combine_with_and(terms: Vec<Expression>) -> Option<Expression> {
         let mut iter = terms.into_iter();
         let mut acc = iter.next()?;
@@ -497,14 +394,11 @@ impl Planner {
 
 struct PlanContext<'a> {
     available_origins: &'a [DataOrigin],
-    max_source_intervals: usize,
-    max_time_clauses: usize,
     max_target_uuids: usize,
 }
 
 struct OriginPlanContext<'a> {
     plan: &'a PlanContext<'a>,
-    table: &'a str,
     origin: &'a DataOrigin,
 }
 
@@ -544,8 +438,8 @@ mod tests {
         let plan = Planner::plan(&query, &origins);
         if let ExecutionPlan::MultiQuery(plans) = plan {
             assert_eq!(plans.len(), 1);
-            if let ExecutionPlan::TableQuery { table, .. } = &plans[0] {
-                assert_eq!(table, "laptop:Screen");
+            if let ExecutionPlan::TableQuery { origin, .. } = &plans[0] {
+                assert_eq!(origin.get_table_name(), "laptop:Screen");
             } else {
                 panic!("Expected TableQuery");
             }
@@ -561,11 +455,10 @@ mod tests {
         let plan = Planner::plan(&query, &origins);
         if let ExecutionPlan::MultiQuery(plans) = plan {
             assert_eq!(plans.len(), 2);
-            // Verify both laptop:Browser and phone:Browser are included
             let tables: Vec<_> = plans
                 .iter()
                 .map(|p| match p {
-                    ExecutionPlan::TableQuery { table, .. } => table.clone(),
+                    ExecutionPlan::TableQuery { origin, .. } => origin.get_table_name(),
                     _ => "".to_string(),
                 })
                 .collect();
@@ -583,8 +476,8 @@ mod tests {
         let plan = Planner::plan(&query, &origins);
         if let ExecutionPlan::MultiQuery(plans) = plan {
             assert_eq!(plans.len(), 1);
-            if let ExecutionPlan::TableQuery { table, .. } = &plans[0] {
-                assert_eq!(table, "unknown:device");
+            if let ExecutionPlan::TableQuery { origin, .. } = &plans[0] {
+                assert_eq!(origin.get_table_name(), "unknown:device");
             } else {
                 panic!("Expected TableQuery");
             }

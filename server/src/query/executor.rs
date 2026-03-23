@@ -2,7 +2,7 @@ use super::ast::{Expression, Value};
 use super::planner::ExecutionPlan;
 use crate::postgres::PostgresPool;
 use anyhow::anyhow;
-use lifelog_core::{DataOrigin, DataOriginType, LifelogFrameKey};
+use lifelog_core::{DataOrigin, LifelogFrameKey};
 use std::collections::BTreeSet;
 use std::time::Duration;
 use tokio::time::timeout;
@@ -201,20 +201,13 @@ fn compile_origin_scope_sql(alias: &str, origin: &DataOrigin) -> String {
     let modality = &origin.modality_name;
     let modality_clause = format!("{alias}.modality = {}", quote_string(modality));
 
-    if let Some(collector_id) = extract_collector_id(origin) {
+    if let Some(collector_id) = origin.collector_id() {
         format!(
             "{modality_clause} AND {alias}.collector_id = {}",
             quote_string(collector_id)
         )
     } else {
         modality_clause
-    }
-}
-
-fn extract_collector_id(origin: &DataOrigin) -> Option<&str> {
-    match &origin.origin {
-        DataOriginType::DeviceId(id) => Some(id.as_str()),
-        DataOriginType::DataOrigin(parent) => extract_collector_id(parent),
     }
 }
 

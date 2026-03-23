@@ -136,6 +136,16 @@ impl DataOrigin {
         }
     }
 
+    pub fn collector_id(&self) -> Option<&str> {
+        let mut current = self;
+        loop {
+            match &current.origin {
+                DataOriginType::DeviceId(id) => return Some(id.as_str()),
+                DataOriginType::DataOrigin(parent) => current = parent,
+            }
+        }
+    }
+
     pub fn get_table_name(&self) -> String {
         let mut segments: Vec<String> = vec![self.modality_name.clone()];
         let mut current = self;

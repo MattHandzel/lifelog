@@ -11,10 +11,6 @@ workspace = true
 name = "lifelog-server"
 path = "src/main.rs"
 
-[[bin]]
-name = "lifelog"
-path = "src/main.rs"
-
 [dependencies]
 config = { path = "../common/config" }
 utils = { path = "../common/utils" }

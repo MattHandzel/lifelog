@@ -140,6 +140,7 @@
           [
             rustc
             cargo
+            clippy
             rust-analyzer
             rustfmt
             openssl
@@ -220,6 +221,7 @@
           [
             rustc
             cargo
+            clippy
             rust-analyzer
             rustfmt
             openssl

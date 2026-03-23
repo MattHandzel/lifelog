@@ -84,7 +84,7 @@ pub async fn write_transform_output(
     destination: &DataOrigin,
     source_timestamps: &SourceTimestamps,
 ) -> Result<Option<DateTime<Utc>>, LifelogError> {
-    let collector_id = extract_collector_id(destination);
+    let collector_id = destination.collector_id().unwrap_or("unknown").to_string();
     let stream_id = destination.modality_name.to_lowercase();
 
     match output {
@@ -159,16 +159,6 @@ async fn write_generic_output(
     frames::insert_transform_output(pool, &row).await?;
 
     extract_timestamp(source_timestamps.t_canonical)
-}
-
-fn extract_collector_id(origin: &lifelog_core::DataOrigin) -> String {
-    let mut current = &origin.origin;
-    loop {
-        match current {
-            lifelog_core::DataOriginType::DeviceId(id) => return id.clone(),
-            lifelog_core::DataOriginType::DataOrigin(parent) => current = &parent.origin,
-        }
-    }
 }
 
 fn extract_timestamp(
