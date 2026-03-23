@@ -984,11 +984,13 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     builder
         .add_service(reflection_service)
         .add_service(health_service)
-        .add_service(LifelogServerServiceServer::new(
-            GRPCServerLifelogServerService {
+        .add_service(
+            LifelogServerServiceServer::new(GRPCServerLifelogServerService {
                 server: server_handle2,
-            },
-        ))
+            })
+            .max_decoding_message_size(128 * 1024 * 1024)
+            .max_encoding_message_size(128 * 1024 * 1024),
+        )
         .serve(addr)
         .await?;
 

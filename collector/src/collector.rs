@@ -256,7 +256,9 @@ impl Collector {
 
         let endpoint = make_endpoint(&self.server_address)?;
         let channel = endpoint.connect().await?;
-        let mut client = LifelogServerServiceClient::with_interceptor(channel, auth_interceptor);
+        let mut client = LifelogServerServiceClient::with_interceptor(channel, auth_interceptor)
+            .max_decoding_message_size(128 * 1024 * 1024)
+            .max_encoding_message_size(128 * 1024 * 1024);
 
         if std::env::var("LIFELOG_AUTH_TOKEN").is_err() {
             let enrollment_token = std::env::var("LIFELOG_ENROLLMENT_TOKEN").map_err(|_| {

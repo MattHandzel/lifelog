@@ -88,7 +88,9 @@ impl UploadManager {
         let mut client = LifelogServerServiceClient::with_interceptor(
             channel,
             crate::collector::auth_interceptor,
-        );
+        )
+        .max_decoding_message_size(128 * 1024 * 1024)
+        .max_encoding_message_size(128 * 1024 * 1024);
 
         for source in sources {
             let stream_id = source.stream_id();

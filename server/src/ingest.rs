@@ -100,7 +100,7 @@ impl IngestBackend for UnifiedIngestBackend {
                         format!("postgres catalog registration failed for origin={origin_key}: {e}")
                     })?;
 
-                (Some(uuid_str), !ocr_enabled)
+                (Some(uuid_str), true)
             }
             Some(Err(e)) => {
                 tracing::warn!(
