@@ -100,6 +100,7 @@ pub async fn write_transform_output(
             let source_uuid = uuid::Uuid::parse_str(&frame.uuid).ok();
 
             let mut row = frames::from_ocr(&collector_id, &stream_id, &frame, source_uuid);
+            row.id = uuid::Uuid::new_v4();
             row.t_canonical = t_canonical;
             row.t_end = Some(t_end);
             row.time_quality = source_timestamps.time_quality.clone();
@@ -113,6 +114,7 @@ pub async fn write_transform_output(
             let ts = frame.t_canonical.or(frame.timestamp);
 
             let mut row = frames::from_transcription(&collector_id, &stream_id, &frame);
+            row.id = uuid::Uuid::new_v4();
             row.t_canonical = pb_to_dt(ts);
             row.t_end = Some(pb_to_dt(frame.t_end.or(ts)));
             row.time_quality = source_timestamps.time_quality.clone();

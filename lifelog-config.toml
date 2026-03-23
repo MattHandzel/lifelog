@@ -67,7 +67,7 @@ outputDir = "~/lifelog/data/keystrokes"
 [[transforms]]
 id = "ocr"
 enabled = true
-sourceOrigin = "*:screen"
+sourceOrigin = "*:Screen"
 language = "eng"
 
 [[transforms]]
