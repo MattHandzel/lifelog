@@ -74,17 +74,23 @@ pub fn auth_interceptor(mut req: Request<()>) -> Result<Request<()>, tonic::Stat
     Ok(req)
 }
 
-fn secure_endpoint(server_address: &str) -> Result<Endpoint, LifelogError> {
-    if !server_address.starts_with("https://") {
+pub(crate) fn make_endpoint(server_address: &str) -> Result<Endpoint, LifelogError> {
+    let allow_plaintext = std::env::var("LIFELOG_ALLOW_PLAINTEXT")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    if !server_address.starts_with("https://") && !allow_plaintext {
         return Err(LifelogError::Validation {
             field: "server_address".to_string(),
             reason: format!(
                 "Invalid server address '{}'. Must use 'https://' because plaintext gRPC is not allowed. \
+                 Set LIFELOG_ALLOW_PLAINTEXT=1 for trusted networks (e.g. Tailscale). \
                  See docs/SETUP_TLS.md for how to set up TLS.",
                 server_address
             ),
         });
     }
+
     let mut endpoint = Endpoint::from_shared(server_address.to_string())
         .map_err(|e| LifelogError::Validation {
             field: "server_address".to_string(),
@@ -92,25 +98,30 @@ fn secure_endpoint(server_address: &str) -> Result<Endpoint, LifelogError> {
         })?
         .connect_timeout(Duration::from_secs(10));
 
-    let tls = if let Ok(ca_path) = std::env::var("LIFELOG_TLS_CA_CERT_PATH") {
-        let ca_pem = std::fs::read_to_string(&ca_path).map_err(|e| LifelogError::Validation {
-            field: "LIFELOG_TLS_CA_CERT_PATH".to_string(),
-            reason: format!("failed to read CA cert: {}", e),
-        })?;
-        let server_name =
-            std::env::var("LIFELOG_TLS_SERVER_NAME").unwrap_or_else(|_| "localhost".to_string());
-        tonic::transport::ClientTlsConfig::new()
-            .domain_name(server_name)
-            .ca_certificate(tonic::transport::Certificate::from_pem(ca_pem))
+    if server_address.starts_with("https://") {
+        let tls = if let Ok(ca_path) = std::env::var("LIFELOG_TLS_CA_CERT_PATH") {
+            let ca_pem =
+                std::fs::read_to_string(&ca_path).map_err(|e| LifelogError::Validation {
+                    field: "LIFELOG_TLS_CA_CERT_PATH".to_string(),
+                    reason: format!("failed to read CA cert: {}", e),
+                })?;
+            let server_name = std::env::var("LIFELOG_TLS_SERVER_NAME")
+                .unwrap_or_else(|_| "localhost".to_string());
+            tonic::transport::ClientTlsConfig::new()
+                .domain_name(server_name)
+                .ca_certificate(tonic::transport::Certificate::from_pem(ca_pem))
+        } else {
+            tonic::transport::ClientTlsConfig::new().with_native_roots()
+        };
+        endpoint = endpoint
+            .tls_config(tls)
+            .map_err(|e| LifelogError::Validation {
+                field: "server_address".to_string(),
+                reason: format!("TLS config error: {}", e),
+            })?;
     } else {
-        tonic::transport::ClientTlsConfig::new().with_native_roots()
-    };
-    endpoint = endpoint
-        .tls_config(tls)
-        .map_err(|e| LifelogError::Validation {
-            field: "server_address".to_string(),
-            reason: format!("TLS config error: {}", e),
-        })?;
+        tracing::warn!("Using plaintext gRPC (LIFELOG_ALLOW_PLAINTEXT=1). Only safe on encrypted networks like Tailscale.");
+    }
 
     Ok(endpoint)
 }
@@ -243,7 +254,7 @@ impl Collector {
             });
         }
 
-        let endpoint = secure_endpoint(&self.server_address)?;
+        let endpoint = make_endpoint(&self.server_address)?;
         let channel = endpoint.connect().await?;
         let mut client = LifelogServerServiceClient::with_interceptor(channel, auth_interceptor);
 

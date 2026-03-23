@@ -11,6 +11,14 @@ if [[ ! -x "$COLLECTOR_BIN" ]]; then
   exit 1
 fi
 
+# Ensure env vars are exported for nix develop subshell.
+export LIFELOG_TLS_CA_CERT_PATH="${LIFELOG_TLS_CA_CERT_PATH:-}"
+export LIFELOG_TLS_SERVER_NAME="${LIFELOG_TLS_SERVER_NAME:-localhost}"
+export LIFELOG_AUTH_TOKEN="${LIFELOG_AUTH_TOKEN:-}"
+export LIFELOG_COLLECTOR_ID="${LIFELOG_COLLECTOR_ID:-}"
+export LIFELOG_CONFIG_PATH="${LIFELOG_CONFIG_PATH:-}"
+export RUST_LOG="${RUST_LOG:-info}"
+
 # Ensure user service has a sensible runtime base even before GUI env import.
 export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 if [[ -z "${WAYLAND_DISPLAY:-}" && -S "$XDG_RUNTIME_DIR/wayland-0" ]]; then

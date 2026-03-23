@@ -880,33 +880,43 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         .accept_http1(true)
         .layer(tonic_web::GrpcWebLayer::new());
 
-    if !tls_config.is_enabled() {
+    let allow_plaintext = std::env::var("LIFELOG_ALLOW_PLAINTEXT")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    if !tls_config.is_enabled() && !allow_plaintext {
         return Err(lifelog_core::LifelogError::Validation {
             field: "LIFELOG_TLS_CERT_PATH/LIFELOG_TLS_KEY_PATH".to_string(),
             reason: "must both be set. Plaintext gRPC is not allowed for security reasons. \
+                     Set LIFELOG_ALLOW_PLAINTEXT=1 for trusted networks (e.g. Tailscale). \
                      See docs/SETUP_TLS.md for how to generate certificates."
                 .to_string(),
         }
         .into());
     }
-    let cert_path = tls_config.cert_path.expect("checked above");
-    let key_path = tls_config.key_path.expect("checked above");
-    let cert = std::fs::read_to_string(&cert_path).map_err(|e| {
-        format!(
-            "Failed to read certificate at {}: {}. Ensure the path is correct and accessible.",
-            cert_path, e
-        )
-    })?;
-    let key = std::fs::read_to_string(&key_path).map_err(|e| {
-        format!(
-            "Failed to read private key at {}: {}. Ensure the path is correct and accessible.",
-            key_path, e
-        )
-    })?;
-    let identity = tonic::transport::Identity::from_pem(cert, key);
-    let tls = tonic::transport::ServerTlsConfig::new().identity(identity);
-    builder = builder.tls_config(tls)?;
-    tracing::info!(cert = %cert_path, key = %key_path, "TLS enabled");
+
+    if !tls_config.is_enabled() {
+        tracing::warn!("Running WITHOUT TLS (LIFELOG_ALLOW_PLAINTEXT=1). Only safe on encrypted networks like Tailscale.");
+    }
+
+    if let (Some(cert_path), Some(key_path)) = (&tls_config.cert_path, &tls_config.key_path) {
+        let cert = std::fs::read_to_string(cert_path).map_err(|e| {
+            format!(
+                "Failed to read certificate at {}: {}. Ensure the path is correct and accessible.",
+                cert_path, e
+            )
+        })?;
+        let key = std::fs::read_to_string(key_path).map_err(|e| {
+            format!(
+                "Failed to read private key at {}: {}. Ensure the path is correct and accessible.",
+                key_path, e
+            )
+        })?;
+        let identity = tonic::transport::Identity::from_pem(cert, key);
+        let tls = tonic::transport::ServerTlsConfig::new().identity(identity);
+        builder = builder.tls_config(tls)?;
+        tracing::info!(cert = %cert_path, key = %key_path, "TLS enabled");
+    }
 
     let _auth_token = std::env::var("LIFELOG_AUTH_TOKEN").map_err(|_| {
         lifelog_core::LifelogError::Validation {

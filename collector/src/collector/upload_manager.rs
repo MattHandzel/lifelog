@@ -18,53 +18,8 @@ pub struct UploadManager {
 }
 
 impl UploadManager {
-    fn secure_endpoint(server_address: &str) -> Result<tonic::transport::Endpoint, LifelogError> {
-        if !server_address.starts_with("https://") {
-            return Err(LifelogError::Validation {
-                field: "server_address".to_string(),
-                reason: format!(
-                    "Invalid server address '{}'. Must use 'https://' because plaintext gRPC is not allowed. \
-                     See docs/SETUP_TLS.md for how to set up TLS.",
-                    server_address
-                ),
-            });
-        }
-
-        let mut endpoint = tonic::transport::Endpoint::from_shared(server_address.to_string())
-            .map_err(|e| LifelogError::Validation {
-                field: "server_address".to_string(),
-                reason: format!(
-                    "invalid URL: {}. Ensure the server address is a valid HTTPS URL.",
-                    e
-                ),
-            })?
-            .connect_timeout(std::time::Duration::from_secs(10));
-
-        let tls = if let Ok(ca_path) = std::env::var("LIFELOG_TLS_CA_CERT_PATH") {
-            let ca_pem =
-                std::fs::read_to_string(&ca_path).map_err(|e| LifelogError::Validation {
-                    field: "LIFELOG_TLS_CA_CERT_PATH".to_string(),
-                    reason: format!(
-                        "failed to read CA certificate at {}: {}. Ensure the path is correct.",
-                        ca_path, e
-                    ),
-                })?;
-            let server_name = std::env::var("LIFELOG_TLS_SERVER_NAME")
-                .unwrap_or_else(|_| "localhost".to_string());
-            tonic::transport::ClientTlsConfig::new()
-                .domain_name(server_name)
-                .ca_certificate(tonic::transport::Certificate::from_pem(ca_pem))
-        } else {
-            tonic::transport::ClientTlsConfig::new().with_native_roots()
-        };
-        endpoint = endpoint
-            .tls_config(tls)
-            .map_err(|e| LifelogError::Validation {
-                field: "server_address".to_string(),
-                reason: format!("TLS config error: {}", e),
-            })?;
-
-        Ok(endpoint)
+    fn make_endpoint(server_address: &str) -> Result<tonic::transport::Endpoint, LifelogError> {
+        super::make_endpoint(server_address)
     }
 
     pub fn new(server_address: String, collector_id: String) -> (Self, mpsc::Sender<()>) {
@@ -127,7 +82,7 @@ impl UploadManager {
             }));
         }
 
-        let endpoint = Self::secure_endpoint(&self.server_address)
+        let endpoint = Self::make_endpoint(&self.server_address)
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
         let channel = endpoint.connect().await?;
         let mut client = LifelogServerServiceClient::with_interceptor(
