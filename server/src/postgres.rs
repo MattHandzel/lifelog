@@ -37,6 +37,16 @@ const MIGRATIONS: &[EmbeddedMigration] = &[
     },
 ];
 
+fn is_unix_socket_connection(cfg: &tokio_postgres::Config) -> bool {
+    let hosts = cfg.get_hosts();
+    if hosts.is_empty() {
+        return true;
+    }
+    hosts
+        .iter()
+        .all(|h| matches!(h, tokio_postgres::config::Host::Unix(_)))
+}
+
 pub async fn connect_pool(
     database_url: &str,
     max_connections: usize,
@@ -47,6 +57,14 @@ pub async fn connect_pool(
             field: "database_endpoint".to_string(),
             reason: format!("invalid postgres uri: {e}"),
         })?;
+
+    if !is_unix_socket_connection(&cfg) {
+        tracing::warn!(
+            "PostgreSQL connection uses TCP without TLS. \
+             Use a Unix socket or add a TLS connector crate for production deployments."
+        );
+    }
+
     let mgr_cfg = deadpool_postgres::ManagerConfig {
         recycling_method: deadpool_postgres::RecyclingMethod::Fast,
     };
