@@ -462,7 +462,10 @@ async fn get_collector_ids(
 #[tauri::command]
 async fn query_timeline(
     state: tauri::State<'_, GrpcClientState>,
-    llql_query: String,
+    collector_id: Option<String>,
+    text_query: Option<Vec<String>>,
+    start_time: Option<i64>,
+    end_time: Option<i64>,
 ) -> Result<Vec<TimelineEntry>, String> {
     let mut client_guard = state.client.lock().await;
     let client = if let Some(c) = client_guard.as_mut() {
@@ -475,8 +478,23 @@ async fn query_timeline(
         client_guard.as_mut().unwrap()
     };
 
+    let text = text_query.unwrap_or_default();
+    let time_ranges = match (start_time, end_time) {
+        (Some(s), Some(e)) => vec![lifelog::Timerange {
+            start: Some(pbjson_types::Timestamp {
+                seconds: s,
+                nanos: 0,
+            }),
+            end: Some(pbjson_types::Timestamp {
+                seconds: e,
+                nanos: 0,
+            }),
+        }],
+        _ => vec![],
+    };
     let query = lifelog::Query {
-        text: vec![llql_query],
+        text,
+        time_ranges,
         ..Default::default()
     };
     let req = lifelog::QueryRequest { query: Some(query) };
