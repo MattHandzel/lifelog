@@ -173,7 +173,11 @@ fn compile_expression_pg_sql(expr: &Expression, alias: &str) -> String {
             format!("NOT ({})", compile_expression_pg_sql(inner, alias))
         }
         Expression::Eq(field, value) => {
-            let field_ref = format!("{alias}.payload->>'{}'", sanitize_identifier(field));
+            let sanitized = sanitize_identifier(field);
+            if sanitized.is_empty() {
+                return "FALSE".to_string();
+            }
+            let field_ref = format!("{alias}.payload->>'{sanitized}'");
             format!("{field_ref} = {}", compile_pg_value(value))
         }
         Expression::Contains(_field, text) => {
@@ -227,9 +231,30 @@ fn quote_string(s: &str) -> String {
     format!("'{}'", s.replace('\'', "''"))
 }
 
+const ALLOWED_PAYLOAD_FIELDS: &[&str] = &[
+    "text",
+    "title",
+    "url",
+    "window_title",
+    "command",
+    "app_name",
+    "process_name",
+    "description",
+    "summary",
+    "language",
+    "confidence",
+    "duration_ms",
+];
+
 fn sanitize_identifier(input: &str) -> String {
-    input
+    let cleaned: String = input
         .chars()
         .filter(|c| c.is_ascii_alphanumeric() || *c == '_')
-        .collect()
+        .collect();
+    if ALLOWED_PAYLOAD_FIELDS.contains(&cleaned.as_str()) {
+        cleaned
+    } else {
+        tracing::warn!(field = %input, "Rejected unknown payload field in query");
+        String::new()
+    }
 }

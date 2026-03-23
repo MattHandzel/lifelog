@@ -13,14 +13,6 @@
     packages = forAllSystems (system: let
       pkgs = import nixpkgs {
         inherit system;
-        config = {
-          # SurrealDB is BSL-licensed and marked unfree in nixpkgs.
-          # We allowlist it so `nix develop` and e2e tests can run a real DB.
-          allowUnfreePredicate = pkg:
-            builtins.elem (nixpkgs.lib.getName pkg) [
-              "surrealdb"
-            ];
-        };
       };
 
       commonDeps = {
@@ -104,12 +96,6 @@
     devShells = forAllSystems (system: let
       pkgs = import nixpkgs {
         inherit system;
-        config = {
-          allowUnfreePredicate = pkg:
-            builtins.elem (nixpkgs.lib.getName pkg) [
-              "surrealdb"
-            ];
-        };
       };
     in {
       default = pkgs.mkShell {
@@ -167,7 +153,6 @@
             sccache
             cargo-nextest
             bacon
-            surrealdb
             sqlx-cli
             postgresql
             cargo-tauri

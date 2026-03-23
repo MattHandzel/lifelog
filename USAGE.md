@@ -86,10 +86,6 @@ The backend supports these environment variables for runtime overrides/secrets:
 
 - `LIFELOG_POSTGRES_INGEST_URL` (recommended default): PostgreSQL DSN, e.g. `postgresql://lifelog@127.0.0.1:5432/lifelog`
 - `LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS` (optional, default `16`)
-- Transitional SurrealDB variables (still required for non-migrated paths during hybrid phase):
-  - `LIFELOG_DB_ENDPOINT` (default from code: `127.0.0.1:7183`)
-  - `LIFELOG_DB_USER` (required in hybrid mode)
-  - `LIFELOG_DB_PASS` (required in hybrid mode)
 - Optional:
   - `LIFELOG_HOST` (default `127.0.0.1`)
   - `LIFELOG_PORT` (default `7182`)
@@ -101,9 +97,6 @@ Example:
 ```bash
 export LIFELOG_POSTGRES_INGEST_URL=postgresql://lifelog@127.0.0.1:5432/lifelog
 export LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS=16
-export LIFELOG_DB_ENDPOINT=127.0.0.1:7183
-export LIFELOG_DB_USER=root
-export LIFELOG_DB_PASS=root
 ```
 
 ## 4. Start PostgreSQL (Default)
@@ -129,14 +122,6 @@ nix develop --command bash -lc '
   psql -h 127.0.0.1 -p 5432 -d postgres -c "DO \$\$BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '\''lifelog'\'') THEN CREATE ROLE lifelog LOGIN; END IF; END\$\$;" &&
   psql -h 127.0.0.1 -p 5432 -d postgres -c "SELECT '\''CREATE DATABASE lifelog OWNER lifelog'\'' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '\''lifelog'\'')\\gexec"
 '
-```
-
-### 4.1 SurrealDB (Transitional Hybrid Mode)
-
-Current server still keeps a SurrealDB path for non-migrated modalities. Run SurrealDB if your deployment still uses hybrid mode:
-
-```bash
-nix develop --command surreal start --bind 127.0.0.1:7183 file:/tmp/lifelog-surreal.db
 ```
 
 ## 5. Run Server
@@ -281,10 +266,8 @@ This section is for a split setup:
 
 - Remote system services:
   - `postgresql.service` (system PostgreSQL)
-  - `deploy/systemd/lifelog-surrealdb.service`
   - `deploy/systemd/lifelog-server.service`
 - Remote user-service fallback (for hosts where `/etc/systemd/system` is read-only):
-  - `deploy/systemd-user/lifelog-surrealdb.service`
   - `deploy/systemd-user/lifelog-server.service`
 - Local user services:
   - `deploy/systemd-user/lifelog-collector.service`
@@ -306,7 +289,7 @@ nix develop --command bash -lc 'scripts/install_persistent_services.sh'
 ```
 
 What this does:
-- Installs and enables remote boot services (`postgresql` when present, `lifelog-surrealdb`, `lifelog-server`)
+- Installs and enables remote boot services (`postgresql` when present, `lifelog-server`)
   - Uses system-level units when writable, otherwise user-level units + linger
 - Installs local user collector service + validation timer
 - Enables linger (`loginctl enable-linger`) so user services survive reboot/login boundaries
@@ -319,17 +302,17 @@ What this does:
 Remote server host:
 
 ```bash
-ssh matth@server.matthandzel.com 'sudo systemctl status postgresql lifelog-surrealdb lifelog-server --no-pager'
-ssh matth@server.matthandzel.com 'sudo systemctl restart postgresql lifelog-surrealdb lifelog-server'
-ssh matth@server.matthandzel.com 'sudo journalctl -u postgresql -u lifelog-surrealdb -u lifelog-server -f'
+ssh matth@server.matthandzel.com 'sudo systemctl status postgresql lifelog-server --no-pager'
+ssh matth@server.matthandzel.com 'sudo systemctl restart postgresql lifelog-server'
+ssh matth@server.matthandzel.com 'sudo journalctl -u postgresql -u lifelog-server -f'
 ```
 
 If using remote user-level fallback:
 
 ```bash
-ssh matth@server.matthandzel.com 'systemctl --user status lifelog-surrealdb lifelog-server --no-pager'
-ssh matth@server.matthandzel.com 'systemctl --user restart lifelog-surrealdb lifelog-server'
-ssh matth@server.matthandzel.com 'journalctl --user -u lifelog-surrealdb -u lifelog-server -f'
+ssh matth@server.matthandzel.com 'systemctl --user status lifelog-server --no-pager'
+ssh matth@server.matthandzel.com 'systemctl --user restart lifelog-server'
+ssh matth@server.matthandzel.com 'journalctl --user -u lifelog-server -f'
 ```
 
 Laptop collector (user service):
@@ -359,7 +342,7 @@ Timer validation (non-invasive):
 Remote DB quick check:
 
 ```bash
-ssh matth@server.matthandzel.com 'cd /home/matth/Projects/lifelog && printf "SELECT stream_id, count() AS n FROM upload_chunks GROUP BY stream_id;\n" | nix develop --command surreal sql --endpoint http://127.0.0.1:7183 --user root --pass root --namespace lifelog --database main --hide-welcome --json'
+ssh matth@server.matthandzel.com 'psql "$LIFELOG_POSTGRES_INGEST_URL" -c "SELECT modality, count(*) FROM frames GROUP BY modality ORDER BY count DESC;"'
 ```
 
 ### 11.5 Known Limitations
@@ -380,9 +363,7 @@ These values are intentionally specific to one environment and should be paramet
   - files:
     - `scripts/install_persistent_services.sh`
     - `deploy/systemd/lifelog-server.service`
-    - `deploy/systemd/lifelog-surrealdb.service`
     - `deploy/systemd-user/lifelog-server.service`
-    - `deploy/systemd-user/lifelog-surrealdb.service`
 
 - Collector endpoint:
   - `SERVER_ADDR=http://100.118.206.104:7182`
@@ -395,9 +376,7 @@ These values are intentionally specific to one environment and should be paramet
 
 - Database credentials:
   - `LIFELOG_POSTGRES_INGEST_URL=postgresql://lifelog@127.0.0.1:5432/lifelog`
-  - `LIFELOG_DB_USER=root`
-  - `LIFELOG_DB_PASS=root`
-  - change all values for any non-dev/shared deployment.
+  - change this for any non-dev/shared deployment.
 
 - Service style fallback:
   - Installer currently tries system services first, then falls back to user services if `/etc/systemd/system` is not writable.
