@@ -55,10 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(resp) => {
             let resp = resp.into_inner();
             println!("[OK] get_state succeeded!");
-            if let Some(ss) = &resp.server_state {
-                println!("  total_frames: {}", ss.total_frames_stored);
-                println!("  disk_usage: {} bytes", ss.disk_usage_bytes);
-            }
+            println!("  response: {:?}", resp);
         }
         Err(e) => {
             eprintln!("[FAIL] get_state: {}", e);
