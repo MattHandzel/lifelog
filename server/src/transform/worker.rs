@@ -139,7 +139,7 @@ impl PipelineWorker {
                 Ok(d) => d,
                 Err(e) => {
                     tracing::error!(uuid = %key.uuid, error = %e, "Failed to load data for transform");
-                    continue;
+                    break;
                 }
             };
 
@@ -158,7 +158,7 @@ impl PipelineWorker {
                         error = %e,
                         "Transform execution failed"
                     );
-                    continue;
+                    break;
                 }
             };
 
@@ -188,6 +188,7 @@ impl PipelineWorker {
                         error = %e,
                         "Failed to write transform output"
                     );
+                    break;
                 }
             }
         }
