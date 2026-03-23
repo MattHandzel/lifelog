@@ -1067,6 +1067,16 @@ pub async fn get_keys_after(
     after: DateTime<Utc>,
     limit: usize,
 ) -> Result<Vec<LifelogFrameKey>, LifelogError> {
+    get_keys_after_filtered(pool, origin, after, limit, false).await
+}
+
+pub async fn get_keys_after_filtered(
+    pool: &PostgresPool,
+    origin: &DataOrigin,
+    after: DateTime<Utc>,
+    limit: usize,
+    exclude_derived: bool,
+) -> Result<Vec<LifelogFrameKey>, LifelogError> {
     let client = pool
         .get()
         .await
@@ -1074,18 +1084,27 @@ pub async fn get_keys_after(
 
     let collector_id = extract_collector_id(origin);
     let modality = &origin.modality_name;
+    let derived_filter = if exclude_derived {
+        " AND source_frame_id IS NULL"
+    } else {
+        ""
+    };
 
     let rows = if let Some(cid) = collector_id {
         client
             .query(
-                "SELECT id FROM frames WHERE modality = $1 AND collector_id = $2 AND t_canonical > $3 ORDER BY t_canonical ASC LIMIT $4",
+                &format!(
+                    "SELECT id FROM frames WHERE modality = $1 AND collector_id = $2 AND t_canonical > $3{derived_filter} ORDER BY t_canonical ASC LIMIT $4"
+                ),
                 &[&modality, &cid, &after, &(limit as i64)],
             )
             .await
     } else {
         client
             .query(
-                "SELECT id FROM frames WHERE modality = $1 AND t_canonical > $2 ORDER BY t_canonical ASC LIMIT $3",
+                &format!(
+                    "SELECT id FROM frames WHERE modality = $1 AND t_canonical > $2{derived_filter} ORDER BY t_canonical ASC LIMIT $3"
+                ),
                 &[&modality, &after, &(limit as i64)],
             )
             .await

@@ -80,12 +80,15 @@ impl PipelineWorker {
         let targets = resolve_targets(&transform.source(), available_origins);
         let mut any_work = false;
 
+        let same_modality = transform.source_modality() == transform.destination_modality();
+
         for target_origin in targets {
-            let keys = match crate::frames::get_keys_after(
+            let keys = match crate::frames::get_keys_after_filtered(
                 &self.postgres_pool,
                 &target_origin,
                 watermark,
                 self.batch_size,
+                same_modality,
             )
             .await
             {
