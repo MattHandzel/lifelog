@@ -298,6 +298,8 @@ async fn get_component_config(
                 "keyboard" => {
                     serde_json::to_value(&collector_cfg_opt.and_then(|c| c.keyboard.as_ref()))
                 }
+                "server" => serde_json::to_value(&config.server),
+                "retention" | "text_upload" | "transforms" => Ok(serde_json::Value::Null),
                 _ => return Err(format!("Unknown component type: {}", component_type)),
             };
 
