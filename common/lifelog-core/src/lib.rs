@@ -137,14 +137,22 @@ impl DataOrigin {
     }
 
     pub fn get_table_name(&self) -> String {
-        match &self.origin {
-            DataOriginType::DeviceId(device_id) => {
-                format!("{}:{}", device_id.replace(":", ""), self.modality_name)
-            }
-            DataOriginType::DataOrigin(data_origin) => {
-                format!("{}:{}", data_origin.get_table_name(), self.modality_name)
+        let mut segments: Vec<String> = vec![self.modality_name.clone()];
+        let mut current = self;
+        loop {
+            match &current.origin {
+                DataOriginType::DeviceId(device_id) => {
+                    segments.push(device_id.replace(":", ""));
+                    break;
+                }
+                DataOriginType::DataOrigin(inner) => {
+                    segments.push(inner.modality_name.clone());
+                    current = inner;
+                }
             }
         }
+        segments.reverse();
+        segments.join(":")
     }
 }
 
