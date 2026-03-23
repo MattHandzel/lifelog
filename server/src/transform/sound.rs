@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use lifelog_core::{DataOrigin, DataOriginType, LifelogFrameKey};
+use lifelog_core::{DataOrigin, DataOriginType, LifelogFrameKey, PrivacyLevel};
 use lifelog_types::{DataModality, LifelogData, TranscriptionFrame};
 
 use super::{TransformExecutor, TransformOutput, TransformPipelineError};
@@ -7,11 +7,20 @@ use super::{TransformExecutor, TransformOutput, TransformPipelineError};
 pub struct SoundClassifierExecutor {
     id: String,
     source: DataOrigin,
+    privacy_level: PrivacyLevel,
 }
 
 impl SoundClassifierExecutor {
-    pub fn new(id: String, source: DataOrigin) -> Self {
-        Self { id, source }
+    pub fn new(
+        id: String,
+        source: DataOrigin,
+        params: &std::collections::HashMap<String, String>,
+    ) -> Self {
+        Self {
+            id,
+            source,
+            privacy_level: PrivacyLevel::from_params(params),
+        }
     }
 }
 
@@ -35,6 +44,10 @@ impl TransformExecutor for SoundClassifierExecutor {
 
     fn is_async(&self) -> bool {
         false
+    }
+
+    fn privacy_level(&self) -> PrivacyLevel {
+        self.privacy_level
     }
 
     fn matches_origin(&self, key_origin: &DataOrigin) -> bool {

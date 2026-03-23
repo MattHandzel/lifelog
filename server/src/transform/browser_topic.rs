@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use lifelog_core::{DataOrigin, DataOriginType, LifelogFrameKey};
+use lifelog_core::{DataOrigin, DataOriginType, LifelogFrameKey, PrivacyLevel};
 use lifelog_types::{DataModality, LifelogData};
 
 use super::{TransformExecutor, TransformOutput, TransformPipelineError};
@@ -11,6 +11,7 @@ pub struct BrowserTopicExecutor {
     model: String,
     system_prompt: String,
     timeout_secs: u64,
+    privacy_level: PrivacyLevel,
 }
 
 impl BrowserTopicExecutor {
@@ -38,6 +39,7 @@ impl BrowserTopicExecutor {
                 .get("timeout_secs")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(60),
+            privacy_level: PrivacyLevel::from_params(params),
         }
     }
 }
@@ -58,6 +60,10 @@ impl TransformExecutor for BrowserTopicExecutor {
     }
     fn is_async(&self) -> bool {
         true
+    }
+
+    fn privacy_level(&self) -> PrivacyLevel {
+        self.privacy_level
     }
 
     fn matches_origin(&self, key_origin: &DataOrigin) -> bool {

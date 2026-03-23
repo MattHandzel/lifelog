@@ -198,4 +198,52 @@ pub trait Transform {
     fn priority(&self) -> u8;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivacyLevel {
+    LocalOnly,
+    Zdr,
+    Standard,
+}
+
+impl Default for PrivacyLevel {
+    fn default() -> Self {
+        Self::Standard
+    }
+}
+
+impl std::fmt::Display for PrivacyLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::LocalOnly => write!(f, "local_only"),
+            Self::Zdr => write!(f, "zdr"),
+            Self::Standard => write!(f, "standard"),
+        }
+    }
+}
+
+impl std::str::FromStr for PrivacyLevel {
+    type Err = LifelogError;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s {
+            "local_only" => Ok(Self::LocalOnly),
+            "zdr" => Ok(Self::Zdr),
+            "standard" => Ok(Self::Standard),
+            other => Err(LifelogError::Other(anyhow::anyhow!(
+                "unknown privacy level: {other}"
+            ))),
+        }
+    }
+}
+
+impl PrivacyLevel {
+    pub fn from_params(params: &std::collections::HashMap<String, String>) -> Self {
+        params
+            .get("privacy_level")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_default()
+    }
+}
+
 pub type Result<T, E = LifelogError> = std::result::Result<T, E>;

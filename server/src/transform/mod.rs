@@ -13,7 +13,7 @@ pub mod worker;
 pub mod writer;
 
 use async_trait::async_trait;
-use lifelog_core::{DataOrigin, LifelogFrameKey};
+use lifelog_core::{DataOrigin, LifelogFrameKey, PrivacyLevel};
 use lifelog_types::LifelogData;
 
 #[derive(Debug, thiserror::Error)]
@@ -46,6 +46,9 @@ pub trait TransformExecutor: Send + Sync {
     fn matches_origin(&self, key_origin: &DataOrigin) -> bool;
     fn source(&self) -> DataOrigin;
     fn destination(&self) -> DataOrigin;
+    fn privacy_level(&self) -> PrivacyLevel {
+        PrivacyLevel::Standard
+    }
 
     async fn execute(
         &self,

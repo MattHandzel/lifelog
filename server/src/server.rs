@@ -465,6 +465,7 @@ impl Server {
                     let executor = crate::transform::sound::SoundClassifierExecutor::new(
                         spec.id.clone(),
                         source,
+                        &spec.params,
                     );
                     executors.push(Arc::new(executor));
                     tracing::info!(

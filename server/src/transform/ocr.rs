@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use data_modalities::ocr::{OcrConfig, OcrTransform};
-use lifelog_core::{DataOrigin, DataOriginType, LifelogFrameKey, LifelogImage, Transform};
+use lifelog_core::{
+    DataOrigin, DataOriginType, LifelogFrameKey, LifelogImage, PrivacyLevel, Transform,
+};
 use lifelog_types::LifelogData;
 
 use super::{TransformExecutor, TransformOutput, TransformPipelineError};
@@ -8,6 +10,7 @@ use super::{TransformExecutor, TransformOutput, TransformPipelineError};
 pub struct OcrExecutor {
     inner: OcrTransform,
     id: String,
+    privacy_level: PrivacyLevel,
 }
 
 impl OcrExecutor {
@@ -15,6 +18,7 @@ impl OcrExecutor {
         Self {
             inner: OcrTransform::new(source, config),
             id: "ocr".to_string(),
+            privacy_level: PrivacyLevel::LocalOnly,
         }
     }
 
@@ -44,6 +48,10 @@ impl TransformExecutor for OcrExecutor {
 
     fn is_async(&self) -> bool {
         false
+    }
+
+    fn privacy_level(&self) -> PrivacyLevel {
+        self.privacy_level
     }
 
     fn matches_origin(&self, key_origin: &DataOrigin) -> bool {

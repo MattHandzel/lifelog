@@ -127,11 +127,42 @@ fn parse_transforms_from_root(root: &toml::Value) -> Vec<lifelog_types::Transfor
     match toml::from_str::<Wrapper>(&toml::to_string(&wrapper_table).unwrap_or_default()) {
         Ok(w) => {
             tracing::info!(count = w.transforms.len(), "Parsed transforms from config");
-            w.transforms
+            let mut specs = w.transforms;
+            inject_privacy_levels(&mut specs, transforms_val);
+            specs
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to parse [[transforms]] from config");
             Vec::new()
+        }
+    }
+}
+
+fn inject_privacy_levels(specs: &mut [lifelog_types::TransformSpec], transforms_val: &toml::Value) {
+    let Some(arr) = transforms_val.as_array() else {
+        return;
+    };
+    for (spec, raw) in specs.iter_mut().zip(arr.iter()) {
+        if let Some(level) = raw
+            .get("privacyLevel")
+            .or_else(|| raw.get("privacy_level"))
+            .and_then(|v| v.as_str())
+        {
+            if level.parse::<lifelog_core::PrivacyLevel>().is_ok() {
+                spec.params
+                    .insert("privacy_level".to_string(), level.to_string());
+                tracing::debug!(
+                    transform_id = %spec.id,
+                    privacy_level = %level,
+                    "Set privacy level for transform"
+                );
+            } else {
+                tracing::warn!(
+                    transform_id = %spec.id,
+                    value = %level,
+                    "Unknown privacy_level value, using default 'standard'"
+                );
+            }
         }
     }
 }
