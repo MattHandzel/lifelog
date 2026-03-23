@@ -53,9 +53,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     match client.get_state(lifelog::GetStateRequest {}).await {
         Ok(resp) => {
-            let state = resp.into_inner();
+            let resp = resp.into_inner();
             println!("[OK] get_state succeeded!");
-            if let Some(ss) = &state.state {
+            if let Some(ss) = &resp.server_state {
                 println!("  total_frames: {}", ss.total_frames_stored);
                 println!("  disk_usage: {} bytes", ss.disk_usage_bytes);
             }
