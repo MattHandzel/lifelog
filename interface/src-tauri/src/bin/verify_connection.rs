@@ -55,7 +55,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(resp) => {
             let state = resp.into_inner();
             println!("[OK] get_state succeeded!");
-            if let Some(ss) = &state.server_state {
+            if let Some(ss) = &state.state {
                 println!("  total_frames: {}", ss.total_frames_stored);
                 println!("  disk_usage: {} bytes", ss.disk_usage_bytes);
             }
@@ -69,7 +69,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     match client
         .query(lifelog::QueryRequest {
             query: Some(lifelog::Query::default()),
-            limit: 5,
         })
         .await
     {
