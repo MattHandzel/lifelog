@@ -8,6 +8,17 @@ use std::pin::Pin;
 use std::time::Duration;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_stream::StreamExt;
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
 use tonic::{Request, Response, Status, Streaming};
 use utils::ingest::ChunkIngester;
 
@@ -20,10 +31,12 @@ impl GRPCServerLifelogServerService {
         let auth_token = std::env::var("LIFELOG_AUTH_TOKEN")
             .map_err(|_| Status::internal("LIFELOG_AUTH_TOKEN must be configured"))?;
 
+        let expected = format!("Bearer {}", auth_token);
+
         match metadata.get("authorization") {
             Some(t) => {
                 let token_str = t.to_str().unwrap_or_default();
-                if token_str == format!("Bearer {}", auth_token) {
+                if constant_time_eq(token_str.as_bytes(), expected.as_bytes()) {
                     return Ok(());
                 }
                 tracing::warn!("Invalid authentication token provided");
