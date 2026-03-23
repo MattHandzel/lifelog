@@ -29,16 +29,16 @@ type SkewSamples = HashMap<String, Vec<(chrono::DateTime<Utc>, chrono::DateTime<
 
 #[derive(Debug, Clone)]
 pub struct Server {
-    pub(crate) postgres_pool: PostgresPool,
-    pub(crate) cas: FsCas,
-    pub(crate) config: Arc<RwLock<ServerConfig>>,
-    pub(crate) state: Arc<RwLock<SystemState>>,
-    pub(crate) registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
-    pub(crate) policy: Arc<RwLock<ServerPolicy>>,
-    pub(crate) transform_dag: Arc<TransformDag>,
-    pub(crate) http_client: reqwest::Client,
-    pub(crate) skew_estimates: Arc<RwLock<HashMap<String, lifelog_core::time_skew::SkewEstimate>>>,
-    pub(crate) skew_samples: Arc<RwLock<SkewSamples>>,
+    pub postgres_pool: PostgresPool,
+    pub cas: FsCas,
+    pub config: Arc<RwLock<ServerConfig>>,
+    pub state: Arc<RwLock<SystemState>>,
+    pub registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
+    pub policy: Arc<RwLock<ServerPolicy>>,
+    pub transform_dag: Arc<TransformDag>,
+    pub http_client: reqwest::Client,
+    pub skew_estimates: Arc<RwLock<HashMap<String, lifelog_core::time_skew::SkewEstimate>>>,
+    pub skew_samples: Arc<RwLock<SkewSamples>>,
 }
 
 #[derive(Clone)]
@@ -445,6 +445,20 @@ impl Server {
                         id = %spec.id,
                         endpoint = %spec.service_endpoint,
                         "Registered activity classifier transform"
+                    );
+                }
+                "browser-topic" => {
+                    let executor = crate::transform::browser_topic::BrowserTopicExecutor::new(
+                        spec.id.clone(),
+                        source,
+                        spec.service_endpoint.clone(),
+                        &spec.params,
+                    );
+                    executors.push(Arc::new(executor));
+                    tracing::info!(
+                        id = %spec.id,
+                        endpoint = %spec.service_endpoint,
+                        "Registered browser topic transform"
                     );
                 }
                 other => {

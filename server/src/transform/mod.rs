@@ -1,8 +1,11 @@
 pub mod activity;
+pub mod browser_topic;
 pub mod dag;
 pub mod llm;
+pub mod location;
 pub mod ocr;
 pub mod stt;
+pub mod summary;
 pub mod watermark;
 pub mod worker;
 pub mod writer;

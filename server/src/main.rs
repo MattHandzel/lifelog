@@ -875,6 +875,36 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    let summary_handle = server_handle.clone();
+    tokio::task::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(86400));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            let server = summary_handle.server.read().await;
+            let endpoint = std::env::var("LIFELOG_OLLAMA_ENDPOINT")
+                .unwrap_or_else(|_| "http://localhost:11434".to_string());
+            let model = std::env::var("LIFELOG_SUMMARY_MODEL")
+                .unwrap_or_else(|_| "gemma3:4b-it-qat".to_string());
+            match lifelog_server::transform::summary::generate_daily_summary(
+                &server.postgres_pool,
+                &server.cas,
+                &server.http_client,
+                &endpoint,
+                &model,
+            )
+            .await
+            {
+                Ok(()) => {
+                    tracing::info!("daily summary generated successfully");
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "daily summary generation failed");
+                }
+            }
+        }
+    });
+
     let tls_config = TlsConfig::from_env();
     let mut builder = TonicServer::builder()
         .accept_http1(true)

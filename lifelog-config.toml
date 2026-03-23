@@ -100,3 +100,13 @@ serviceEndpoint = "http://localhost:11434"
 priority = 3
 [transforms.params]
 model = "gemma3:4b-it-qat"
+
+[[transforms]]
+id = "browser-topic"
+enabled = true
+transformType = "browser-topic"
+sourceOrigin = "*:Browser"
+serviceEndpoint = "http://localhost:11434"
+priority = 3
+[transforms.params]
+model = "gemma3:4b-it-qat"
