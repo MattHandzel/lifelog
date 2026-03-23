@@ -8,6 +8,7 @@ members = [
     "common/lifelog-core",
     "interface/src-tauri",
     "common/lifelog-types",
+    "mcp",
 ]
 
 # Keep the Tauri UI crate in the workspace, but don't build it by default.
@@ -21,6 +22,7 @@ default-members = [
     "common/utils",
     "common/lifelog-core",
     "common/lifelog-types",
+    "mcp",
 ]
 
 resolver = "2"
