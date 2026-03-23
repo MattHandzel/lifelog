@@ -45,7 +45,11 @@ impl IngestBackend for UnifiedIngestBackend {
                 let (t_canonical, time_quality) =
                     get_canonical_time(&self.skew_estimates, collector_id, row.t_canonical).await;
                 row.t_canonical = t_canonical;
-                row.t_end = Some(row.t_end.unwrap_or(t_canonical));
+                row.t_end = Some(
+                    row.t_end
+                        .map(|te| std::cmp::max(te, t_canonical))
+                        .unwrap_or(t_canonical),
+                );
                 row.time_quality = time_quality;
 
                 let is_screen = row.modality == "Screen";
@@ -70,7 +74,10 @@ impl IngestBackend for UnifiedIngestBackend {
                     .execute(crate::frames::FrameRow::insert_sql(), &row.insert_params())
                     .await
                     .map_err(|e| {
-                        format!("postgres insert frames failed for {}: {e}", row.modality)
+                        format!(
+                            "postgres insert frames failed for {} (id={}): {e:?}",
+                            row.modality, row.id
+                        )
                     })?;
 
                 let origin_key = format!("{}:{}", collector_id, row.modality);
