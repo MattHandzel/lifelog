@@ -9,4 +9,4 @@ pub mod postgres;
 pub mod query;
 pub(crate) mod replay;
 pub(crate) mod retention;
-pub(crate) mod transform;
+pub mod transform;
