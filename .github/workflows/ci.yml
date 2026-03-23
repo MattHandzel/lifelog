@@ -49,13 +49,17 @@ jobs:
       - name: Cache Cargo Dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Install SurrealDB
+      - name: Start PostgreSQL
         run: |
-          curl -sSf https://install.surrealdb.com | sh -s -- --nightly
-          surreal version
+          sudo systemctl start postgresql
+          sudo -u postgres createuser --superuser runner || true
+          sudo -u postgres createdb lifelog || true
 
       - name: Run integration tests
         timeout-minutes: 10
+        env:
+          LIFELOG_POSTGRES_INGEST_URL: "postgres://runner@localhost/lifelog"
+          LIFELOG_ALLOW_PLAINTEXT: "1"
         run: |
           nix develop --command cargo test -p lifelog-server --test validation_suite -- --nocapture --include-ignored
           nix develop --command cargo test -p lifelog-server --test multi_device -- --nocapture --include-ignored
