@@ -15,7 +15,7 @@ pub mod storage;
 
 pub mod google {
     pub mod protobuf {
-        tonic::include_proto!("google.protobuf");
+        pub use pbjson_types::*;
     }
 }
 

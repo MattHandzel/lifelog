@@ -76,6 +76,7 @@ bincode = "1.3"
 tonic = { workspace = true, features = ["transport", "tls-ring", "tls-native-roots"] }
 tonic-build = { workspace = true }
 prost-types = { workspace = true }
+pbjson-types = "0.7"
 
 # Platform-specific dependencies
 [target.'cfg(target_os = "linux")'.dependencies]
