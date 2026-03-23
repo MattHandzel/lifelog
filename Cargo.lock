@@ -3329,6 +3329,8 @@ dependencies = [
  "hyprland",
  "image 0.24.9",
  "log",
+ "pbjson-types",
+ "prost",
  "prost-build",
  "prost-types",
  "rdev",
