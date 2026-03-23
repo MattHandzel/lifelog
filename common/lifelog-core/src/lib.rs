@@ -244,6 +244,96 @@ impl PrivacyLevel {
             .and_then(|s| s.parse().ok())
             .unwrap_or_default()
     }
+
+    pub fn can_process(&self, tier: PrivacyTier) -> bool {
+        match tier {
+            PrivacyTier::Sensitive => *self == PrivacyLevel::LocalOnly,
+            PrivacyTier::Moderate => *self != PrivacyLevel::Standard,
+            PrivacyTier::Low => true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PrivacyTier {
+    Sensitive,
+    Moderate,
+    Low,
+}
+
+impl PrivacyTier {
+    pub fn for_modality(modality: &str) -> Self {
+        match modality {
+            "Keystrokes" | "Audio" | "Clipboard" | "Microphone" => PrivacyTier::Sensitive,
+            "Screen" | "Browser" | "Ocr" | "WindowActivity" | "Camera" => PrivacyTier::Moderate,
+            _ => PrivacyTier::Low,
+        }
+    }
+}
+
+impl std::fmt::Display for PrivacyTier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Sensitive => write!(f, "sensitive"),
+            Self::Moderate => write!(f, "moderate"),
+            Self::Low => write!(f, "low"),
+        }
+    }
 }
 
 pub type Result<T, E = LifelogError> = std::result::Result<T, E>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn privacy_tier_modality_mapping() {
+        assert_eq!(
+            PrivacyTier::for_modality("Keystrokes"),
+            PrivacyTier::Sensitive
+        );
+        assert_eq!(PrivacyTier::for_modality("Audio"), PrivacyTier::Sensitive);
+        assert_eq!(
+            PrivacyTier::for_modality("Clipboard"),
+            PrivacyTier::Sensitive
+        );
+        assert_eq!(
+            PrivacyTier::for_modality("Microphone"),
+            PrivacyTier::Sensitive
+        );
+        assert_eq!(PrivacyTier::for_modality("Screen"), PrivacyTier::Moderate);
+        assert_eq!(PrivacyTier::for_modality("Browser"), PrivacyTier::Moderate);
+        assert_eq!(PrivacyTier::for_modality("Weather"), PrivacyTier::Low);
+        assert_eq!(PrivacyTier::for_modality("Processes"), PrivacyTier::Low);
+    }
+
+    #[test]
+    fn privacy_level_enforcement() {
+        assert!(PrivacyLevel::LocalOnly.can_process(PrivacyTier::Sensitive));
+        assert!(!PrivacyLevel::Zdr.can_process(PrivacyTier::Sensitive));
+        assert!(!PrivacyLevel::Standard.can_process(PrivacyTier::Sensitive));
+
+        assert!(PrivacyLevel::LocalOnly.can_process(PrivacyTier::Moderate));
+        assert!(PrivacyLevel::Zdr.can_process(PrivacyTier::Moderate));
+        assert!(!PrivacyLevel::Standard.can_process(PrivacyTier::Moderate));
+
+        assert!(PrivacyLevel::LocalOnly.can_process(PrivacyTier::Low));
+        assert!(PrivacyLevel::Zdr.can_process(PrivacyTier::Low));
+        assert!(PrivacyLevel::Standard.can_process(PrivacyTier::Low));
+    }
+
+    #[test]
+    fn privacy_level_parse_roundtrip() {
+        for level in [
+            PrivacyLevel::LocalOnly,
+            PrivacyLevel::Zdr,
+            PrivacyLevel::Standard,
+        ] {
+            let s = level.to_string();
+            let parsed: PrivacyLevel = s.parse().unwrap();
+            assert_eq!(parsed, level);
+        }
+    }
+}

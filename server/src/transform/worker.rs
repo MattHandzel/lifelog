@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
-use lifelog_core::{DataOrigin, DataOriginType, LifelogError, LifelogFrameKey};
+use lifelog_core::{DataOrigin, DataOriginType, LifelogError, LifelogFrameKey, PrivacyTier};
 use utils::cas::FsCas;
 
 use crate::postgres::PostgresPool;
@@ -76,6 +76,18 @@ impl PipelineWorker {
                 return false;
             }
         };
+
+        let source_tier = PrivacyTier::for_modality(transform.source_modality());
+        if !transform.privacy_level().can_process(source_tier) {
+            tracing::warn!(
+                transform_id = %id,
+                source_modality = %transform.source_modality(),
+                privacy_tier = %source_tier,
+                privacy_level = %transform.privacy_level(),
+                "Transform privacy level cannot process source modality tier; skipping"
+            );
+            return false;
+        }
 
         let targets = resolve_targets(&transform.source(), available_origins);
         let mut any_work = false;
