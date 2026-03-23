@@ -18,6 +18,52 @@ interval = 10.0
 outputDir = "/home/matth/lifelog/data/screen"
 program = "grim"
 
+[collectors.matts-laptop.browser]
+enabled = true
+inputFile = "~/.config/google-chrome/Default/History"
+outputFile = "~/lifelog/data/browser/last_query_chrome_micros.txt"
+browserType = "chrome"
+
+[collectors.matts-laptop.camera]
+enabled = false
+interval = 10.0
+outputDir = "~/lifelog/data/camera"
+device = "/dev/video0"
+resolutionX = 640
+resolutionY = 480
+fps = 30
+timestampFormat = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+
+[collectors.matts-laptop.microphone]
+enabled = true
+outputDir = "~/lifelog/data/microphone"
+sampleRate = 16000
+chunkDurationSecs = 300
+timestampFormat = "%Y-%m-%d_%H-%M-%S.%3f%Z"
+bitsPerSample = 16
+channels = 1
+captureIntervalSecs = 300
+
+[collectors.matts-laptop.processes]
+enabled = true
+interval = 60.0
+outputDir = "~/lifelog/data/processes"
+
+[collectors.matts-laptop.hyprland]
+enabled = true
+interval = 5.0
+outputDir = "~/lifelog/data/hyprland"
+logClients = true
+logActivewindow = true
+logWorkspace = true
+logActiveMonitor = true
+logDevices = true
+
+[collectors.matts-laptop.keyboard]
+enabled = true
+interval = 1.0
+outputDir = "~/lifelog/data/keystrokes"
+
 [[transforms]]
 id = "ocr"
 enabled = true

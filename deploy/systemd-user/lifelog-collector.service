@@ -13,6 +13,7 @@ Environment=LIFELOG_CONFIG_PATH=%h/Projects/lifelog/lifelog-config.toml
 Environment=LIFELOG_TLS_CA_CERT_PATH=%h/.config/lifelog/tls/server-cert.pem
 Environment=LIFELOG_TLS_SERVER_NAME=localhost
 Environment=LIFELOG_AUTH_TOKEN=cdf4fa2f8f324ae9afed98dfa0430755
+Environment=LIFELOG_COLLECTOR_ID=matts-laptop
 Environment=RUST_LOG=info
 Environment=XDG_RUNTIME_DIR=/run/user/%U
 PassEnvironment=DISPLAY WAYLAND_DISPLAY XAUTHORITY XDG_SESSION_TYPE XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS
