@@ -13,19 +13,28 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v22
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
+        uses: DeterminateSystems/nix-installer-action@v14
 
-      - name: Cache Cargo Dependencies
+      - name: Cachix setup
+        uses: cachix/cachix-action@v15
+        with:
+          name: lifelog
+          skipPush: true
+
+      - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Check formatting
-        run: nix develop --command cargo fmt -- --check
+      - name: Nix flake check
+        run: nix flake check
 
-      - name: Cargo check
-        run: nix develop --command cargo check --all-targets
+      - name: Build server
+        run: nix build .#lifelog-server
+
+      - name: Build collector
+        run: nix build .#lifelog-collector
+
+      - name: Check formatting
+        run: nix develop --command cargo fmt --all -- --check
 
       - name: Clippy lints
         run: nix develop --command cargo clippy --all-targets -- -D warnings
@@ -41,12 +50,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Install Nix
-        uses: cachix/install-nix-action@v22
-        with:
-          extra_nix_config: |
-            experimental-features = nix-command flakes
+        uses: DeterminateSystems/nix-installer-action@v14
 
-      - name: Cache Cargo Dependencies
+      - name: Cachix setup
+        uses: cachix/cachix-action@v15
+        with:
+          name: lifelog
+          skipPush: true
+
+      - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
       - name: Start PostgreSQL
@@ -81,7 +93,7 @@ jobs:
       - name: Install dependencies
         run: brew install protobuf tesseract
 
-      - name: Cache Cargo Dependencies
+      - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
       - name: Cargo check

@@ -1,0 +1,31 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lifelog
+      POSTGRES_PASSWORD: lifelog
+      POSTGRES_DB: lifelog
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifelog"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  lifelog-server:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "7182:7182"
+    environment:
+      LIFELOG_POSTGRES_INGEST_URL: "postgres://lifelog:lifelog@postgres/lifelog"
+    volumes:
+      - cas-data:/var/lib/lifelog/cas
+      - ./lifelog-config.toml:/etc/lifelog/lifelog-config.toml:ro
+
+volumes:
+  postgres-data:
+  cas-data:
