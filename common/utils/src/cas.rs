@@ -1,7 +1,13 @@
+use chacha20poly1305::aead::Aead;
+use chacha20poly1305::{KeyInit, XChaCha20Poly1305};
+use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io;
 use std::path::PathBuf;
+
+const ENCRYPTION_MAGIC: &[u8; 4] = b"ECAS";
+const NONCE_LEN: usize = 24;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CasError {
@@ -9,17 +15,67 @@ pub enum CasError {
     Io(#[from] io::Error),
     #[error("invalid hash: {0}")]
     InvalidHash(String),
+    #[error("encryption error")]
+    Encryption,
+    #[error("decryption error")]
+    Decryption,
+    #[error("encrypted blob but no key configured")]
+    MissingKey,
 }
 
-/// Simple filesystem content-addressed store (CAS) keyed by SHA256.
-#[derive(Debug, Clone)]
 pub struct FsCas {
     root: PathBuf,
+    key: Option<[u8; 32]>,
+    cipher: Option<XChaCha20Poly1305>,
+}
+
+impl std::fmt::Debug for FsCas {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FsCas")
+            .field("root", &self.root)
+            .field("encrypted", &self.key.is_some())
+            .finish()
+    }
+}
+
+impl Clone for FsCas {
+    fn clone(&self) -> Self {
+        match &self.key {
+            Some(k) => Self::with_key(self.root.clone(), k),
+            None => Self::new(self.root.clone()),
+        }
+    }
 }
 
 impl FsCas {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: root.into(),
+            key: None,
+            cipher: None,
+        }
+    }
+
+    pub fn with_key(root: impl Into<PathBuf>, key: &[u8; 32]) -> Self {
+        Self {
+            root: root.into(),
+            key: Some(*key),
+            cipher: Some(XChaCha20Poly1305::new(key.into())),
+        }
+    }
+
+    pub fn with_key_file(
+        root: impl Into<PathBuf>,
+        key_file: &std::path::Path,
+    ) -> Result<Self, CasError> {
+        let key_bytes = fs::read(key_file)?;
+        if key_bytes.len() < 32 {
+            return Err(CasError::Encryption);
+        }
+        let key: [u8; 32] = key_bytes[..32]
+            .try_into()
+            .map_err(|_| CasError::Encryption)?;
+        Ok(Self::with_key(root, &key))
     }
 
     pub fn put(&self, bytes: &[u8]) -> Result<String, CasError> {
@@ -30,35 +86,30 @@ impl FsCas {
             return Ok(hash);
         }
 
+        let on_disk = self.maybe_encrypt(bytes)?;
+
         if let Some(parent) = final_path.parent() {
             fs::create_dir_all(parent)?;
         }
 
-        // Use a unique temporary file in the same directory to avoid collisions between concurrent writers.
         let parent = final_path.parent().ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotFound, "No parent directory for CAS path")
         })?;
 
         let mut tmp = tempfile::NamedTempFile::new_in(parent)?;
-        io::Write::write_all(&mut tmp, bytes)?;
+        io::Write::write_all(&mut tmp, &on_disk)?;
 
-        // Best-effort atomic write: rename unique temp file to final path.
-        // On POSIX, rename is atomic and overwrites the destination if it exists.
-        // On Windows, it might fail if the destination exists, which we handle.
         match tmp.persist(&final_path) {
             Ok(_) => Ok(hash),
-            Err(_e) if final_path.exists() => {
-                // Another writer won the race and successfully persisted the file.
-                // Since this is content-addressed, we can safely ignore the error.
-                Ok(hash)
-            }
+            Err(_e) if final_path.exists() => Ok(hash),
             Err(e) => Err(CasError::Io(e.error)),
         }
     }
 
     pub fn get(&self, hash: &str) -> Result<Vec<u8>, CasError> {
         let p = self.path_for_hash(hash)?;
-        Ok(fs::read(p)?)
+        let raw = fs::read(p)?;
+        self.maybe_decrypt(&raw)
     }
 
     pub fn contains(&self, hash: &str) -> Result<bool, CasError> {
@@ -72,6 +123,53 @@ impl FsCas {
             fs::remove_file(p)?;
         }
         Ok(())
+    }
+
+    fn maybe_encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, CasError> {
+        let cipher = match &self.cipher {
+            Some(c) => c,
+            None => return Ok(plaintext.to_vec()),
+        };
+
+        let mut nonce_bytes = [0u8; NONCE_LEN];
+        rand::rngs::OsRng.fill_bytes(&mut nonce_bytes);
+        let nonce = chacha20poly1305::XNonce::from(nonce_bytes);
+
+        let ciphertext = cipher
+            .encrypt(&nonce, plaintext)
+            .map_err(|_| CasError::Encryption)?;
+
+        let mut out = Vec::with_capacity(ENCRYPTION_MAGIC.len() + NONCE_LEN + ciphertext.len());
+        out.extend_from_slice(ENCRYPTION_MAGIC);
+        out.extend_from_slice(&nonce_bytes);
+        out.extend_from_slice(&ciphertext);
+        Ok(out)
+    }
+
+    fn maybe_decrypt(&self, data: &[u8]) -> Result<Vec<u8>, CasError> {
+        if !data.starts_with(ENCRYPTION_MAGIC) {
+            return Ok(data.to_vec());
+        }
+
+        let cipher = match &self.cipher {
+            Some(c) => c,
+            None => return Err(CasError::MissingKey),
+        };
+
+        let header_len = ENCRYPTION_MAGIC.len() + NONCE_LEN;
+        if data.len() < header_len {
+            return Err(CasError::Decryption);
+        }
+
+        let nonce_bytes: [u8; NONCE_LEN] = data[ENCRYPTION_MAGIC.len()..header_len]
+            .try_into()
+            .map_err(|_| CasError::Decryption)?;
+        let nonce = chacha20poly1305::XNonce::from(nonce_bytes);
+        let ciphertext = &data[header_len..];
+
+        cipher
+            .decrypt(&nonce, ciphertext)
+            .map_err(|_| CasError::Decryption)
     }
 
     fn path_for_hash(&self, hash: &str) -> Result<PathBuf, CasError> {
@@ -148,6 +246,71 @@ mod tests {
                 prop_assert_eq!(cas.get(first).unwrap(), data);
             }
         }
+    }
+
+    #[test]
+    fn encrypted_round_trip() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = [42u8; 32];
+        let cas = FsCas::with_key(dir.path(), &key);
+
+        let blob = b"secret data";
+        let hash = cas.put(blob).unwrap();
+        let retrieved = cas.get(&hash).unwrap();
+        assert_eq!(retrieved, blob);
+    }
+
+    #[test]
+    fn ciphertext_differs_from_plaintext() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = [42u8; 32];
+        let cas = FsCas::with_key(dir.path(), &key);
+
+        let blob = b"secret data that should be encrypted";
+        let hash = cas.put(blob).unwrap();
+
+        let on_disk_path = dir.path().join(&hash[0..2]).join(&hash[2..]);
+        let raw = std::fs::read(on_disk_path).unwrap();
+        assert_ne!(raw, blob);
+        assert!(raw.starts_with(b"ECAS"));
+    }
+
+    #[test]
+    fn backward_compat_reads_unencrypted() {
+        let dir = tempfile::tempdir().unwrap();
+        let plain_cas = FsCas::new(dir.path());
+        let blob = b"old plaintext blob";
+        let hash = plain_cas.put(blob).unwrap();
+
+        let key = [42u8; 32];
+        let encrypted_cas = FsCas::with_key(dir.path(), &key);
+        let retrieved = encrypted_cas.get(&hash).unwrap();
+        assert_eq!(retrieved, blob);
+    }
+
+    #[test]
+    fn encrypted_blob_without_key_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let key = [42u8; 32];
+        let cas_enc = FsCas::with_key(dir.path(), &key);
+
+        let blob = b"secret";
+        let hash = cas_enc.put(blob).unwrap();
+
+        let cas_plain = FsCas::new(dir.path());
+        let err = cas_plain.get(&hash).unwrap_err();
+        assert!(matches!(err, CasError::MissingKey));
+    }
+
+    #[test]
+    fn with_key_file_works() {
+        let dir = tempfile::tempdir().unwrap();
+        let key_path = dir.path().join("test.key");
+        std::fs::write(&key_path, [7u8; 32]).unwrap();
+
+        let cas = FsCas::with_key_file(dir.path().join("store"), &key_path).unwrap();
+        let hash = cas.put(b"via key file").unwrap();
+        assert_eq!(cas.get(&hash).unwrap(), b"via key file");
     }
 
     #[test]
