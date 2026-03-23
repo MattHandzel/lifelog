@@ -147,7 +147,95 @@ fn main() -> Result<(), Box<dyn Error>> {
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
         .type_attribute(
+            "lifelog.TransformSpec",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
             "lifelog.ScreenFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.BrowserFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.AudioFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.KeystrokeFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.ClipboardFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.ShellHistoryFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.WindowActivityFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.MouseFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.ProcessFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.CameraFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.WeatherFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.HyprlandFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.OcrFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.TranscriptionFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.EmbeddingFrame",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.HyprMonitor",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.HyprWorkspace",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.HyprClient",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.HyprDevice",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.HyprCursor",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.TimeQuality",
+            "#[derive(serde::Serialize, serde::Deserialize)]",
+        )
+        .type_attribute(
+            "lifelog.DataModality",
             "#[derive(serde::Serialize, serde::Deserialize)]",
         )
         .extern_path(".google.protobuf.Timestamp", "::pbjson_types::Timestamp")
