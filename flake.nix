@@ -78,9 +78,6 @@
             license = licenses.mit;
             maintainers = [maintainers.MattHandzel];
           };
-          preBuild = ''
-            cargo build
-          '';
         };
     in {
       lifelog-server = mkRustPackage {
