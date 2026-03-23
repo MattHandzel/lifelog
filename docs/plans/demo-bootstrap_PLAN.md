@@ -4,7 +4,7 @@
 Initialize the demo environment with valid credentials, persistent storage, and required transformations.
 
 ## Phase 1: Credential Generation
-1. Run `lifelog-server-backend init` (interactive) to generate:
+1. Run `lifelog-server init` (interactive) to generate:
    - Self-signed TLS certificates in `~/.config/lifelog/tls/`.
    - `LIFELOG_AUTH_TOKEN` and `LIFELOG_ENROLLMENT_TOKEN`.
    - The unified `lifelog-config.toml`.

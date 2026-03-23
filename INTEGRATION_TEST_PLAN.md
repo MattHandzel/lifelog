@@ -5,7 +5,7 @@
 ---
 
 ## 1. System Architecture & Context
-*   **Remote Server (Sink)**: Runs `lifelog-server-backend` on `192.168.0.177:7182`.
+*   **Remote Server (Sink)**: Runs `lifelog-server` on `192.168.0.177:7182`.
 *   **Laptop Client (Source)**: Runs `lifelog-collector` and `interface`.
 *   **Database**: PostgreSQL 16+ (Local to Server).
 *   **Security**: Mandatory TLS (Self-signed) + Bearer Token Auth + Pairing Handshake.

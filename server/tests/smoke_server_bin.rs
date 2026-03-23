@@ -47,7 +47,7 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
     let tls_dir = tempfile::tempdir().expect("tls tempdir");
     let (cert_path, key_path) = bin_e2e::write_test_tls_materials(tls_dir.path());
     let mut server_child = bin_e2e::ChildGuard::new(
-        Command::new(env!("CARGO_BIN_EXE_lifelog-server-backend"))
+        Command::new(env!("CARGO_BIN_EXE_lifelog-server"))
             .env("LIFELOG_HOST", "127.0.0.1")
             .env("LIFELOG_PORT", server_port.to_string())
             .env("LIFELOG_POSTGRES_INGEST_URL", &pg_test_url)

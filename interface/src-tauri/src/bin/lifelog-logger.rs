@@ -33,5 +33,5 @@ async fn main() {
     // The modules being referenced don't exist in the library
     // Instead we should be using the API client to communicate with the server
     println!("All modules will be handled by the server process.");
-    println!("This binary is deprecated. Please use the lifelog-server-backend instead.");
+    println!("This binary is deprecated. Please use the lifelog-server instead.");
 }

@@ -8,7 +8,7 @@ Use this file as the stable navigation surface. For deeper design notes, browse 
 
 - `common/`: shared Rust crates (types, config, utils, proto bindings, algorithms).
 - `collector/`: device-side data collection binary (`lifelog-collector`).
-- `server/`: backend crate (builds `lifelog-server-backend`).
+- `server/`: backend crate (builds `lifelog-server`).
 - `interface/`: Vite + React + TypeScript UI; Tauri app under `interface/src-tauri/`.
 - `proto/`: `.proto` definitions; Rust bindings generated via build scripts.
 - `docs/`: design notes and system documentation.

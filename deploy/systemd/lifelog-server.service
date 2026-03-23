@@ -16,7 +16,7 @@ Environment=LIFELOG_POSTGRES_INGEST_URL=postgresql://lifelog@127.0.0.1:5432/life
 Environment=LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS=16
 Environment=LIFELOG_CONFIG_PATH=/home/matth/Projects/lifelog/lifelog-config.toml
 Environment=RUST_LOG=info
-ExecStart=/usr/bin/env bash -lc 'exec nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend'
+ExecStart=/usr/bin/env bash -lc 'exec nix develop --command cargo run -p lifelog-server --bin lifelog-server'
 Restart=always
 RestartSec=5
 

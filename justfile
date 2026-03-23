@@ -66,11 +66,11 @@ validate-raw:
 
 # Start the server
 run-server:
-    nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend
+    nix develop --command cargo run -p lifelog-server --bin lifelog-server
 
 # Start the server with TLS (requires cert/key files)
 run-server-tls cert_path key_path:
-    LIFELOG_TLS_CERT_PATH={{cert_path}} LIFELOG_TLS_KEY_PATH={{key_path}} nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend
+    LIFELOG_TLS_CERT_PATH={{cert_path}} LIFELOG_TLS_KEY_PATH={{key_path}} nix develop --command cargo run -p lifelog-server --bin lifelog-server
 
 # Start the collector
 run-collector:
@@ -272,7 +272,7 @@ use-ai-to-implement-feature name ai="claude" model="" plan_file=("docs/plans/" +
 # Build release binaries and copy to /usr/local/bin
 install:
     nix develop --command cargo build --release -p lifelog-server -p lifelog-collector
-    sudo cp target/release/lifelog-server-backend /usr/local/bin/
+    sudo cp target/release/lifelog-server /usr/local/bin/
     sudo cp target/release/lifelog-collector /usr/local/bin/
     @echo "Binaries installed to /usr/local/bin/"
 

@@ -30,5 +30,5 @@ RUN apt-get update && apt-get install -y \
     libasound2 \
     libssl3 \
     && rm -rf /var/lib/apt/lists/*
-COPY --from=builder /app/target/release/lifelog-server-backend /usr/local/bin/lifelog-server
+COPY --from=builder /app/target/release/lifelog-server /usr/local/bin/lifelog-server
 ENTRYPOINT ["lifelog-server"]

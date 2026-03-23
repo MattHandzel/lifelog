@@ -90,7 +90,7 @@ just repoatlas-view
 - [Tesseract](https://tesseract-ocr.github.io/tessdoc/Installation.html) for OCR
 - PostgreSQL 16+ (required for migrated ingest/query paths)
 
-Run `nix develop --command cargo build --release` to build the project. This will create binaries in `target/release/` folder. It will create three binaries, one for the server, one for the collector and one for the interface. The server binary is `lifelog-server-backend`, the client binary is `lifelog-collector` and the interface binary is `lifelog-server-frontend`.
+Run `nix develop --command cargo build --release` to build the project. This will create binaries in `target/release/` folder. It will create three binaries, one for the server, one for the collector and one for the interface. The server binary is `lifelog-server`, the client binary is `lifelog-collector` and the interface binary is `lifelog-server-frontend`.
 
 Optionally, if you would like to only build a specific binary, you can run `nix develop --command cargo build --release -p <binary_name>` where `<binary_name>` is one of the three binaries mentioned above.
 

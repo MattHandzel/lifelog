@@ -8,7 +8,7 @@ description = "A project to log, process, and interact with various sources of d
 workspace = true
 
 [[bin]]
-name = "lifelog-server-backend"
+name = "lifelog-server"
 path = "src/main.rs"
 
 [[bin]]

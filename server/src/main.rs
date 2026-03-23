@@ -675,7 +675,7 @@ async fn run_init() -> Result<(), lifelog_core::LifelogError> {
     println!("Enrollment token: {}", enrollment_token);
     println!("Server cert SHA256 fingerprint: {}", cert_fp);
     println!(
-        "Next: source {} and run `lifelog-server-backend serve`",
+        "Next: source {} and run `lifelog-server serve`",
         paths.env_path.display()
     );
     Ok(())

@@ -132,7 +132,7 @@ In another terminal:
 just run-server
 ```
 
-This starts `lifelog-server-backend` (gRPC + gRPC-web).
+This starts `lifelog-server` (gRPC + gRPC-web).
 
 ## 6. Configure and Run Collector
 

@@ -95,16 +95,16 @@ query_count() {
 
 ensure_remote_server() {
   local running
-  running="$(ssh "$REMOTE_HOST" "pgrep -f 'target/debug/lifelog-server-backend' >/dev/null; echo \$?" 2>/dev/null || echo 1)"
+  running="$(ssh "$REMOTE_HOST" "pgrep -f 'target/debug/lifelog-server' >/dev/null; echo \$?" 2>/dev/null || echo 1)"
   if [[ "$running" == "0" ]]; then
     return
   fi
 
   echo "Remote server not running; starting it..."
-  ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && nohup env LIFELOG_HOST=0.0.0.0 LIFELOG_DB_USER=root LIFELOG_DB_PASS=root RUST_LOG=info nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend > /tmp/lifelog-server-remote.log 2>&1 < /dev/null &" >/dev/null
+  ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && nohup env LIFELOG_HOST=0.0.0.0 LIFELOG_DB_USER=root LIFELOG_DB_PASS=root RUST_LOG=info nix develop --command cargo run -p lifelog-server --bin lifelog-server > /tmp/lifelog-server-remote.log 2>&1 < /dev/null &" >/dev/null
 
   sleep 5
-  ssh "$REMOTE_HOST" "pgrep -f 'target/debug/lifelog-server-backend' >/dev/null" || {
+  ssh "$REMOTE_HOST" "pgrep -f 'target/debug/lifelog-server' >/dev/null" || {
     echo "Failed to start remote server. Check /tmp/lifelog-server-remote.log on $REMOTE_HOST" >&2
     exit 1
   }
