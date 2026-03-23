@@ -37,6 +37,7 @@ pub struct Server {
     pub policy: Arc<RwLock<ServerPolicy>>,
     pub transform_dag: Arc<TransformDag>,
     pub http_client: reqwest::Client,
+    pub egress_guard: crate::transform::egress::EgressGuard,
     pub skew_estimates: Arc<RwLock<HashMap<String, lifelog_core::time_skew::SkewEstimate>>>,
     pub skew_samples: Arc<RwLock<SkewSamples>>,
 }
@@ -371,6 +372,9 @@ impl Server {
         };
 
         let mut executors: Vec<Arc<dyn TransformExecutor>> = Vec::new();
+        let network_policy = config::load_network_policy_from_unified();
+        let startup_egress =
+            crate::transform::egress::EgressGuard::new(network_policy.allowed_hosts);
 
         for spec in &config.transforms {
             if !spec.enabled {
@@ -394,6 +398,19 @@ impl Server {
                     continue;
                 }
             };
+
+            let privacy_level = lifelog_core::PrivacyLevel::from_params(&spec.params);
+            if !spec.service_endpoint.is_empty() {
+                if let Err(e) = startup_egress.check(&spec.service_endpoint, privacy_level) {
+                    tracing::warn!(
+                        transform_id = %spec.id,
+                        endpoint = %spec.service_endpoint,
+                        error = %e,
+                        "Skipping transform: egress check failed"
+                    );
+                    continue;
+                }
+            }
 
             match transform_type {
                 "ocr" => {
@@ -495,6 +512,9 @@ impl Server {
             .build()
             .map_err(|e| LifelogError::Other(e.into()))?;
 
+        let network_policy = config::load_network_policy_from_unified();
+        let egress_guard = crate::transform::egress::EgressGuard::new(network_policy.allowed_hosts);
+
         Ok(Server {
             postgres_pool,
             cas,
@@ -504,6 +524,7 @@ impl Server {
             policy: Arc::new(RwLock::new(ServerPolicy::new(policy_config))),
             transform_dag,
             http_client,
+            egress_guard,
             skew_estimates: Arc::new(RwLock::new(HashMap::new())),
             skew_samples: Arc::new(RwLock::new(HashMap::new())),
         })
@@ -1021,6 +1042,7 @@ impl Server {
                 let pool_clone = self.postgres_pool.clone();
                 let dag = self.transform_dag.clone();
                 let http = self.http_client.clone();
+                let egress = self.egress_guard.clone();
 
                 tokio::spawn(async move {
                     let watermarks: std::sync::Arc<
@@ -1032,7 +1054,7 @@ impl Server {
                     );
 
                     let worker = crate::transform::worker::PipelineWorker::new(
-                        dag, watermarks, pool_clone, cas_clone, http, 50,
+                        dag, watermarks, pool_clone, cas_clone, http, egress, 50,
                     );
 
                     if let Err(e) = worker.poll_once().await {

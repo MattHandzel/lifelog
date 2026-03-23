@@ -9,6 +9,26 @@ mod server_config;
 pub use policy_config::*;
 pub use server_config::*;
 
+pub fn load_network_policy_from_unified() -> NetworkPolicy {
+    let path = env::var("LIFELOG_CONFIG_PATH")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| default_lifelog_config_path());
+    let Some(root) = load_toml_from_path(&path) else {
+        return NetworkPolicy::default();
+    };
+    let allowed_hosts = root
+        .get("server")
+        .and_then(|s| s.get("allowedHosts").or_else(|| s.get("allowed_hosts")))
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default();
+    NetworkPolicy { allowed_hosts }
+}
+
 // Re-export all config types from lifelog_types
 pub use lifelog_types::{
     AmbientConfig, AudioConfig, BrowserHistoryConfig, CameraConfig, ClipboardConfig,

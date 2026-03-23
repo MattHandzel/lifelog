@@ -1,7 +1,10 @@
 pub use lifelog_types::ServerConfig;
 
-/// TLS configuration for the server. Loaded from environment variables.
-/// This is Rust-only config (not proto) since cert paths are local deployment details.
+#[derive(Debug, Clone, Default)]
+pub struct NetworkPolicy {
+    pub allowed_hosts: Vec<String>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct TlsConfig {
     pub cert_path: Option<String>,
