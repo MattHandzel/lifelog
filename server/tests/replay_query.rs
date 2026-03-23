@@ -8,7 +8,7 @@ use lifelog_types::{BrowserFrame, ReplayRequest, ScreenFrame};
 use prost::Message;
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_replay_query_returns_ordered_steps_with_context() {
     let _ = tracing_subscriber::fmt::try_init();
 

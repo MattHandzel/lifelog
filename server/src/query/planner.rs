@@ -246,7 +246,6 @@ impl Planner {
                 format!("{} @@ {}", field, Self::quote_string(text))
             }
             Expression::TimeRange(start, end) => {
-                // SurrealDB datetime format
                 format!(
                     "t_canonical >= d'{}' AND t_canonical < d'{}'",
                     start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),

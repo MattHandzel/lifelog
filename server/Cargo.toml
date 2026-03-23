@@ -19,7 +19,7 @@ path = "src/main.rs"
 config = { path = "../common/config" }
 utils = { path = "../common/utils" }
 lifelog-core = {path = "../common/lifelog-core/"}
-lifelog-types = { path = "../common/lifelog-types", features = ["full", "surrealdb"] }
+lifelog-types = { path = "../common/lifelog-types", features = ["full"] }
 tokio = { version = "1.44.2", features = ["full", "macros", "rt-multi-thread"] }
 chrono = "0.4"
 thiserror = "2"
@@ -27,7 +27,6 @@ anyhow = {workspace = true}
 serde_json = "1.0"
 uuid = { version = "1", features = ["v4"] }
 clap = { version = "4.5.37", features = ["derive"] }
-surrealdb = {workspace = true}
 deadpool-postgres = "0.14"
 tokio-postgres = { version = "0.7", features = ["with-chrono-0_4", "with-uuid-1", "with-serde_json-1"] }
 async-trait = "0.1.88"

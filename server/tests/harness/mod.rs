@@ -12,7 +12,6 @@ use lifelog_server::server::{Server, ServerHandle};
 use lifelog_types::lifelog_server_service_client::LifelogServerServiceClient;
 use lifelog_types::lifelog_server_service_server::LifelogServerServiceServer;
 use std::path::PathBuf;
-use std::process::{Child, Command};
 use std::sync::Arc;
 use std::time::Duration;
 use tempfile::TempDir;
@@ -29,7 +28,7 @@ use device_client::DeviceClient;
 fn generate_test_tls_materials(dir: &std::path::Path) -> (PathBuf, PathBuf, String, String) {
     let cert_path = dir.join("test-cert.pem");
     let key_path = dir.join("test-key.pem");
-    let status = Command::new("openssl")
+    let status = std::process::Command::new("openssl")
         .args([
             "req",
             "-x509",
@@ -117,8 +116,6 @@ pub type TestClient =
 #[allow(dead_code)]
 pub struct TestContext {
     pub server_addr: String,
-    pub db_addr: String,
-    pub db_process: Child,
     #[allow(dead_code)]
     pub temp_dir: TempDir,
     pub client: TestClient,
@@ -128,7 +125,7 @@ pub struct TestContext {
     pub cas_path: PathBuf,
     tls_ca_path: PathBuf,
     server_port: u16,
-    db_port: u16,
+    pub pg_url: String,
 }
 
 impl TestContext {
@@ -140,35 +137,13 @@ impl TestContext {
     pub async fn new_with_faults(fault_controller: FaultController) -> Self {
         let _ = rustls::crypto::ring::default_provider().install_default();
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let db_port = portpicker::pick_unused_port().expect("No ports available");
         let server_port = portpicker::pick_unused_port().expect("No ports available");
 
-        let db_addr = format!("127.0.0.1:{}", db_port);
         let server_addr = format!("https://localhost:{}", server_port);
         let cas_path = temp_dir.path().join("cas");
         let (tls_cert_path, _tls_key_path, tls_cert_pem, tls_key_pem) =
             generate_test_tls_materials(temp_dir.path());
 
-        // Start SurrealDB
-        let db_process = Command::new("surreal")
-            .arg("start")
-            .arg("--user")
-            .arg("root")
-            .arg("--pass")
-            .arg("root")
-            .arg("--bind")
-            .arg(&db_addr)
-            .arg("memory")
-            .spawn()
-            .expect("Failed to start SurrealDB");
-
-        // Wait for DB to be ready
-        sleep(Duration::from_secs(5)).await;
-
-        // Integration tests run an ephemeral SurrealDB with root/root.
-        // The server requires these env vars (see server/src/server.rs).
-        std::env::set_var("LIFELOG_DB_USER", "root");
-        std::env::set_var("LIFELOG_DB_PASS", "root");
         std::env::set_var("LIFELOG_AUTH_TOKEN", "test-auth-token");
         std::env::set_var("LIFELOG_ENROLLMENT_TOKEN", "test-enrollment-token");
         std::env::set_var("LIFELOG_TLS_CA_CERT_PATH", &tls_cert_path);
@@ -203,7 +178,7 @@ impl TestContext {
         let config = ServerConfig {
             host: "127.0.0.1".to_string(),
             port: server_port as u32,
-            database_endpoint: db_addr.clone(),
+            database_endpoint: pg_test_url.clone(),
             database_name: "test_db".to_string(),
             server_name: "TestServer".to_string(),
             cas_path: cas_path.display().to_string(),
@@ -222,7 +197,6 @@ impl TestContext {
             server: handle_clone.clone(),
         };
 
-        // Start server background loop
         tokio::spawn(async move {
             handle_clone.r#loop().await;
         });
@@ -236,7 +210,6 @@ impl TestContext {
             enrollment_token: "test-enrollment-token".to_string(),
         };
 
-        // Spawn the gRPC server with fault injection layer
         tokio::spawn(async move {
             tonic::transport::Server::builder()
                 .layer(fault_layer)
@@ -251,7 +224,6 @@ impl TestContext {
                 .expect("Server failed");
         });
 
-        // Wait for server to be ready and fail fast if it never binds.
         sleep(Duration::from_millis(250)).await;
 
         let tls_config = ClientTlsConfig::new()
@@ -278,8 +250,6 @@ impl TestContext {
 
         Self {
             server_addr,
-            db_addr,
-            db_process,
             temp_dir,
             client,
             raw_client,
@@ -288,21 +258,18 @@ impl TestContext {
             cas_path,
             tls_ca_path: tls_cert_path,
             server_port,
-            db_port,
+            pg_url: pg_test_url,
         }
     }
 
-    /// Get a clone of the primary gRPC client.
     pub fn client(&self) -> TestClient {
         self.client.clone()
     }
 
-    /// Get a clone of an unauthenticated gRPC client.
     pub fn raw_client(&self) -> LifelogServerServiceClient<Channel> {
         self.raw_client.clone()
     }
 
-    /// Build a client authenticated with an arbitrary token.
     pub fn client_with_token(&self, token: &str) -> TestClient {
         LifelogServerServiceClient::with_interceptor(
             self.raw_channel.clone(),
@@ -310,7 +277,6 @@ impl TestContext {
         )
     }
 
-    /// Create N `DeviceClient` instances, each with a unique device_id.
     #[allow(dead_code)]
     pub fn create_device_clients(&self, n: usize) -> Vec<DeviceClient> {
         (0..n)
@@ -318,31 +284,17 @@ impl TestContext {
             .collect()
     }
 
-    /// Get a `FsCas` handle pointing to the server's CAS directory.
     #[allow(dead_code)]
     pub fn cas(&self) -> FsCas {
         FsCas::new(&self.cas_path)
     }
 
-    /// Get the server port (useful for reconnection scenarios).
     #[allow(dead_code)]
     pub fn server_port(&self) -> u16 {
         self.server_port
     }
 
-    /// Get the DB port (useful for direct DB assertions).
-    #[allow(dead_code)]
-    pub fn db_port(&self) -> u16 {
-        self.db_port
-    }
-
     pub fn tls_ca_path(&self) -> &std::path::Path {
         &self.tls_ca_path
-    }
-}
-
-impl Drop for TestContext {
-    fn drop(&mut self) {
-        let _ = self.db_process.kill();
     }
 }

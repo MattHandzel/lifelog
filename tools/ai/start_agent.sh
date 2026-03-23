@@ -26,9 +26,9 @@ case "$AI" in
         ;;
     gemini)
         if [ -n "$MODEL" ]; then
-            gemini --model "$MODEL" -y -i "$PROMPT"
+            gemini --model "$MODEL" -y -i "$PROMPT" --
         else
-            gemini -y -i -- "$PROMPT"
+            gemini -y -i "$PROMPT" --
         fi
         ;;
     claude)

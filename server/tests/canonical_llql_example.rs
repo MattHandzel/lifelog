@@ -4,12 +4,11 @@ mod harness;
 
 use chrono::{Duration, Utc};
 use harness::TestContext;
-use lifelog_core::{DataOrigin, DataOriginType};
 use lifelog_types::{AudioFrame, BrowserFrame, Query, QueryRequest};
 use prost::Message;
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_llql_canonical_example_audio_during_youtube_and_3b1b() {
     let _ = tracing_subscriber::fmt::try_init();
 
@@ -101,111 +100,38 @@ async fn test_llql_canonical_example_audio_during_youtube_and_3b1b() {
         .await
         .expect("Ingest browser failed");
 
-    // Seed an OcrRecord directly (collector-derived origin) so LLQL can resolve modality "Ocr".
-    // We create the table schema + catalog entry to mimic the transform pipeline output.
-    let db = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(&ctx.db_addr)
+    // Seed an OcrRecord directly into the frames table so LLQL can resolve modality "Ocr".
+    let (pg_client, pg_conn) = tokio_postgres::connect(&ctx.pg_url, tokio_postgres::NoTls)
         .await
-        .expect("DB Connect failed");
-    db.signin(surrealdb::opt::auth::Root {
-        username: "root",
-        password: "root",
-    })
-    .await
-    .expect("DB Signin failed");
-    db.use_ns("lifelog")
-        .use_db("test_db")
-        .await
-        .expect("DB Select failed");
-
-    let screen_origin = DataOrigin::new(
-        DataOriginType::DeviceId(collector_id.to_string()),
-        "Screen".to_string(),
-    );
-    let ocr_origin = DataOrigin::new(
-        DataOriginType::DataOrigin(Box::new(screen_origin.clone())),
-        "Ocr".to_string(),
-    );
-    let ocr_table = ocr_origin.get_table_name();
-
-    // Text analyzer required for SEARCH indexes.
-    db.query(
-        "DEFINE ANALYZER IF NOT EXISTS lifelog_text TOKENIZERS blank, class FILTERS lowercase, ascii, snowball(english);",
-    )
-    .await
-    .expect("analyzer ddl failed")
-    .check()
-    .expect("analyzer ddl check failed");
-
-    // Create Ocr schema (mirrors server/src/schema.rs for DataModality::Ocr).
-    let ocr_ddl = format!(
-        r#"
-        DEFINE TABLE `{}` SCHEMAFULL;
-        DEFINE FIELD uuid      ON `{}` TYPE string;
-        DEFINE FIELD timestamp ON `{}` TYPE datetime;
-        DEFINE FIELD text      ON `{}` TYPE string;
-        DEFINE FIELD t_ingest    ON `{}` TYPE option<datetime>;
-        DEFINE FIELD t_canonical ON `{}` TYPE option<datetime>;
-        DEFINE FIELD t_end       ON `{}` TYPE option<datetime>;
-        DEFINE FIELD time_quality ON `{}` TYPE option<string>;
-        DEFINE INDEX `{}_ts_idx` ON `{}` FIELDS timestamp;
-        DEFINE INDEX `{}_tcanon_idx` ON `{}` FIELDS t_canonical;
-        DEFINE INDEX `{}_tend_idx` ON `{}` FIELDS t_end;
-        DEFINE INDEX `{}_text_search` ON `{}` FIELDS text SEARCH ANALYZER lifelog_text BM25;
-        "#,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-        ocr_table,
-    );
-
-    db.query(ocr_ddl)
-        .await
-        .expect("ocr schema failed")
-        .check()
-        .expect("ocr schema check failed");
-
-    // Register derived origin in catalog using the same representation as ensure_table_schema.
-    // For derived origins, `origin` is the parent table name.
-    let _ = db
-        .query(
-            "UPSERT catalog SET origin = $origin, modality = $modality WHERE origin = $origin AND modality = $modality",
-        )
-        .bind(("origin", screen_origin.get_table_name()))
-        .bind(("modality", "Ocr".to_string()))
-        .await
-        .expect("catalog upsert failed");
+        .expect("connect to test postgres");
+    tokio::spawn(pg_conn);
 
     let ocr_uuid = lifelog_core::Uuid::new_v4().to_string();
     let ocr_ts = base + Duration::seconds(8);
-    let ocr_record = lifelog_types::OcrRecord {
-        uuid: ocr_uuid,
-        timestamp: ocr_ts.into(),
-        text: "Watching 3Blue1Brown".to_string(),
-        t_ingest: Some(Utc::now().into()),
-        t_canonical: Some(ocr_ts.into()),
-        t_end: Some(ocr_ts.into()),
-        time_quality: Some("good".to_string()),
-    };
 
-    let _created: Option<lifelog_types::OcrRecord> = db
-        .upsert((&ocr_table, &ocr_record.uuid))
-        .content(ocr_record)
+    let payload = serde_json::json!({
+        "uuid": ocr_uuid,
+        "text": "Watching 3Blue1Brown",
+        "timestamp": ocr_ts.to_rfc3339(),
+    });
+
+    pg_client
+        .execute(
+            "INSERT INTO frames (id, collector_id, stream_id, modality, t_canonical, t_end, t_ingest, payload, indexed, search_doc)
+             VALUES ($1::uuid, $2, 'ocr', 'Ocr', $3, $3, now(), $4, true,
+                     to_tsvector('english', $5))",
+            &[
+                &lifelog_core::Uuid::new_v4(),
+                &collector_id,
+                &ocr_ts,
+                &payload,
+                &"Watching 3Blue1Brown".to_string(),
+            ],
+        )
         .await
-        .expect("insert ocr record failed");
+        .expect("insert ocr frame failed");
 
-    // Give SurrealDB a moment to update search indexes.
+    // Give Postgres a moment to update indexes.
     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 
     // Execute the canonical cross-modal query via LLQL.

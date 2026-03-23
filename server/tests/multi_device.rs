@@ -7,7 +7,7 @@ use harness::TestContext;
 use std::sync::Arc;
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_multi_device_simulation() {
     let ctx = Arc::new(TestContext::new().await);
     let num_devices = 5;
@@ -50,7 +50,7 @@ async fn test_multi_device_simulation() {
 }
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_10_devices_concurrent() {
     let ctx = Arc::new(TestContext::new().await);
     let num_devices = 10;
@@ -97,7 +97,7 @@ async fn test_10_devices_concurrent() {
 }
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_device_isolation() {
     let ctx = TestContext::new().await;
     let chunk_size = 64;
@@ -143,7 +143,7 @@ async fn test_device_isolation() {
 }
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_registration_before_upload() {
     let ctx = TestContext::new().await;
     let mut device = harness::device_client::DeviceClient::new("unregistered", ctx.client());

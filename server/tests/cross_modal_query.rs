@@ -9,7 +9,7 @@ use lifelog_types::{BrowserFrame, GetDataRequest, Query, QueryRequest, ScreenFra
 use prost::Message;
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_cross_modal_query() {
     let _ = tracing_subscriber::fmt::try_init();
     let ctx = TestContext::new().await;
@@ -96,28 +96,24 @@ async fn test_cross_modal_query() {
     // Wait for indexing
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-    // DEBUG: check if record exists directly
-    let db = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(&ctx.db_addr)
+    // DEBUG: check if record exists directly in Postgres
+    let (pg_client, pg_conn) = tokio_postgres::connect(&ctx.pg_url, tokio_postgres::NoTls)
         .await
-        .expect("DB Connect failed");
-    db.signin(surrealdb::opt::auth::Root {
-        username: "root",
-        password: "root",
-    })
-    .await
-    .expect("DB Signin failed");
-    db.use_ns("lifelog")
-        .use_db("test_db")
-        .await
-        .expect("DB Select failed");
+        .expect("connect to test postgres");
+    tokio::spawn(pg_conn);
 
-    let table = format!("{}:Browser", collector_id);
-    let mut db_resp = db
-        .query(format!("SELECT * FROM `{table}`"))
+    let rows = pg_client
+        .query(
+            "SELECT id, modality, payload FROM frames WHERE collector_id = $1 AND modality = 'Browser'",
+            &[&collector_id],
+        )
         .await
         .expect("Debug query failed");
-    let all_browser: Vec<lifelog_types::BrowserRecord> = db_resp.take(0).expect("Take failed");
-    println!("DEBUG: All browser records in {}: {:?}", table, all_browser);
+    println!(
+        "DEBUG: Browser frames for {}: {} rows",
+        collector_id,
+        rows.len()
+    );
 
     // 3. Perform Unified Search via Query and GetData
 

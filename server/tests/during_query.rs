@@ -1,24 +1,16 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
-#[cfg(feature = "surrealdb-tests")]
 mod harness;
 
-#[cfg(feature = "surrealdb-tests")]
 use chrono::{Duration, Utc};
-#[cfg(feature = "surrealdb-tests")]
 use harness::TestContext;
-#[cfg(feature = "surrealdb-tests")]
 use lifelog_core::{DataOrigin, DataOriginType};
-#[cfg(feature = "surrealdb-tests")]
 use lifelog_server::query::{ast, executor, planner};
-#[cfg(feature = "surrealdb-tests")]
 use lifelog_types::{AudioFrame, ScreenFrame};
-#[cfg(feature = "surrealdb-tests")]
 use prost::Message;
 
-#[cfg(feature = "surrealdb-tests")]
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_during_returns_target_records_inside_source_intervals() {
     let _ = tracing_subscriber::fmt::try_init();
 
@@ -172,19 +164,9 @@ async fn test_during_returns_target_records_inside_source_intervals() {
 
     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 
-    let db = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(&ctx.db_addr)
+    let pg_pool = lifelog_server::postgres::connect_pool(&ctx.pg_url, 2)
         .await
-        .expect("DB Connect failed");
-    db.signin(surrealdb::opt::auth::Root {
-        username: "root",
-        password: "root",
-    })
-    .await
-    .expect("DB Signin failed");
-    db.use_ns("lifelog")
-        .use_db("test_db")
-        .await
-        .expect("DB Select failed");
+        .expect("connect to test postgres pool");
 
     let screen_origin = DataOrigin::new(
         DataOriginType::DeviceId(collector_id.to_string()),
@@ -208,7 +190,7 @@ async fn test_during_returns_target_records_inside_source_intervals() {
     };
 
     let plan = planner::Planner::plan(&query, &[screen_origin.clone(), audio_origin.clone()]);
-    let keys = executor::execute(&db, plan)
+    let keys = executor::execute_postgres(&pg_pool, plan)
         .await
         .expect("DURING query execution failed");
 
@@ -224,9 +206,8 @@ async fn test_during_returns_target_records_inside_source_intervals() {
     );
 }
 
-#[cfg(feature = "surrealdb-tests")]
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_during_conjunction_intersects_intervals() {
     let _ = tracing_subscriber::fmt::try_init();
 
@@ -383,19 +364,9 @@ async fn test_during_conjunction_intersects_intervals() {
 
     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 
-    let db = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(&ctx.db_addr)
+    let pg_pool = lifelog_server::postgres::connect_pool(&ctx.pg_url, 2)
         .await
-        .expect("DB Connect failed");
-    db.signin(surrealdb::opt::auth::Root {
-        username: "root",
-        password: "root",
-    })
-    .await
-    .expect("DB Signin failed");
-    db.use_ns("lifelog")
-        .use_db("test_db")
-        .await
-        .expect("DB Select failed");
+        .expect("connect to test postgres pool");
 
     let screen_origin = DataOrigin::new(
         DataOriginType::DeviceId(collector_id.to_string()),
@@ -431,7 +402,7 @@ async fn test_during_conjunction_intersects_intervals() {
     };
 
     let plan = planner::Planner::plan(&query, &[screen_origin.clone(), audio_origin.clone()]);
-    let keys = executor::execute(&db, plan)
+    let keys = executor::execute_postgres(&pg_pool, plan)
         .await
         .expect("DURING conjunction query execution failed");
 
@@ -447,9 +418,8 @@ async fn test_during_conjunction_intersects_intervals() {
     );
 }
 
-#[cfg(feature = "surrealdb-tests")]
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_during_interval_target_overlaps_point_sources() {
     let _ = tracing_subscriber::fmt::try_init();
 
@@ -538,19 +508,9 @@ async fn test_during_interval_target_overlaps_point_sources() {
 
     tokio::time::sleep(std::time::Duration::from_millis(250)).await;
 
-    let db = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(&ctx.db_addr)
+    let pg_pool = lifelog_server::postgres::connect_pool(&ctx.pg_url, 2)
         .await
-        .expect("DB Connect failed");
-    db.signin(surrealdb::opt::auth::Root {
-        username: "root",
-        password: "root",
-    })
-    .await
-    .expect("DB Signin failed");
-    db.use_ns("lifelog")
-        .use_db("test_db")
-        .await
-        .expect("DB Select failed");
+        .expect("connect to test postgres pool");
 
     let screen_origin = DataOrigin::new(
         DataOriginType::DeviceId(collector_id.to_string()),
@@ -574,7 +534,7 @@ async fn test_during_interval_target_overlaps_point_sources() {
     };
 
     let plan = planner::Planner::plan(&query, &[screen_origin, audio_origin.clone()]);
-    let keys = executor::execute(&db, plan)
+    let keys = executor::execute_postgres(&pg_pool, plan)
         .await
         .expect("DURING interval-target query execution failed");
 

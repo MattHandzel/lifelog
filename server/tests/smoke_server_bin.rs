@@ -9,45 +9,38 @@ use std::process::{Command, Stdio};
 use std::time::Duration;
 use tokio::time::{sleep, timeout};
 
-use bin_e2e::{pick_unused_port, sha256_hex, wait_for_surreal_ws_ready, wait_for_tcp_listen};
+use bin_e2e::{pick_unused_port, sha256_hex, wait_for_tcp_listen};
 
 #[tokio::test]
 async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
     // Realistic end-to-end test:
-    // - starts SurrealDB (memory) as an external process
-    // - starts the actual server backend binary
+    // - starts the actual server backend binary (using PostgreSQL)
     // - uploads Audio + Keystroke frames over gRPC (same API collectors use)
     // - queries by LLQL and fetches results via GetData
 
     let _ = tracing_subscriber::fmt::try_init();
 
-    let db_port = pick_unused_port();
     let server_port = pick_unused_port();
-    let db_addr = format!("127.0.0.1:{db_port}");
     let server_addr = format!("https://localhost:{server_port}");
     let server_tcp_addr = format!("127.0.0.1:{server_port}");
 
-    // Start SurrealDB (in-memory, ephemeral).
-    let mut db_child = bin_e2e::ChildGuard::new(
-        Command::new("surreal")
-            .arg("start")
-            .arg("--user")
-            .arg("root")
-            .arg("--pass")
-            .arg("root")
-            .arg("--bind")
-            .arg(&db_addr)
-            .arg("memory")
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .expect("spawn surrealdb"),
-    );
-
-    wait_for_surreal_ws_ready(&db_addr, Duration::from_secs(10))
-        .await
-        .expect("surrealdb should accept ws connections");
+    let pg_url = std::env::var("LIFELOG_TEST_PG_URL")
+        .unwrap_or_else(|_| "host=/run/postgresql dbname=postgres".into());
+    let test_db_name = format!("lifelog_smoke_{server_port}");
+    {
+        let (pg_client, pg_conn) = tokio_postgres::connect(&pg_url, tokio_postgres::NoTls)
+            .await
+            .expect("connect to postgres for test DB setup");
+        tokio::spawn(pg_conn);
+        let _ = pg_client
+            .execute(&format!("DROP DATABASE IF EXISTS \"{test_db_name}\""), &[])
+            .await;
+        pg_client
+            .execute(&format!("CREATE DATABASE \"{test_db_name}\""), &[])
+            .await
+            .expect("create test database");
+    }
+    let pg_test_url = format!("host=/run/postgresql dbname={test_db_name}");
 
     // Start server backend binary.
     let cas_dir = tempfile::tempdir().expect("tempdir");
@@ -57,12 +50,8 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
         Command::new(env!("CARGO_BIN_EXE_lifelog-server-backend"))
             .env("LIFELOG_HOST", "127.0.0.1")
             .env("LIFELOG_PORT", server_port.to_string())
-            .env("LIFELOG_DB_ENDPOINT", db_addr.clone())
+            .env("LIFELOG_POSTGRES_INGEST_URL", &pg_test_url)
             .env("LIFELOG_CAS_PATH", cas_dir.path())
-            // Server requires these for SurrealDB auth.
-            .env("LIFELOG_DB_USER", "root")
-            .env("LIFELOG_DB_PASS", "root")
-            // Security hardening: provide dummy auth.
             .env("LIFELOG_AUTH_TOKEN", "smoke-test-token")
             .env("LIFELOG_ENROLLMENT_TOKEN", "smoke-enrollment-token")
             .env("LIFELOG_TLS_CERT_PATH", &cert_path)
@@ -85,17 +74,10 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
             .expect("take server child")
             .wait_with_output()
             .expect("read server output after failure");
-        let db_out = db_child
-            .take_child()
-            .expect("take surrealdb child")
-            .wait_with_output()
-            .expect("read surrealdb output after failure");
         panic!(
-            "server should listen: {e}\nserver stdout:\n{}\nserver stderr:\n{}\ndb stdout:\n{}\ndb stderr:\n{}",
+            "server should listen: {e}\nserver stdout:\n{}\nserver stderr:\n{}",
             String::from_utf8_lossy(&server_out.stdout),
             String::from_utf8_lossy(&server_out.stderr),
-            String::from_utf8_lossy(&db_out.stdout),
-            String::from_utf8_lossy(&db_out.stderr),
         );
     }
 
@@ -200,7 +182,7 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
         .into_inner();
     assert!(ack.acked_offset > 0, "audio ack should advance");
 
-    // Give SurrealDB a moment for SEARCH indexes (keystrokes table has BM25 on text).
+    // Give Postgres a moment for search indexes.
     sleep(Duration::from_millis(250)).await;
 
     // Query keystrokes back via LLQL (exercises catalog resolution + query planner + executor).
@@ -248,5 +230,4 @@ async fn server_binary_e2e_audio_and_keystrokes_roundtrip() {
 
     // Cleanup processes.
     drop(server_child);
-    drop(db_child);
 }

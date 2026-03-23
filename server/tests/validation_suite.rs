@@ -16,11 +16,10 @@ use prost::Message;
 use tonic::Request;
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn test_harness_smoke() {
     let ctx = TestContext::new().await;
     println!("Server address: {}", ctx.server_addr);
-    // ctx dropped here kills surrealdb
 }
 
 #[test]
@@ -36,7 +35,7 @@ fn it_060_canonical_time_across_devices() {}
 fn it_080_crash_restart_durability() {}
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn it_090_resume_upload_with_byte_offsets() {
     let ctx = TestContext::new().await;
     let mut client = ctx.client();
@@ -105,7 +104,7 @@ async fn it_090_resume_upload_with_byte_offsets() {
 }
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn it_081_ack_implies_queryable() {
     // Enable OCR transform so that ScreenFrame ingestion sets indexed=false and gates the ACK.
     std::env::set_var(
@@ -167,49 +166,29 @@ async fn it_081_ack_implies_queryable() {
     );
 
     // 2. Simulate "Indexer" completing work.
-    // We manually flip 'indexed' to true in SurrealDB for this chunk.
-    let db = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(&ctx.db_addr)
+    // We manually flip 'indexed' to true in Postgres for this chunk.
+    let (pg_client, pg_conn) = tokio_postgres::connect(&ctx.pg_url, tokio_postgres::NoTls)
         .await
-        .expect("DB Connect failed");
-    db.signin(surrealdb::opt::auth::Root {
-        username: "root",
-        password: "root",
-    })
-    .await
-    .expect("DB Signin failed");
-    db.use_ns("lifelog")
-        .use_db("test_db")
-        .await
-        .expect("DB Select failed");
+        .expect("connect to test postgres");
+    tokio::spawn(pg_conn);
 
     let id = format!("{}_{}_{}_{}", collector_id, stream_id, session_id, 0);
 
-    #[derive(serde::Deserialize, serde::Serialize)]
-    struct RawRec {
-        indexed: bool,
-    }
-
-    // Check it exists first
-    let mut q_resp = db
-        .query("SELECT * FROM upload_chunks WHERE id = type::thing('upload_chunks', $id)")
-        .bind(("id", id.clone()))
+    let rows = pg_client
+        .query("SELECT indexed FROM upload_chunks WHERE id = $1", &[&id])
         .await
         .expect("Select failed");
-    let results: Vec<RawRec> = q_resp.take(0).expect("Take failed");
-    assert!(!results.is_empty(), "Chunk record should exist");
+    assert!(!rows.is_empty(), "Chunk record should exist");
 
-    // Update to indexed=true
-    let _updated: Vec<RawRec> = db
-        .query(
-            "UPDATE upload_chunks SET indexed = true WHERE id = type::thing('upload_chunks', $id)",
+    let updated = pg_client
+        .execute(
+            "UPDATE upload_chunks SET indexed = true WHERE id = $1",
+            &[&id],
         )
-        .bind(("id", id.clone()))
         .await
-        .expect("Update failed")
-        .take(0)
-        .expect("Take failed");
+        .expect("Update failed");
     assert!(
-        !_updated.is_empty(),
+        updated > 0,
         "Update should have affected at least one record"
     );
 
@@ -246,7 +225,7 @@ fn it_130_ui_query_cancellation() {}
 fn it_140_tls_and_pairing_enforcement() {}
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn it_141_rejects_plaintext_grpc() {
     let ctx = TestContext::new().await;
     let plaintext = format!("http://127.0.0.1:{}", ctx.server_port());
@@ -267,7 +246,7 @@ async fn it_141_rejects_plaintext_grpc() {
 }
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn it_142_rejects_missing_or_invalid_auth_tokens() {
     let ctx = TestContext::new().await;
 
@@ -287,7 +266,7 @@ async fn it_142_rejects_missing_or_invalid_auth_tokens() {
 }
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB"]
+#[ignore = "integration test: requires PostgreSQL"]
 async fn it_143_pairing_accepts_enrollment_token_and_client_hint() {
     let ctx = TestContext::new().await;
 

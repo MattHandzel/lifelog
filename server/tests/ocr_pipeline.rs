@@ -10,7 +10,7 @@ use prost::Message;
 use std::time::Duration;
 
 #[tokio::test]
-#[ignore = "integration test: requires SurrealDB and Tesseract"]
+#[ignore = "integration test: requires PostgreSQL and Tesseract"]
 async fn test_ocr_transformation_pipeline() {
     let _ = tracing_subscriber::fmt::try_init();
     let ctx = TestContext::new().await;
@@ -75,36 +75,28 @@ async fn test_ocr_transformation_pipeline() {
     );
     let table = destination_origin.get_table_name();
 
-    let db = surrealdb::Surreal::new::<surrealdb::engine::remote::ws::Ws>(&ctx.db_addr)
+    let (pg_client, pg_conn) = tokio_postgres::connect(&ctx.pg_url, tokio_postgres::NoTls)
         .await
-        .expect("DB Connect failed");
-    db.signin(surrealdb::opt::auth::Root {
-        username: "root",
-        password: "root",
-    })
-    .await
-    .expect("DB Signin failed");
-    db.use_ns("lifelog")
-        .use_db("test_db")
-        .await
-        .expect("DB Select failed");
+        .expect("connect to test postgres");
+    tokio::spawn(pg_conn);
 
-    println!("Waiting for OCR frame in table: {}", table);
+    println!("Waiting for OCR frame derived from source screen frame");
 
     let frame_uuid = frame.uuid.clone();
 
     for i in 0..20 {
         tokio::time::sleep(Duration::from_secs(1)).await;
 
-        let mut response = db
-            .query(format!("SELECT count() FROM `{table}` WHERE uuid = $uuid"))
-            .bind(("uuid", frame_uuid.clone()))
+        let rows = pg_client
+            .query(
+                "SELECT COUNT(*) AS cnt FROM frames WHERE modality = 'Ocr' AND payload->>'uuid' = $1",
+                &[&frame_uuid],
+            )
             .await
             .expect("Query failed");
 
-        let results: Vec<serde_json::Value> = response.take(0).expect("Take failed");
-        if let Some(count_obj) = results.first() {
-            let count = count_obj.get("count").and_then(|v| v.as_u64()).unwrap_or(0);
+        if let Some(row) = rows.first() {
+            let count: i64 = row.get(0);
             if count > 0 {
                 println!("OCR result found after {}ms", i * 1000);
                 success = true;

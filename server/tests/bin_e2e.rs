@@ -89,30 +89,3 @@ impl Drop for ChildGuard {
         }
     }
 }
-
-pub async fn wait_for_surreal_ws_ready(addr: &str, timeout: Duration) -> Result<(), String> {
-    use surrealdb::engine::remote::ws::Ws;
-    use surrealdb::opt::auth::Root;
-    use surrealdb::Surreal;
-
-    let deadline = std::time::Instant::now() + timeout;
-    loop {
-        if let Ok(db) = Surreal::new::<Ws>(addr).await {
-            let signed = db
-                .signin(Root {
-                    username: "root",
-                    password: "root",
-                })
-                .await;
-            if signed.is_ok() {
-                return Ok(());
-            }
-        }
-
-        if std::time::Instant::now() >= deadline {
-            return Err(format!("timed out waiting for surreal ws ready at {addr}"));
-        }
-
-        tokio::time::sleep(Duration::from_millis(100)).await;
-    }
-}

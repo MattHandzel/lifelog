@@ -67,7 +67,7 @@ async fn test_performance_suite_smoke() {
         ingest_throughput, ingest_duration
     );
 
-    // 2. Wait for indexing (SurrealDB memory KVS is fast but let's give it a bit)
+    // 2. Wait for indexing
     tokio::time::sleep(Duration::from_millis(500)).await;
 
     // 3. Measure Query Latency
