@@ -803,6 +803,30 @@ async fn run_join(server_url: String, yes: bool) -> Result<(), lifelog_core::Lif
     Ok(())
 }
 
+fn check_disk_space(path: &str) {
+    let output = std::process::Command::new("df")
+        .arg("-B1")
+        .arg(path)
+        .output();
+    if let Ok(out) = output {
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        if let Some(line) = stdout.lines().nth(1) {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 4 {
+                if let Ok(avail) = parts[3].parse::<u64>() {
+                    if avail < 1_073_741_824 {
+                        tracing::warn!(
+                            path = %path,
+                            available_bytes = avail,
+                            "CAS directory has less than 1 GB of free disk space"
+                        );
+                    }
+                }
+            }
+        }
+    }
+}
+
 async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
@@ -832,6 +856,7 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         config.cas_path = cas;
     }
     let server = LifelogServer::new(&config).await?;
+    check_disk_space(&config.cas_path);
 
     let addr = format!("{}:{}", config.host, config.port).parse()?;
 
@@ -851,6 +876,30 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     let server_handle =
         LifelogServerHandle::new(std::sync::Arc::new(tokio::sync::RwLock::new(server)));
     let server_handle2 = server_handle.clone();
+
+    let health_handle = server_handle.clone();
+    let health_reporter_bg = health_reporter.clone();
+    tokio::task::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(15));
+        loop {
+            interval.tick().await;
+            let server = health_handle.server.read().await;
+            let status = match server.postgres_pool.get().await {
+                Ok(client) => match client.execute("SELECT 1", &[]).await {
+                    Ok(_) => tonic_health::ServingStatus::Serving,
+                    Err(e) => {
+                        tracing::warn!(error = %e, "health check: postgres query failed");
+                        tonic_health::ServingStatus::NotServing
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!(error = %e, "health check: postgres pool unavailable");
+                    tonic_health::ServingStatus::NotServing
+                }
+            };
+            health_reporter_bg.set_service_status("", status).await;
+        }
+    });
 
     let loop_handle = server_handle.clone();
     tokio::task::spawn(async move {
