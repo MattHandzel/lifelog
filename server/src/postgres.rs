@@ -1,6 +1,4 @@
 use lifelog_core::LifelogError;
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use tokio_postgres::NoTls;
 
@@ -11,9 +9,33 @@ pub fn is_postgres_uri(endpoint: &str) -> bool {
     trimmed.starts_with("postgres://") || trimmed.starts_with("postgresql://")
 }
 
-pub fn migrations_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("migrations")
+struct EmbeddedMigration {
+    version: &'static str,
+    sql: &'static str,
 }
+
+const MIGRATIONS: &[EmbeddedMigration] = &[
+    EmbeddedMigration {
+        version: "20260303143000_init_postgres.sql",
+        sql: include_str!("../migrations/20260303143000_init_postgres.sql"),
+    },
+    EmbeddedMigration {
+        version: "20260322000000_transform_pipeline.sql",
+        sql: include_str!("../migrations/20260322000000_transform_pipeline.sql"),
+    },
+    EmbeddedMigration {
+        version: "20260323000000_unified_frames.sql",
+        sql: include_str!("../migrations/20260323000000_unified_frames.sql"),
+    },
+    EmbeddedMigration {
+        version: "20260323100000_migrate_to_frames.sql",
+        sql: include_str!("../migrations/20260323100000_migrate_to_frames.sql"),
+    },
+    EmbeddedMigration {
+        version: "20260323200000_drop_legacy_tables.sql",
+        sql: include_str!("../migrations/20260323200000_drop_legacy_tables.sql"),
+    },
+];
 
 pub async fn connect_pool(
     database_url: &str,
@@ -55,24 +77,11 @@ pub async fn run_migrations(pool: &PostgresPool) -> Result<(), LifelogError> {
         .await
         .map_err(|e| LifelogError::Database(format!("postgres migration bootstrap failed: {e}")))?;
 
-    let mut files = std::fs::read_dir(migrations_dir())
-        .map_err(|e| LifelogError::Database(format!("read migrations dir failed: {e}")))?
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| p.extension() == Some(OsStr::new("sql")))
-        .collect::<Vec<_>>();
-    files.sort();
-
-    for path in files {
-        let version = path
-            .file_name()
-            .and_then(OsStr::to_str)
-            .ok_or_else(|| LifelogError::Database("invalid migration filename".to_string()))?
-            .to_string();
+    for migration in MIGRATIONS {
         let already = client
             .query_opt(
                 "SELECT version FROM schema_migrations WHERE version = $1",
-                &[&version],
+                &[&migration.version],
             )
             .await
             .map_err(|e| LifelogError::Database(format!("migration query failed: {e}")))?;
@@ -80,25 +89,32 @@ pub async fn run_migrations(pool: &PostgresPool) -> Result<(), LifelogError> {
             continue;
         }
 
-        let sql = std::fs::read_to_string(&path).map_err(|e| {
-            LifelogError::Database(format!("read migration {} failed: {e}", path.display()))
-        })?;
-
         let tx = client
             .transaction()
             .await
             .map_err(|e| LifelogError::Database(format!("migration tx begin failed: {e}")))?;
-        tx.batch_execute(&sql).await.map_err(|e| {
-            LifelogError::Database(format!("apply migration {version} failed: {e}"))
+        tx.batch_execute(migration.sql).await.map_err(|e| {
+            LifelogError::Database(format!(
+                "apply migration {} failed: {e}",
+                migration.version
+            ))
         })?;
         tx.execute(
             "INSERT INTO schema_migrations(version) VALUES ($1)",
-            &[&version],
+            &[&migration.version],
         )
         .await
-        .map_err(|e| LifelogError::Database(format!("record migration {version} failed: {e}")))?;
+        .map_err(|e| {
+            LifelogError::Database(format!(
+                "record migration {} failed: {e}",
+                migration.version
+            ))
+        })?;
         tx.commit().await.map_err(|e| {
-            LifelogError::Database(format!("commit migration {version} failed: {e}"))
+            LifelogError::Database(format!(
+                "commit migration {} failed: {e}",
+                migration.version
+            ))
         })?;
     }
 
