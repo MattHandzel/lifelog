@@ -17,16 +17,8 @@ interface TimelineDashboardProps {
 }
 
 export default function TimelineDashboard({ collectorId = null }: TimelineDashboardProps): JSX.Element {
-  const [startDate, setStartDate] = useState<string>(() => {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d.toISOString().slice(0, 16);
-  });
-  const [endDate, setEndDate] = useState<string>(() => {
-    const d = new Date();
-    d.setHours(23, 59, 59, 0);
-    return d.toISOString().slice(0, 16);
-  });
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [textQuery, setTextQuery] = useState<string>('');
   const [queryMode, setQueryMode] = useState<'text' | 'llql'>('text');
   const [results, setResults] = useState<TimelineEntry[]>([]);
