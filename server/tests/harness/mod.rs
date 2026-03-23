@@ -173,6 +173,26 @@ impl TestContext {
         std::env::set_var("LIFELOG_ENROLLMENT_TOKEN", "test-enrollment-token");
         std::env::set_var("LIFELOG_TLS_CA_CERT_PATH", &tls_cert_path);
 
+        let test_db_name = format!("lifelog_test_{}", server_port);
+        let pg_admin_url = std::env::var("LIFELOG_TEST_PG_URL")
+            .unwrap_or_else(|_| "host=/run/postgresql dbname=postgres".into());
+        {
+            let (pg_client, pg_conn) =
+                tokio_postgres::connect(&pg_admin_url, tokio_postgres::NoTls)
+                    .await
+                    .expect("Failed to connect to postgres for test DB setup");
+            tokio::spawn(pg_conn);
+            let _ = pg_client
+                .execute(&format!("DROP DATABASE IF EXISTS \"{test_db_name}\""), &[])
+                .await;
+            pg_client
+                .execute(&format!("CREATE DATABASE \"{test_db_name}\""), &[])
+                .await
+                .expect("Failed to create test database");
+        }
+        let pg_test_url = format!("host=/run/postgresql dbname={test_db_name}");
+        std::env::set_var("LIFELOG_POSTGRES_INGEST_URL", &pg_test_url);
+
         let mut transforms = Vec::new();
         if let Ok(v) = std::env::var("LIFELOG_TRANSFORMS_JSON") {
             if !v.trim().is_empty() {

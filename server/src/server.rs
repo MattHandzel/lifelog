@@ -36,7 +36,7 @@ type SkewSamples = HashMap<String, Vec<(chrono::DateTime<Utc>, chrono::DateTime<
 #[derive(Debug, Clone)]
 pub struct Server {
     pub(crate) db: Surreal<Client>,
-    pub(crate) postgres_pool: Option<PostgresPool>,
+    pub(crate) postgres_pool: PostgresPool,
     pub(crate) cas: FsCas,
     pub(crate) config: Arc<RwLock<ServerConfig>>,
     pub(crate) state: Arc<RwLock<SystemState>>,
@@ -120,7 +120,7 @@ impl ServerHandle {
             );
             match get_data_by_key(
                 &server.db,
-                server.postgres_pool.as_ref(),
+                Some(&server.postgres_pool),
                 &server.cas,
                 &core_key,
             )
@@ -142,10 +142,7 @@ impl ServerHandle {
 
     pub async fn list_postgres_origins(&self) -> Vec<DataOrigin> {
         let server = self.server.read().await;
-        let pool = match server.postgres_pool.as_ref() {
-            Some(p) => p,
-            None => return vec![],
-        };
+        let pool = &server.postgres_pool;
 
         let client = match pool.get().await {
             Ok(c) => c,
@@ -408,8 +405,8 @@ impl Server {
 
     async fn get_available_origins_hybrid(&self) -> Result<Vec<DataOrigin>, LifelogError> {
         let mut origins = get_origins_from_db(&self.db).await?;
-        if let Some(pool) = &self.postgres_pool {
-            let pg_origins = Self::get_origins_from_postgres(pool).await?;
+        {
+            let pg_origins = Self::get_origins_from_postgres(&self.postgres_pool).await?;
             let mut seen: HashSet<String> = origins.iter().map(|o| o.get_table_name()).collect();
             for origin in pg_origins {
                 let key = origin.get_table_name();
@@ -450,22 +447,27 @@ impl Server {
             .map_err(|e| LifelogError::Database(e.to_string()))?;
 
         crate::schema::run_startup_migrations(&db).await?;
-        let postgres_pool = match std::env::var("LIFELOG_POSTGRES_INGEST_URL") {
-            Ok(url) if !url.trim().is_empty() => {
-                let max_connections = std::env::var("LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS")
-                    .ok()
-                    .and_then(|v| v.parse::<usize>().ok())
-                    .unwrap_or(16);
-                let pool = connect_pool(&url, max_connections).await?;
-                run_migrations(&pool).await?;
-                tracing::info!(
-                    max_connections,
-                    "Postgres ingest backend enabled via LIFELOG_POSTGRES_INGEST_URL"
-                );
-                Some(pool)
-            }
-            _ => None,
-        };
+        let postgres_url = std::env::var("LIFELOG_POSTGRES_INGEST_URL").map_err(|_| {
+            LifelogError::Database(
+                "LIFELOG_POSTGRES_INGEST_URL must be set — PostgreSQL is required".to_string(),
+            )
+        })?;
+        if postgres_url.trim().is_empty() {
+            return Err(LifelogError::Database(
+                "LIFELOG_POSTGRES_INGEST_URL must not be empty — PostgreSQL is required"
+                    .to_string(),
+            ));
+        }
+        let max_connections = std::env::var("LIFELOG_POSTGRES_INGEST_MAX_CONNECTIONS")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(16);
+        let postgres_pool = connect_pool(&postgres_url, max_connections).await?;
+        run_migrations(&postgres_pool).await?;
+        tracing::info!(
+            max_connections,
+            "Postgres backend enabled via LIFELOG_POSTGRES_INGEST_URL"
+        );
 
         let cas = FsCas::new(&config.cas_path);
 
@@ -625,15 +627,15 @@ impl Server {
     async fn get_state(&self) -> SystemState {
         let mut state = self.state.read().await.clone();
         if let Some(server_state) = state.server_state.as_mut() {
-            if let Some(pool) = &self.postgres_pool {
-                let pool_status = pool.status();
+            {
+                let pool_status = self.postgres_pool.status();
                 server_state.postgres_pool_enabled = true;
                 server_state.postgres_pool_max_size = pool_status.max_size as u32;
                 server_state.postgres_pool_size = pool_status.size as u32;
                 server_state.postgres_pool_available = pool_status.available as u32;
                 server_state.postgres_pool_waiting = pool_status.waiting as u32;
 
-                if let Ok(client) = pool.get().await {
+                if let Ok(client) = self.postgres_pool.get().await {
                     let count_sql = "\
                         SELECT COALESCE(SUM(cnt), 0)::BIGINT AS total FROM ( \
                             SELECT COUNT(*) AS cnt FROM screen_records \
@@ -643,6 +645,7 @@ impl Server {
                             UNION ALL SELECT COUNT(*) FROM clipboard_records \
                             UNION ALL SELECT COUNT(*) FROM shell_history_records \
                             UNION ALL SELECT COUNT(*) FROM keystroke_records \
+                            UNION ALL SELECT COUNT(*) FROM frames \
                         ) sub";
                     if let Ok(row) = client.query_one(count_sql, &[]).await {
                         let total: i64 = row.get(0);
@@ -655,12 +658,6 @@ impl Server {
                         server_state.disk_usage_bytes = size as u64;
                     }
                 }
-            } else {
-                server_state.postgres_pool_enabled = false;
-                server_state.postgres_pool_max_size = 0;
-                server_state.postgres_pool_size = 0;
-                server_state.postgres_pool_available = 0;
-                server_state.postgres_pool_waiting = 0;
             }
         }
         state
@@ -727,12 +724,8 @@ impl Server {
             };
 
             let plan = crate::query::planner::Planner::plan(&ast_query, &scoped_origins);
-            let res = if let Some(pool) = &self.postgres_pool {
-                if crate::query::executor::plan_is_postgres_compatible(&plan) {
-                    crate::query::executor::execute_postgres(pool, plan).await
-                } else {
-                    crate::query::executor::execute(&self.db, plan).await
-                }
+            let res = if crate::query::executor::plan_is_postgres_compatible(&plan) {
+                crate::query::executor::execute_postgres(&self.postgres_pool, plan).await
             } else {
                 crate::query::executor::execute(&self.db, plan).await
             };
@@ -817,12 +810,8 @@ impl Server {
 
             // Pass the full catalog so temporal operators like WITHIN can resolve other streams.
             let plan = crate::query::planner::Planner::plan(&query, &available_origins);
-            let query_result = if let Some(pool) = &self.postgres_pool {
-                if crate::query::executor::plan_is_postgres_compatible(&plan) {
-                    crate::query::executor::execute_postgres(pool, plan).await
-                } else {
-                    crate::query::executor::execute(&self.db, plan).await
-                }
+            let query_result = if crate::query::executor::plan_is_postgres_compatible(&plan) {
+                crate::query::executor::execute_postgres(&self.postgres_pool, plan).await
             } else {
                 crate::query::executor::execute(&self.db, plan).await
             };
@@ -919,9 +908,8 @@ impl Server {
             t_canonical: Option<chrono::DateTime<Utc>>,
         }
 
-        let screen_frames: Vec<(String, chrono::DateTime<Utc>)> = if let Some(pool) =
-            &self.postgres_pool
-        {
+        let screen_frames: Vec<(String, chrono::DateTime<Utc>)> = {
+            let pool = &self.postgres_pool;
             if let Some(table) = Self::postgres_table_for_modality(&screen_origin.modality_name) {
                 let collector_id =
                     Self::collector_id_from_origin(&screen_origin).ok_or_else(|| {
@@ -979,25 +967,6 @@ impl Server {
                     .filter_map(|r| Some((r.uuid, r.t_canonical?.0)))
                     .collect()
             }
-        } else {
-            let screen_table = screen_origin.get_table_name();
-            let sql = format!(
-                    "SELECT uuid, t_canonical FROM `{}` WHERE t_canonical >= d'{}' AND t_canonical < d'{}' ORDER BY t_canonical ASC LIMIT {};",
-                    screen_table,
-                    start.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
-                    end.to_rfc3339_opts(chrono::SecondsFormat::Nanos, true),
-                    max_steps
-                );
-            let mut resp =
-                self.db.query(sql).await.map_err(|e| {
-                    LifelogError::Database(format!("replay screen query failed: {e}"))
-                })?;
-            let rows: Vec<ScreenRow> = resp
-                .take(0)
-                .map_err(|e| LifelogError::Database(format!("replay screen take failed: {e}")))?;
-            rows.into_iter()
-                .filter_map(|r| Some((r.uuid, r.t_canonical?.0)))
-                .collect()
         };
 
         let mut steps =
@@ -1060,7 +1029,8 @@ impl Server {
             };
 
             for origin in resolved {
-                if let Some(pool) = &self.postgres_pool {
+                {
+                    let pool = &self.postgres_pool;
                     if let Some(table) = Self::postgres_table_for_modality(&origin.modality_name) {
                         let collector_id =
                             Self::collector_id_from_origin(&origin).ok_or_else(|| {
@@ -1287,22 +1257,17 @@ impl Server {
                 tokio::spawn(async move {
                     let watermarks: std::sync::Arc<
                         dyn crate::transform::watermark::WatermarkStore,
-                    > = match &pool_clone {
-                        Some(p) => std::sync::Arc::new(
-                            crate::transform::watermark::PostgresWatermarkStore::new(p.clone()),
+                    > = std::sync::Arc::new(
+                        crate::transform::watermark::PostgresWatermarkStore::new(
+                            pool_clone.clone(),
                         ),
-                        None => std::sync::Arc::new(
-                            crate::transform::watermark::SurrealWatermarkStore::new(
-                                db_connection.clone(),
-                            ),
-                        ),
-                    };
+                    );
 
                     let worker = crate::transform::worker::PipelineWorker::new(
                         dag,
                         watermarks,
                         db_connection,
-                        pool_clone,
+                        Some(pool_clone),
                         cas_clone,
                         http,
                         50,
