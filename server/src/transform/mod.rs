@@ -35,6 +35,13 @@ pub enum TransformOutput {
     Ocr(lifelog_types::OcrFrame),
     Transcription(lifelog_types::TranscriptionFrame),
     Embedding(lifelog_types::EmbeddingFrame),
+    Generic(GenericTransformOutput),
+}
+
+pub struct GenericTransformOutput {
+    pub source_uuid: String,
+    pub modality: String,
+    pub payload: serde_json::Value,
 }
 
 #[async_trait]

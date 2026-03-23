@@ -1148,6 +1148,46 @@ pub async fn get_origins(pool: &PostgresPool) -> Result<Vec<DataOrigin>, Lifelog
     Ok(origins)
 }
 
+pub async fn insert_transform_output(
+    pool: &PostgresPool,
+    row: &FrameRow,
+) -> Result<bool, LifelogError> {
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| LifelogError::Database(format!("pool: {e}")))?;
+
+    let sql = "INSERT INTO frames (
+            id, collector_id, stream_id, modality, time_range,
+            t_device, t_ingest, t_canonical, t_end, time_quality,
+            blob_hash, blob_size, indexed, source_frame_id, payload
+        ) VALUES (
+            $1, $2, $3, $4, tstzrange($5, $6, '[]'),
+            $7, $8, $9, $10, $11,
+            $12, $13, $14, $15, $16
+        )
+        ON CONFLICT (source_frame_id, stream_id, modality)
+            WHERE source_frame_id IS NOT NULL
+        DO NOTHING";
+
+    let params = row.insert_params();
+    let rows_affected = client
+        .execute(sql, &params)
+        .await
+        .map_err(|e| LifelogError::Database(format!("transform output insert: {e}")))?;
+
+    if rows_affected == 0 {
+        tracing::debug!(
+            source_frame_id = ?row.source_frame_id,
+            stream_id = %row.stream_id,
+            modality = %row.modality,
+            "Transform output already exists; skipped duplicate"
+        );
+    }
+
+    Ok(rows_affected > 0)
+}
+
 pub async fn upsert(pool: &PostgresPool, row: &FrameRow) -> Result<(), LifelogError> {
     let client = pool
         .get()

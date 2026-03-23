@@ -7,6 +7,7 @@ use utils::cas::FsCas;
 use crate::postgres::PostgresPool;
 
 use super::dag::TransformDag;
+use super::egress::EgressGuard;
 use super::watermark::WatermarkStore;
 use super::writer::{extract_source_timestamps, write_transform_output};
 use super::TransformExecutor;
@@ -17,6 +18,7 @@ pub struct PipelineWorker {
     postgres_pool: PostgresPool,
     cas: FsCas,
     http_client: reqwest::Client,
+    egress_guard: EgressGuard,
     batch_size: usize,
 }
 
@@ -27,6 +29,7 @@ impl PipelineWorker {
         postgres_pool: PostgresPool,
         cas: FsCas,
         http_client: reqwest::Client,
+        egress_guard: EgressGuard,
         batch_size: usize,
     ) -> Self {
         Self {
@@ -35,6 +38,7 @@ impl PipelineWorker {
             postgres_pool,
             cas,
             http_client,
+            egress_guard,
             batch_size,
         }
     }

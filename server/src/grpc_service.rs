@@ -276,6 +276,21 @@ impl LifelogServerService for GRPCServerLifelogServerService {
                 last_stream = Some(stream_id.clone());
                 stream_id_str = Some(stream_id.stream_id.clone());
 
+                let origin = &stream_id.collector_id;
+                if origin.len() > 200 {
+                    return Err(Status::invalid_argument(format!(
+                        "origin too long: {} chars (max 200)",
+                        origin.len()
+                    )));
+                }
+                if origin.len() > 100 {
+                    tracing::warn!(
+                        origin_len = origin.len(),
+                        origin = %origin,
+                        "origin string exceeds 100 chars"
+                    );
+                }
+
                 let server = self.server.server.read().await;
                 let transforms = server.config.read().await.transforms.clone();
                 let pool = server.postgres_pool.clone();

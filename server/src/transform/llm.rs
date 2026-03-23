@@ -1,8 +1,14 @@
+use std::sync::Mutex;
+
 use async_trait::async_trait;
 use lifelog_core::{DataOrigin, DataOriginType, LifelogFrameKey, PrivacyLevel};
 use lifelog_types::{DataModality, LifelogData};
 
 use super::{TransformExecutor, TransformOutput, TransformPipelineError};
+
+struct RateState {
+    call_timestamps: Vec<chrono::DateTime<chrono::Utc>>,
+}
 
 pub struct LlmExecutor {
     id: String,
@@ -12,6 +18,8 @@ pub struct LlmExecutor {
     system_prompt: String,
     timeout_secs: u64,
     privacy_level: PrivacyLevel,
+    max_calls_per_hour: Option<u32>,
+    rate_state: Mutex<RateState>,
 }
 
 impl LlmExecutor {
@@ -21,6 +29,18 @@ impl LlmExecutor {
         endpoint: String,
         params: &std::collections::HashMap<String, String>,
     ) -> Self {
+        let max_calls_per_hour = params
+            .get("max_calls_per_hour")
+            .and_then(|v| v.parse().ok());
+
+        if let Some(limit) = max_calls_per_hour {
+            tracing::info!(
+                transform_id = %id,
+                max_calls_per_hour = limit,
+                "LLM transform rate limit configured"
+            );
+        }
+
         Self {
             id,
             source,
@@ -40,7 +60,35 @@ impl LlmExecutor {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(60),
             privacy_level: PrivacyLevel::from_params(params),
+            max_calls_per_hour,
+            rate_state: Mutex::new(RateState {
+                call_timestamps: Vec::new(),
+            }),
         }
+    }
+
+    fn check_rate_limit(&self) -> Result<(), TransformPipelineError> {
+        let limit = match self.max_calls_per_hour {
+            Some(l) => l,
+            None => return Ok(()),
+        };
+
+        let now = chrono::Utc::now();
+        let one_hour_ago = now - chrono::Duration::hours(1);
+
+        let mut state = self.rate_state.lock().unwrap_or_else(|e| e.into_inner());
+        state.call_timestamps.retain(|ts| *ts > one_hour_ago);
+
+        if state.call_timestamps.len() >= limit as usize {
+            return Err(TransformPipelineError::ServiceError(format!(
+                "rate limit exceeded: {} calls in the last hour (limit: {})",
+                state.call_timestamps.len(),
+                limit
+            )));
+        }
+
+        state.call_timestamps.push(now);
+        Ok(())
     }
 }
 
@@ -94,6 +142,8 @@ impl TransformExecutor for LlmExecutor {
         data: &LifelogData,
         key: &LifelogFrameKey,
     ) -> Result<TransformOutput, TransformPipelineError> {
+        self.check_rate_limit()?;
+
         let payload = data
             .payload
             .as_ref()
@@ -190,15 +240,28 @@ impl TransformExecutor for LlmExecutor {
             }
         };
 
-        let cleaned_text = json["message"]["content"]
+        let raw_text = json["message"]["content"]
             .as_str()
-            .unwrap_or(&transcription.text)
+            .unwrap_or("")
             .to_string();
+
+        let cleaned_text = match validate_llm_output(&raw_text, &transcription.text) {
+            Ok(text) => text,
+            Err(reason) => {
+                tracing::warn!(
+                    transform_id = %self.id,
+                    uuid = %key.uuid,
+                    reason = %reason,
+                    "LLM output rejected; keeping original text"
+                );
+                return Ok(TransformOutput::Transcription(transcription.clone()));
+            }
+        };
 
         let frame = lifelog_types::TranscriptionFrame {
             uuid: key.uuid.to_string(),
             text: cleaned_text,
-            source_uuid: transcription.source_uuid.clone(),
+            source_uuid: key.uuid.to_string(),
             model: self.model.clone(),
             timestamp: transcription.timestamp,
             confidence: 0.0,
@@ -212,4 +275,51 @@ impl TransformExecutor for LlmExecutor {
 
         Ok(TransformOutput::Transcription(frame))
     }
+}
+
+const MIN_OUTPUT_LEN: usize = 2;
+const MAX_OUTPUT_LEN: usize = 50_000;
+
+const REFUSAL_PHRASES: &[&str] = &[
+    "i cannot",
+    "i can't",
+    "i'm sorry",
+    "i am sorry",
+    "as an ai",
+    "as a language model",
+    "i'm unable to",
+    "i am unable to",
+    "i apologize",
+];
+
+fn validate_llm_output(output: &str, original: &str) -> Result<String, String> {
+    let trimmed = output.trim();
+
+    if trimmed.is_empty() {
+        return Err("empty response".to_string());
+    }
+
+    if trimmed.len() < MIN_OUTPUT_LEN {
+        return Err(format!("too short ({} chars)", trimmed.len()));
+    }
+
+    if trimmed.len() > MAX_OUTPUT_LEN {
+        return Err(format!("too long ({} chars)", trimmed.len()));
+    }
+
+    let lower = trimmed.to_lowercase();
+    for phrase in REFUSAL_PHRASES {
+        if lower.starts_with(phrase) {
+            return Err(format!("refusal detected: starts with '{phrase}'"));
+        }
+    }
+
+    if trimmed.len() > original.len() * 5 && original.len() > 10 {
+        return Err(format!(
+            "output suspiciously long ({}x original)",
+            trimmed.len() / original.len()
+        ));
+    }
+
+    Ok(trimmed.to_string())
 }

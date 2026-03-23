@@ -4,7 +4,7 @@ use lifelog_core::{DataOrigin, LifelogError};
 use crate::frames;
 use crate::postgres::PostgresPool;
 
-use super::TransformOutput;
+use super::{GenericTransformOutput, TransformOutput};
 
 pub struct SourceTimestamps {
     pub t_canonical: Option<::pbjson_types::Timestamp>,
@@ -100,7 +100,7 @@ pub async fn write_transform_output(
             row.time_quality = source_timestamps.time_quality.clone();
             row.t_ingest = Utc::now();
 
-            frames::upsert(pool, &row).await?;
+            frames::insert_transform_output(pool, &row).await?;
 
             extract_timestamp(source_timestamps.t_canonical)
         }
@@ -114,7 +114,7 @@ pub async fn write_transform_output(
             row.time_quality = source_timestamps.time_quality.clone();
             row.t_ingest = Utc::now();
 
-            frames::upsert(pool, &row).await?;
+            frames::insert_transform_output(pool, &row).await?;
 
             extract_timestamp(ts)
         }
@@ -122,7 +122,43 @@ pub async fn write_transform_output(
             tracing::warn!("embedding output writing not yet implemented");
             Ok(None)
         }
+        TransformOutput::Generic(generic) => {
+            write_generic_output(pool, generic, &collector_id, &stream_id, source_timestamps).await
+        }
     }
+}
+
+async fn write_generic_output(
+    pool: &PostgresPool,
+    generic: GenericTransformOutput,
+    collector_id: &str,
+    stream_id: &str,
+    source_timestamps: &SourceTimestamps,
+) -> Result<Option<DateTime<Utc>>, LifelogError> {
+    let t_canonical = pb_to_dt(source_timestamps.t_canonical);
+    let t_end = pb_to_dt(source_timestamps.t_end);
+    let source_uuid = uuid::Uuid::parse_str(&generic.source_uuid).ok();
+
+    let row = frames::FrameRow {
+        id: uuid::Uuid::new_v4(),
+        collector_id: collector_id.to_string(),
+        stream_id: stream_id.to_string(),
+        modality: generic.modality,
+        t_device: Some(t_canonical),
+        t_ingest: Utc::now(),
+        t_canonical,
+        t_end: Some(t_end),
+        time_quality: source_timestamps.time_quality.clone(),
+        blob_hash: None,
+        blob_size: None,
+        indexed: true,
+        source_frame_id: source_uuid,
+        payload: generic.payload,
+    };
+
+    frames::insert_transform_output(pool, &row).await?;
+
+    extract_timestamp(source_timestamps.t_canonical)
 }
 
 fn extract_collector_id(origin: &lifelog_core::DataOrigin) -> String {

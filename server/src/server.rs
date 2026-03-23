@@ -418,6 +418,13 @@ impl Server {
                     executors.push(Arc::new(executor));
                 }
                 "stt" => {
+                    if spec.service_endpoint.is_empty() {
+                        tracing::error!(
+                            transform_id = %spec.id,
+                            "STT transform has no service_endpoint; skipping"
+                        );
+                        continue;
+                    }
                     let executor = crate::transform::stt::SttExecutor::new(
                         spec.id.clone(),
                         source,
@@ -432,6 +439,20 @@ impl Server {
                     );
                 }
                 "llm" => {
+                    if spec.service_endpoint.is_empty() {
+                        tracing::error!(
+                            transform_id = %spec.id,
+                            "LLM transform has no service_endpoint; skipping"
+                        );
+                        continue;
+                    }
+                    let model = spec.params.get("model").map(|s| s.as_str()).unwrap_or("");
+                    if model.is_empty() && !spec.params.contains_key("model") {
+                        tracing::warn!(
+                            transform_id = %spec.id,
+                            "LLM transform has no explicit model; using default"
+                        );
+                    }
                     let executor = crate::transform::llm::LlmExecutor::new(
                         spec.id.clone(),
                         source,
@@ -442,6 +463,7 @@ impl Server {
                     tracing::info!(
                         id = %spec.id,
                         endpoint = %spec.service_endpoint,
+                        model = %spec.params.get("model").map(|s| s.as_str()).unwrap_or("(default)"),
                         "Registered LLM transform"
                     );
                 }
@@ -486,7 +508,11 @@ impl Server {
                     );
                 }
                 other => {
-                    tracing::warn!(transform_id = %other, "Unknown transform type; skipping");
+                    tracing::error!(
+                        transform_id = %spec.id,
+                        transform_type = %other,
+                        "Unknown transform type in config; skipping this transform"
+                    );
                 }
             }
         }

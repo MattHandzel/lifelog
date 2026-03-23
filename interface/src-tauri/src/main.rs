@@ -139,9 +139,9 @@ fn get_auth_token() -> String {
         .unwrap_or_default()
 }
 
-async fn create_grpc_channel(addr: &str) -> Result<Channel, tonic::transport::Error> {
-    let addr_static: &'static str = Box::leak(addr.to_string().into_boxed_str());
-    let mut endpoint = Channel::from_static(addr_static);
+async fn create_grpc_channel(addr: &str) -> Result<Channel, String> {
+    let mut endpoint = Channel::from_shared(addr.to_string())
+        .map_err(|e| format!("Invalid gRPC address '{}': {}", addr, e))?;
     if addr.starts_with("https://") {
         let ca_path = "/home/matth/.config/lifelog/tls/server-ca.pem";
         let mut tls = if let Ok(pem) = std::fs::read_to_string(ca_path) {
@@ -161,9 +161,14 @@ async fn create_grpc_channel(addr: &str) -> Result<Channel, tonic::transport::Er
             // but the CA approach above is correct for self-signed.
         }
 
-        endpoint = endpoint.tls_config(tls)?;
+        endpoint = endpoint
+            .tls_config(tls)
+            .map_err(|e| format!("TLS config error: {}", e))?;
     }
-    endpoint.connect().await
+    endpoint
+        .connect()
+        .await
+        .map_err(|e| format!("gRPC connect error: {}", e))
 }
 
 fn create_client(channel: Channel) -> InterceptedClient {

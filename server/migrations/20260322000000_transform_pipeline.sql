@@ -22,25 +22,6 @@ CREATE INDEX IF NOT EXISTS idx_transcription_records_search_gin
 CREATE INDEX IF NOT EXISTS idx_transcription_records_collector
     ON transcription_records (collector_id);
 
-CREATE TABLE IF NOT EXISTS transform_jobs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    transform_id TEXT NOT NULL,
-    origin TEXT NOT NULL,
-    source_uuid TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'pending',
-    attempts INTEGER NOT NULL DEFAULT 0,
-    max_attempts INTEGER NOT NULL DEFAULT 3,
-    last_error TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMPTZ
-);
-
-CREATE INDEX IF NOT EXISTS idx_transform_jobs_status
-    ON transform_jobs (status, transform_id);
-CREATE INDEX IF NOT EXISTS idx_transform_jobs_source
-    ON transform_jobs (source_uuid);
-
 DO $$
 BEGIN
     IF NOT EXISTS (
