@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # PostToolUse async hook: Run cargo check after .rs file edits.
 # Runs in background, reports result to Claude on next turn.
+# Debounced: skips if a check ran within the last 10 seconds.
 
 INPUT=$(cat)
 FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
@@ -14,6 +15,18 @@ fi
 if echo "$FILE_PATH" | grep -q 'OUT_DIR'; then
   exit 0
 fi
+
+# Debounce: skip if checked within last 10 seconds
+LOCKFILE="/tmp/cargo-check-debounce-$(echo "$CLAUDE_PROJECT_DIR" | md5sum | cut -c1-8)"
+if [ -f "$LOCKFILE" ]; then
+  LAST=$(stat -c %Y "$LOCKFILE" 2>/dev/null || echo 0)
+  NOW=$(date +%s)
+  if [ $((NOW - LAST)) -lt 10 ]; then
+    echo '{"suppressOutput": true}'
+    exit 0
+  fi
+fi
+touch "$LOCKFILE"
 
 # Run cargo check and report
 RESULT=$(cd "$CLAUDE_PROJECT_DIR" && nix develop --command cargo check --all-targets 2>&1)
