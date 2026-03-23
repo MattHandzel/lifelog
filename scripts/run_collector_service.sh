@@ -2,8 +2,8 @@
 set -euo pipefail
 
 REPO_DIR="${REPO_DIR:-$HOME/Projects/lifelog}"
-COLLECTOR_BIN="${COLLECTOR_BIN:-$REPO_DIR/target/debug/lifelog-collector}"
-SERVER_ADDR="${SERVER_ADDR:-http://100.118.206.104:7182}"
+COLLECTOR_BIN="${COLLECTOR_BIN:-$REPO_DIR/target/release/lifelog-collector}"
+SERVER_ADDR="${SERVER_ADDR:-https://100.118.206.104:7182}"
 
 if [[ ! -x "$COLLECTOR_BIN" ]]; then
   echo "collector binary is missing: $COLLECTOR_BIN" >&2

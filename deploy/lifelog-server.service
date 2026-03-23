@@ -1,14 +1,16 @@
 [Unit]
 Description=Lifelog Server
-After=network.target surrealdb.service
-Wants=surrealdb.service
+After=network.target postgresql.service
+Wants=postgresql.service
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/lifelog-server-backend
+ExecStart=/usr/local/bin/lifelog-server-backend serve
 Restart=on-failure
 RestartSec=5
+EnvironmentFile=/home/matth/.config/lifelog/.env
 Environment=RUST_LOG=info
+Environment=LIFELOG_POSTGRES_INGEST_URL=postgres://matth@/lifelog?host=/run/postgresql
 
 [Install]
 WantedBy=multi-user.target
