@@ -84,13 +84,7 @@ pub async fn write_transform_output(
     destination: &DataOrigin,
     source_timestamps: &SourceTimestamps,
 ) -> Result<Option<DateTime<Utc>>, LifelogError> {
-    let collector_id = match &destination.origin {
-        lifelog_core::DataOriginType::DeviceId(id) => id.clone(),
-        lifelog_core::DataOriginType::DataOrigin(parent) => match &parent.origin {
-            lifelog_core::DataOriginType::DeviceId(id) => id.clone(),
-            _ => "unknown".to_string(),
-        },
-    };
+    let collector_id = extract_collector_id(destination);
     let stream_id = destination.modality_name.to_lowercase();
 
     match output {
@@ -127,6 +121,16 @@ pub async fn write_transform_output(
         TransformOutput::Embedding(_frame) => {
             tracing::warn!("embedding output writing not yet implemented");
             Ok(None)
+        }
+    }
+}
+
+fn extract_collector_id(origin: &lifelog_core::DataOrigin) -> String {
+    let mut current = &origin.origin;
+    loop {
+        match current {
+            lifelog_core::DataOriginType::DeviceId(id) => return id.clone(),
+            lifelog_core::DataOriginType::DataOrigin(parent) => current = &parent.origin,
         }
     }
 }
