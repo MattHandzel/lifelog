@@ -35,6 +35,10 @@ const MIGRATIONS: &[EmbeddedMigration] = &[
         version: "20260323200000_drop_legacy_tables.sql",
         sql: include_str!("../migrations/20260323200000_drop_legacy_tables.sql"),
     },
+    EmbeddedMigration {
+        version: "20260323300000_dynamic_search_doc.sql",
+        sql: include_str!("../migrations/20260323300000_dynamic_search_doc.sql"),
+    },
 ];
 
 fn is_unix_socket_connection(cfg: &tokio_postgres::Config) -> bool {
