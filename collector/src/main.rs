@@ -33,6 +33,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "unknown".to_string());
 
     tracing::info!(binary = %binary_name, "Starting Life Logger");
+
+    if std::env::var("WAYLAND_DISPLAY").is_err() && std::env::var("DISPLAY").is_err() {
+        tracing::warn!("No display server detected (WAYLAND_DISPLAY and DISPLAY are both unset). Screen capture will not work.");
+    }
+
     let config = Arc::new(load_config());
 
     // Check to see if there is another instance of lifelog running
