@@ -1,8 +1,7 @@
 [server]
 host = "0.0.0.0"
 port = 7182
-databaseEndpoint = "100.118.206.104:7182"
-databaseName = "main"
+databaseEndpoint = "postgresql://lifelog@100.118.206.104:5432/lifelog"
 serverName = "LifelogServer"
 casPath = "/home/matth/lifelog/cas"
 defaultCorrelationWindowMs = 30000

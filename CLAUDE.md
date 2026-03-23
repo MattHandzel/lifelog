@@ -22,7 +22,7 @@ Use `just` recipes (which wrap nix) instead of raw cargo.
 | `just ship-feature <name>`    | Validate, merge, and prune a feature worktree  |
 | `just check`                  | `cargo check --all-targets`                    |
 | `just test`                   | `cargo test --all-targets`                     |
-| `just test-e2e`               | Integration suite (needs SurrealDB running)    |
+| `just test-e2e`               | Integration suite (needs PostgreSQL running)   |
 | `just validate`               | Full gate: fmt + check + clippy + test         |
 | `just run-server`             | Start the lifelog server                       |
 | `just run-collector`          | Start the collector daemon                     |
@@ -33,12 +33,13 @@ Use `just` recipes (which wrap nix) instead of raw cargo.
 and DataModality types. Rust types generated via `prost`/`tonic-build`.
 
 **Unified Trait Model:** `DataType` and `Modality` provide basic identity.
-`ToRecord` (guarded by `surrealdb` feature in `lifelog-types`) provides
-SurrealDB 2.x friendly record types to avoid generic `serde_json` serialization
-issues with native types like `datetime` and `bytes`.
 
-**Catalog System:** Explicit `catalog` table in SurrealDB tracks registered
-origins. Avoids expensive `INFO FOR DB` discovery during query execution.
+**Unified Frames Table:** All data modalities are stored in a single `frames`
+table in PostgreSQL. Modality-specific fields go in a `payload JSONB` column.
+Binary data is stored in a content-addressable store (CAS) referenced by `blob_hash`.
+
+**Catalog System:** Explicit `catalog` table in PostgreSQL tracks registered
+origins.
 
 See @README.md for project overview.
 

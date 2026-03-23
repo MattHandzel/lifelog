@@ -62,12 +62,7 @@ outputDir = "~/lifelog/data/keystrokes"
 [server]
 host = "0.0.0.0"
 port = 7182
-# Hybrid transition note:
-# - `databaseEndpoint` is the legacy SurrealDB endpoint still required for non-migrated paths.
-# - PostgreSQL is now the default ingest/query backend via env:
-#   LIFELOG_POSTGRES_INGEST_URL=postgresql://lifelog@127.0.0.1:5432/lifelog
-databaseEndpoint = "127.0.0.1:7183"
-databaseName = "main"
+databaseEndpoint = "postgresql://lifelog@127.0.0.1:5432/lifelog"
 serverName = "LifelogServer"
 casPath = "~/lifelog/cas"
 defaultCorrelationWindowMs = 30000

@@ -51,16 +51,13 @@ pub fn default_cas_path() -> String {
 }
 
 pub fn default_database_endpoint() -> String {
-    "127.0.0.1:7183".to_string()
+    "postgresql://lifelog@127.0.0.1:5432/lifelog".to_string()
 }
 
 pub fn default_server_name() -> String {
     "LifelogServer".to_string()
 }
 
-pub fn default_database_path() -> String {
-    "surrealkv://".to_string()
-}
 pub fn default_database_name() -> String {
     "main".to_string()
 }
