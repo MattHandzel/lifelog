@@ -2,8 +2,6 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use lifelog_core::{DataOrigin, DataOriginType, LifelogError, LifelogFrameKey};
-use surrealdb::engine::remote::ws::Client;
-use surrealdb::Surreal;
 use utils::cas::FsCas;
 
 use crate::postgres::PostgresPool;
@@ -16,8 +14,7 @@ use super::TransformExecutor;
 pub struct PipelineWorker {
     dag: Arc<TransformDag>,
     watermarks: Arc<dyn WatermarkStore>,
-    db: Surreal<Client>,
-    postgres_pool: Option<PostgresPool>,
+    postgres_pool: PostgresPool,
     cas: FsCas,
     http_client: reqwest::Client,
     batch_size: usize,
@@ -27,8 +24,7 @@ impl PipelineWorker {
     pub fn new(
         dag: Arc<TransformDag>,
         watermarks: Arc<dyn WatermarkStore>,
-        db: Surreal<Client>,
-        postgres_pool: Option<PostgresPool>,
+        postgres_pool: PostgresPool,
         cas: FsCas,
         http_client: reqwest::Client,
         batch_size: usize,
@@ -36,7 +32,6 @@ impl PipelineWorker {
         Self {
             dag,
             watermarks,
-            db,
             postgres_pool,
             cas,
             http_client,
@@ -45,12 +40,8 @@ impl PipelineWorker {
     }
 
     pub async fn poll_once(&self) -> Result<(), LifelogError> {
-        let available_origins = crate::db::get_origins_from_db(&self.db).await?;
+        let available_origins = crate::frames::get_origins(&self.postgres_pool).await?;
 
-        // Two-pass approach: first run all primary transforms, then run
-        // downstream transforms that may have new input from the first pass.
-        // This avoids async recursion while still supporting one level of chaining
-        // (e.g., Audio → STT → Transcription, then Transcription → LLM → CleanedTranscription).
         let mut produced_modalities: Vec<String> = Vec::new();
 
         for transform in self.dag.all_transforms() {
@@ -62,11 +53,9 @@ impl PipelineWorker {
             }
         }
 
-        // Second pass: process any downstream transforms triggered by first-pass outputs.
         for modality in &produced_modalities {
             for downstream in self.dag.transforms_for_modality(modality) {
-                // Re-fetch origins since first pass may have written new tables.
-                let origins = crate::db::get_origins_from_db(&self.db).await?;
+                let origins = crate::frames::get_origins(&self.postgres_pool).await?;
                 self.run_single_transform(downstream, &origins).await;
             }
         }
@@ -92,9 +81,8 @@ impl PipelineWorker {
         let mut any_work = false;
 
         for target_origin in targets {
-            let keys = match crate::data_retrieval::get_keys_after(
-                &self.db,
-                self.postgres_pool.as_ref(),
+            let keys = match crate::frames::get_keys_after(
+                &self.postgres_pool,
                 &target_origin,
                 watermark,
                 self.batch_size,
@@ -138,11 +126,10 @@ impl PipelineWorker {
         let mut last_ts: Option<DateTime<Utc>> = None;
 
         for key in keys {
-            let data = match crate::data_retrieval::get_data_by_key(
-                &self.db,
-                self.postgres_pool.as_ref(),
+            let data = match crate::frames::get_by_id(
+                &self.postgres_pool,
                 &self.cas,
-                key,
+                uuid::Uuid::from_bytes(key.uuid.into_bytes()),
             )
             .await
             {
@@ -175,8 +162,7 @@ impl PipelineWorker {
             let destination = transform.destination();
 
             match write_transform_output(
-                &self.db,
-                self.postgres_pool.as_ref(),
+                &self.postgres_pool,
                 output,
                 &destination,
                 &source_timestamps,

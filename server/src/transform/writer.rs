@@ -1,9 +1,7 @@
 use chrono::{DateTime, Utc};
 use lifelog_core::{DataOrigin, LifelogError};
-use lifelog_types::ToRecord;
-use surrealdb::engine::remote::ws::Client;
-use surrealdb::Surreal;
 
+use crate::frames;
 use crate::postgres::PostgresPool;
 
 use super::TransformOutput;
@@ -73,61 +71,54 @@ pub fn extract_source_timestamps(data: &lifelog_types::LifelogData) -> SourceTim
     }
 }
 
+fn pb_to_dt(ts: Option<pbjson_types::Timestamp>) -> DateTime<Utc> {
+    let ts = ts.unwrap_or_default();
+    DateTime::from_timestamp(ts.seconds, ts.nanos as u32).unwrap_or_else(|| {
+        DateTime::<Utc>::from_naive_utc_and_offset(chrono::NaiveDateTime::MIN, Utc)
+    })
+}
+
 pub async fn write_transform_output(
-    db: &Surreal<Client>,
-    _postgres_pool: Option<&PostgresPool>,
+    pool: &PostgresPool,
     output: TransformOutput,
     destination: &DataOrigin,
     source_timestamps: &SourceTimestamps,
 ) -> Result<Option<DateTime<Utc>>, LifelogError> {
-    let _ = crate::schema::ensure_table_schema(db, destination).await;
-    let table = destination.get_table_name();
+    let collector_id = match &destination.origin {
+        lifelog_core::DataOriginType::DeviceId(id) => id.clone(),
+        lifelog_core::DataOriginType::DataOrigin(parent) => match &parent.origin {
+            lifelog_core::DataOriginType::DeviceId(id) => id.clone(),
+            _ => "unknown".to_string(),
+        },
+    };
+    let stream_id = destination.modality_name.to_lowercase();
 
     match output {
         TransformOutput::Ocr(frame) => {
-            let id = frame.uuid.clone();
-            let mut record = frame.to_record();
-            let now: surrealdb::sql::Datetime = chrono::Utc::now().into();
-            record.t_ingest = Some(now);
-            record.t_canonical = Some(lifelog_types::to_dt(source_timestamps.t_canonical).into());
-            record.t_end = Some(lifelog_types::to_dt(source_timestamps.t_end).into());
-            record.time_quality = Some(source_timestamps.time_quality.clone());
+            let t_canonical = pb_to_dt(source_timestamps.t_canonical);
+            let t_end = pb_to_dt(source_timestamps.t_end);
+            let source_uuid = uuid::Uuid::parse_str(&frame.uuid).ok();
 
-            let _ = db
-                .upsert::<Option<lifelog_types::OcrRecord>>((&table, &id))
-                .content(record)
-                .await;
+            let mut row = frames::from_ocr(&collector_id, &stream_id, &frame, source_uuid);
+            row.t_canonical = t_canonical;
+            row.t_end = Some(t_end);
+            row.time_quality = source_timestamps.time_quality.clone();
+            row.t_ingest = Utc::now();
 
-            let _ = db
-                .query("UPDATE upload_chunks SET indexed = true WHERE frame_uuid = $uuid AND (stream_id = 'screen' OR stream_id = 'Screen')")
-                .bind(("uuid", id))
-                .await;
+            frames::upsert(pool, &row).await?;
 
             extract_timestamp(source_timestamps.t_canonical)
         }
         TransformOutput::Transcription(frame) => {
-            let id = frame.uuid.clone();
             let ts = frame.t_canonical.or(frame.timestamp);
 
-            let record = lifelog_types::TranscriptionRecord {
-                uuid: frame.uuid,
-                timestamp: surrealdb::sql::Datetime::from(lifelog_types::to_dt(frame.timestamp)),
-                text: frame.text,
-                source_uuid: Some(frame.source_uuid),
-                model: Some(frame.model),
-                confidence: Some(frame.confidence),
-                t_ingest: Some(surrealdb::sql::Datetime::from(chrono::Utc::now())),
-                t_canonical: Some(surrealdb::sql::Datetime::from(lifelog_types::to_dt(ts))),
-                t_end: Some(surrealdb::sql::Datetime::from(lifelog_types::to_dt(
-                    frame.t_end.or(ts),
-                ))),
-                time_quality: Some(source_timestamps.time_quality.clone()),
-            };
+            let mut row = frames::from_transcription(&collector_id, &stream_id, &frame);
+            row.t_canonical = pb_to_dt(ts);
+            row.t_end = Some(pb_to_dt(frame.t_end.or(ts)));
+            row.time_quality = source_timestamps.time_quality.clone();
+            row.t_ingest = Utc::now();
 
-            let _ = db
-                .upsert::<Option<lifelog_types::TranscriptionRecord>>((&table, &id))
-                .content(record)
-                .await;
+            frames::upsert(pool, &row).await?;
 
             extract_timestamp(ts)
         }

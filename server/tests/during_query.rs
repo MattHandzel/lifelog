@@ -1,14 +1,22 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
+#[cfg(feature = "surrealdb-tests")]
 mod harness;
 
+#[cfg(feature = "surrealdb-tests")]
 use chrono::{Duration, Utc};
+#[cfg(feature = "surrealdb-tests")]
 use harness::TestContext;
+#[cfg(feature = "surrealdb-tests")]
 use lifelog_core::{DataOrigin, DataOriginType};
+#[cfg(feature = "surrealdb-tests")]
 use lifelog_server::query::{ast, executor, planner};
+#[cfg(feature = "surrealdb-tests")]
 use lifelog_types::{AudioFrame, ScreenFrame};
+#[cfg(feature = "surrealdb-tests")]
 use prost::Message;
 
+#[cfg(feature = "surrealdb-tests")]
 #[tokio::test]
 #[ignore = "integration test: requires SurrealDB"]
 async fn test_during_returns_target_records_inside_source_intervals() {
@@ -216,6 +224,7 @@ async fn test_during_returns_target_records_inside_source_intervals() {
     );
 }
 
+#[cfg(feature = "surrealdb-tests")]
 #[tokio::test]
 #[ignore = "integration test: requires SurrealDB"]
 async fn test_during_conjunction_intersects_intervals() {
@@ -438,6 +447,7 @@ async fn test_during_conjunction_intersects_intervals() {
     );
 }
 
+#[cfg(feature = "surrealdb-tests")]
 #[tokio::test]
 #[ignore = "integration test: requires SurrealDB"]
 async fn test_during_interval_target_overlaps_point_sources() {

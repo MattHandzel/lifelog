@@ -1,14 +1,22 @@
 #![allow(clippy::expect_used, clippy::panic, clippy::unwrap_used)]
 
+#[cfg(feature = "surrealdb-tests")]
 mod harness;
 
+#[cfg(feature = "surrealdb-tests")]
 use chrono::{Duration, Utc};
+#[cfg(feature = "surrealdb-tests")]
 use harness::TestContext;
+#[cfg(feature = "surrealdb-tests")]
 use lifelog_core::{DataOrigin, DataOriginType};
+#[cfg(feature = "surrealdb-tests")]
 use lifelog_server::query::{ast, executor, planner};
+#[cfg(feature = "surrealdb-tests")]
 use lifelog_types::{BrowserFrame, ScreenFrame};
+#[cfg(feature = "surrealdb-tests")]
 use prost::Message;
 
+#[cfg(feature = "surrealdb-tests")]
 #[tokio::test]
 #[ignore = "integration test: requires SurrealDB"]
 async fn test_within_returns_target_records_near_source_matches() {
@@ -185,6 +193,7 @@ async fn test_within_returns_target_records_near_source_matches() {
     );
 }
 
+#[cfg(feature = "surrealdb-tests")]
 #[tokio::test]
 #[ignore = "integration test: requires SurrealDB"]
 async fn test_within_multiple_terms_intersects_windows() {

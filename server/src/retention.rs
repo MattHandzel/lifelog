@@ -2,11 +2,9 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Duration, Utc};
 use lifelog_core::LifelogError;
-use surrealdb::engine::remote::ws::Client;
-use surrealdb::Surreal;
 use utils::cas::FsCas;
 
-use crate::db::get_origins_from_db;
+use crate::postgres::PostgresPool;
 
 #[derive(Debug, Default, Clone)]
 pub struct RetentionRunSummary {
@@ -14,23 +12,8 @@ pub struct RetentionRunSummary {
     pub deleted_blobs: u64,
 }
 
-#[derive(serde::Deserialize)]
-struct CountRow {
-    count: u64,
-}
-
-#[derive(serde::Deserialize)]
-struct BlobRow {
-    blob_hash: Option<String>,
-}
-
-#[derive(serde::Deserialize)]
-struct RefRow {
-    id: Option<serde_json::Value>,
-}
-
 pub async fn prune_once(
-    db: &Surreal<Client>,
+    pool: &PostgresPool,
     cas: &FsCas,
     retention_policy_days: &HashMap<String, u32>,
     now: DateTime<Utc>,
@@ -40,68 +23,74 @@ pub async fn prune_once(
         return Ok(RetentionRunSummary::default());
     }
 
-    let origins = get_origins_from_db(db).await?;
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| LifelogError::Database(format!("pool: {e}")))?;
+
+    let modality_rows = client
+        .query("SELECT DISTINCT modality FROM frames", &[])
+        .await
+        .map_err(|e| LifelogError::Database(format!("retention modality query: {e}")))?;
+
     let mut candidate_hashes = HashSet::new();
     let mut summary = RetentionRunSummary::default();
 
-    for origin in origins {
-        let modality = origin.modality_name.to_lowercase();
-        let ttl_days = match ttl_days_for_modality(&normalized, &modality) {
+    for row in modality_rows {
+        let modality: String = row.get(0);
+        let lower_modality = modality.to_lowercase();
+        let ttl_days = match ttl_days_for_modality(&normalized, &lower_modality) {
             Some(days) if days > 0 => days,
             _ => continue,
         };
 
         let cutoff = now - Duration::days(i64::from(ttl_days));
-        let table = origin.get_table_name();
 
-        let mut count_resp = db
-            .query(format!(
-                "SELECT count() AS count FROM `{}` WHERE ((t_canonical != NONE AND t_canonical < $cutoff) OR (t_canonical = NONE AND timestamp < $cutoff));",
-                table
-            ))
-            .bind(("cutoff", cutoff))
+        let count_row = client
+            .query_one(
+                "SELECT COUNT(*) AS count FROM frames WHERE modality = $1 AND t_canonical < $2",
+                &[&modality, &cutoff],
+            )
             .await
-            .map_err(|e| LifelogError::Database(e.to_string()))?;
-        let counts: Vec<CountRow> = count_resp
-            .take(0)
-            .map_err(|e| LifelogError::Database(e.to_string()))?;
-        let stale_count = counts.first().map(|r| r.count).unwrap_or(0);
+            .map_err(|e| LifelogError::Database(format!("retention count: {e}")))?;
+        let stale_count: i64 = count_row.get(0);
         if stale_count == 0 {
             continue;
         }
 
-        let mut blobs_resp = db
-            .query(format!(
-                "SELECT blob_hash FROM `{}` WHERE ((t_canonical != NONE AND t_canonical < $cutoff) OR (t_canonical = NONE AND timestamp < $cutoff)) AND blob_hash != NONE AND blob_hash != '';",
-                table
-            ))
-            .bind(("cutoff", cutoff))
+        let blob_rows = client
+            .query(
+                "SELECT blob_hash FROM frames WHERE modality = $1 AND t_canonical < $2 AND blob_hash IS NOT NULL",
+                &[&modality, &cutoff],
+            )
             .await
-            .map_err(|e| LifelogError::Database(e.to_string()))?;
-        let blob_rows: Vec<BlobRow> = blobs_resp
-            .take(0)
-            .map_err(|e| LifelogError::Database(e.to_string()))?;
-        for row in blob_rows {
-            if let Some(hash) = row.blob_hash {
-                if !hash.is_empty() {
-                    candidate_hashes.insert(hash);
-                }
+            .map_err(|e| LifelogError::Database(format!("retention blob query: {e}")))?;
+
+        for brow in blob_rows {
+            let hash: String = brow.get(0);
+            if !hash.is_empty() {
+                candidate_hashes.insert(hash);
             }
         }
 
-        db.query(format!(
-            "DELETE `{}` WHERE ((t_canonical != NONE AND t_canonical < $cutoff) OR (t_canonical = NONE AND timestamp < $cutoff));",
-            table
-        ))
-        .bind(("cutoff", cutoff))
-        .await
-        .map_err(|e| LifelogError::Database(e.to_string()))?;
+        client
+            .execute(
+                "DELETE FROM frames WHERE modality = $1 AND t_canonical < $2",
+                &[&modality, &cutoff],
+            )
+            .await
+            .map_err(|e| LifelogError::Database(format!("retention delete: {e}")))?;
 
-        summary.deleted_records = summary.deleted_records.saturating_add(stale_count);
+        summary.deleted_records = summary.deleted_records.saturating_add(stale_count as u64);
     }
 
     for hash in candidate_hashes {
-        if has_blob_references(db, &hash).await? {
+        let ref_row = client
+            .query_one("SELECT COUNT(*) FROM frames WHERE blob_hash = $1", &[&hash])
+            .await
+            .map_err(|e| LifelogError::Database(format!("retention ref check: {e}")))?;
+        let ref_count: i64 = ref_row.get(0);
+        if ref_count > 0 {
             continue;
         }
         match cas.remove(&hash) {
@@ -115,28 +104,6 @@ pub async fn prune_once(
     }
 
     Ok(summary)
-}
-
-async fn has_blob_references(db: &Surreal<Client>, hash: &str) -> Result<bool, LifelogError> {
-    let origins = get_origins_from_db(db).await?;
-    for origin in origins {
-        let table = origin.get_table_name();
-        let mut resp = db
-            .query(format!(
-                "SELECT id FROM `{}` WHERE blob_hash = $hash LIMIT 1;",
-                table
-            ))
-            .bind(("hash", hash.to_string()))
-            .await
-            .map_err(|e| LifelogError::Database(e.to_string()))?;
-        let refs: Vec<RefRow> = resp
-            .take(0)
-            .map_err(|e| LifelogError::Database(e.to_string()))?;
-        if refs.iter().any(|r| r.id.is_some()) {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 fn normalize_policy_map(raw: &HashMap<String, u32>) -> HashMap<String, u32> {

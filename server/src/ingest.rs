@@ -1033,7 +1033,7 @@ fn decode_stream_payload(
                 .map(|f| make_data(Payload::Windowactivityframe(f)))
                 .map_err(|e| e.to_string()),
         ),
-        "process" => Some(
+        "process" | "processes" => Some(
             lifelog_types::ProcessFrame::decode(payload)
                 .map(|f| make_data(Payload::Processframe(f)))
                 .map_err(|e| e.to_string()),

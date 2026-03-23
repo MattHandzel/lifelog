@@ -15,32 +15,6 @@ pub trait WatermarkStore: Send + Sync {
     ) -> Result<(), LifelogError>;
 }
 
-pub struct SurrealWatermarkStore {
-    db: surrealdb::Surreal<surrealdb::engine::remote::ws::Client>,
-}
-
-impl SurrealWatermarkStore {
-    pub fn new(db: surrealdb::Surreal<surrealdb::engine::remote::ws::Client>) -> Self {
-        Self { db }
-    }
-}
-
-#[async_trait]
-impl WatermarkStore for SurrealWatermarkStore {
-    async fn get(&self, transform_id: &str, _origin: &str) -> Result<DateTime<Utc>, LifelogError> {
-        crate::db::get_watermark(&self.db, transform_id).await
-    }
-
-    async fn set(
-        &self,
-        transform_id: &str,
-        _origin: &str,
-        ts: DateTime<Utc>,
-    ) -> Result<(), LifelogError> {
-        crate::db::set_watermark(&self.db, transform_id, ts).await
-    }
-}
-
 pub struct PostgresWatermarkStore {
     pool: PostgresPool,
 }
