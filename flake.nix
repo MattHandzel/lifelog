@@ -7,7 +7,7 @@
     self,
     nixpkgs,
   }: let
-    systems = ["x86_64-linux" "x86_64-darwin" "aarch64-darwin"];
+    systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
     forAllSystems = nixpkgs.lib.genAttrs systems;
   in {
     packages = forAllSystems (system: let
@@ -260,49 +260,19 @@
     });
 
     nixosModules = {
-      default = self.nixosModules.lifelog-postgres;
+      default = self.nixosModules.lifelog;
 
-      lifelog-postgres = {
-        config,
-        lib,
-        pkgs,
-        ...
-      }: let
-        cfg = config.services.lifelog.postgres;
-      in {
-        options.services.lifelog.postgres = {
-          enable = lib.mkEnableOption "PostgreSQL provisioning for Lifelog";
-          database = lib.mkOption {
-            type = lib.types.str;
-            default = "lifelog";
-            description = "PostgreSQL database name for Lifelog.";
-          };
-          user = lib.mkOption {
-            type = lib.types.str;
-            default = "lifelog";
-            description = "PostgreSQL role for Lifelog.";
-          };
-          package = lib.mkOption {
-            type = lib.types.package;
-            default = pkgs.postgresql_16;
-            description = "PostgreSQL package used by the managed service.";
-          };
-        };
-
-        config = lib.mkIf cfg.enable {
-          services.postgresql = {
-            enable = true;
-            package = cfg.package;
-            ensureDatabases = [cfg.database];
-            ensureUsers = [
-              {
-                name = cfg.user;
-                ensureDBOwnership = true;
-              }
-            ];
-          };
-        };
+      lifelog = {
+        imports = [
+          self.nixosModules.lifelog-server
+          self.nixosModules.lifelog-collector
+          self.nixosModules.lifelog-postgres
+        ];
       };
+
+      lifelog-server = import ./nix/server-module.nix;
+      lifelog-collector = import ./nix/collector-module.nix;
+      lifelog-postgres = import ./nix/postgres-module.nix;
     };
   };
 }

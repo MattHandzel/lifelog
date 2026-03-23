@@ -187,7 +187,13 @@ impl CollectorHandle {
     }
 
     pub async fn r#loop(&self) {
+        use rand::Rng;
+
+        const BASE_DELAY_SECS: u64 = 2;
+        const MAX_DELAY_SECS: u64 = 300;
+
         let collector_handle = self.clone();
+        let mut consecutive_failures: u32 = 0;
         loop {
             let needs_handshake = {
                 let collector = collector_handle.collector.read().await;
@@ -197,10 +203,22 @@ impl CollectorHandle {
             if needs_handshake {
                 let mut collector = collector_handle.collector.write().await;
                 if let Err(e) = collector.handshake(collector_handle.clone()).await {
-                    tracing::error!(error = %e, "Handshake failed, retrying in 5s");
-                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    consecutive_failures = consecutive_failures.saturating_add(1);
+                    let exp_delay =
+                        BASE_DELAY_SECS.saturating_mul(1u64 << consecutive_failures.min(8));
+                    let capped = exp_delay.min(MAX_DELAY_SECS);
+                    let jitter = rand::rng().random_range(0..=(capped / 4).max(1));
+                    let delay = capped + jitter;
+                    tracing::error!(
+                        error = %e,
+                        attempt = consecutive_failures,
+                        retry_secs = delay,
+                        "Handshake failed, backing off"
+                    );
+                    tokio::time::sleep(Duration::from_secs(delay)).await;
                     continue;
                 }
+                consecutive_failures = 0;
             }
 
             {
