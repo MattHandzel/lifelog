@@ -4,7 +4,7 @@ use clap::{Parser, ValueEnum};
 use deadpool_postgres::Pool;
 use serde::Serialize;
 use serde_json::Value;
-use std::io::{self, Write as _};
+use std::io;
 use tokio_postgres::NoTls;
 
 #[derive(Parser)]
