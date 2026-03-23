@@ -461,6 +461,17 @@ impl Server {
                         "Registered browser topic transform"
                     );
                 }
+                "sound-classifier" => {
+                    let executor = crate::transform::sound::SoundClassifierExecutor::new(
+                        spec.id.clone(),
+                        source,
+                    );
+                    executors.push(Arc::new(executor));
+                    tracing::info!(
+                        id = %spec.id,
+                        "Registered sound classifier transform"
+                    );
+                }
                 other => {
                     tracing::warn!(transform_id = %other, "Unknown transform type; skipping");
                 }

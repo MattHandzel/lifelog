@@ -905,6 +905,24 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
+    let meeting_handle = server_handle.clone();
+    tokio::task::spawn(async move {
+        let mut interval = tokio::time::interval(std::time::Duration::from_secs(3600));
+        interval.tick().await;
+        loop {
+            interval.tick().await;
+            let server = meeting_handle.server.read().await;
+            match lifelog_server::transform::meeting::detect_meetings(&server.postgres_pool).await {
+                Ok(()) => {
+                    tracing::debug!("meeting detection completed");
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "meeting detection failed");
+                }
+            }
+        }
+    });
+
     let tls_config = TlsConfig::from_env();
     let mut builder = TonicServer::builder()
         .accept_http1(true)
