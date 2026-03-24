@@ -9,6 +9,7 @@ import FeatureTabs from "./components/FeatureTabs.tsx";
 import { cn } from "./lib/utils";
 import { Switch } from "./components/ui/switch";
 import NetworkTopologyDashboard from './components/NetworkTopologyDashboard';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import './App.css';
 
@@ -172,10 +173,10 @@ function AppLayout(): JSX.Element {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden bg-[#0F111A]">
         <div className="flex-1 overflow-auto">
-          {currentView === "dashboard" && <FeatureTabs />}
-          {currentView === "search" && <SearchDashboard />}
-          {currentView === "network" && <NetworkTopologyDashboard />}
-          {currentView === "settings" && <SettingsDashboard />}
+          {currentView === "dashboard" && <ErrorBoundary><FeatureTabs /></ErrorBoundary>}
+          {currentView === "search" && <ErrorBoundary><SearchDashboard /></ErrorBoundary>}
+          {currentView === "network" && <ErrorBoundary><NetworkTopologyDashboard /></ErrorBoundary>}
+          {currentView === "settings" && <ErrorBoundary><SettingsDashboard /></ErrorBoundary>}
         </div>
         
         {/* Footer */}
