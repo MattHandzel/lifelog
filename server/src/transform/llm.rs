@@ -163,13 +163,15 @@ impl TransformExecutor for LlmExecutor {
             return Ok(TransformOutput::Transcription(transcription.clone()));
         }
 
+        let sanitized_input = sanitize_llm_input(&transcription.text, &self.id);
+
         let url = format!("{}/api/chat", self.endpoint.trim_end_matches('/'));
 
         let body = serde_json::json!({
             "model": self.model,
             "messages": [
                 { "role": "system", "content": self.system_prompt },
-                { "role": "user", "content": &transcription.text }
+                { "role": "user", "content": sanitized_input }
             ],
             "stream": false
         });
@@ -277,6 +279,8 @@ impl TransformExecutor for LlmExecutor {
     }
 }
 
+const MAX_INPUT_LEN: usize = 10_000;
+
 const MIN_OUTPUT_LEN: usize = 2;
 const MAX_OUTPUT_LEN: usize = 50_000;
 
@@ -291,6 +295,52 @@ const REFUSAL_PHRASES: &[&str] = &[
     "i am unable to",
     "i apologize",
 ];
+
+const INJECTION_PATTERNS: &[&str] = &[
+    "ignore previous instructions",
+    "ignore all previous",
+    "disregard previous",
+    "forget your instructions",
+    "new instructions:",
+    "system prompt:",
+    "you are now",
+    "act as",
+    "pretend you are",
+    "override:",
+    "jailbreak",
+];
+
+fn sanitize_llm_input(input: &str, transform_id: &str) -> String {
+    let lower = input.to_lowercase();
+    for pattern in INJECTION_PATTERNS {
+        if lower.contains(pattern) {
+            tracing::warn!(
+                transform_id = %transform_id,
+                pattern = %pattern,
+                input_len = input.len(),
+                "Suspicious content detected in LLM input (possible prompt injection)"
+            );
+            break;
+        }
+    }
+
+    let sanitized = if input.len() > MAX_INPUT_LEN {
+        tracing::info!(
+            transform_id = %transform_id,
+            original_len = input.len(),
+            truncated_to = MAX_INPUT_LEN,
+            "Truncating oversized LLM input"
+        );
+        &input[..MAX_INPUT_LEN]
+    } else {
+        input
+    };
+
+    sanitized
+        .replace("```system", "``` system")
+        .replace("<|im_start|>", "")
+        .replace("<|im_end|>", "")
+}
 
 fn validate_llm_output(output: &str, original: &str) -> Result<String, String> {
     let trimmed = output.trim();

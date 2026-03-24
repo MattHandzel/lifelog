@@ -1067,9 +1067,10 @@ impl Server {
                         ),
                     );
 
-                    let worker = crate::transform::worker::PipelineWorker::new(
-                        dag, watermarks, pool_clone, cas_clone, http, 50,
-                    );
+                    let worker =
+                        std::sync::Arc::new(crate::transform::worker::PipelineWorker::new(
+                            dag, watermarks, pool_clone, cas_clone, http, 50,
+                        ));
 
                     if let Err(e) = worker.poll_once().await {
                         tracing::error!(error = %e, "Transform pipeline error");

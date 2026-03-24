@@ -1125,6 +1125,40 @@ pub async fn get_keys_after_filtered(
     Ok(keys)
 }
 
+pub async fn count_keys_after(
+    pool: &PostgresPool,
+    origin: &DataOrigin,
+    after: DateTime<Utc>,
+) -> Result<i64, LifelogError> {
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| LifelogError::Database(format!("pool: {e}")))?;
+
+    let collector_id = extract_collector_id(origin);
+    let modality = &origin.modality_name;
+
+    let count: i64 = if let Some(cid) = collector_id {
+        client
+            .query_one(
+                "SELECT COUNT(*) FROM frames WHERE modality = $1 AND collector_id = $2 AND t_canonical > $3",
+                &[&modality, &cid, &after],
+            )
+            .await
+    } else {
+        client
+            .query_one(
+                "SELECT COUNT(*) FROM frames WHERE modality = $1 AND t_canonical > $2",
+                &[&modality, &after],
+            )
+            .await
+    }
+    .map_err(|e| LifelogError::Database(format!("frames count query: {e}")))?
+    .get(0);
+
+    Ok(count)
+}
+
 pub async fn get_origins(pool: &PostgresPool) -> Result<Vec<DataOrigin>, LifelogError> {
     let client = pool
         .get()
