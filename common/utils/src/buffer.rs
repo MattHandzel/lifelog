@@ -62,7 +62,7 @@ impl DiskBuffer {
         file.write_u32_le(len).await?;
         file.write_all(data).await?;
         file.write_all(&checksum).await?;
-        file.flush().await?;
+        file.sync_all().await?;
 
         Ok(())
     }
@@ -226,7 +226,7 @@ impl DiskBuffer {
         let file_len = tokio::fs::metadata(&log).await?.len();
         if committed >= file_len {
             tokio::fs::write(&log, &[]).await?;
-            self.commit_offset(0).await?;
+            self.write_cursor(0).await?;
             return Ok(());
         }
 
@@ -246,8 +246,8 @@ impl DiskBuffer {
             dst.sync_all().await?;
         }
 
+        self.write_cursor(0).await?;
         tokio::fs::rename(&tmp_log, &log).await?;
-        self.commit_offset(0).await?;
 
         eprintln!(
             "[WAL] Compacted: removed {} bytes, {} bytes remaining",
@@ -257,9 +257,7 @@ impl DiskBuffer {
         Ok(())
     }
 
-    /// Commit the offset, marking items before this offset as processed.
-    /// Uses write-to-temp + rename for atomic updates on POSIX.
-    pub async fn commit_offset(&self, offset: u64) -> Result<(), BufferError> {
+    async fn write_cursor(&self, offset: u64) -> Result<(), BufferError> {
         let path = self.cursor_path();
         let tmp_path = path.with_extension("tmp");
 
@@ -271,11 +269,26 @@ impl DiskBuffer {
             .await?;
 
         file.write_all(&offset.to_le_bytes()).await?;
-        file.flush().await?;
         file.sync_all().await?;
         drop(file);
 
         tokio::fs::rename(&tmp_path, &path).await?;
+        Ok(())
+    }
+
+    pub async fn commit_offset(&self, offset: u64) -> Result<(), BufferError> {
+        self.write_cursor(offset).await?;
+
+        const COMPACT_THRESHOLD: u64 = 100 * 1024 * 1024;
+        let log = self.log_path();
+        if let Ok(meta) = tokio::fs::metadata(&log).await {
+            if meta.len() > COMPACT_THRESHOLD && offset > 0 {
+                if let Err(e) = self.compact().await {
+                    eprintln!("[WAL] Auto-compact failed: {e}");
+                }
+            }
+        }
+
         Ok(())
     }
 }
