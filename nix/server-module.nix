@@ -70,6 +70,10 @@ in {
         Path to an environment file containing secrets.
         Used for LIFELOG_TLS_CERT_PATH, LIFELOG_TLS_KEY_PATH,
         LIFELOG_POSTGRES_INGEST_URL, etc.
+
+        IMPORTANT: This file must be mode 600 and owned by root (or the
+        service user). It contains auth tokens and connection strings.
+        Example: `install -m 600 /dev/null /etc/lifelog/server.env`
       '';
     };
 
@@ -107,6 +111,8 @@ in {
         message = "services.lifelog.server: tlsCertFile and tlsKeyFile must both be set or both be null.";
       }
     ];
+
+    services.timesyncd.enable = true;
 
     networking.firewall.allowedTCPPorts = lib.mkIf cfg.openFirewall [cfg.settings.server.port];
 
