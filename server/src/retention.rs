@@ -103,7 +103,44 @@ pub async fn prune_once(
         }
     }
 
+    let chunks_deleted = prune_upload_chunks(pool, now).await?;
+    if chunks_deleted > 0 {
+        tracing::info!(deleted = chunks_deleted, "Pruned old upload_chunks");
+    }
+    summary.deleted_records = summary
+        .deleted_records
+        .saturating_add(chunks_deleted as u64);
+
     Ok(summary)
+}
+
+async fn prune_upload_chunks(pool: &PostgresPool, now: DateTime<Utc>) -> Result<u64, LifelogError> {
+    let cutoff = now - Duration::days(90);
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| LifelogError::Database(format!("pool: {e}")))?;
+
+    let result = client
+        .execute(
+            "DELETE FROM upload_chunks WHERE id IN (
+                SELECT id FROM upload_chunks WHERE created_at < $1 LIMIT 10000
+            )",
+            &[&cutoff],
+        )
+        .await;
+
+    match result {
+        Ok(n) => Ok(n),
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("does not exist") {
+                Ok(0)
+            } else {
+                Err(LifelogError::Database(format!("prune upload_chunks: {e}")))
+            }
+        }
+    }
 }
 
 fn normalize_policy_map(raw: &HashMap<String, u32>) -> HashMap<String, u32> {
