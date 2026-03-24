@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use chrono::Local;
 use config::ScreenConfig;
 use data_modalities::screen::ScreenFrame;
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
+use tokio::process::Command;
 use tokio::time::{sleep, Duration};
 
 use image::GenericImageView;
@@ -268,23 +268,41 @@ impl ScreenLogger {
 
         #[cfg(target_os = "macos")]
         {
-            Command::new("screencapture")
-                .arg("-x")
-                .arg("-t")
-                .arg("png")
-                .arg(&out)
-                .status()
-                .map_err(LifelogError::Io)?;
+            tokio::time::timeout(
+                Duration::from_secs(10),
+                Command::new("screencapture")
+                    .arg("-x")
+                    .arg("-t")
+                    .arg("png")
+                    .arg(&out)
+                    .status(),
+            )
+            .await
+            .map_err(|_| {
+                LifelogError::Io(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Screenshot timed out",
+                ))
+            })?
+            .map_err(LifelogError::Io)?;
         }
         #[cfg(not(target_os = "macos"))]
         {
-            let status = Command::new(&self.config.program)
-                .arg(&out)
-                .status()
-                .map_err(|e| {
-                    tracing::error!(program = %self.config.program, error = %e, "Failed to start screenshot program");
-                    LifelogError::Io(e)
-                })?;
+            let status = tokio::time::timeout(
+                Duration::from_secs(10),
+                Command::new(&self.config.program)
+                    .arg(&out)
+                    .status(),
+            )
+            .await
+            .map_err(|_| {
+                tracing::error!(program = %self.config.program, "Screenshot program timed out");
+                LifelogError::Io(std::io::Error::new(std::io::ErrorKind::TimedOut, "Screenshot timed out"))
+            })?
+            .map_err(|e| {
+                tracing::error!(program = %self.config.program, error = %e, "Failed to start screenshot program");
+                LifelogError::Io(e)
+            })?;
 
             if !status.success() {
                 tracing::error!(program = %self.config.program, status = ?status, path = %out, "Screenshot program exited with error");

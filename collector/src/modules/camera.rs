@@ -13,11 +13,9 @@ use utils::buffer::DiskBuffer;
 use rscam::{Camera, Config};
 
 #[cfg(target_os = "macos")]
-use std::fs;
-#[cfg(target_os = "macos")]
-use std::process::Command;
-#[cfg(target_os = "macos")]
 use tempfile::NamedTempFile;
+#[cfg(target_os = "macos")]
+use tokio::process::Command;
 
 static RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -153,15 +151,19 @@ impl DataSource for CameraDataSource {
                 if let Ok(temp_file) = NamedTempFile::new() {
                     let temp_path = temp_file.path().to_string_lossy().to_string();
 
-                    let output = Command::new("imagesnap")
-                        .arg("-w")
-                        .arg("0.5")
-                        .arg(&temp_path)
-                        .output();
+                    let output = tokio::time::timeout(
+                        Duration::from_secs(10),
+                        Command::new("imagesnap")
+                            .arg("-w")
+                            .arg("0.5")
+                            .arg(&temp_path)
+                            .output(),
+                    )
+                    .await;
 
                     match output {
-                        Ok(out) if out.status.success() => {
-                            if let Ok(data) = fs::read(&temp_path) {
+                        Ok(Ok(out)) if out.status.success() => {
+                            if let Ok(data) = tokio::fs::read(&temp_path).await {
                                 if !data.is_empty() {
                                     let timestamp = to_pb_ts(Utc::now());
                                     let pb_frame = CameraFrame {

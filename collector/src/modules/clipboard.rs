@@ -5,9 +5,9 @@ use config::ClipboardConfig;
 use lifelog_core::{LifelogError, Uuid};
 use lifelog_types::{to_pb_ts, ClipboardFrame};
 use prost::Message;
-use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use tokio::process::Command;
 use tokio::time::{sleep, Duration};
 use utils::buffer::DiskBuffer;
 
@@ -35,9 +35,7 @@ impl ClipboardDataSource {
         })
     }
 
-    fn read_clipboard_text(&self) -> Result<String, LifelogError> {
-        // Prefer Wayland, then fall back to X11 tools. These are best-effort and are expected
-        // to fail on systems where the tool isn't installed or a display isn't available.
+    async fn read_clipboard_text(&self) -> Result<String, LifelogError> {
         let candidates: &[(&str, &[&str])] = &[
             ("wl-paste", &["--no-newline"]),
             ("xclip", &["-o", "-selection", "clipboard"]),
@@ -45,8 +43,12 @@ impl ClipboardDataSource {
         ];
 
         for (bin, args) in candidates {
-            let out = Command::new(bin).args(*args).output();
-            let Ok(out) = out else { continue };
+            let out = tokio::time::timeout(
+                Duration::from_secs(5),
+                Command::new(bin).args(*args).output(),
+            )
+            .await;
+            let Ok(Ok(out)) = out else { continue };
             if !out.status.success() {
                 continue;
             }
@@ -114,7 +116,7 @@ impl DataSource for ClipboardDataSource {
         let mut last_text: Option<String> = None;
 
         while RUNNING.load(Ordering::SeqCst) {
-            match self.read_clipboard_text() {
+            match self.read_clipboard_text().await {
                 Ok(text) => {
                     let changed = last_text.as_deref() != Some(text.as_str());
                     if changed {

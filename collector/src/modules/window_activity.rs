@@ -351,7 +351,24 @@ impl DataSource for WindowActivityDataSource {
 
         while RUNNING.load(Ordering::SeqCst) {
             let now = Utc::now();
-            match self.read_active_window() {
+            let this = self.clone();
+            let window_result = tokio::time::timeout(
+                Duration::from_secs(10),
+                tokio::task::spawn_blocking(move || this.read_active_window()),
+            )
+            .await;
+            let window_result = match window_result {
+                Ok(Ok(r)) => r,
+                Ok(Err(e)) => Err(LifelogError::Io(std::io::Error::new(
+                    std::io::ErrorKind::Other,
+                    e.to_string(),
+                ))),
+                Err(_) => Err(LifelogError::Io(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    "Window activity read timed out",
+                ))),
+            };
+            match window_result {
                 Ok(info) => {
                     let changed = current.as_ref().map(|c| c.info != info).unwrap_or(true);
 

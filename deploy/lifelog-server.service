@@ -8,9 +8,9 @@ Type=simple
 ExecStart=/usr/local/bin/lifelog-server serve
 Restart=on-failure
 RestartSec=5
-EnvironmentFile=/home/matth/.config/lifelog/.env
+EnvironmentFile=/etc/lifelog/.env
 Environment=RUST_LOG=info
-Environment=LIFELOG_POSTGRES_INGEST_URL=postgres://matth@/lifelog?host=/run/postgresql
+Environment=LIFELOG_POSTGRES_INGEST_URL=postgres://lifelog@/lifelog?host=/run/postgresql
 
 [Install]
 WantedBy=multi-user.target
