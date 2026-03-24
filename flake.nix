@@ -93,6 +93,24 @@
         pname = "lifelog-collector";
         binName = "lifelog-collector";
       };
+      lifelog-interface = pkgs.rustPlatform.buildRustPackage {
+        pname = "lifelog-interface";
+        version = "0.1.0";
+        src = ./.;
+        cargoLock.lockFile = ./Cargo.lock;
+        cargoBuildFlags = ["-p" "lifelog-interface"];
+
+        LIBCLANG_PATH = "${pkgs.llvmPackages.libclang}/lib";
+
+        buildInputs = commonDeps.buildInputs ++ commonDeps.frontendDeps;
+        nativeBuildInputs = commonDeps.nativeBuildInputs;
+
+        meta = with pkgs.lib; {
+          description = "Lifelog desktop interface (Tauri/WebKitGTK)";
+          license = licenses.mit;
+          maintainers = [maintainers.MattHandzel];
+        };
+      };
     });
 
     devShells = forAllSystems (system: let

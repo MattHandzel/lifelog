@@ -6,6 +6,8 @@
 }: let
   serverPkg = self.packages.${pkgs.system}.lifelog-server;
   collectorPkg = self.packages.${pkgs.system}.lifelog-collector;
+  interfacePkg = self.packages.${pkgs.system}.lifelog-interface;
+  vmTestPubKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEO/QOuTnat81f+K+rOhv5lqQrWoHeVRX29VAYYkImGF lifelog-vm-test";
 in {
   imports = [
     self.nixosModules.lifelog-server
@@ -14,7 +16,7 @@ in {
   ];
 
   microvm = {
-    hypervisor = "cloud-hypervisor";
+    hypervisor = "qemu";
     vcpu = 4;
     mem = 4096;
 
@@ -41,6 +43,14 @@ in {
       }
     ];
 
+    forwardPorts = [
+      {
+        from = "host";
+        host.port = 2222;
+        guest.port = 22;
+      }
+    ];
+
     interfaces = [
       {
         type = "user";
@@ -54,12 +64,22 @@ in {
     firewall.enable = false;
   };
 
+  users.users.root.openssh.authorizedKeys.keys = [vmTestPubKey];
+
   users.users.test = {
     isNormalUser = true;
     group = "test";
     home = "/home/test";
   };
   users.groups.test = {};
+
+  services.openssh = {
+    enable = true;
+    settings = {
+      PermitRootLogin = "prohibit-password";
+      PasswordAuthentication = false;
+    };
+  };
 
   # --- V2: Virtual display (Xvfb) ---
   environment.systemPackages = with pkgs; [
@@ -69,6 +89,16 @@ in {
     leptonica
     coreutils
     bash
+    imagemagick
+    interfacePkg
+    gtk3
+    webkitgtk_4_1
+    libsoup_3
+    glib
+    pango
+    gdk-pixbuf
+    atk
+    harfbuzz
   ];
 
   systemd.services.xvfb = {
@@ -85,6 +115,29 @@ in {
   };
 
   environment.variables.DISPLAY = ":99";
+
+  # --- V5: Interface (Tauri/WebKitGTK) ---
+  systemd.services.lifelog-interface = {
+    description = "Lifelog interface (Tauri)";
+    wantedBy = ["multi-user.target"];
+    after = ["xvfb.service" "lifelog-server.service"];
+    requires = ["xvfb.service"];
+
+    environment = {
+      DISPLAY = ":99";
+      LIFELOG_SERVER_ADDRESS = "http://127.0.0.1:7182";
+      XDG_RUNTIME_DIR = "/run/user/0";
+      GDK_BACKEND = "x11";
+    };
+
+    serviceConfig = {
+      ExecStartPre = "${pkgs.coreutils}/bin/sleep 5";
+      ExecStart = "${interfacePkg}/bin/lifelog-server-frontend";
+      Restart = "on-failure";
+      RestartSec = 5;
+      Type = "simple";
+    };
+  };
 
   # --- V3: Basic services ---
   services.lifelog.postgres = {

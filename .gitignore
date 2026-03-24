@@ -79,3 +79,4 @@ worktrees/
 *.pem
 key.pem
 cert.pem
+nix/vm-test-key
