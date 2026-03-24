@@ -67,7 +67,7 @@ nix develop --command cargo build --release -p lifelog-server-frontend
 
 ## CSP / Network
 
-- Connects to gRPC server at `https://100.118.206.104:7182` (Tailscale) or `http://localhost:8080`
+- Connects to gRPC server at `https://YOUR_SERVER_IP:7182` (Tailscale) or `http://localhost:8080`
 - WebSocket for Vite HMR at `ws://localhost:1420`
 - MinIO/S3 at `http://localhost:9000`
 

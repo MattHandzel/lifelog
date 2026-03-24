@@ -59,6 +59,43 @@ pub async fn get_by_id(
         .map_err(|e| LifelogError::Database(format!("frame conversion: {e}")))
 }
 
+pub async fn get_by_ids(
+    pool: &PostgresPool,
+    cas: &FsCas,
+    ids: &[uuid::Uuid],
+) -> Result<Vec<lifelog_types::LifelogData>, LifelogError> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let client = pool
+        .get()
+        .await
+        .map_err(|e| LifelogError::Database(format!("pool: {e}")))?;
+
+    let rows = client
+        .query(
+            "SELECT id, collector_id, stream_id, modality, t_device, t_ingest, t_canonical, t_end,
+                    time_quality, blob_hash, blob_size, indexed, source_frame_id, payload
+             FROM frames WHERE id = ANY($1)",
+            &[&ids],
+        )
+        .await
+        .map_err(|e| LifelogError::Database(format!("frames batch select: {e}")))?;
+
+    let mut results = Vec::with_capacity(rows.len());
+    for row in &rows {
+        match row_to_frame_row(row) {
+            Ok(frame_row) => match to_lifelog_data(&frame_row, cas) {
+                Ok(data) => results.push(data),
+                Err(e) => tracing::error!(error = %e, "Failed to convert frame row"),
+            },
+            Err(e) => tracing::error!(error = %e, "Failed to parse frame row"),
+        }
+    }
+    Ok(results)
+}
+
 pub async fn get_keys_after(
     pool: &PostgresPool,
     origin: &DataOrigin,

@@ -100,36 +100,9 @@ impl ServerHandle {
         keys: Vec<lifelog_types::LifelogDataKey>,
     ) -> Result<Vec<lifelog_types::LifelogData>, LifelogError> {
         let server = self.server.read().await;
-        let mut data = Vec::new();
-        for key in keys {
-            let core_key = LifelogFrameKey::new(
-                key.uuid.parse().unwrap_or_default(),
-                DataOrigin::tryfrom_string(key.origin.clone()).unwrap_or_else(|_| {
-                    DataOrigin::new(
-                        DataOriginType::DeviceId("unknown".to_string()),
-                        "unknown".to_string(),
-                    )
-                }),
-            );
-            match crate::data_retrieval::get_data_by_key(
-                &server.postgres_pool,
-                &server.cas,
-                &core_key,
-            )
-            .await
-            {
-                Ok(d) => data.push(d),
-                Err(e) => {
-                    tracing::error!(
-                        uuid = %key.uuid,
-                        origin = %key.origin,
-                        error = %e,
-                        "Failed to get data by key"
-                    );
-                }
-            }
-        }
-        Ok(data)
+        let ids: Vec<uuid::Uuid> = keys.iter().filter_map(|k| k.uuid.parse().ok()).collect();
+
+        crate::frames::get_by_ids(&server.postgres_pool, &server.cas, &ids).await
     }
 
     pub async fn list_postgres_origins(&self) -> Vec<DataOrigin> {
