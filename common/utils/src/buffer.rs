@@ -210,17 +210,24 @@ impl DiskBuffer {
     }
 
     /// Commit the offset, marking items before this offset as processed.
+    /// Uses write-to-temp + rename for atomic updates on POSIX.
     pub async fn commit_offset(&self, offset: u64) -> Result<(), BufferError> {
         let path = self.cursor_path();
+        let tmp_path = path.with_extension("tmp");
+
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
             .truncate(true)
-            .open(path)
+            .open(&tmp_path)
             .await?;
 
         file.write_all(&offset.to_le_bytes()).await?;
         file.flush().await?;
+        file.sync_all().await?;
+        drop(file);
+
+        tokio::fs::rename(&tmp_path, &path).await?;
         Ok(())
     }
 }

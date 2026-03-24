@@ -51,7 +51,10 @@ impl ShellHistoryDataSource {
 
     fn save_cursor(&self, cursor: u64) {
         let _ = std::fs::create_dir_all(&self.config.output_dir);
-        let _ = std::fs::write(self.cursor_path(), cursor.to_string());
+        let tmp = self.cursor_path().with_extension("tmp");
+        if std::fs::write(&tmp, cursor.to_string()).is_ok() {
+            let _ = std::fs::rename(&tmp, self.cursor_path());
+        }
     }
 
     fn parse_zsh_extended(line: &str) -> Option<(chrono::DateTime<Utc>, String)> {
