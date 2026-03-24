@@ -464,6 +464,34 @@ async fn get_collector_ids(
     }
 }
 
+fn extract_payload_timestamp(data: &lifelog::LifelogData) -> Option<i64> {
+    match data.payload.as_ref()? {
+        lifelog::lifelog_data::Payload::Screenframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        lifelog::lifelog_data::Payload::Transcriptionframe(f) => {
+            f.timestamp.as_ref().map(|ts| ts.seconds)
+        }
+        lifelog::lifelog_data::Payload::Audioframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        lifelog::lifelog_data::Payload::Browserhistoryframe(f) => {
+            f.timestamp.as_ref().map(|ts| ts.seconds)
+        }
+        lifelog::lifelog_data::Payload::Processesframe(f) => {
+            f.timestamp.as_ref().map(|ts| ts.seconds)
+        }
+        _ => None,
+    }
+}
+
+fn extract_payload_uuid(data: &lifelog::LifelogData) -> Option<String> {
+    match data.payload.as_ref()? {
+        lifelog::lifelog_data::Payload::Screenframe(f) => Some(f.uuid.clone()),
+        lifelog::lifelog_data::Payload::Transcriptionframe(f) => Some(f.uuid.clone()),
+        lifelog::lifelog_data::Payload::Audioframe(f) => Some(f.uuid.clone()),
+        lifelog::lifelog_data::Payload::Browserhistoryframe(f) => Some(f.uuid.clone()),
+        lifelog::lifelog_data::Payload::Processesframe(f) => Some(f.uuid.clone()),
+        _ => None,
+    }
+}
+
 #[tauri::command]
 async fn query_timeline(
     state: tauri::State<'_, GrpcClientState>,
@@ -506,17 +534,42 @@ async fn query_timeline(
 
     match timeout(Duration::from_secs(15), client.query(req)).await {
         Ok(Ok(resp)) => {
-            let entries = resp
-                .into_inner()
-                .keys
+            let keys = resp.into_inner().keys;
+            if keys.is_empty() {
+                return Ok(vec![]);
+            }
+
+            let grpc_keys: Vec<lifelog::LifelogDataKey> = keys
+                .iter()
+                .map(|k| lifelog::LifelogDataKey {
+                    uuid: k.uuid.clone(),
+                    origin: k.origin.clone(),
+                })
+                .collect();
+
+            let mut timestamp_map = std::collections::HashMap::new();
+            let data_req = lifelog::GetDataRequest { keys: grpc_keys };
+            if let Ok(Ok(data_resp)) =
+                timeout(Duration::from_secs(15), client.get_data(data_req)).await
+            {
+                for d in data_resp.into_inner().data {
+                    let ts = extract_payload_timestamp(&d);
+                    if let (Some(uuid), Some(t)) = (extract_payload_uuid(&d), ts) {
+                        timestamp_map.insert(uuid, t);
+                    }
+                }
+            }
+
+            let entries = keys
                 .into_iter()
                 .map(|k| {
                     let modality = k.origin.split(':').last().unwrap_or("unknown").to_string();
+                    let timestamp = timestamp_map.get(&k.uuid).copied();
                     TimelineEntry {
                         uuid: k.uuid,
                         origin: k.origin,
                         modality,
-                        timestamp: None,
+                        timestamp,
                     }
                 })
                 .collect();
