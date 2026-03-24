@@ -52,22 +52,27 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
       });
 
       setResults(entries);
+      setIsLoading(false);
 
       if (entries.length > 0) {
         const keys = entries.slice(0, 50).map(e => ({ uuid: e.uuid, origin: e.origin }));
-        const enriched = await invoke<FrameDataWrapper[]>('get_frame_data', { keys });
-        const frameMap = new Map(enriched.map(f => [f.uuid, f]));
-        const ordered = entries.slice(0, 50).map(e => frameMap.get(e.uuid) ?? {
-          uuid: e.uuid, modality: e.modality, timestamp: e.timestamp,
-          text: null, url: null, title: null, visit_count: null,
-          command: null, working_dir: null, exit_code: null,
-          application: null, window_title: null, duration_secs: null,
-          audio_data_url: null, codec: null, sample_rate: null, channels: null, audio_duration_secs: null,
-          image_data_url: null, width: null, height: null, mime_type: null,
-          camera_device: null, processes: null,
-          transcription_model: null, transcription_confidence: null, source_frame_uuid: null,
-        });
-        setFrames(ordered);
+        try {
+          const enriched = await invoke<FrameDataWrapper[]>('get_frame_data', { keys });
+          const frameMap = new Map(enriched.map(f => [f.uuid, f]));
+          const ordered = entries.slice(0, 50).map(e => frameMap.get(e.uuid) ?? {
+            uuid: e.uuid, modality: e.modality, timestamp: e.timestamp,
+            text: null, url: null, title: null, visit_count: null,
+            command: null, working_dir: null, exit_code: null,
+            application: null, window_title: null, duration_secs: null,
+            audio_data_url: null, codec: null, sample_rate: null, channels: null, audio_duration_secs: null,
+            image_data_url: null, width: null, height: null, mime_type: null,
+            camera_device: null, processes: null,
+            transcription_model: null, transcription_confidence: null, source_frame_uuid: null,
+          });
+          setFrames(ordered);
+        } catch (frameError) {
+          console.error('Frame data enrichment failed:', frameError);
+        }
       } else {
         setFrames([]);
       }
