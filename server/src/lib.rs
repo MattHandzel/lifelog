@@ -1,7 +1,6 @@
 pub mod policy;
 pub mod server;
 
-pub(crate) mod data_retrieval;
 pub mod frames;
 pub mod grpc_service;
 pub(crate) mod ingest;
