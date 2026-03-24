@@ -4,10 +4,9 @@ use tonic::transport::Channel;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let addr = std::env::var("LIFELOG_GRPC_ADDR")
-        .unwrap_or_else(|_| "http://100.118.206.104:7182".to_string());
-    let token = std::env::var("LIFELOG_AUTH_TOKEN")
-        .unwrap_or_else(|_| "cdf4fa2f8f324ae9afed98dfa0430755".to_string());
+    let addr =
+        std::env::var("LIFELOG_GRPC_ADDR").unwrap_or_else(|_| "http://localhost:7182".to_string());
+    let token = std::env::var("LIFELOG_AUTH_TOKEN").unwrap_or_else(|_| String::new());
 
     println!("[CHECK] Connecting to {}...", addr);
 

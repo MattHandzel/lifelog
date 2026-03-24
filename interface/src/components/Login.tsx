@@ -4,8 +4,8 @@ import { invoke } from '@tauri-apps/api/core';
 
 export function Login(): JSX.Element {
   const [credentials, setCredentials] = useState({
-    username: 'admin',  // Hardcode for testing
-    password: 'admin',  // Hardcode for testing
+    username: '',
+    password: '',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
