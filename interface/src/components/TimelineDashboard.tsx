@@ -31,9 +31,11 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
   const [frames, setFrames] = useState<FrameDataWrapper[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showTransforms, setShowTransforms] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSearch(): Promise<void> {
     setIsLoading(true);
+    setError(null);
     try {
       const startTime = startDate ? Math.floor(new Date(startDate).getTime() / 1000) : undefined;
       const endTime = endDate ? Math.floor(new Date(endDate).getTime() / 1000) : undefined;
@@ -76,8 +78,10 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
       } else {
         setFrames([]);
       }
-    } catch (error) {
-      console.error('Timeline query failed:', error);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('Timeline query failed:', msg);
+      setError(msg);
       setResults([]);
       setFrames([]);
     } finally {
@@ -209,7 +213,12 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
       {/* Results */}
       <div className="card">
         <div className="p-6">
-          {isLoading ? (
+          {error ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center text-red-400">
+              <p className="text-lg font-medium mb-2">Query Error</p>
+              <p className="text-sm font-mono break-all">{error}</p>
+            </div>
+          ) : isLoading ? (
             <div className="flex flex-col items-center justify-center py-12 text-[#9CA3AF]">
               <RefreshCw className="w-8 h-8 animate-spin mb-3 text-[#4C8BF5]" />
               Searching timeline...
