@@ -1,13 +1,13 @@
 [server]
 host = "0.0.0.0"
 port = 7182
-databaseEndpoint = "postgresql://lifelog@100.118.206.104:5432/lifelog"
+databaseEndpoint = "postgresql://lifelog@YOUR_HOST:5432/lifelog"
 serverName = "LifelogServer"
 casPath = "/home/matth/lifelog/cas"
 defaultCorrelationWindowMs = 30000
 
 [collectors.matts-laptop]
-host = "100.118.206.104"
+host = "YOUR_HOST"
 id = "matts-laptop"
 port = 7190
 timestampFormat = "%Y-%m-%d_%H-%M-%S.%3f%Z"

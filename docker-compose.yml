@@ -3,7 +3,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: lifelog
-      POSTGRES_PASSWORD: lifelog
+      POSTGRES_PASSWORD: CHANGE_ME
       POSTGRES_DB: lifelog
     volumes:
       - postgres-data:/var/lib/postgresql/data
@@ -21,7 +21,7 @@ services:
     ports:
       - "7182:7182"
     environment:
-      LIFELOG_POSTGRES_INGEST_URL: "postgres://lifelog:lifelog@postgres/lifelog"
+      LIFELOG_POSTGRES_INGEST_URL: "postgres://lifelog:CHANGE_ME@postgres/lifelog"
     volumes:
       - cas-data:/var/lib/lifelog/cas
       - ./lifelog-config.toml:/etc/lifelog/lifelog-config.toml:ro

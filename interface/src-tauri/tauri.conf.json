@@ -13,7 +13,7 @@
     "security": {
       "csp": {
         "defaultSrc": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        "connectSrc": ["'self'", "https://100.118.206.104:7182", "http://localhost:9000", "ws://localhost:1420", "http://localhost:8080", "*"]
+        "connectSrc": ["'self'", "https://YOUR_SERVER_IP:7182", "http://localhost:9000", "ws://localhost:1420", "http://localhost:8080", "*"]
       },
       "capabilities": []
     },
@@ -40,7 +40,7 @@
     "http": {
       "all": true,
       "request": true,
-      "scope": ["https://100.118.206.104:7182/*", "http://localhost:9000/*", "http://localhost:8080/*"]
+      "scope": ["https://YOUR_SERVER_IP:7182/*", "http://localhost:9000/*", "http://localhost:8080/*"]
     }
   },
   "bundle": {

@@ -154,7 +154,7 @@ tlsKeyPath = "/etc/lifelog/key.pem"
 allowedHosts = ["api.openai.com"]
 
 [collectors.my-laptop]
-host = "100.118.206.104"
+host = "YOUR_HOST"
 port = 7190
 timestampFormat = "%Y-%m-%d_%H-%M-%S.%3f%Z"
 

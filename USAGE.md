@@ -258,7 +258,7 @@ sudo systemctl start lifelog-collector
 This section is for a split setup:
 - Server backend on home server (`matth@server.matthandzel.com`)
 - Collector on laptop
-- Transport over Tailscale (`http://100.118.206.104:7182`)
+- Transport over Tailscale (`http://YOUR_SERVER_IP:7182`)
 
 ### 11.1 Files Added for Persistence
 
@@ -364,7 +364,7 @@ These values are intentionally specific to one environment and should be paramet
     - `deploy/systemd-user/lifelog-server.service`
 
 - Collector endpoint:
-  - `SERVER_ADDR=http://100.118.206.104:7182`
+  - `SERVER_ADDR=http://YOUR_SERVER_IP:7182`
   - file: `deploy/systemd-user/lifelog-collector.service`
 
 - Local data/output paths and laptop id:

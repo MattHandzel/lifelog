@@ -22,7 +22,7 @@ Environment overrides:
 
 Example:
   $0 --duration 90
-  SERVER_ADDR=http://100.118.206.104:7182 $0
+  SERVER_ADDR=http://YOUR_SERVER_IP:7182 $0
 USAGE
 }
 
