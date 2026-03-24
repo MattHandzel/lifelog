@@ -895,6 +895,145 @@ async fn get_frame_data_async(
                             },
                             ..Default::default()
                         },
+                        lifelog::lifelog_data::Payload::Ocrframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Ocr".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            text: Some(f.text),
+                            ..Default::default()
+                        },
+                        lifelog::lifelog_data::Payload::Browserframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Browser".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            url: Some(f.url),
+                            title: Some(f.title),
+                            visit_count: Some(f.visit_count),
+                            ..Default::default()
+                        },
+                        lifelog::lifelog_data::Payload::Audioframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Audio".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            codec: if f.codec.is_empty() {
+                                None
+                            } else {
+                                Some(f.codec)
+                            },
+                            sample_rate: if f.sample_rate > 0 {
+                                Some(f.sample_rate)
+                            } else {
+                                None
+                            },
+                            channels: if f.channels > 0 {
+                                Some(f.channels)
+                            } else {
+                                None
+                            },
+                            audio_duration_secs: if f.duration_secs > 0.0 {
+                                Some(f.duration_secs)
+                            } else {
+                                None
+                            },
+                            ..Default::default()
+                        },
+                        lifelog::lifelog_data::Payload::Keystrokeframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Keystroke".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            text: if f.text.is_empty() {
+                                None
+                            } else {
+                                Some(f.text)
+                            },
+                            application: if f.application.is_empty() {
+                                None
+                            } else {
+                                Some(f.application)
+                            },
+                            window_title: if f.window_title.is_empty() {
+                                None
+                            } else {
+                                Some(f.window_title)
+                            },
+                            ..Default::default()
+                        },
+                        lifelog::lifelog_data::Payload::Clipboardframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Clipboard".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            text: if f.text.is_empty() {
+                                None
+                            } else {
+                                Some(f.text)
+                            },
+                            ..Default::default()
+                        },
+                        lifelog::lifelog_data::Payload::Shellhistoryframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "ShellHistory".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            command: if f.command.is_empty() {
+                                None
+                            } else {
+                                Some(f.command)
+                            },
+                            working_dir: if f.working_dir.is_empty() {
+                                None
+                            } else {
+                                Some(f.working_dir)
+                            },
+                            exit_code: Some(f.exit_code),
+                            ..Default::default()
+                        },
+                        lifelog::lifelog_data::Payload::Windowactivityframe(f) => {
+                            FrameDataWrapper {
+                                uuid: f.uuid,
+                                modality: "WindowActivity".into(),
+                                timestamp: f.timestamp.map(|ts| ts.seconds),
+                                application: if f.application.is_empty() {
+                                    None
+                                } else {
+                                    Some(f.application)
+                                },
+                                window_title: if f.window_title.is_empty() {
+                                    None
+                                } else {
+                                    Some(f.window_title)
+                                },
+                                duration_secs: if f.duration_secs > 0.0 {
+                                    Some(f.duration_secs)
+                                } else {
+                                    None
+                                },
+                                ..Default::default()
+                            }
+                        }
+                        lifelog::lifelog_data::Payload::Cameraframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Camera".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            dataUrl: Some(encode_dataUrl(
+                                &f.image_bytes,
+                                &f.mime_type,
+                                thumbnail_mode,
+                            )?),
+                            width: Some(f.width),
+                            height: Some(f.height),
+                            mime_type: Some(f.mime_type),
+                            camera_device: if f.device.is_empty() {
+                                None
+                            } else {
+                                Some(f.device)
+                            },
+                            ..Default::default()
+                        },
+                        lifelog::lifelog_data::Payload::Weatherframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Weather".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            ..Default::default()
+                        },
                         _ => FrameDataWrapper::default(),
                     };
                     frames.push(frame);

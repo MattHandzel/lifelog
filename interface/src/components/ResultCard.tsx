@@ -159,7 +159,7 @@ function ModalityIcon({ modality }: { modality: string }): JSX.Element {
   if (lower === 'clipboard') return <Clipboard className="w-5 h-5 text-yellow-400" />;
   if (lower === 'browser') return <Globe className="w-5 h-5 text-cyan-400" />;
   if (lower === 'shellhistory' || lower === 'shell_history') return <Terminal className="w-5 h-5 text-rose-400" />;
-  if (lower === 'keystrokes') return <Activity className="w-5 h-5 text-pink-400" />;
+  if (lower === 'keystroke' || lower === 'keystrokes') return <Activity className="w-5 h-5 text-pink-400" />;
   if (lower === 'transcription') return <MessageSquareText className="w-5 h-5 text-emerald-400" />;
   return <File className="w-5 h-5 text-gray-400" />;
 }
@@ -196,16 +196,80 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
     );
   }
 
+  if (lower === 'ocr') {
+    const text = result.snippet || (result.metadata?.text as string) || '';
+    if (text) {
+      return (
+        <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
+          <File className="w-6 h-6 text-blue-400 shrink-0" />
+          <p className="text-xs text-[#D1D5DB] line-clamp-4 leading-relaxed font-mono">{text}</p>
+        </div>
+      );
+    }
+  }
+
+  if (lower === 'keystroke' || lower === 'keystrokes') {
+    const text = result.snippet || (result.metadata?.text as string) || '';
+    const app = result.metadata?.application as string;
+    return (
+      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
+        <Activity className="w-6 h-6 text-pink-400 shrink-0" />
+        {app && <p className="text-xs text-[#9CA3AF] truncate w-full">{app}</p>}
+        {text && <p className="text-xs text-[#D1D5DB] line-clamp-3 leading-relaxed font-mono">{text}</p>}
+      </div>
+    );
+  }
+
+  if (lower === 'clipboard') {
+    const text = result.snippet || (result.metadata?.text as string) || '';
+    return (
+      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
+        <Clipboard className="w-6 h-6 text-yellow-400 shrink-0" />
+        {text && <p className="text-xs text-[#D1D5DB] line-clamp-4 leading-relaxed font-mono">{text}</p>}
+      </div>
+    );
+  }
+
+  if (lower === 'shellhistory' || lower === 'shell_history') {
+    const cmd = (result.metadata?.command as string) || '';
+    return (
+      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
+        <Terminal className="w-6 h-6 text-rose-400 shrink-0" />
+        {cmd && <p className="text-xs text-[#D1D5DB] line-clamp-2 leading-relaxed font-mono">$ {cmd}</p>}
+      </div>
+    );
+  }
+
+  if (lower === 'browser') {
+    const title = (result.metadata?.title as string) || '';
+    const url = (result.metadata?.url as string) || '';
+    return (
+      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
+        <Globe className="w-6 h-6 text-cyan-400 shrink-0" />
+        {title && <p className="text-xs text-[#F9FAFB] truncate w-full font-medium">{title}</p>}
+        {url && <p className="text-xs text-[#9CA3AF] truncate w-full">{url}</p>}
+      </div>
+    );
+  }
+
+  if (lower === 'windowactivity') {
+    const app = (result.metadata?.application as string) || '';
+    const wt = (result.metadata?.window_title as string) || result.name;
+    return (
+      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
+        <Monitor className="w-6 h-6 text-indigo-400 shrink-0" />
+        {app && <p className="text-xs text-[#F9FAFB] truncate w-full font-medium">{app}</p>}
+        {wt && <p className="text-xs text-[#9CA3AF] truncate w-full">{wt}</p>}
+      </div>
+    );
+  }
+
   const iconClass = "w-12 h-12 text-[#4C8BF5]";
   const icon = (() => {
     if (lower === 'mouse') return <Mouse className={iconClass} />;
     if (lower === 'weather') return <Cloud className={iconClass} />;
-    if (lower === 'hyprland' || lower === 'windowactivity') return <Monitor className={iconClass} />;
+    if (lower === 'hyprland') return <Monitor className={iconClass} />;
     if (lower === 'processes') return <Cpu className={iconClass} />;
-    if (lower === 'clipboard') return <Clipboard className={iconClass} />;
-    if (lower === 'browser') return <Globe className={iconClass} />;
-    if (lower === 'shellhistory' || lower === 'shell_history') return <Terminal className={iconClass} />;
-    if (lower === 'keystrokes') return <Activity className={iconClass} />;
     return <File className={iconClass} />;
   })();
 
@@ -264,7 +328,7 @@ function ModalityDetails({ result }: { result: SearchResult }): JSX.Element {
     );
   }
 
-  if (lower === 'keystrokes') {
+  if (lower === 'keystroke' || lower === 'keystrokes') {
     return (
       <div className="text-sm text-[#9CA3AF]">
         {meta.application != null && <p className="truncate">{String(meta.application)}</p>}
@@ -316,12 +380,15 @@ function frameToResult(frame: FrameDataWrapper): SearchResult {
       title: frame.title,
       command: frame.command,
       application: frame.application,
+      window_title: frame.window_title,
       visit_count: frame.visit_count,
       processes_count: frame.processes?.length ?? 0,
       text: frame.text,
       model: frame.transcription_model,
       confidence: frame.transcription_confidence,
       source_frame_uuid: frame.source_frame_uuid,
+      exit_code: frame.exit_code,
+      working_dir: frame.working_dir,
     },
   };
 }
