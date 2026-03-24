@@ -30,7 +30,7 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
   const [results, setResults] = useState<TimelineEntry[]>([]);
   const [frames, setFrames] = useState<FrameDataWrapper[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [showTransforms, setShowTransforms] = useState(false);
+  const [showTransforms, setShowTransforms] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSearch(): Promise<void> {
