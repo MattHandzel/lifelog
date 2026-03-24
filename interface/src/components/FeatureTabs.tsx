@@ -236,7 +236,7 @@ export default function FeatureTabs(): JSX.Element {
 
   // Filter tabs by category
   function getTabsByCategory(category: CategoryType): TabDefinition[] {
-    return tabs.filter(function (tab) { return tab.category === category; });
+    return tabs.filter(function (tab) { return tab.category === category && tab.implemented; });
   }
 
   // Toggle category
