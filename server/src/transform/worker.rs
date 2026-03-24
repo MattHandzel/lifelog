@@ -21,6 +21,21 @@ const CIRCUIT_BREAKER_COOLDOWN_SECS: i64 = 300;
 struct CircuitState {
     consecutive_failures: u32,
     tripped_at: Option<DateTime<Utc>>,
+    last_success: Option<DateTime<Utc>>,
+    last_failure: Option<DateTime<Utc>>,
+    total_processed: u64,
+    total_failures: u64,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TransformStatus {
+    pub id: String,
+    pub state: &'static str,
+    pub consecutive_failures: u32,
+    pub last_success: Option<DateTime<Utc>>,
+    pub last_failure: Option<DateTime<Utc>>,
+    pub total_processed: u64,
+    pub total_failures: u64,
 }
 
 pub struct PipelineWorker {
@@ -88,6 +103,41 @@ impl PipelineWorker {
         true
     }
 
+    pub async fn get_transform_statuses(&self) -> Vec<TransformStatus> {
+        let breakers = self.circuit_breakers.lock().await;
+        let now = Utc::now();
+        let stale_threshold = chrono::Duration::minutes(10);
+
+        let mut statuses = Vec::new();
+        for (id, state) in breakers.iter() {
+            let circuit_open = state.consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD
+                && state.tripped_at.is_some();
+            let is_stale = state
+                .last_success
+                .map(|t| now - t > stale_threshold)
+                .unwrap_or(false);
+
+            let status = if circuit_open {
+                "failed"
+            } else if is_stale {
+                "stale"
+            } else {
+                "ok"
+            };
+
+            statuses.push(TransformStatus {
+                id: id.clone(),
+                state: status,
+                consecutive_failures: state.consecutive_failures,
+                last_success: state.last_success,
+                last_failure: state.last_failure,
+                total_processed: state.total_processed,
+                total_failures: state.total_failures,
+            });
+        }
+        statuses
+    }
+
     async fn record_transform_result(&self, transform_id: &str, success: bool) {
         let mut breakers = self.circuit_breakers.lock().await;
         let state = breakers
@@ -95,12 +145,20 @@ impl PipelineWorker {
             .or_insert(CircuitState {
                 consecutive_failures: 0,
                 tripped_at: None,
+                last_success: None,
+                last_failure: None,
+                total_processed: 0,
+                total_failures: 0,
             });
         if success {
             state.consecutive_failures = 0;
             state.tripped_at = None;
+            state.last_success = Some(Utc::now());
+            state.total_processed += 1;
         } else {
             state.consecutive_failures += 1;
+            state.last_failure = Some(Utc::now());
+            state.total_failures += 1;
             if state.consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD && state.tripped_at.is_none()
             {
                 state.tripped_at = Some(Utc::now());
