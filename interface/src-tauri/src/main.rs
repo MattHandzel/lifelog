@@ -587,10 +587,11 @@ async fn query_timeline(
 
     match timeout(Duration::from_secs(15), client.query(req)).await {
         Ok(Ok(resp)) => {
-            let keys = resp.into_inner().keys;
+            let mut keys = resp.into_inner().keys;
             if keys.is_empty() {
                 return Ok(vec![]);
             }
+            keys.truncate(100);
 
             let grpc_keys: Vec<lifelog::LifelogDataKey> = keys
                 .iter()
@@ -601,16 +602,21 @@ async fn query_timeline(
                 .collect();
 
             let mut timestamp_map = std::collections::HashMap::new();
-            let data_req = lifelog::GetDataRequest { keys: grpc_keys };
-            if let Ok(Ok(data_resp)) =
-                timeout(Duration::from_secs(30), client.get_data(data_req)).await
-            {
-                for d in data_resp.into_inner().data {
-                    if let (Some(uuid), Some(t)) =
-                        (extract_payload_uuid(&d), extract_payload_timestamp(&d))
-                    {
-                        timestamp_map.insert(uuid, t);
+            for chunk in grpc_keys.chunks(25) {
+                let data_req = lifelog::GetDataRequest {
+                    keys: chunk.to_vec(),
+                };
+                match timeout(Duration::from_secs(30), client.get_data(data_req)).await {
+                    Ok(Ok(data_resp)) => {
+                        for d in data_resp.into_inner().data {
+                            if let (Some(uuid), Some(t)) =
+                                (extract_payload_uuid(&d), extract_payload_timestamp(&d))
+                            {
+                                timestamp_map.insert(uuid, t);
+                            }
+                        }
                     }
+                    _ => break,
                 }
             }
 
