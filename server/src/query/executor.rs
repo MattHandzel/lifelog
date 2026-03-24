@@ -70,8 +70,19 @@ async fn execute_table_query(
         .map(|f| compile_expression_pg_sql(f, "t"))
         .unwrap_or_else(|| "TRUE".to_string());
 
+    let order_by = filter
+        .as_ref()
+        .and_then(|f| extract_search_text(f))
+        .map(|text| {
+            format!(
+                "ts_rank(t.search_doc, websearch_to_tsquery('english', {})) DESC, t.t_canonical ASC",
+                quote_string(text)
+            )
+        })
+        .unwrap_or_else(|| "t.t_canonical ASC".to_string());
+
     let sql = format!(
-        "SELECT t.id::text AS id FROM frames t WHERE ({origin_scope}) AND ({filter_sql}) ORDER BY t.t_canonical ASC LIMIT {limit}"
+        "SELECT t.id::text AS id FROM frames t WHERE ({origin_scope}) AND ({filter_sql}) ORDER BY {order_by} LIMIT {limit}"
     );
     tracing::debug!("Postgres TableQuery SQL: {}", sql);
 
@@ -133,8 +144,19 @@ async fn execute_during_query(
     }
 
     let where_sql = where_clauses.join(" AND ");
+    let order_by = target_base_filter
+        .as_ref()
+        .and_then(|f| extract_search_text(f))
+        .map(|text| {
+            format!(
+                "ts_rank(t.search_doc, websearch_to_tsquery('english', {})) DESC, t.t_canonical ASC",
+                quote_string(text)
+            )
+        })
+        .unwrap_or_else(|| "t.t_canonical ASC".to_string());
+
     let sql = format!(
-        "SELECT DISTINCT t.id::text AS id FROM frames t WHERE {where_sql} ORDER BY t.t_canonical ASC LIMIT {target_limit}"
+        "SELECT DISTINCT t.id::text AS id FROM frames t WHERE {where_sql} ORDER BY {order_by} LIMIT {target_limit}"
     );
 
     let client = pool.get().await?;
@@ -194,6 +216,17 @@ fn compile_expression_pg_sql(expr: &Expression, alias: &str) -> String {
         Expression::Within { .. } | Expression::During { .. } | Expression::Overlaps { .. } => {
             "FALSE".to_string()
         }
+    }
+}
+
+fn extract_search_text(expr: &Expression) -> Option<&str> {
+    match expr {
+        Expression::Contains(_, text) => Some(text.as_str()),
+        Expression::And(left, right) | Expression::Or(left, right) => {
+            extract_search_text(left).or_else(|| extract_search_text(right))
+        }
+        Expression::Not(inner) => extract_search_text(inner),
+        _ => None,
     }
 }
 
