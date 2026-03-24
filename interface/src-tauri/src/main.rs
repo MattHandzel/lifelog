@@ -193,6 +193,7 @@ async fn create_grpc_channel(addr: &str) -> Result<Channel, String> {
 fn create_client(channel: Channel) -> InterceptedClient {
     let token = get_auth_token();
     lifelog::LifelogServerServiceClient::with_interceptor(channel, AuthInterceptor { token })
+        .max_decoding_message_size(512 * 1024 * 1024)
 }
 
 async fn reconnect_grpc_client(state: &GrpcClientState) -> Result<(), String> {
@@ -600,21 +601,16 @@ async fn query_timeline(
                 .collect();
 
             let mut timestamp_map = std::collections::HashMap::new();
-            for chunk in grpc_keys.chunks(20) {
-                let data_req = lifelog::GetDataRequest {
-                    keys: chunk.to_vec(),
-                };
-                match timeout(Duration::from_secs(15), client.get_data(data_req)).await {
-                    Ok(Ok(data_resp)) => {
-                        for d in data_resp.into_inner().data {
-                            if let (Some(uuid), Some(t)) =
-                                (extract_payload_uuid(&d), extract_payload_timestamp(&d))
-                            {
-                                timestamp_map.insert(uuid, t);
-                            }
-                        }
+            let data_req = lifelog::GetDataRequest { keys: grpc_keys };
+            if let Ok(Ok(data_resp)) =
+                timeout(Duration::from_secs(30), client.get_data(data_req)).await
+            {
+                for d in data_resp.into_inner().data {
+                    if let (Some(uuid), Some(t)) =
+                        (extract_payload_uuid(&d), extract_payload_timestamp(&d))
+                    {
+                        timestamp_map.insert(uuid, t);
                     }
-                    Ok(Err(_)) | Err(_) => break,
                 }
             }
 
