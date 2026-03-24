@@ -22,7 +22,7 @@ pub fn load_server_deploy_config() -> ServerDeployConfig {
         toml_server
             .and_then(|s| s.get(key1).or_else(|| s.get(key2)))
             .and_then(|v| v.as_str())
-            .map(|s| resolve_file_ref(s))
+            .map(resolve_file_ref)
     };
 
     let toml_bool = |key1: &str, key2: &str| -> Option<bool> {

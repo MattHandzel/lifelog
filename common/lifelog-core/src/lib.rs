@@ -216,18 +216,13 @@ pub trait Transform {
     fn priority(&self) -> u8;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum PrivacyLevel {
     LocalOnly,
     Zdr,
+    #[default]
     Standard,
-}
-
-impl Default for PrivacyLevel {
-    fn default() -> Self {
-        Self::Standard
-    }
 }
 
 impl std::fmt::Display for PrivacyLevel {

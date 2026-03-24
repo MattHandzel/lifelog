@@ -529,7 +529,7 @@ async fn handle_request(pool: &Pool, req: JsonRpcRequest) -> JsonRpcResponse {
         ),
 
         "notifications/initialized" | "notifications/cancelled" => {
-            return JsonRpcResponse::success(id, json!(null));
+            JsonRpcResponse::success(id, json!(null))
         }
 
         "tools/list" => JsonRpcResponse::success(
