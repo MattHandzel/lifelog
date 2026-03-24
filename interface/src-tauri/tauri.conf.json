@@ -24,8 +24,7 @@
         "resizable": true,
         "title": "lifelog",
         "width": 1920,
-        "label": "main",
-        "zoomFactor": 1.0
+        "label": "main"
       }
     ],
     "withGlobalTauri": true,
