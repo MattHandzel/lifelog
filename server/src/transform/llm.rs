@@ -260,13 +260,15 @@ impl TransformExecutor for LlmExecutor {
             }
         };
 
+        let confidence = compute_llm_confidence(&cleaned_text, &transcription.text);
+
         let frame = lifelog_types::TranscriptionFrame {
             uuid: key.uuid.to_string(),
             text: cleaned_text,
             source_uuid: key.uuid.to_string(),
             model: self.model.clone(),
             timestamp: transcription.timestamp,
-            confidence: 0.0,
+            confidence,
             t_device: transcription.t_device,
             t_ingest: None,
             t_canonical: transcription.t_canonical,
@@ -340,6 +342,32 @@ fn sanitize_llm_input(input: &str, transform_id: &str) -> String {
         .replace("```system", "``` system")
         .replace("<|im_start|>", "")
         .replace("<|im_end|>", "")
+}
+
+fn compute_llm_confidence(cleaned: &str, original: &str) -> f32 {
+    if original.is_empty() || cleaned.is_empty() {
+        return 0.0;
+    }
+    let orig_len = original.len() as f32;
+    let clean_len = cleaned.len() as f32;
+    let length_ratio = clean_len.min(orig_len) / clean_len.max(orig_len);
+
+    let orig_words: std::collections::HashSet<&str> = original
+        .split_whitespace()
+        .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()))
+        .filter(|w| !w.is_empty())
+        .collect();
+    let clean_words: std::collections::HashSet<&str> = cleaned
+        .split_whitespace()
+        .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()))
+        .filter(|w| !w.is_empty())
+        .collect();
+
+    let overlap = orig_words.intersection(&clean_words).count() as f32;
+    let total = orig_words.union(&clean_words).count() as f32;
+    let word_overlap = if total > 0.0 { overlap / total } else { 0.0 };
+
+    (0.4 * length_ratio + 0.6 * word_overlap).clamp(0.0, 1.0)
 }
 
 fn validate_llm_output(output: &str, original: &str) -> Result<String, String> {
