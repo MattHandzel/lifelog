@@ -153,7 +153,7 @@ pub fn to_lifelog_data(row: &FrameRow, cas: &FsCas) -> Result<lifelog_types::Lif
             time_quality: 0,
             record_type: 0,
         }),
-        "Keystrokes" => Payload::Keystrokeframe(lifelog_types::KeystrokeFrame {
+        "Keystroke" | "Keystrokes" => Payload::Keystrokeframe(lifelog_types::KeystrokeFrame {
             uuid,
             timestamp,
             text: p["text"].as_str().unwrap_or("").to_string(),

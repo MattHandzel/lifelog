@@ -192,7 +192,7 @@ pub fn from_keystroke(
         id: parse_uuid(&frame.uuid),
         collector_id: collector_id.to_string(),
         stream_id: stream_id.to_string(),
-        modality: "Keystrokes".to_string(),
+        modality: "Keystroke".to_string(),
         t_device: Some(t_device),
         t_ingest: Utc::now(),
         t_canonical: t_device,

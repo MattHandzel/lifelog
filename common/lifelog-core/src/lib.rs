@@ -278,7 +278,9 @@ pub enum PrivacyTier {
 impl PrivacyTier {
     pub fn for_modality(modality: &str) -> Self {
         match modality {
-            "Keystrokes" | "Audio" | "Clipboard" | "Microphone" => PrivacyTier::Sensitive,
+            "Keystroke" | "Keystrokes" | "Audio" | "Clipboard" | "Microphone" => {
+                PrivacyTier::Sensitive
+            }
             "Screen" | "Browser" | "Ocr" | "WindowActivity" | "Camera" => PrivacyTier::Moderate,
             _ => PrivacyTier::Low,
         }
