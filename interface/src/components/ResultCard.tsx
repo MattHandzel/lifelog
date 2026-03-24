@@ -64,7 +64,8 @@ export interface FrameDataWrapper {
 
 function formatDate(timestamp: number | null): string {
   if (timestamp == null || timestamp === 0) return 'No timestamp';
-  return new Date(timestamp * 1000).toLocaleString();
+  const ms = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+  return new Date(ms).toLocaleString();
 }
 
 function formatFileSize(bytes: number): string {
