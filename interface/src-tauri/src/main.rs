@@ -48,6 +48,13 @@ pub struct GrpcClientState {
     client: Arc<tokio::sync::Mutex<Option<InterceptedClient>>>,
 }
 
+fn is_transport_error(status: &tonic::Status) -> bool {
+    matches!(
+        status.code(),
+        tonic::Code::Unavailable | tonic::Code::Unknown | tonic::Code::Internal
+    )
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct InterfaceRuntimeConfig {
     grpc_server_address: String,
@@ -332,7 +339,7 @@ async fn set_component_config(
     _component_type: String,
     _config_json: String,
 ) -> Result<(), String> {
-    Ok(())
+    Err("set_component_config is not yet implemented".to_string())
 }
 
 #[tauri::command]
@@ -369,6 +376,9 @@ async fn query_screenshot_keys(
         }
         Err(e) => {
             println!("[GRPC] query_screenshot_keys error: {}", e);
+            if is_transport_error(&e) {
+                *client_guard = None;
+            }
             Err(format!("gRPC error: {}", e))
         }
     }
@@ -426,6 +436,9 @@ async fn get_screenshots_data(
         }
         Err(e) => {
             println!("[GRPC] get_screenshots_data error: {}", e);
+            if is_transport_error(&e) {
+                *client_guard = None;
+            }
             Err(format!("gRPC error: {}", e))
         }
     }
@@ -471,6 +484,9 @@ async fn get_collector_ids(
         }
         Err(e) => {
             println!("[GRPC] get_collector_ids error: {}", e);
+            if is_transport_error(&e) {
+                *client_guard = None;
+            }
             Err(format!("Failed to list collectors: {}", e))
         }
     }
@@ -587,7 +603,12 @@ async fn query_timeline(
                 .collect();
             Ok(entries)
         }
-        Ok(Err(e)) => Err(format!("Query failed: {}", e)),
+        Ok(Err(e)) => {
+            if is_transport_error(&e) {
+                *client_guard = None;
+            }
+            Err(format!("Query failed: {}", e))
+        }
         Err(_) => Err("Query timed out".to_string()),
     }
 }
