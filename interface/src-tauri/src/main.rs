@@ -832,18 +832,27 @@ async fn get_frame_data_async(
     keys: Vec<LifelogDataKeyWrapper>,
     thumbnail_mode: bool,
 ) -> Result<Vec<FrameDataWrapper>, String> {
-    let grpc_keys = keys
+    let grpc_keys: Vec<lifelog::LifelogDataKey> = keys
         .into_iter()
         .map(|k| lifelog::LifelogDataKey {
             uuid: k.uuid,
             origin: k.origin,
         })
         .collect();
-    let req = lifelog::GetDataRequest { keys: grpc_keys };
-    match timeout(Duration::from_secs(15), grpc_client.get_data(req)).await {
-        Ok(Ok(resp)) => {
+    let mut all_data = Vec::new();
+    for chunk in grpc_keys.chunks(10) {
+        let req = lifelog::GetDataRequest {
+            keys: chunk.to_vec(),
+        };
+        match timeout(Duration::from_secs(30), grpc_client.get_data(req)).await {
+            Ok(Ok(resp)) => all_data.extend(resp.into_inner().data),
+            _ => break,
+        }
+    }
+    {
+        {
             let mut frames = Vec::new();
-            for d in resp.into_inner().data {
+            for d in all_data {
                 if let Some(payload) = d.payload {
                     let frame = match payload {
                         lifelog::lifelog_data::Payload::Screenframe(f) => FrameDataWrapper {
@@ -889,7 +898,6 @@ async fn get_frame_data_async(
             }
             Ok(frames)
         }
-        _ => Err("GetData failed".into()),
     }
 }
 

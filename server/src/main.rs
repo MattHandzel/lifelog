@@ -1044,8 +1044,8 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
             LifelogServerServiceServer::new(GRPCServerLifelogServerService {
                 server: server_handle2,
             })
-            .max_decoding_message_size(128 * 1024 * 1024)
-            .max_encoding_message_size(128 * 1024 * 1024),
+            .max_decoding_message_size(512 * 1024 * 1024)
+            .max_encoding_message_size(512 * 1024 * 1024),
         )
         .serve(addr)
         .await?;
