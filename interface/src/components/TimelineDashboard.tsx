@@ -24,6 +24,7 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
   const [results, setResults] = useState<TimelineEntry[]>([]);
   const [frames, setFrames] = useState<FrameDataWrapper[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [showTransforms, setShowTransforms] = useState(false);
 
   async function handleSearch(): Promise<void> {
     setIsLoading(true);
@@ -158,6 +159,16 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
           {/* Action Buttons */}
           <div className="flex gap-2 justify-end border-t border-[#232B3D] pt-4">
             <Button
+              type="button"
+              size="sm"
+              variant={showTransforms ? 'secondary' : 'outline'}
+              onClick={() => setShowTransforms(v => !v)}
+              disabled={isLoading}
+              title="Transform outputs (e.g. transcriptions) are derived from raw frames and hidden by default"
+            >
+              {showTransforms ? 'Hide transforms' : 'Show transforms'}
+            </Button>
+            <Button
               onClick={handleReset}
               variant="secondary"
               disabled={isLoading}
@@ -209,7 +220,7 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
                 image_data_url: null, width: null, height: null, mime_type: null,
                 camera_device: null, processes: null,
           transcription_model: null, transcription_confidence: null, source_frame_uuid: null,
-              }))).map((frame) => (
+              }))).filter(frame => showTransforms || frame.source_frame_uuid === null).map((frame) => (
                 <ResultCard key={frame.uuid} frame={frame} />
               ))}
             </div>
