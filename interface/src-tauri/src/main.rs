@@ -492,24 +492,34 @@ async fn get_collector_ids(
     }
 }
 
+macro_rules! extract_ts {
+    ($f:expr) => {
+        $f.t_canonical
+            .as_ref()
+            .or($f.timestamp.as_ref())
+            .or($f.t_ingest.as_ref())
+            .map(|ts| ts.seconds)
+    };
+}
+
 fn extract_payload_timestamp(data: &lifelog::LifelogData) -> Option<i64> {
     use lifelog::lifelog_data::Payload;
     match data.payload.as_ref()? {
-        Payload::Screenframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Transcriptionframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Audioframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Browserframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Processframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Ocrframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Clipboardframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Shellhistoryframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Keystrokeframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Mouseframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Windowactivityframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Cameraframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Weatherframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Hyprlandframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        Payload::Embeddingframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Screenframe(f) => extract_ts!(f),
+        Payload::Transcriptionframe(f) => extract_ts!(f),
+        Payload::Audioframe(f) => extract_ts!(f),
+        Payload::Browserframe(f) => extract_ts!(f),
+        Payload::Processframe(f) => extract_ts!(f),
+        Payload::Ocrframe(f) => extract_ts!(f),
+        Payload::Clipboardframe(f) => extract_ts!(f),
+        Payload::Shellhistoryframe(f) => extract_ts!(f),
+        Payload::Keystrokeframe(f) => extract_ts!(f),
+        Payload::Mouseframe(f) => extract_ts!(f),
+        Payload::Windowactivityframe(f) => extract_ts!(f),
+        Payload::Cameraframe(f) => extract_ts!(f),
+        Payload::Weatherframe(f) => extract_ts!(f),
+        Payload::Hyprlandframe(f) => extract_ts!(f),
+        Payload::Embeddingframe(f) => extract_ts!(f),
     }
 }
 
