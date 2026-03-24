@@ -193,20 +193,68 @@ impl DiskBuffer {
             hasher.update(&data_buf);
             let calculated_checksum = hasher.finalize();
 
+            let entry_size = HEADER_SIZE + len + CHECKSUM_SIZE;
             if calculated_checksum.as_slice() != stored_checksum {
-                return Err(BufferError::CorruptData(format!(
-                    "Checksum mismatch at offset {}",
-                    current_offset
-                )));
+                eprintln!(
+                    "[WAL] Checksum mismatch at offset {}; skipping corrupted entry ({} bytes)",
+                    current_offset, entry_size
+                );
+                current_offset += entry_size;
+                continue;
             }
 
             items.push(data_buf);
-
-            // MAGIC (4) + len (4) + data len + checksum (32)
-            current_offset += HEADER_SIZE + len + CHECKSUM_SIZE;
+            current_offset += entry_size;
         }
 
         Ok((current_offset, items))
+    }
+
+    /// Compact the WAL by removing already-committed data from the front.
+    /// Call periodically to prevent unbounded WAL growth.
+    pub async fn compact(&self) -> Result<(), BufferError> {
+        let committed = self.get_committed_offset().await?;
+        if committed == 0 {
+            return Ok(());
+        }
+
+        let log = self.log_path();
+        if !log.exists() {
+            return Ok(());
+        }
+
+        let file_len = tokio::fs::metadata(&log).await?.len();
+        if committed >= file_len {
+            tokio::fs::write(&log, &[]).await?;
+            self.commit_offset(0).await?;
+            return Ok(());
+        }
+
+        let remaining = file_len - committed;
+        let tmp_log = log.with_extension("compact");
+
+        {
+            let mut src = File::open(&log).await?;
+            src.seek(SeekFrom::Start(committed)).await?;
+            let mut dst = OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&tmp_log)
+                .await?;
+            tokio::io::copy(&mut src, &mut dst).await?;
+            dst.sync_all().await?;
+        }
+
+        tokio::fs::rename(&tmp_log, &log).await?;
+        self.commit_offset(0).await?;
+
+        eprintln!(
+            "[WAL] Compacted: removed {} bytes, {} bytes remaining",
+            committed, remaining
+        );
+
+        Ok(())
     }
 
     /// Commit the offset, marking items before this offset as processed.
@@ -296,12 +344,8 @@ mod tests {
         file.write_all(b"X").await.unwrap();
         file.flush().await.unwrap();
 
-        // Attempt to peek
-        let result = buffer.peek_chunk(1).await;
-        assert!(
-            matches!(result, Err(BufferError::CorruptData(ref msg)) if msg.contains("Checksum mismatch")),
-            "Expected CorruptData error with Checksum mismatch, got {:?}",
-            result
-        );
+        // Corrupted entry should be skipped, returning empty items
+        let (_, items) = buffer.peek_chunk(1).await.unwrap();
+        assert!(items.is_empty(), "Corrupted entry should be skipped");
     }
 }
