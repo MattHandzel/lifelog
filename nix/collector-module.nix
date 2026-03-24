@@ -66,6 +66,19 @@ in {
       default = "%h/lifelog/data";
       description = "Base directory for collector data. Supports %h for home directory.";
     };
+
+    environmentFile = lib.mkOption {
+      type = lib.types.nullOr lib.types.path;
+      default = null;
+      description = ''
+        Path to an environment file containing secrets for the collector.
+        Used for auth tokens and other credentials shared with the server
+        (e.g. LIFELOG_AUTH_TOKEN).
+
+        The file must be mode 600 and owned by the service user.
+        Example: `install -m 600 /dev/null ~/.config/lifelog/collector.env`
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -86,6 +99,8 @@ in {
         Restart = "on-failure";
         RestartSec = 10;
         StartLimitBurst = 5;
+
+        EnvironmentFile = lib.optional (cfg.environmentFile != null) cfg.environmentFile;
 
         NoNewPrivileges = true;
         PrivateTmp = true;

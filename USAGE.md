@@ -392,3 +392,75 @@ These values are intentionally specific to one environment and should be paramet
 - Collector runtime mode:
   - Service currently runs `target/debug/lifelog-collector`.
   - For production sharing, switch to a pinned release binary path and versioned build artifact.
+
+### 11.7 Auth Token Sync (Server ↔ Collector)
+
+When per-request auth tokens are enabled, both the server and the collector must
+use the same shared secret. Use the `environmentFile` option on both NixOS
+modules to inject the token without hardcoding it in the Nix config.
+
+**Generate a token:**
+
+```bash
+openssl rand -hex 32 > /etc/lifelog/auth_token
+chmod 600 /etc/lifelog/auth_token
+```
+
+**Server env file** (e.g. `/etc/lifelog/server.env`, mode 600, owned by root):
+
+```
+LIFELOG_AUTH_TOKEN=<paste token here>
+LIFELOG_TLS_CERT_PATH=/etc/lifelog/tls/cert.pem
+LIFELOG_TLS_KEY_PATH=/etc/lifelog/tls/key.pem
+LIFELOG_POSTGRES_INGEST_URL=postgresql://lifelog@127.0.0.1:5432/lifelog
+```
+
+Wire it in `configuration.nix`:
+
+```nix
+services.lifelog.server.environmentFile = "/etc/lifelog/server.env";
+```
+
+**Collector env file** (e.g. `~/.config/lifelog/collector.env`, mode 600, owned by the user):
+
+```
+LIFELOG_AUTH_TOKEN=<same token>
+```
+
+Wire it in the laptop's `configuration.nix` or `home-manager`:
+
+```nix
+services.lifelog.collector.environmentFile = "/home/<user>/.config/lifelog/collector.env";
+```
+
+**Distributing the token securely:**
+
+Copy over SSH — never commit the raw token to git:
+
+```bash
+scp /etc/lifelog/auth_token <user>@<laptop>:.config/lifelog/auth_token
+```
+
+If you use [agenix](https://github.com/ryantm/agenix), encrypt the secret with
+the host keys for both machines and reference the resulting `.age` file as the
+`environmentFile`. This ensures the token is decrypted at boot on each host
+without ever appearing in plain text in the Nix store.
+
+### 11.8 PostgreSQL Collation Version Refresh
+
+After a glibc or ICU upgrade the database may log a collation mismatch warning.
+Run this once on the server to silence it and prevent index corruption:
+
+```bash
+psql "$LIFELOG_POSTGRES_INGEST_URL" -c "ALTER DATABASE lifelog REFRESH COLLATION VERSION;"
+```
+
+You can check whether a refresh is needed with:
+
+```bash
+psql "$LIFELOG_POSTGRES_INGEST_URL" -c "SELECT datname, datcollversion FROM pg_database WHERE datname = 'lifelog';"
+```
+
+If `datcollversion` differs from what `pg_collation_actual_version()` returns,
+run the `REFRESH` statement above. This is a one-time manual operation per
+system upgrade — it does not affect data.
