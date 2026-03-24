@@ -22,7 +22,7 @@ impl ServerPolicy {
     pub fn get_action(&self, state: SystemState) -> ServerAction {
         let ss = match state.server_state.as_ref() {
             Some(s) => s,
-            None => return ServerAction::Sleep(Duration::from_millis(100)),
+            None => return ServerAction::Sleep(Duration::from_secs(5)),
         };
 
         let t_now = Utc::now();
@@ -48,7 +48,7 @@ impl ServerPolicy {
         {
             ServerAction::TransformData(vec![])
         } else {
-            ServerAction::Sleep(Duration::from_millis(100))
+            ServerAction::Sleep(Duration::from_secs(5))
         }
     }
 }

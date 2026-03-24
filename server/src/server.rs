@@ -61,7 +61,7 @@ impl ServerHandle {
                 let server = self.server.read().await;
                 server.step().await;
             }
-            tokio::time::sleep(time::Duration::from_millis(100)).await;
+            tokio::time::sleep(time::Duration::from_secs(5)).await;
         }
     }
 
