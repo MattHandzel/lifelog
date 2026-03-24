@@ -38,6 +38,14 @@ test:
 # Alias for agent-specific digest tests
 test-digest: test
 
+# Build and boot the MicroVM, run health checks
+test-vm:
+    ./scripts/test-vm.sh
+
+# Build the MicroVM configuration (no boot)
+build-vm:
+    nix build '.#nixosConfigurations.lifelog-test-vm.config.microvm.declaredRunner' -o result-vm
+
 # Run the integration validation suite
 test-e2e:
     nix develop --command cargo test -p lifelog-server --test validation_suite -- --include-ignored --nocapture

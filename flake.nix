@@ -1,11 +1,16 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    microvm = {
+      url = "github:astro/microvm.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs = {
     self,
     nixpkgs,
+    microvm,
   }: let
     systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
     forAllSystems = nixpkgs.lib.genAttrs systems;
@@ -275,6 +280,15 @@
       lifelog-server = import ./nix/server-module.nix;
       lifelog-collector = import ./nix/collector-module.nix;
       lifelog-postgres = import ./nix/postgres-module.nix;
+    };
+
+    nixosConfigurations.lifelog-test-vm = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      specialArgs = {inherit self;};
+      modules = [
+        microvm.nixosModules.microvm
+        ./nix/microvm.nix
+      ];
     };
   };
 }
