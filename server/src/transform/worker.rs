@@ -1,7 +1,10 @@
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use lifelog_core::{DataOrigin, DataOriginType, LifelogError, LifelogFrameKey, PrivacyTier};
+use tokio::sync::Mutex;
 use tokio::task::JoinSet;
 use utils::cas::FsCas;
 
@@ -12,6 +15,14 @@ use super::watermark::WatermarkStore;
 use super::writer::{extract_source_timestamps, write_transform_output};
 use super::TransformExecutor;
 
+const CIRCUIT_BREAKER_THRESHOLD: u32 = 5;
+const CIRCUIT_BREAKER_COOLDOWN_SECS: i64 = 300;
+
+struct CircuitState {
+    consecutive_failures: u32,
+    tripped_at: Option<DateTime<Utc>>,
+}
+
 pub struct PipelineWorker {
     dag: Arc<TransformDag>,
     watermarks: Arc<dyn WatermarkStore>,
@@ -19,6 +30,8 @@ pub struct PipelineWorker {
     cas: FsCas,
     http_client: reqwest::Client,
     batch_size: usize,
+    transforms_paused: AtomicBool,
+    circuit_breakers: Mutex<HashMap<String, CircuitState>>,
 }
 
 impl PipelineWorker {
@@ -37,10 +50,75 @@ impl PipelineWorker {
             cas,
             http_client,
             batch_size,
+            transforms_paused: AtomicBool::new(false),
+            circuit_breakers: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub fn set_paused(&self, paused: bool) {
+        self.transforms_paused.store(paused, Ordering::SeqCst);
+        tracing::info!(paused = paused, "Transform pipeline pause flag updated");
+    }
+
+    pub fn is_paused(&self) -> bool {
+        self.transforms_paused.load(Ordering::SeqCst)
+    }
+
+    async fn is_circuit_open(&self, transform_id: &str) -> bool {
+        let mut breakers = self.circuit_breakers.lock().await;
+        let state = match breakers.get_mut(transform_id) {
+            Some(s) => s,
+            None => return false,
+        };
+        if state.consecutive_failures < CIRCUIT_BREAKER_THRESHOLD {
+            return false;
+        }
+        if let Some(tripped) = state.tripped_at {
+            let elapsed = (Utc::now() - tripped).num_seconds();
+            if elapsed >= CIRCUIT_BREAKER_COOLDOWN_SECS {
+                tracing::info!(
+                    transform_id = transform_id,
+                    "Circuit breaker cooldown expired, resetting"
+                );
+                state.consecutive_failures = 0;
+                state.tripped_at = None;
+                return false;
+            }
+        }
+        true
+    }
+
+    async fn record_transform_result(&self, transform_id: &str, success: bool) {
+        let mut breakers = self.circuit_breakers.lock().await;
+        let state = breakers
+            .entry(transform_id.to_string())
+            .or_insert(CircuitState {
+                consecutive_failures: 0,
+                tripped_at: None,
+            });
+        if success {
+            state.consecutive_failures = 0;
+            state.tripped_at = None;
+        } else {
+            state.consecutive_failures += 1;
+            if state.consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD && state.tripped_at.is_none()
+            {
+                state.tripped_at = Some(Utc::now());
+                tracing::error!(
+                    transform_id = transform_id,
+                    failures = state.consecutive_failures,
+                    cooldown_secs = CIRCUIT_BREAKER_COOLDOWN_SECS,
+                    "Circuit breaker tripped"
+                );
+            }
         }
     }
 
     pub async fn poll_once(self: &Arc<Self>) -> Result<(), LifelogError> {
+        if self.is_paused() {
+            return Ok(());
+        }
+
         let available_origins = crate::frames::get_origins(&self.postgres_pool).await?;
 
         let mut join_set = JoinSet::new();
@@ -103,6 +181,12 @@ impl PipelineWorker {
         available_origins: &[DataOrigin],
     ) -> bool {
         let id = transform.id().to_string();
+
+        if self.is_circuit_open(&id).await {
+            tracing::debug!(transform_id = %id, "Skipping transform — circuit breaker open");
+            return false;
+        }
+
         let watermark = match self.watermarks.get(&id, "*").await {
             Ok(w) => w,
             Err(e) => {
@@ -210,6 +294,8 @@ impl PipelineWorker {
                 frames_per_min = format_args!("{rate:.1}"),
                 "Batch complete"
             );
+
+            self.record_transform_result(&id, last_ts.is_some()).await;
 
             if let Some(ts) = last_ts {
                 if let Err(e) = self.watermarks.set(&id, "*", ts).await {
