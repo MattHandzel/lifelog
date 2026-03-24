@@ -143,13 +143,25 @@ async fn create_grpc_channel(addr: &str) -> Result<Channel, String> {
     let mut endpoint = Channel::from_shared(addr.to_string())
         .map_err(|e| format!("Invalid gRPC address '{}': {}", addr, e))?;
     if addr.starts_with("https://") {
-        let ca_path = "/home/matth/.config/lifelog/tls/server-ca.pem";
-        let mut tls = if let Ok(pem) = std::fs::read_to_string(ca_path) {
+        let ca_path = std::env::var("LIFELOG_TLS_CA_PATH").unwrap_or_else(|_| {
+            dirs::config_dir()
+                .map(|d| {
+                    d.join("lifelog")
+                        .join("tls")
+                        .join("server-ca.pem")
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .unwrap_or_else(|| "/etc/lifelog/tls/server-ca.pem".to_string())
+        });
+        let domain =
+            std::env::var("LIFELOG_SERVER_DOMAIN").unwrap_or_else(|_| "localhost".to_string());
+        let mut tls = if let Ok(pem) = std::fs::read_to_string(&ca_path) {
             println!("[GRPC] Using CA cert from {}", ca_path);
             let ca = tonic::transport::Certificate::from_pem(pem);
             tonic::transport::ClientTlsConfig::new()
                 .ca_certificate(ca)
-                .domain_name("server.matthandzel.com")
+                .domain_name(domain)
         } else {
             println!("[GRPC] WARNING: CA cert not found, using native roots");
             tonic::transport::ClientTlsConfig::new().with_native_roots()
