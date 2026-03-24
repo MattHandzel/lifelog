@@ -499,10 +499,10 @@ fn extract_payload_timestamp(data: &lifelog::LifelogData) -> Option<i64> {
             f.timestamp.as_ref().map(|ts| ts.seconds)
         }
         lifelog::lifelog_data::Payload::Audioframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        lifelog::lifelog_data::Payload::Browserhistoryframe(f) => {
+        lifelog::lifelog_data::Payload::Browserframe(f) => {
             f.timestamp.as_ref().map(|ts| ts.seconds)
         }
-        lifelog::lifelog_data::Payload::Processesframe(f) => {
+        lifelog::lifelog_data::Payload::Processframe(f) => {
             f.timestamp.as_ref().map(|ts| ts.seconds)
         }
         _ => None,
@@ -514,8 +514,8 @@ fn extract_payload_uuid(data: &lifelog::LifelogData) -> Option<String> {
         lifelog::lifelog_data::Payload::Screenframe(f) => Some(f.uuid.clone()),
         lifelog::lifelog_data::Payload::Transcriptionframe(f) => Some(f.uuid.clone()),
         lifelog::lifelog_data::Payload::Audioframe(f) => Some(f.uuid.clone()),
-        lifelog::lifelog_data::Payload::Browserhistoryframe(f) => Some(f.uuid.clone()),
-        lifelog::lifelog_data::Payload::Processesframe(f) => Some(f.uuid.clone()),
+        lifelog::lifelog_data::Payload::Browserframe(f) => Some(f.uuid.clone()),
+        lifelog::lifelog_data::Payload::Processframe(f) => Some(f.uuid.clone()),
         _ => None,
     }
 }
