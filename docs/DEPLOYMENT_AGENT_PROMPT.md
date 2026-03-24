@@ -19,11 +19,12 @@ Guide me through setting up the **Lifelog Server** on my server and the **Lifelo
 ### Steps to Automate:
 1. **Security:** Use the `lifelog init` command to generate TLS certificates and authentication tokens.
 2. **Server Configuration:**
-   - Integrate the NixOS module from `deploy/nix/nixos-module.nix`.
-   - Configure the firewall to allow gRPC traffic (default port 50051).
-   - Set up SurrealDB as a dependency.
+   - Integrate the NixOS module: `inputs.lifelog.nixosModules.default` (bundles server, collector, and postgres submodules).
+   - Enable `services.lifelog.server` and `services.lifelog.postgres`.
+   - Configure the firewall to allow gRPC traffic (default port 7182).
+   - Set `services.lifelog.server.environmentFile` to inject secrets (TLS paths, auth tokens).
 3. **Collector Configuration:**
-   - Integrate the Home Manager module from `deploy/nix/home-manager-module.nix`.
+   - Enable `services.lifelog.collector` on the laptop NixOS/Home Manager config.
    - Use `lifelog join <server-url>` to pair the laptop.
    - Configure captured modalities (Screen, Audio, Keystrokes, etc.).
 4. **Verification:**

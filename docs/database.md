@@ -1,4 +1,4 @@
-A database that the server uses, we are using SurrealDB:
+A database that the server uses, we are using PostgreSQL 16+:
 
 Database schema:
 

@@ -8,16 +8,20 @@ The authoritative schema for all records is defined in `proto/lifelog_types.prot
 - **Point Records**: Events at a single point in time (e.g., Keystroke, ScreenFrame).
 - **Interval Records**: Events spanning a duration (e.g., AudioChunk, ActiveWindow).
 
-## Physical Storage (SurrealDB)
+## Physical Storage (PostgreSQL)
 
-While the logic is "Proto-First", the physical storage remains in **SurrealDB** for metadata and a **Filesystem CAS** for large blobs.
+While the logic is "Proto-First", the physical storage uses **PostgreSQL** for
+metadata (unified `frames` table) and a **Filesystem CAS** for large blobs.
 
 ### Table Mapping
-Each `DataOrigin` (Device + Modality) maps to a unique table in SurrealDB.
-Format: `<device_id_sanitized>:<modality_name>` (e.g., `DEADC0DE:screen`).
+All data modalities are stored in a single `frames` table. The `modality`
+column identifies the data type; modality-specific fields go in a `payload
+JSONB` column. A `catalog` table tracks registered origins (device + modality).
 
 ### Record Structure
-Records in SurrealDB are isomorphic to their Protobuf counterparts. Thanks to the `pbjson` integration, we can store Proto-generated structs directly as SurrealDB documents.
+Frame records map directly from Protobuf-generated types. The `payload` column
+stores modality-specific fields as JSONB. Binary data is referenced by
+`blob_hash` (SHA-256) and stored in the CAS.
 
 ## Blobs and CAS
 Large payloads (images, audio) are not stored in the database. Instead:

@@ -246,8 +246,6 @@ sudo systemctl start lifelog-collector
 
 - Server fails at startup with PostgreSQL connection error:
   - Ensure `LIFELOG_POSTGRES_INGEST_URL` points to a running PostgreSQL instance.
-- Server fails at startup with Surreal auth error in hybrid mode:
-  - Ensure `LIFELOG_DB_USER` and `LIFELOG_DB_PASS` are exported in the server terminal.
 - Collector starts but does not upload:
   - Verify server is reachable at `http://<host>:<port>` and config `id` is set.
 - Interface cannot query:
