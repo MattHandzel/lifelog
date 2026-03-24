@@ -493,30 +493,44 @@ async fn get_collector_ids(
 }
 
 fn extract_payload_timestamp(data: &lifelog::LifelogData) -> Option<i64> {
+    use lifelog::lifelog_data::Payload;
     match data.payload.as_ref()? {
-        lifelog::lifelog_data::Payload::Screenframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        lifelog::lifelog_data::Payload::Transcriptionframe(f) => {
-            f.timestamp.as_ref().map(|ts| ts.seconds)
-        }
-        lifelog::lifelog_data::Payload::Audioframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
-        lifelog::lifelog_data::Payload::Browserframe(f) => {
-            f.timestamp.as_ref().map(|ts| ts.seconds)
-        }
-        lifelog::lifelog_data::Payload::Processframe(f) => {
-            f.timestamp.as_ref().map(|ts| ts.seconds)
-        }
-        _ => None,
+        Payload::Screenframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Transcriptionframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Audioframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Browserframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Processframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Ocrframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Clipboardframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Shellhistoryframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Keystrokeframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Mouseframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Windowactivityframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Cameraframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Weatherframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Hyprlandframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
+        Payload::Embeddingframe(f) => f.timestamp.as_ref().map(|ts| ts.seconds),
     }
 }
 
 fn extract_payload_uuid(data: &lifelog::LifelogData) -> Option<String> {
+    use lifelog::lifelog_data::Payload;
     match data.payload.as_ref()? {
-        lifelog::lifelog_data::Payload::Screenframe(f) => Some(f.uuid.clone()),
-        lifelog::lifelog_data::Payload::Transcriptionframe(f) => Some(f.uuid.clone()),
-        lifelog::lifelog_data::Payload::Audioframe(f) => Some(f.uuid.clone()),
-        lifelog::lifelog_data::Payload::Browserframe(f) => Some(f.uuid.clone()),
-        lifelog::lifelog_data::Payload::Processframe(f) => Some(f.uuid.clone()),
-        _ => None,
+        Payload::Screenframe(f) => Some(f.uuid.clone()),
+        Payload::Transcriptionframe(f) => Some(f.uuid.clone()),
+        Payload::Audioframe(f) => Some(f.uuid.clone()),
+        Payload::Browserframe(f) => Some(f.uuid.clone()),
+        Payload::Processframe(f) => Some(f.uuid.clone()),
+        Payload::Ocrframe(f) => Some(f.uuid.clone()),
+        Payload::Clipboardframe(f) => Some(f.uuid.clone()),
+        Payload::Shellhistoryframe(f) => Some(f.uuid.clone()),
+        Payload::Keystrokeframe(f) => Some(f.uuid.clone()),
+        Payload::Mouseframe(f) => Some(f.uuid.clone()),
+        Payload::Windowactivityframe(f) => Some(f.uuid.clone()),
+        Payload::Cameraframe(f) => Some(f.uuid.clone()),
+        Payload::Weatherframe(f) => Some(f.uuid.clone()),
+        Payload::Hyprlandframe(f) => Some(f.uuid.clone()),
+        Payload::Embeddingframe(f) => Some(f.uuid.clone()),
     }
 }
 

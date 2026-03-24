@@ -62,8 +62,9 @@ export interface FrameDataWrapper {
   source_frame_uuid: string | null;
 }
 
-function formatDate(timestamp: number): string {
-  return new Date(timestamp).toLocaleString();
+function formatDate(timestamp: number | null): string {
+  if (timestamp == null || timestamp === 0) return 'No timestamp';
+  return new Date(timestamp * 1000).toLocaleString();
 }
 
 function formatFileSize(bytes: number): string {
