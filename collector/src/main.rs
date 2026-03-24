@@ -83,8 +83,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!("Starting Collector");
     let _ = collector_handle.start().await;
-    collector_handle.r#loop().await;
 
-    tracing::info!("Collector exiting");
+    let shutdown = async {
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => tracing::info!("Received SIGINT, shutting down"),
+            _ = sigterm.recv() => tracing::info!("Received SIGTERM, shutting down"),
+        }
+    };
+
+    tokio::select! {
+        _ = collector_handle.r#loop() => {},
+        _ = shutdown => {},
+    }
+
+    tracing::info!("Collector exiting gracefully");
     Ok(())
 }

@@ -1,3 +1,4 @@
+# Dev/build-from-source service template
 [Unit]
 Description=Lifelog Server Backend
 After=network-online.target postgresql.service

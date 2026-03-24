@@ -1037,6 +1037,15 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         }
     })?;
 
+    let shutdown = async {
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => tracing::info!("Received SIGINT, shutting down"),
+            _ = sigterm.recv() => tracing::info!("Received SIGTERM, shutting down"),
+        }
+    };
+
     builder
         .add_service(reflection_service)
         .add_service(health_service)
@@ -1047,9 +1056,10 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
             .max_decoding_message_size(512 * 1024 * 1024)
             .max_encoding_message_size(512 * 1024 * 1024),
         )
-        .serve(addr)
+        .serve_with_shutdown(addr, shutdown)
         .await?;
 
+    tracing::info!("Server shut down gracefully");
     Ok(())
 }
 
