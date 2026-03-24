@@ -40,16 +40,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = Arc::new(load_config());
 
-    // Check to see if there is another instance of lifelog running
-    #[cfg(not(feature = "dev"))]
-    if setup::n_processes_already_running(&binary_name, 2) {
-        // need n=2 b/c when this process runs
-        // it has same binary name as the one that is running
-        tracing::warn!("Another instance of lifelog is already running. Exiting...");
-
-        #[cfg(not(feature = "dev"))]
-        return Ok(());
-    }
+    let runtime_dir = std::env::var("XDG_RUNTIME_DIR")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::path::PathBuf::from("/tmp"));
+    let _pid_lock = match setup::PidLock::acquire(&runtime_dir) {
+        Ok(lock) => lock,
+        Err(msg) => {
+            tracing::error!("{}", msg);
+            return Ok(());
+        }
+    };
 
     setup::initialize_project(&config).expect("Failed to initialize project");
 

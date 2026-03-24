@@ -4,6 +4,41 @@ use std::fs;
 use std::path::Path;
 use sysinfo::System;
 
+pub struct PidLock {
+    path: std::path::PathBuf,
+}
+
+impl PidLock {
+    pub fn acquire(dir: &Path) -> Result<Self, String> {
+        let path = dir.join("lifelog-collector.pid");
+        if let Ok(contents) = fs::read_to_string(&path) {
+            if let Ok(pid) = contents.trim().parse::<u32>() {
+                let check = Path::new("/proc").join(pid.to_string());
+                if check.exists() {
+                    return Err(format!(
+                        "Another collector instance is running (pid {})",
+                        pid
+                    ));
+                }
+            }
+        }
+
+        let pid = std::process::id();
+        if let Some(parent) = path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::write(&path, pid.to_string())
+            .map_err(|e| format!("Failed to write PID lock: {}", e))?;
+        Ok(Self { path })
+    }
+}
+
+impl Drop for PidLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
 // Ensures the directory exists, creating it if necessary.
 pub fn ensure_directory(path: &Path) -> std::io::Result<()> {
     if !path.exists() {
