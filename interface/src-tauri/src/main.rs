@@ -184,10 +184,10 @@ async fn create_grpc_channel(addr: &str) -> Result<Channel, String> {
             .tls_config(tls)
             .map_err(|e| format!("TLS config error: {}", e))?;
     }
-    endpoint
-        .connect()
-        .await
-        .map_err(|e| format!("gRPC connect error: {}", e))
+    endpoint.connect().await.map_err(|e| {
+        eprintln!("[gRPC] Connection failed to {}: {}", addr, e);
+        format!("gRPC connect error: {}", e)
+    })
 }
 
 fn create_client(channel: Channel) -> InterceptedClient {
@@ -636,12 +636,16 @@ async fn query_timeline(
             Ok(entries)
         }
         Ok(Err(e)) => {
+            eprintln!("[query_timeline] gRPC error: {}", e);
             if is_transport_error(&e) {
                 *client_guard = None;
             }
             Err(format!("Query failed: {}", e))
         }
-        Err(_) => Err("Query timed out".to_string()),
+        Err(_) => {
+            eprintln!("[query_timeline] Timeout");
+            Err("Query timed out".to_string())
+        }
     }
 }
 
