@@ -1,5 +1,11 @@
 # Lifelog — Agent & Developer Guide
 
+## Pre-Session Reading (Autonomous Sessions)
+
+Read `~/notes/projects/lifelog/session-plans-v3-comprehensive.md` and
+`~/notes/projects/lifelog/all-issues-complete-inventory.md` before starting
+implementation work. These contain research, red-team findings, and prioritized tasks.
+
 ## Build Environment
 
 **Nix is required.** All cargo commands must run inside `nix develop`.
@@ -15,10 +21,8 @@ Use `just` recipes (which wrap nix) instead of raw cargo.
 | `just work`                   | Display developer dashboard & active agents    |
 | `just status-all`             | List all active worktrees & branch status      |
 | `just init-session`           | Prepare workspace for new AI session           |
-| `just worktree-list`          | List all active worktrees                      |
 | `just worktree-create <name>` | Create a new feature branch and local worktree |
 | `just worktree-remove <name>` | Safely remove a worktree and its branch        |
-| `just review-feature <name>`  | Read agent handoff report & change digest      |
 | `just ship-feature <name>`    | Validate, merge, and prune a feature worktree  |
 | `just check`                  | `cargo check --all-targets`                    |
 | `just test`                   | `cargo test --all-targets`                     |
@@ -46,6 +50,9 @@ See @README.md for project overview.
 ## Conventions
 
 - **Commit style:** `type: short description` (feat/fix/refactor/docs/tests/build)
+- **Config over env vars:** All configuration comes from lifelog-config.toml. Env vars are optional overrides only.
+- **Privacy tiers:** Modalities have tiers — sensitive (keystrokes, audio, clipboard), moderate (screenshots, browser), low (weather, processes). Respect per-tier policies in transforms and export.
+- **Network egress:** Default local-only. External hosts must be explicitly allowlisted in config.
 - **Error handling:** Unified `LifelogError` in `lifelog-core`. `thiserror` in libraries, `anyhow` only in binary crates.
 - **Testing:**
   - `just test`: Unit tests.
@@ -60,6 +67,8 @@ See @README.md for project overview.
 
 - **NEVER run raw `cargo` without nix** — native deps won't resolve
 - **Don't touch proto files unless required** — changes cascade to every crate
+- **Don't add env var reads** — use config file; env vars are overrides only
+- **Don't push current git history publicly** — fresh repo planned; current history contains personal data
 - **Don't `unwrap()` in library code** — use `?` or typed errors
 - **Don't add interface/src-tauri to default-members** — breaks CI
 - **Don't use `unsafe`** — existing unsafe is legacy debt
