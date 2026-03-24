@@ -96,16 +96,38 @@ Optionally, if you would like to only build a specific binary, you can run `nix 
 
 ##### NixOS
 
-If you are on NixOS, include this flake and enable the provided module:
+If you are on NixOS, include this flake and enable the provided modules:
 
 ```nix
 {
-  imports = [ inputs.lifelog.nixosModules.lifelog-postgres ];
+  imports = [ inputs.lifelog.nixosModules.default ];
+
   services.lifelog.postgres.enable = true;
+  services.lifelog.server = {
+    enable = true;
+    package = inputs.lifelog.packages.${pkgs.system}.lifelog-server;
+  };
 }
 ```
 
-This provisions PostgreSQL and auto-creates a `lifelog` DB/user by default.
+The `default` module bundles `lifelog-server`, `lifelog-collector`, and
+`lifelog-postgres` submodules. `services.lifelog.postgres.enable` provisions
+PostgreSQL and auto-creates a `lifelog` DB/user. See `nix/server-module.nix`
+and `nix/collector-module.nix` for all available options including
+`environmentFile` for secrets.
+
+##### Docker Compose
+
+A `docker-compose.yml` is provided for quickly running the server + PostgreSQL
+without a full NixOS setup:
+
+```bash
+docker compose up -d
+```
+
+This starts PostgreSQL (postgres:16) and the lifelog server on port 7182.
+Copy `lifelog-config.toml` to the repo root before starting — the compose file
+mounts it read-only into the container.
 
 ## Persistent Deployment
 
