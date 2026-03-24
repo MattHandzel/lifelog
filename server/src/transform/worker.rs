@@ -227,6 +227,7 @@ impl PipelineWorker {
         keys: &[LifelogFrameKey],
     ) -> Option<DateTime<Utc>> {
         let mut last_ts: Option<DateTime<Utc>> = None;
+        let mut skip_count: u64 = 0;
 
         for key in keys {
             let data = match crate::frames::get_by_id(
@@ -238,8 +239,9 @@ impl PipelineWorker {
             {
                 Ok(d) => d,
                 Err(e) => {
-                    tracing::error!(uuid = %key.uuid, error = %e, "Failed to load data for transform");
-                    break;
+                    tracing::error!(uuid = %key.uuid, error = %e, "Failed to load data for transform; skipping frame");
+                    skip_count += 1;
+                    continue;
                 }
             };
 
@@ -248,6 +250,10 @@ impl PipelineWorker {
             }
 
             let source_timestamps = extract_source_timestamps(&data);
+            if let Some(ref t) = source_timestamps.t_canonical {
+                let t_utc = DateTime::from_timestamp(t.seconds, t.nanos as u32).unwrap_or_default();
+                last_ts = Some(last_ts.map_or(t_utc, |prev| prev.max(t_utc)));
+            }
 
             let output = match transform.execute(&self.http_client, &data, key).await {
                 Ok(o) => o,
@@ -256,9 +262,10 @@ impl PipelineWorker {
                         uuid = %key.uuid,
                         transform = %transform.id(),
                         error = %e,
-                        "Transform execution failed"
+                        "Transform execution failed; skipping frame"
                     );
-                    break;
+                    skip_count += 1;
+                    continue;
                 }
             };
 
@@ -273,7 +280,7 @@ impl PipelineWorker {
             .await
             {
                 Ok(Some(ts)) => {
-                    last_ts = Some(ts);
+                    last_ts = Some(last_ts.map_or(ts, |prev| prev.max(ts)));
                     tracing::debug!(
                         uuid = %key.uuid,
                         transform = %transform.id(),
@@ -286,11 +293,20 @@ impl PipelineWorker {
                         uuid = %key.uuid,
                         transform = %transform.id(),
                         error = %e,
-                        "Failed to write transform output"
+                        "Failed to write transform output; skipping frame"
                     );
-                    break;
+                    skip_count += 1;
+                    continue;
                 }
             }
+        }
+
+        if skip_count > 0 {
+            tracing::warn!(
+                transform = %transform.id(),
+                skipped_frames = skip_count,
+                "Batch completed with skipped frames"
+            );
         }
 
         last_ts
