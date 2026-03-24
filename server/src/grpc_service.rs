@@ -464,7 +464,7 @@ impl LifelogServerService for GRPCServerLifelogServerService {
             return Err(Status::internal("Enrollment not configured on server"));
         }
 
-        if req.enrollment_token != expected_token {
+        if !constant_time_eq(req.enrollment_token.as_bytes(), expected_token.as_bytes()) {
             tracing::warn!("Invalid enrollment token attempt");
             return Err(Status::permission_denied("Invalid enrollment token"));
         }
