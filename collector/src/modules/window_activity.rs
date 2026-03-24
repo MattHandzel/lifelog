@@ -336,11 +336,9 @@ impl DataSource for WindowActivityDataSource {
 
         RUNNING.store(true, Ordering::SeqCst);
         let source_clone = self.clone();
-        let _join_handle = tokio::spawn(async move { source_clone.run().await });
+        let join_handle = tokio::spawn(async move { source_clone.run().await });
 
-        Ok(DataSourceHandle {
-            join: tokio::spawn(async { Ok(()) }),
-        })
+        Ok(DataSourceHandle { join: join_handle })
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {

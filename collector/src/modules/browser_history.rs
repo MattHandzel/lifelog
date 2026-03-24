@@ -137,17 +137,14 @@ impl DataSource for BrowserHistorySource {
 
         let source_clone = self.clone();
 
-        let _join_handle = tokio::spawn(async move {
+        let join_handle = tokio::spawn(async move {
             let task_result = source_clone.run().await;
             tracing::info!(result = ?task_result, "BrowserHistorySource (in-memory) background task finished");
             task_result
         });
 
         tracing::info!("BrowserHistorySource: Data source task (in-memory) started successfully");
-        let new_join_handle = tokio::spawn(async { Ok(()) });
-        Ok(DataSourceHandle {
-            join: new_join_handle,
-        })
+        Ok(DataSourceHandle { join: join_handle })
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {

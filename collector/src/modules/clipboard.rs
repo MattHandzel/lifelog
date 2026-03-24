@@ -100,12 +100,9 @@ impl DataSource for ClipboardDataSource {
 
         RUNNING.store(true, Ordering::SeqCst);
         let source_clone = self.clone();
-        let _join_handle = tokio::spawn(async move { source_clone.run().await });
+        let join_handle = tokio::spawn(async move { source_clone.run().await });
 
-        // Existing sources return a dummy handle; keep the convention.
-        Ok(DataSourceHandle {
-            join: tokio::spawn(async { Ok(()) }),
-        })
+        Ok(DataSourceHandle { join: join_handle })
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {

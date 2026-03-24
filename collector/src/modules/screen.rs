@@ -163,17 +163,14 @@ impl DataSource for ScreenDataSource {
 
         let source_clone = self.clone();
 
-        let _join_handle = tokio::spawn(async move {
+        let join_handle = tokio::spawn(async move {
             let task_result = source_clone.run().await;
             tracing::info!(result = ?task_result, "ScreenDataSource (WAL) background task finished");
             task_result
         });
 
         tracing::info!("ScreenDataSource: Data source task (WAL) started successfully");
-        let new_join_handle = tokio::spawn(async { Ok(()) });
-        Ok(DataSourceHandle {
-            join: new_join_handle,
-        })
+        Ok(DataSourceHandle { join: join_handle })
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {
