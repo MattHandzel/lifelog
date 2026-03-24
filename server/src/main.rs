@@ -861,6 +861,12 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
     let addr = format!("{}:{}", config.host, config.port).parse()?;
 
     tracing::info!("Starting server on {}", addr);
+    let enable_reflection = std::env::var("LIFELOG_ENABLE_GRPC_REFLECTION")
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+    if enable_reflection {
+        tracing::info!("gRPC reflection enabled");
+    }
     let reflection_service = Builder::configure()
         .register_encoded_file_descriptor_set(FILE_DESCRIPTOR_SET)
         .build_v1alpha()?;
@@ -1046,18 +1052,26 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         }
     };
 
-    builder
-        .add_service(reflection_service)
-        .add_service(health_service)
-        .add_service(
-            LifelogServerServiceServer::new(GRPCServerLifelogServerService {
-                server: server_handle2,
-            })
-            .max_decoding_message_size(512 * 1024 * 1024)
-            .max_encoding_message_size(512 * 1024 * 1024),
-        )
-        .serve_with_shutdown(addr, shutdown)
-        .await?;
+    let lifelog_service = LifelogServerServiceServer::new(GRPCServerLifelogServerService {
+        server: server_handle2,
+    })
+    .max_decoding_message_size(512 * 1024 * 1024)
+    .max_encoding_message_size(512 * 1024 * 1024);
+
+    if enable_reflection {
+        builder
+            .add_service(reflection_service)
+            .add_service(health_service)
+            .add_service(lifelog_service)
+            .serve_with_shutdown(addr, shutdown)
+            .await?;
+    } else {
+        builder
+            .add_service(health_service)
+            .add_service(lifelog_service)
+            .serve_with_shutdown(addr, shutdown)
+            .await?;
+    }
 
     tracing::info!("Server shut down gracefully");
     Ok(())
