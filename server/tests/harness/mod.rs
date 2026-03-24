@@ -15,6 +15,9 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tempfile::TempDir;
+use testcontainers::runners::AsyncRunner;
+use testcontainers::ContainerAsync;
+use testcontainers_modules::postgres::Postgres;
 use tokio::sync::RwLock;
 use tokio::time::{sleep, timeout};
 use tonic::metadata::{Ascii, MetadataValue};
@@ -126,6 +129,83 @@ pub struct TestContext {
     tls_ca_path: PathBuf,
     server_port: u16,
     pub pg_url: String,
+    _pg_container: Option<ContainerAsync<Postgres>>,
+}
+
+struct PgSetup {
+    admin_url: String,
+    test_db_url_fn: Box<dyn FnOnce(&str) -> String>,
+    container: Option<ContainerAsync<Postgres>>,
+}
+
+fn replace_dbname(conn_str: &str, new_dbname: &str) -> String {
+    if conn_str.contains("dbname=") {
+        conn_str
+            .split_whitespace()
+            .map(|part| {
+                if part.starts_with("dbname=") {
+                    format!("dbname={new_dbname}")
+                } else {
+                    part.to_string()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    } else {
+        format!("{conn_str} dbname={new_dbname}")
+    }
+}
+
+async fn provision_postgres() -> PgSetup {
+    if let Ok(url) = std::env::var("LIFELOG_TEST_PG_URL") {
+        let base = url.clone();
+        return PgSetup {
+            admin_url: url,
+            test_db_url_fn: Box::new(move |db_name| replace_dbname(&base, db_name)),
+            container: None,
+        };
+    }
+
+    if let Ok(url) = std::env::var("LIFELOG_POSTGRES_INGEST_URL") {
+        let base = url.clone();
+        return PgSetup {
+            admin_url: url,
+            test_db_url_fn: Box::new(move |db_name| replace_dbname(&base, db_name)),
+            container: None,
+        };
+    }
+
+    let local_url = "host=/run/postgresql dbname=postgres";
+    let local_try = tokio_postgres::connect(local_url, tokio_postgres::NoTls).await;
+    if local_try.is_ok() {
+        let base = local_url.to_string();
+        return PgSetup {
+            admin_url: base.clone(),
+            test_db_url_fn: Box::new(move |db_name| replace_dbname(&base, db_name)),
+            container: None,
+        };
+    }
+
+    eprintln!("No local PostgreSQL found, starting testcontainer...");
+    let container = Postgres::default()
+        .start()
+        .await
+        .expect("Failed to start PostgreSQL testcontainer (is Docker running?)");
+    let host_port = container
+        .get_host_port_ipv4(5432)
+        .await
+        .expect("Failed to get testcontainer port");
+    let admin_url =
+        format!("host=127.0.0.1 port={host_port} user=postgres password=postgres dbname=postgres");
+    PgSetup {
+        admin_url,
+        test_db_url_fn: Box::new(move |db_name| {
+            format!(
+                "host=127.0.0.1 port={host_port} user=postgres password=postgres dbname={db_name}"
+            )
+        }),
+        container: Some(container),
+    }
 }
 
 impl TestContext {
@@ -150,11 +230,10 @@ impl TestContext {
 
         let test_db_name = std::env::var("LIFELOG_TEST_DB")
             .unwrap_or_else(|_| format!("lifelog_test_{}", server_port));
-        let pg_admin_url = std::env::var("LIFELOG_TEST_PG_URL")
-            .unwrap_or_else(|_| "host=/run/postgresql dbname=postgres".into());
+        let pg_setup = provision_postgres().await;
         {
             let (pg_client, pg_conn) =
-                tokio_postgres::connect(&pg_admin_url, tokio_postgres::NoTls)
+                tokio_postgres::connect(&pg_setup.admin_url, tokio_postgres::NoTls)
                     .await
                     .expect("Failed to connect to postgres for test DB setup");
             tokio::spawn(pg_conn);
@@ -166,7 +245,7 @@ impl TestContext {
                 .await
                 .expect("Failed to create test database");
         }
-        let pg_test_url = format!("host=/run/postgresql dbname={test_db_name}");
+        let pg_test_url = (pg_setup.test_db_url_fn)(&test_db_name);
         std::env::set_var("LIFELOG_POSTGRES_INGEST_URL", &pg_test_url);
 
         let mut transforms = Vec::new();
@@ -260,6 +339,7 @@ impl TestContext {
             tls_ca_path: tls_cert_path,
             server_port,
             pg_url: pg_test_url,
+            _pg_container: pg_setup.container,
         }
     }
 

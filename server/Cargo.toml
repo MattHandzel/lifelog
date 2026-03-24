@@ -68,6 +68,7 @@ proptest = "1.6"
 pretty_assertions = "1.4"
 http = "1"
 testcontainers = "0.23"
+testcontainers-modules = { version = "0.11", features = ["postgres"] }
 
 [features]
 dev = ["config/dev"] # Have config look for dev.toml
