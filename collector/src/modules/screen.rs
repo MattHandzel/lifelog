@@ -65,6 +65,50 @@ impl ScreenDataSource {
         Ok(frames)
     }
 
+    async fn process_and_store(&self, image_data_bytes: Vec<u8>) -> Result<(), LifelogError> {
+        let ts = Utc::now();
+
+        let img = ImageReader::new(Cursor::new(&image_data_bytes))
+            .with_guessed_format()
+            .map_err(|e| LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?
+            .decode()
+            .map_err(|e| LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, e)))?;
+
+        let (width, height) = img.dimensions();
+
+        let timestamp = to_pb_ts(ts);
+        let captured = ScreenFrame {
+            uuid: Uuid::new_v4().to_string(),
+            width,
+            height,
+            image_bytes: image_data_bytes,
+            timestamp,
+            mime_type: "image/png".to_string(),
+            t_device: timestamp,
+            t_canonical: timestamp,
+            t_end: timestamp,
+            ..Default::default()
+        };
+
+        let mut buf = Vec::new();
+        captured.encode(&mut buf).map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Prost encode error: {}", e),
+            ))
+        })?;
+
+        self.buffer.append(&buf).await.map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                e.to_string(),
+            ))
+        })?;
+
+        tracing::debug!("ScreenDataSource: Stored screen capture in WAL");
+        Ok(())
+    }
+
     pub async fn clear_buffer(&self) -> Result<(), LifelogError> {
         // Mark all current data as committed
         let start = self.buffer.get_committed_offset().await.map_err(|e| {
@@ -142,50 +186,9 @@ impl DataSource for ScreenDataSource {
         while RUNNING.load(Ordering::SeqCst) {
             match self.logger.log_data().await {
                 Ok(image_data_bytes) => {
-                    let ts = Utc::now();
-
-                    let img = ImageReader::new(Cursor::new(&image_data_bytes))
-                        .with_guessed_format()
-                        .map_err(|e| {
-                            LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-                        })?
-                        .decode()
-                        .map_err(|e| {
-                            LifelogError::Io(std::io::Error::new(std::io::ErrorKind::Other, e))
-                        })?;
-
-                    let (width, height) = img.dimensions();
-
-                    let timestamp = to_pb_ts(ts);
-                    let captured = ScreenFrame {
-                        uuid: Uuid::new_v4().to_string(), //use v6
-                        width,
-                        height,
-                        image_bytes: image_data_bytes,
-                        timestamp,
-                        mime_type: "image/png".to_string(),
-                        t_device: timestamp,
-                        t_canonical: timestamp,
-                        t_end: timestamp,
-                        ..Default::default()
-                    };
-
-                    let mut buf = Vec::new();
-                    captured.encode(&mut buf).map_err(|e| {
-                        LifelogError::Io(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            format!("Prost encode error: {}", e),
-                        ))
-                    })?;
-
-                    self.buffer.append(&buf).await.map_err(|e| {
-                        LifelogError::Io(std::io::Error::new(
-                            std::io::ErrorKind::Other,
-                            e.to_string(),
-                        ))
-                    })?;
-
-                    tracing::debug!("ScreenDataSource: Stored screen capture in WAL");
+                    if let Err(e) = self.process_and_store(image_data_bytes).await {
+                        tracing::error!(error = %e, "ScreenDataSource: Failed to process/store frame, continuing");
+                    }
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "ScreenDataSource: Failed to capture screen data for WAL store");
