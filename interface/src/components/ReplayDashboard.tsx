@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Clock, List, Monitor, Pause, Play, RefreshCw, SkipBack, SkipForward } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, List, Monitor, Pause, Play, RefreshCw, SkipBack, SkipForward } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Slider } from './ui/slider';
@@ -33,6 +33,7 @@ export default function ReplayDashboard(): JSX.Element {
   const [maxSteps, setMaxSteps] = useState<number>(200);
   const [maxContextPerStep, setMaxContextPerStep] = useState<number>(25);
   const [contextPadMs, setContextPadMs] = useState<number>(15000);
+  const [showAdvanced, setShowAdvanced] = useState<boolean>(false);
 
   const {
     steps,
@@ -66,6 +67,25 @@ export default function ReplayDashboard(): JSX.Element {
     };
     setEndDate(toLocal(now));
     setStartDate(toLocal(tenMinAgo));
+  }, []);
+
+  useEffect(() => {
+    function handleReplayMoment(e: Event): void {
+      const detail = (e as CustomEvent).detail;
+      if (detail?.timestamp) {
+        const ts = detail.timestamp < 1e12 ? detail.timestamp * 1000 : detail.timestamp;
+        const fiveMinBefore = new Date(ts - 5 * 60 * 1000);
+        const fiveMinAfter = new Date(ts + 5 * 60 * 1000);
+        const toLocal = (d: Date): string => {
+          const pad = (n: number) => String(n).padStart(2, '0');
+          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        };
+        setStartDate(toLocal(fiveMinBefore));
+        setEndDate(toLocal(fiveMinAfter));
+      }
+    }
+    window.addEventListener('replay-moment', handleReplayMoment);
+    return () => window.removeEventListener('replay-moment', handleReplayMoment);
   }, []);
 
   const contextOrigins = useMemo(() => parseOrigins(contextOriginsText), [contextOriginsText]);
@@ -136,64 +156,77 @@ export default function ReplayDashboard(): JSX.Element {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-[#F9FAFB]">Screen Origin (optional)</label>
-              <Input
-                type="text"
-                placeholder='e.g. "laptop:Screen" (leave blank to auto-pick)'
-                value={screenOrigin}
-                onChange={(e) => setScreenOrigin(e.target.value)}
-                className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-[#F9FAFB]">Context Origins</label>
-              <Input
-                type="text"
-                placeholder='e.g. "Browser,Ocr,Clipboard" or "*"'
-                value={contextOriginsText}
-                onChange={(e) => setContextOriginsText(e.target.value)}
-                className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
-              />
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className="flex items-center gap-1 text-sm text-[#9CA3AF] hover:text-[#F9FAFB] transition-colors"
+          >
+            {showAdvanced ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            Advanced Options
+          </button>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-[#F9FAFB]">Max Steps</label>
-              <Input
-                type="number"
-                min={1}
-                max={5000}
-                value={maxSteps}
-                onChange={(e) => setMaxSteps(Number(e.target.value))}
-                className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
-              />
+          {showAdvanced && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-[#F9FAFB]">Screen Origin (optional)</label>
+                  <Input
+                    type="text"
+                    placeholder='e.g. "laptop:Screen" (leave blank to auto-pick)'
+                    value={screenOrigin}
+                    onChange={(e) => setScreenOrigin(e.target.value)}
+                    className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-[#F9FAFB]">Context Origins</label>
+                  <Input
+                    type="text"
+                    placeholder='e.g. "Browser,Ocr,Clipboard" or "*"'
+                    value={contextOriginsText}
+                    onChange={(e) => setContextOriginsText(e.target.value)}
+                    className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-[#F9FAFB]">Max Steps</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={5000}
+                    value={maxSteps}
+                    onChange={(e) => setMaxSteps(Number(e.target.value))}
+                    className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-[#F9FAFB]">Max Context/Step</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={1000}
+                    value={maxContextPerStep}
+                    onChange={(e) => setMaxContextPerStep(Number(e.target.value))}
+                    className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-[#F9FAFB]">Context Pad (ms)</label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={300000}
+                    value={contextPadMs}
+                    onChange={(e) => setContextPadMs(Number(e.target.value))}
+                    className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
+                  />
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-[#F9FAFB]">Max Context/Step</label>
-              <Input
-                type="number"
-                min={0}
-                max={1000}
-                value={maxContextPerStep}
-                onChange={(e) => setMaxContextPerStep(Number(e.target.value))}
-                className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-[#F9FAFB]">Context Pad (ms)</label>
-              <Input
-                type="number"
-                min={0}
-                max={300000}
-                value={contextPadMs}
-                onChange={(e) => setContextPadMs(Number(e.target.value))}
-                className="bg-[#1C2233] border-[#232B3D] text-[#F9FAFB]"
-              />
-            </div>
-          </div>
+          )}
 
           <div className="flex gap-2 justify-end border-t border-[#232B3D] pt-4">
             <Button onClick={onLoadReplay} disabled={isLoadingReplay}>

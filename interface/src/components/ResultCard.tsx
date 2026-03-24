@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, FileAudio, File, Mouse, Cloud, Monitor, Cpu, Clipboard, Globe, Terminal, Activity, MessageSquareText } from 'lucide-react';
+import { Image, FileAudio, File, Mouse, Cloud, Monitor, Cpu, Clipboard, Globe, Terminal, Activity, MessageSquareText, Play } from 'lucide-react';
 import { Card, CardContent } from './ui/card';
 
 export interface SearchResult {
@@ -428,6 +428,19 @@ export default function ResultCard({ result, frame }: ResultCardProps): JSX.Elem
             <div className="mt-2">
               <ModalityDetails result={effectiveResult} />
             </div>
+            {effectiveResult.timestamp > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('replay-moment', { detail: { timestamp: effectiveResult.timestamp } }));
+                  window.dispatchEvent(new CustomEvent('switch-tab', { detail: { tab: 'replay' } }));
+                }}
+                className="mt-2 flex items-center gap-1 text-xs text-[#4C8BF5] hover:text-[#6BA1F8] transition-colors"
+              >
+                <Play className="w-3 h-3" />
+                Replay this moment
+              </button>
+            )}
           </div>
         </div>
       </CardContent>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "../lib/utils";
 import {
   FileTextIcon,
@@ -63,6 +63,21 @@ export default function FeatureTabs(): JSX.Element {
   const [activeTab, setActiveTab] = useState<ModuleType>("timeline");
   const [expandedCategory, setExpandedCategory] = useState<CategoryType>("data");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    function handleSwitchTab(e: Event): void {
+      const tab = (e as CustomEvent).detail?.tab as ModuleType;
+      if (tab) {
+        setActiveTab(tab);
+        const targetTab = tabs.find(function (t) { return t.id === tab; });
+        if (targetTab) {
+          setExpandedCategory(targetTab.category);
+        }
+      }
+    }
+    window.addEventListener('switch-tab', handleSwitchTab);
+    return () => window.removeEventListener('switch-tab', handleSwitchTab);
+  }, []);
 
   // Define categories
   const categories: CategoryDefinition[] = [
