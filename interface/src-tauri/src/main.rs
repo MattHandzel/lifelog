@@ -186,7 +186,10 @@ async fn create_grpc_channel(addr: &str) -> Result<Channel, String> {
     }
     endpoint = endpoint
         .http2_keep_alive_interval(std::time::Duration::from_secs(10))
-        .keep_alive_timeout(std::time::Duration::from_secs(20));
+        .keep_alive_timeout(std::time::Duration::from_secs(20))
+        .http2_adaptive_window(false)
+        .initial_stream_window_size(1024 * 1024)
+        .initial_connection_window_size(4 * 1024 * 1024);
     endpoint.connect().await.map_err(|e| {
         eprintln!("[gRPC] Connection failed to {}: {}", addr, e);
         format!("gRPC connect error: {}", e)
@@ -855,8 +858,10 @@ async fn get_frame_data_async(
             Ok(Ok(resp)) => all_data.extend(resp.into_inner().data),
             Ok(Err(e)) => {
                 eprintln!(
-                    "[get_frame_data] gRPC GetData error: {} — retrying with fresh data",
-                    e
+                    "[get_frame_data] gRPC GetData error: code={:?} msg={} details={:?}",
+                    e.code(),
+                    e.message(),
+                    e.details()
                 );
                 continue;
             }
