@@ -32,7 +32,11 @@ impl SttExecutor {
                 .get("timeout_secs")
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(120),
-            privacy_level: PrivacyLevel::from_params(params),
+            privacy_level: {
+                let level = PrivacyLevel::from_params(params);
+                tracing::info!(privacy_level = %level, params_keys = ?params.keys().collect::<Vec<_>>(), "STT privacy level");
+                level
+            },
         }
     }
 }

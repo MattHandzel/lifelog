@@ -254,6 +254,7 @@ impl PrivacyLevel {
     pub fn from_params(params: &std::collections::HashMap<String, String>) -> Self {
         params
             .get("privacy_level")
+            .or_else(|| params.get("privacyLevel"))
             .and_then(|s| s.parse().ok())
             .unwrap_or_default()
     }
