@@ -1025,7 +1025,28 @@ async fn get_frame_data_async(
                             timestamp: f.timestamp.map(|ts| ts.seconds),
                             ..Default::default()
                         },
-                        _ => FrameDataWrapper::default(),
+                        lifelog::lifelog_data::Payload::Processframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Processes".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            ..Default::default()
+                        },
+                        lifelog::lifelog_data::Payload::Hyprlandframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Hyprland".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            ..Default::default()
+                        },
+                        lifelog::lifelog_data::Payload::Mouseframe(f) => FrameDataWrapper {
+                            uuid: f.uuid,
+                            modality: "Mouse".into(),
+                            timestamp: f.timestamp.map(|ts| ts.seconds),
+                            ..Default::default()
+                        },
+                        _ => {
+                            eprintln!("[get_frame_data] Unhandled payload variant");
+                            FrameDataWrapper::default()
+                        }
                     };
                     frames.push(frame);
                 }
