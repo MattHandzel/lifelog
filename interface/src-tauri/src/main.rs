@@ -847,7 +847,7 @@ async fn get_frame_data_async(
         })
         .collect();
     let mut all_data = Vec::new();
-    for chunk in grpc_keys.chunks(5) {
+    for chunk in grpc_keys.chunks(1) {
         let req = lifelog::GetDataRequest {
             keys: chunk.to_vec(),
         };
