@@ -38,11 +38,17 @@ export default function SettingsDashboard(): JSX.Element {
       const result = await invoke<InterfaceSettings>('get_interface_settings');
       setSettings(result);
       setServerAddressInput(result.grpcServerAddress);
-      const retentionResult = await invoke<RetentionSettings>('get_component_config', {
-        collectorId: 'server',
-        componentType: 'retention',
-      });
-      setRetention(retentionResult);
+      try {
+        const retentionResult = await invoke<RetentionSettings>('get_component_config', {
+          collectorId: 'server',
+          componentType: 'retention',
+        });
+        if (retentionResult) {
+          setRetention(retentionResult);
+        }
+      } catch {
+        // retention config not available — use defaults
+      }
     } catch (err) {
       console.error('Failed to load interface settings:', err);
       setError(`Failed to load interface settings: ${String(err)}`);
