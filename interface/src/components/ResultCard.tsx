@@ -175,8 +175,8 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
 
   if (lower === 'audio' || lower === 'microphone') {
     return (
-      <div className="aspect-video bg-[#0F111A] flex flex-col items-center justify-center gap-2">
-        <FileAudio className="w-12 h-12 text-[#4C8BF5]" />
+      <div className="h-20 bg-[#0F111A] flex flex-col items-center justify-center gap-2">
+        <FileAudio className="w-8 h-8 text-[#4C8BF5]" />
         {result.duration != null && (
           <span className="text-xs text-[#9CA3AF]">
             {Math.floor(result.duration / 60)}:{(result.duration % 60).toString().padStart(2, '0')}
@@ -189,9 +189,12 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
   if (lower === 'transcription') {
     const text = result.snippet || (result.metadata?.text as string) || '';
     return (
-      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
-        <MessageSquareText className="w-6 h-6 text-emerald-400 shrink-0" />
-        <p className="text-xs text-[#D1D5DB] line-clamp-4 leading-relaxed">{text}</p>
+      <div className="h-24 bg-[#0F111A] p-3 overflow-hidden">
+        <div className="flex items-center gap-1.5 mb-1">
+          <MessageSquareText className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span className="text-[10px] text-[#6B7280]">Transcription</span>
+        </div>
+        <p className="text-xs text-[#D1D5DB] line-clamp-3 leading-relaxed">{text}</p>
       </div>
     );
   }
@@ -200,9 +203,8 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
     const text = result.snippet || (result.metadata?.text as string) || '';
     if (text) {
       return (
-        <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
-          <File className="w-6 h-6 text-blue-400 shrink-0" />
-          <p className="text-xs text-[#D1D5DB] line-clamp-4 leading-relaxed font-mono">{text}</p>
+        <div className="h-24 bg-[#0a0d14] p-3 overflow-hidden">
+          <p className="text-xs text-[#8BB4F0] line-clamp-4 leading-relaxed font-mono whitespace-pre-wrap">{text}</p>
         </div>
       );
     }
@@ -212,10 +214,9 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
     const text = result.snippet || (result.metadata?.text as string) || '';
     const app = result.metadata?.application as string;
     return (
-      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
-        <Activity className="w-6 h-6 text-pink-400 shrink-0" />
-        {app && <p className="text-xs text-[#9CA3AF] truncate w-full">{app}</p>}
-        {text && <p className="text-xs text-[#D1D5DB] line-clamp-3 leading-relaxed font-mono">{text}</p>}
+      <div className="h-24 bg-[#0a0d14] p-3 overflow-hidden">
+        {app && <p className="text-[10px] text-[#6B7280] mb-1 truncate">{app}</p>}
+        <p className="text-xs text-[#F0ABFC] font-mono line-clamp-3 leading-relaxed whitespace-pre-wrap">{text || 'No text captured'}</p>
       </div>
     );
   }
@@ -223,19 +224,23 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
   if (lower === 'clipboard') {
     const text = result.snippet || (result.metadata?.text as string) || '';
     return (
-      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
-        <Clipboard className="w-6 h-6 text-yellow-400 shrink-0" />
-        {text && <p className="text-xs text-[#D1D5DB] line-clamp-4 leading-relaxed font-mono">{text}</p>}
+      <div className="h-24 bg-[#0a0d14] p-3 overflow-hidden">
+        <div className="flex items-center gap-1.5 mb-1">
+          <Clipboard className="w-3.5 h-3.5 text-yellow-400" />
+          <span className="text-[10px] text-[#6B7280]">Copied</span>
+        </div>
+        <p className="text-xs text-[#FDE68A] font-mono line-clamp-3 leading-relaxed whitespace-pre-wrap">{text || 'Binary content'}</p>
       </div>
     );
   }
 
   if (lower === 'shellhistory' || lower === 'shell_history') {
     const cmd = (result.metadata?.command as string) || '';
+    const dir = result.path || '';
     return (
-      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
-        <Terminal className="w-6 h-6 text-rose-400 shrink-0" />
-        {cmd && <p className="text-xs text-[#D1D5DB] line-clamp-2 leading-relaxed font-mono">$ {cmd}</p>}
+      <div className="h-24 bg-[#0a0d14] p-3 overflow-hidden font-mono">
+        {dir && <p className="text-[10px] text-[#6B7280] truncate mb-1">$ {dir}</p>}
+        <p className="text-sm text-[#34D399] line-clamp-3 leading-relaxed">{cmd}</p>
       </div>
     );
   }
@@ -244,10 +249,10 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
     const title = (result.metadata?.title as string) || '';
     const url = (result.metadata?.url as string) || '';
     return (
-      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
-        <Globe className="w-6 h-6 text-cyan-400 shrink-0" />
-        {title && <p className="text-xs text-[#F9FAFB] truncate w-full font-medium">{title}</p>}
-        {url && <p className="text-xs text-[#9CA3AF] truncate w-full">{url}</p>}
+      <div className="h-24 bg-[#0F111A] p-3 overflow-hidden flex flex-col justify-center">
+        <Globe className="w-4 h-4 text-cyan-400 mb-1.5 shrink-0" />
+        <p className="text-sm text-[#F9FAFB] line-clamp-2 font-medium">{title || 'Untitled page'}</p>
+        <p className="text-[10px] text-[#6B7280] truncate mt-0.5">{url}</p>
       </div>
     );
   }
@@ -256,15 +261,15 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
     const app = (result.metadata?.application as string) || '';
     const wt = (result.metadata?.window_title as string) || result.name;
     return (
-      <div className="aspect-video bg-[#0F111A] flex flex-col items-start justify-start p-3 gap-1 overflow-hidden">
-        <Monitor className="w-6 h-6 text-indigo-400 shrink-0" />
-        {app && <p className="text-xs text-[#F9FAFB] truncate w-full font-medium">{app}</p>}
-        {wt && <p className="text-xs text-[#9CA3AF] truncate w-full">{wt}</p>}
+      <div className="h-24 bg-[#0F111A] p-3 overflow-hidden flex flex-col justify-center">
+        <Monitor className="w-4 h-4 text-indigo-400 mb-1.5 shrink-0" />
+        <p className="text-sm text-[#F9FAFB] font-medium truncate">{app}</p>
+        <p className="text-xs text-[#9CA3AF] line-clamp-2 mt-0.5">{wt}</p>
       </div>
     );
   }
 
-  const iconClass = "w-12 h-12 text-[#4C8BF5]";
+  const iconClass = "w-8 h-8 text-[#4C8BF5]";
   const icon = (() => {
     if (lower === 'mouse') return <Mouse className={iconClass} />;
     if (lower === 'weather') return <Cloud className={iconClass} />;
@@ -274,7 +279,7 @@ function ModalityPreview({ result }: { result: SearchResult }): JSX.Element | nu
   })();
 
   return (
-    <div className="aspect-video bg-[#0F111A] flex items-center justify-center">
+    <div className="h-16 bg-[#0F111A] flex items-center justify-center">
       {icon}
     </div>
   );
