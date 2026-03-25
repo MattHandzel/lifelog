@@ -1072,10 +1072,14 @@ async fn get_frame_data(
         *client_guard = Some(create_client(channel));
         client_guard.as_mut().unwrap()
     };
-    let result = get_frame_data_async(client, keys.clone(), false).await;
+    let key_count = keys.len();
+    let result = get_frame_data_async(client, keys, false).await;
     if let Ok(ref frames) = result {
-        if frames.is_empty() && !keys.is_empty() {
-            eprintln!("[get_frame_data] Got 0 frames, resetting gRPC client for reconnect");
+        if frames.is_empty() && key_count > 0 {
+            eprintln!(
+                "[get_frame_data] Got 0 frames for {} keys, resetting gRPC client",
+                key_count
+            );
             *client_guard = None;
         }
     }
