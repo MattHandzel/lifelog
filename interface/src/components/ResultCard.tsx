@@ -52,6 +52,7 @@ export interface FrameDataWrapper {
   channels: number | null;
   audio_duration_secs: number | null;
   image_data_url: string | null;
+  dataUrl: string | null;
   width: number | null;
   height: number | null;
   mime_type: string | null;
@@ -369,7 +370,7 @@ interface ResultCardProps {
 
 function frameToResult(frame: FrameDataWrapper): SearchResult {
   const modalityLower = frame.modality.toLowerCase();
-  const preview = frame.image_data_url ?? undefined;
+  const preview = frame.dataUrl ?? frame.image_data_url ?? undefined;
   return {
     id: frame.uuid,
     type: modalityLower === 'audio' || modalityLower === 'microphone' ? 'audio' : 'file',
