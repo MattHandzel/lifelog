@@ -200,6 +200,7 @@ fn create_client(channel: Channel) -> InterceptedClient {
     let token = get_auth_token();
     lifelog::LifelogServerServiceClient::with_interceptor(channel, AuthInterceptor { token })
         .max_decoding_message_size(512 * 1024 * 1024)
+        .max_encoding_message_size(512 * 1024 * 1024)
 }
 
 async fn reconnect_grpc_client(state: &GrpcClientState) -> Result<(), String> {
@@ -865,10 +866,10 @@ async fn get_frame_data_async(
             Ok(Ok(resp)) => all_data.extend(resp.into_inner().data),
             Ok(Err(e)) => {
                 eprintln!(
-                    "[get_frame_data] gRPC GetData error: code={:?} msg={} details={:?}",
+                    "[get_frame_data] gRPC GetData error: code={:?} msg={} source={:?}",
                     e.code(),
                     e.message(),
-                    e.details()
+                    std::error::Error::source(&e).map(|s| format!("{}", s))
                 );
                 continue;
             }
