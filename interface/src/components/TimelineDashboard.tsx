@@ -54,6 +54,9 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
         const keys = entries.slice(0, 50).map(e => ({ uuid: e.uuid, origin: e.origin }));
         try {
           const enriched = await invoke<FrameDataWrapper[]>('get_frame_data_thumbnails', { keys });
+          if (enriched.length === 0) {
+            setError(`Enrichment returned 0 frames for ${keys.length} keys`);
+          }
           const frameMap = new Map(enriched.map(f => [f.uuid, f]));
           const ordered = entries.slice(0, 50).map(e => frameMap.get(e.uuid) ?? {
             uuid: e.uuid, modality: e.modality, timestamp: e.timestamp,
