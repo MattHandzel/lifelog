@@ -75,11 +75,11 @@ async fn execute_table_query(
         .and_then(|f| extract_search_text(f))
         .map(|text| {
             format!(
-                "ts_rank(t.search_doc, websearch_to_tsquery('english', {})) DESC, t.t_canonical ASC",
+                "ts_rank(t.search_doc, websearch_to_tsquery('english', {})) DESC, t.t_canonical DESC",
                 quote_string(text)
             )
         })
-        .unwrap_or_else(|| "t.t_canonical ASC".to_string());
+        .unwrap_or_else(|| "t.t_canonical DESC".to_string());
 
     let sql = format!(
         "SELECT t.id::text AS id FROM frames t WHERE ({origin_scope}) AND ({filter_sql}) ORDER BY {order_by} LIMIT {limit}"
@@ -149,11 +149,11 @@ async fn execute_during_query(
         .and_then(|f| extract_search_text(f))
         .map(|text| {
             format!(
-                "ts_rank(t.search_doc, websearch_to_tsquery('english', {})) DESC, t.t_canonical ASC",
+                "ts_rank(t.search_doc, websearch_to_tsquery('english', {})) DESC, t.t_canonical DESC",
                 quote_string(text)
             )
         })
-        .unwrap_or_else(|| "t.t_canonical ASC".to_string());
+        .unwrap_or_else(|| "t.t_canonical DESC".to_string());
 
     let sql = format!(
         "SELECT DISTINCT t.id::text AS id FROM frames t WHERE {where_sql} ORDER BY {order_by} LIMIT {target_limit}"
