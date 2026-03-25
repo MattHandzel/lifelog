@@ -850,7 +850,14 @@ async fn get_frame_data_async(
         };
         match timeout(Duration::from_secs(30), grpc_client.get_data(req)).await {
             Ok(Ok(resp)) => all_data.extend(resp.into_inner().data),
-            _ => break,
+            Ok(Err(e)) => {
+                eprintln!("[get_frame_data] gRPC GetData error: {}", e);
+                break;
+            }
+            Err(_) => {
+                eprintln!("[get_frame_data] GetData timeout after 30s");
+                break;
+            }
         }
     }
     {
