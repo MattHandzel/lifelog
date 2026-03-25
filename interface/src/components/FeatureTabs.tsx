@@ -254,6 +254,24 @@ export default function FeatureTabs(): JSX.Element {
     return tabs.filter(function (tab) { return tab.category === category && tab.implemented; });
   }
 
+  // Keyboard shortcuts: Alt+1 through Alt+9 for tab switching
+  useEffect(() => {
+    const implementedTabs = tabs.filter(t => t.implemented);
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.altKey && e.key >= '1' && e.key <= '9') {
+        e.preventDefault();
+        const idx = parseInt(e.key) - 1;
+        if (idx < implementedTabs.length) {
+          setActiveTab(implementedTabs[idx].id);
+          const cat = implementedTabs[idx].category;
+          setExpandedCategory(cat);
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [tabs]);
+
   // Toggle category
   function toggleCategory(category: CategoryType): void {
     if (expandedCategory === category) {
