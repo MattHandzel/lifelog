@@ -184,6 +184,9 @@ async fn create_grpc_channel(addr: &str) -> Result<Channel, String> {
             .tls_config(tls)
             .map_err(|e| format!("TLS config error: {}", e))?;
     }
+    endpoint = endpoint
+        .http2_keep_alive_interval(std::time::Duration::from_secs(10))
+        .keep_alive_timeout(std::time::Duration::from_secs(20));
     endpoint.connect().await.map_err(|e| {
         eprintln!("[gRPC] Connection failed to {}: {}", addr, e);
         format!("gRPC connect error: {}", e)
@@ -844,19 +847,22 @@ async fn get_frame_data_async(
         })
         .collect();
     let mut all_data = Vec::new();
-    for chunk in grpc_keys.chunks(10) {
+    for chunk in grpc_keys.chunks(5) {
         let req = lifelog::GetDataRequest {
             keys: chunk.to_vec(),
         };
         match timeout(Duration::from_secs(30), grpc_client.get_data(req)).await {
             Ok(Ok(resp)) => all_data.extend(resp.into_inner().data),
             Ok(Err(e)) => {
-                eprintln!("[get_frame_data] gRPC GetData error: {}", e);
-                break;
+                eprintln!(
+                    "[get_frame_data] gRPC GetData error: {} — retrying with fresh data",
+                    e
+                );
+                continue;
             }
             Err(_) => {
                 eprintln!("[get_frame_data] GetData timeout after 30s");
-                break;
+                continue;
             }
         }
     }
@@ -1066,7 +1072,14 @@ async fn get_frame_data(
         *client_guard = Some(create_client(channel));
         client_guard.as_mut().unwrap()
     };
-    get_frame_data_async(client, keys, false).await
+    let result = get_frame_data_async(client, keys.clone(), false).await;
+    if let Ok(ref frames) = result {
+        if frames.is_empty() && !keys.is_empty() {
+            eprintln!("[get_frame_data] Got 0 frames, resetting gRPC client for reconnect");
+            *client_guard = None;
+        }
+    }
+    result
 }
 
 #[tauri::command]
