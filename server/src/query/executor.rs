@@ -79,7 +79,7 @@ async fn execute_table_query(
                 quote_string(text)
             )
         })
-        .unwrap_or_else(|| "t.t_canonical DESC".to_string());
+        .unwrap_or_else(|| "t.t_canonical DESC NULLS LAST".to_string());
 
     let sql = format!(
         "SELECT t.id::text AS id FROM frames t WHERE ({origin_scope}) AND ({filter_sql}) ORDER BY {order_by} LIMIT {limit}"
@@ -153,7 +153,7 @@ async fn execute_during_query(
                 quote_string(text)
             )
         })
-        .unwrap_or_else(|| "t.t_canonical DESC".to_string());
+        .unwrap_or_else(|| "t.t_canonical DESC NULLS LAST".to_string());
 
     let sql = format!(
         "SELECT DISTINCT t.id::text AS id FROM frames t WHERE {where_sql} ORDER BY {order_by} LIMIT {target_limit}"
