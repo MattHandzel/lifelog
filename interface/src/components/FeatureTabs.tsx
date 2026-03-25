@@ -290,7 +290,7 @@ export default function FeatureTabs(): JSX.Element {
         </div>
         
         <div className="overflow-y-auto flex-1">
-          {categories.map(category => (
+          {categories.filter(category => getTabsByCategory(category.id).length > 0).map(category => (
             <div key={category.id} className="mb-1">
               <button
                 onClick={() => toggleCategory(category.id)}
