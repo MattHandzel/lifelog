@@ -636,6 +636,27 @@ impl Server {
             return res.map_err(|e| LifelogError::Database(format!("query execution failed: {e}")));
         }
 
+        // Fast path: no text search and no time ranges → single query across all origins
+        if query_msg.text.is_empty() && query_msg.time_ranges.is_empty() {
+            let sql =
+                "SELECT id, stream_id FROM frames ORDER BY t_canonical DESC NULLS LAST LIMIT 1000";
+            if let Ok(client) = self.postgres_pool.get().await {
+                if let Ok(rows) = client.query(sql, &[]).await {
+                    for row in rows {
+                        let id: uuid::Uuid = row.get("id");
+                        let stream_id: String = row.get("stream_id");
+                        if let Some(origin) = scoped_origins
+                            .iter()
+                            .find(|o| o.get_table_name() == stream_id)
+                        {
+                            keys.push(LifelogFrameKey::new(id, origin.clone()));
+                        }
+                    }
+                }
+            }
+            return Ok(keys);
+        }
+
         for origin in scoped_origins {
             let table = origin.get_table_name();
             let modality = origin.modality_name.clone();
