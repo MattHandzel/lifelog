@@ -1072,23 +1072,14 @@ async fn get_frame_data(
         *client_guard = Some(create_client(channel));
         client_guard.as_mut().unwrap()
     };
-    let keys_backup = keys.clone();
-    let result = get_frame_data_async(client, keys, false).await;
-    match &result {
-        Ok(frames) if frames.is_empty() && !keys_backup.is_empty() => {
-            eprintln!("[get_frame_data] Got 0 frames, reconnecting and retrying");
-            *client_guard = None;
-            drop(client_guard);
-            let mut client_guard = state.client.lock().await;
-            let channel = create_grpc_channel(&grpc_server_address())
-                .await
-                .map_err(|e| e.to_string())?;
-            *client_guard = Some(create_client(channel));
-            let client = client_guard.as_mut().unwrap();
-            get_frame_data_async(client, keys_backup, false).await
-        }
-        _ => result,
-    }
+    // Always use a fresh connection for GetData to avoid h2 protocol errors
+    // from reusing the connection after query_timeline
+    drop(client_guard);
+    let channel = create_grpc_channel(&grpc_server_address())
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut fresh_client = create_client(channel);
+    get_frame_data_async(&mut fresh_client, keys, false).await
 }
 
 #[tauri::command]
