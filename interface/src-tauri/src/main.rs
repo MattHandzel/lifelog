@@ -591,7 +591,7 @@ async fn query_timeline(
             if keys.is_empty() {
                 return Ok(vec![]);
             }
-            keys.truncate(100);
+            keys.truncate(1000);
 
             let grpc_keys: Vec<lifelog::LifelogDataKey> = keys
                 .iter()

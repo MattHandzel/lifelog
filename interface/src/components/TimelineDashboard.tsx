@@ -17,14 +17,8 @@ interface TimelineDashboardProps {
 }
 
 export default function TimelineDashboard({ collectorId = null }: TimelineDashboardProps): JSX.Element {
-  const [startDate, setStartDate] = useState<string>(() => {
-    const d = new Date();
-    d.setHours(d.getHours() - 24);
-    return d.toISOString().slice(0, 16);
-  });
-  const [endDate, setEndDate] = useState<string>(() => {
-    return new Date().toISOString().slice(0, 16);
-  });
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
   const [textQuery, setTextQuery] = useState<string>('');
   const [queryMode, setQueryMode] = useState<'text' | 'llql'>('text');
   const [results, setResults] = useState<TimelineEntry[]>([]);
@@ -57,11 +51,11 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
       setIsLoading(false);
 
       if (entries.length > 0) {
-        const keys = entries.slice(0, 50).map(e => ({ uuid: e.uuid, origin: e.origin }));
+        const keys = entries.slice(0, 100).map(e => ({ uuid: e.uuid, origin: e.origin }));
         try {
           const enriched = await invoke<FrameDataWrapper[]>('get_frame_data', { keys });
           const frameMap = new Map(enriched.map(f => [f.uuid, f]));
-          const ordered = entries.slice(0, 50).map(e => frameMap.get(e.uuid) ?? {
+          const ordered = entries.slice(0, 100).map(e => frameMap.get(e.uuid) ?? {
             uuid: e.uuid, modality: e.modality, timestamp: e.timestamp,
             text: null, url: null, title: null, visit_count: null,
             command: null, working_dir: null, exit_code: null,
