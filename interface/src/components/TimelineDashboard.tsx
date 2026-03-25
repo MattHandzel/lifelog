@@ -67,7 +67,9 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
           });
           setFrames(ordered);
         } catch (frameError) {
-          console.error('Frame data enrichment failed:', frameError);
+          const msg = frameError instanceof Error ? frameError.message : String(frameError);
+          console.error('Frame data enrichment failed:', msg);
+          setError('Enrichment: ' + msg);
         }
       } else {
         setFrames([]);
