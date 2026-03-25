@@ -58,6 +58,10 @@ export default function TimelineDashboard({ collectorId = null }: TimelineDashbo
             setError(`Enrichment returned 0 frames for ${keys.length} keys`);
           }
           const frameMap = new Map(enriched.map(f => [f.uuid, f]));
+          const matchCount = entries.slice(0, 20).filter(e => frameMap.has(e.uuid)).length;
+          if (matchCount < enriched.length) {
+            setError(`Enrichment: ${enriched.length} frames, ${matchCount} matched. Entry[0]: ${entries[0]?.uuid?.slice(0,8)}, Enriched[0]: ${enriched[0]?.uuid?.slice(0,8)}`);
+          }
           const ordered = entries.slice(0, 20).map(e => frameMap.get(e.uuid) ?? {
             uuid: e.uuid, modality: e.modality, timestamp: e.timestamp,
             text: null, url: null, title: null, visit_count: null,
