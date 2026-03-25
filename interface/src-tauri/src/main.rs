@@ -242,7 +242,7 @@ async fn test_interface_server_connection(grpc_server_address: String) -> Result
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct LifelogDataKeyWrapper {
     uuid: String,
     origin: String,
@@ -1072,18 +1072,23 @@ async fn get_frame_data(
         *client_guard = Some(create_client(channel));
         client_guard.as_mut().unwrap()
     };
-    let key_count = keys.len();
+    let keys_backup = keys.clone();
     let result = get_frame_data_async(client, keys, false).await;
-    if let Ok(ref frames) = result {
-        if frames.is_empty() && key_count > 0 {
-            eprintln!(
-                "[get_frame_data] Got 0 frames for {} keys, resetting gRPC client",
-                key_count
-            );
+    match &result {
+        Ok(frames) if frames.is_empty() && !keys_backup.is_empty() => {
+            eprintln!("[get_frame_data] Got 0 frames, reconnecting and retrying");
             *client_guard = None;
+            drop(client_guard);
+            let mut client_guard = state.client.lock().await;
+            let channel = create_grpc_channel(&grpc_server_address())
+                .await
+                .map_err(|e| e.to_string())?;
+            *client_guard = Some(create_client(channel));
+            let client = client_guard.as_mut().unwrap();
+            get_frame_data_async(client, keys_backup, false).await
         }
+        _ => result,
     }
-    result
 }
 
 #[tauri::command]
