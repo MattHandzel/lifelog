@@ -50,6 +50,19 @@ function AppLayout(): JSX.Element {
     setCurrentView(view);
   }
 
+  // Ctrl+Shift+D/S/N/G for view switching
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.ctrlKey && e.shiftKey) {
+        const map: Record<string, View> = { d: 'dashboard', s: 'search', n: 'network', g: 'settings' };
+        const view = map[e.key.toLowerCase()];
+        if (view) { e.preventDefault(); setCurrentView(view); }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   async function handleGlobalPause(paused: boolean) {
     if (isPausing) return;
     setIsPausing(true);
