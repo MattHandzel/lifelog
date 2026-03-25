@@ -608,7 +608,7 @@ async fn query_timeline(
                 .collect();
 
             let mut timestamp_map = std::collections::HashMap::new();
-            for chunk in grpc_keys.chunks(25) {
+            for chunk in grpc_keys.chunks(1) {
                 let data_req = lifelog::GetDataRequest {
                     keys: chunk.to_vec(),
                 };
@@ -622,7 +622,14 @@ async fn query_timeline(
                             }
                         }
                     }
-                    _ => break,
+                    Ok(Err(e)) => {
+                        eprintln!("[query_timeline] GetData chunk error: {}", e);
+                        break;
+                    }
+                    Err(_) => {
+                        eprintln!("[query_timeline] GetData chunk timeout");
+                        break;
+                    }
                 }
             }
 
