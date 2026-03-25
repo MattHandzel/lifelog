@@ -1051,13 +1051,25 @@ async fn get_frame_data(
         client_guard.as_mut().unwrap()
     };
     // Always use a fresh connection for GetData to avoid h2 protocol errors
-    // from reusing the connection after query_timeline
     drop(client_guard);
+    eprintln!(
+        "[get_frame_data] Creating fresh channel for {} keys",
+        keys.len()
+    );
     let channel = create_grpc_channel(&grpc_server_address())
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| {
+            eprintln!("[get_frame_data] Channel creation failed: {}", e);
+            e.to_string()
+        })?;
+    eprintln!("[get_frame_data] Channel created, calling get_frame_data_async");
     let mut fresh_client = create_client(channel);
-    get_frame_data_async(&mut fresh_client, keys, false).await
+    let result = get_frame_data_async(&mut fresh_client, keys, false).await;
+    eprintln!(
+        "[get_frame_data] get_frame_data_async returned {:?} frames",
+        result.as_ref().map(|v| v.len())
+    );
+    result
 }
 
 #[tauri::command]
