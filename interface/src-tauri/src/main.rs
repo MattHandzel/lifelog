@@ -600,50 +600,15 @@ async fn query_timeline(
             }
             keys.truncate(1000);
 
-            let grpc_keys: Vec<lifelog::LifelogDataKey> = keys
-                .iter()
-                .map(|k| lifelog::LifelogDataKey {
-                    uuid: k.uuid.clone(),
-                    origin: k.origin.clone(),
-                })
-                .collect();
-
-            let mut timestamp_map = std::collections::HashMap::new();
-            for chunk in grpc_keys.chunks(1) {
-                let data_req = lifelog::GetDataRequest {
-                    keys: chunk.to_vec(),
-                };
-                match timeout(Duration::from_secs(30), client.get_data(data_req)).await {
-                    Ok(Ok(data_resp)) => {
-                        for d in data_resp.into_inner().data {
-                            if let (Some(uuid), Some(t)) =
-                                (extract_payload_uuid(&d), extract_payload_timestamp(&d))
-                            {
-                                timestamp_map.insert(uuid, t);
-                            }
-                        }
-                    }
-                    Ok(Err(e)) => {
-                        eprintln!("[query_timeline] GetData chunk error: {}", e);
-                        break;
-                    }
-                    Err(_) => {
-                        eprintln!("[query_timeline] GetData chunk timeout");
-                        break;
-                    }
-                }
-            }
-
             let entries = keys
                 .into_iter()
                 .map(|k| {
                     let modality = k.origin.split(':').last().unwrap_or("unknown").to_string();
-                    let timestamp = timestamp_map.get(&k.uuid).copied();
                     TimelineEntry {
                         uuid: k.uuid,
                         origin: k.origin,
                         modality,
-                        timestamp,
+                        timestamp: None,
                     }
                 })
                 .collect();
