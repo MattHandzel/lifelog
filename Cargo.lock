@@ -8126,6 +8126,7 @@ dependencies = [
  "chrono",
  "directories",
  "image 0.25.10",
+ "memchr",
  "proptest",
  "rand 0.8.5",
  "serde",

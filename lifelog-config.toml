@@ -88,7 +88,7 @@ sourceOrigin = "*:Transcription"
 serviceEndpoint = "http://localhost:11434"
 priority = 2
 [transforms.params]
-model = "gemma3:4b-it-qat"
+model = "gemma4:e2b"
 system_prompt = "Clean up this speech-to-text transcription. Fix grammar, remove filler words, and format into readable paragraphs. Return only the cleaned text."
 
 [[transforms]]
@@ -99,7 +99,7 @@ sourceOrigin = "*:Ocr"
 serviceEndpoint = "http://localhost:11434"
 priority = 3
 [transforms.params]
-model = "gemma3:4b-it-qat"
+model = "gemma4:e2b"
 
 [[transforms]]
 id = "browser-topic"
@@ -109,7 +109,7 @@ sourceOrigin = "*:Browser"
 serviceEndpoint = "http://localhost:11434"
 priority = 3
 [transforms.params]
-model = "gemma3:4b-it-qat"
+model = "gemma4:e2b"
 
 [[transforms]]
 id = "sound-classifier"

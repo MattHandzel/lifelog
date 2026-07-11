@@ -1,0 +1,228 @@
+RepoAtlas Text Audit
+================================================================================
+
+[1] Correctness Model For This Project
+- Journey-first: entrypoints must lead to concrete module flows with evidence.
+- Evidence-backed: edge evidence file:line must exist in repo.
+- Icon semantics: entry/resource icon families must match node kinds.
+- Connectivity: selected journey should show explicit ordered steps.
+- Readability: full graph is allowed to be cluttered; journey view must be concise.
+
+[2] Artifact Integrity
+status=pass nodes=220 edges=566 journeys=14 evidence_total=735
+checks edge_endpoints=True evidence=True journey=True drift=True
+errors edge=0 evidence=0 journey=0 drift=0
+
+[3] Icon Audit
+icon_counts={'collector': 24, 'library': 25, 'ui': 79, 'server': 18, 'cli': 3, 'rpc': 11, 'database': 60}
+icon_mismatches=0
+
+[4] Clutter Metrics
+nodes=220 edges=566 density=0.0117 avg_out=2.57
+top_hubs:
+  - deg=128 module:interface::lib::utils
+  - deg= 91 module:server::server
+  - deg= 47 module:collector::collector
+  - deg= 45 module:server::ingest
+  - deg= 30 module:common::root
+  - deg= 30 module:common::cas
+  - deg= 28 module:collector::modules
+  - deg= 25 module:server::schema
+  - deg= 24 module:server::grpc_service
+  - deg= 20 module:common::chunk
+  - deg= 20 module:server::db
+  - deg= 20 module:server::query
+
+[5] Repo-Specific Expectations
+pass=4/4
+  - OK collector CLI has entry edge to collector root
+  - OK collector flow reaches collector setup/collector logic
+  - OK RPC Query entry exists
+  - OK RPC Query reaches server query module
+
+[Journey] entry:cli:collector
+  entry=entry:cli:collector nodes=29 edges=50
+  Primary Path:
+    01 [d0] entry_invokes entry:cli:collector -> module:collector::root @ collector/src/main.rs:1 OK
+    02 [d1] assoc_call module:collector::root -> module:collector::collector @ collector/src/main.rs:65 OK
+    03 [d1] assoc_call module:collector::root -> module:collector::collector::upload_manager @ collector/src/main.rs:60 OK
+    04 [d1] assoc_call module:collector::root -> module:collector::setup @ collector/src/main.rs:40 OK
+    05 [d2] assoc_call module:collector::collector -> module:collector::modules::audio @ collector/src/collector.rs:487 OK
+    06 [d2] assoc_call module:collector::collector -> module:collector::modules::browser_history @ collector/src/collector.rs:399 OK
+    07 [d2] qualified_ref module:collector::collector::upload_manager -> module:collector::collector @ collector/src/collector/upload_manager.rs:1 OK
+    08 [d2] qualified_ref module:collector::collector::upload_manager -> module:collector::modules @ collector/src/collector/upload_manager.rs:2 OK
+    09 [d2] resource_access module:collector::setup -> resource:table:sqlite_master @ collector/src/setup.rs:423 OK
+    10 [d3] call module:collector::modules::audio -> module:common::root @ collector/src/modules/audio.rs:336 OK
+    11 [d3] call module:collector::modules::browser_history -> module:common::root @ collector/src/modules/browser_history.rs:88 OK
+    12 [d4] call module:common::root -> module:common::server_config @ common/config/src/lib.rs:47 OK
+    13 [d5] resource_access module:common::server_config -> resource:table:environment @ common/config/src/server_config.rs:3 OK
+  Supporting Branches:
+    01 [d1] method_call module:collector::root -> module:collector::collector @ collector/src/main.rs:80 OK
+    02 [d1] call module:collector::root -> module:common::root @ collector/src/main.rs:36 OK
+    03 [d2] assoc_call module:collector::collector -> module:collector::modules::camera @ collector/src/collector.rs:456 OK
+    04 [d2] assoc_call module:collector::collector -> module:collector::modules::clipboard @ collector/src/collector.rs:629 OK
+    05 [d2] assoc_call module:collector::collector -> module:collector::modules::hyprland @ collector/src/collector.rs:598 OK
+    06 [d2] assoc_call module:collector::collector -> module:collector::modules::keystrokes @ collector/src/collector.rs:545 OK
+    07 [d2] assoc_call module:collector::collector -> module:collector::modules::microphone @ collector/src/collector.rs:518 OK
+    08 [d2] assoc_call module:collector::collector -> module:collector::modules::mouse @ collector/src/collector.rs:687 OK
+    09 [d2] assoc_call module:collector::collector -> module:collector::modules::processes @ collector/src/collector.rs:430 OK
+    10 [d2] assoc_call module:collector::collector -> module:collector::modules::screen @ collector/src/collector.rs:373 OK
+    11 [d2] assoc_call module:collector::collector -> module:collector::modules::shell_history @ collector/src/collector.rs:660 OK
+    12 [d2] assoc_call module:collector::collector -> module:collector::modules::weather @ collector/src/collector.rs:572 OK
+    13 [d2] assoc_call module:collector::collector -> module:collector::modules::window_activity @ collector/src/collector.rs:718 OK
+    14 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:2 OK
+    15 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:3 OK
+    16 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:4 OK
+    17 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:5 OK
+    18 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:6 OK
+    19 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:7 OK
+    20 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:8 OK
+    21 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:9 OK
+    22 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:10 OK
+    23 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:11 OK
+    24 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:12 OK
+    25 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:13 OK
+    26 [d2] qualified_ref module:collector::collector -> module:collector::modules @ collector/src/collector.rs:14 OK
+    27 [d2] call module:collector::collector -> module:common::root @ collector/src/collector.rs:952 OK
+    28 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:2 OK
+    29 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:3 OK
+    30 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:4 OK
+    31 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:5 OK
+    32 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:6 OK
+    33 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:7 OK
+    34 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:8 OK
+    35 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:9 OK
+    36 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:10 OK
+    37 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:11 OK
+    38 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:12 OK
+    39 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:13 OK
+    40 [d2] import module:collector::collector -> module:collector::modules @ collector/src/collector.rs:14 OK
+    41 [d2] import module:collector::collector::upload_manager -> module:collector::collector @ collector/src/collector/upload_manager.rs:1 OK
+    42 [d2] import module:collector::collector::upload_manager -> module:collector::modules @ collector/src/collector/upload_manager.rs:2 OK
+    43 [d2] resource_access module:collector::setup -> resource:table:test @ collector/src/setup.rs:419 OK
+    44 [d2] resource_access module:common::root -> resource:table:implementations @ common/lifelog-types/src/lib.rs:43 OK
+    45 [d2] resource_access module:common::root -> resource:table:lifelog_types @ common/config/src/lib.rs:12 OK
+    46 [d2] resource_access module:common::root -> resource:table:unified @ common/config/src/lib.rs:227 OK
+    47 [d3] call module:collector::modules::keystrokes -> module:collector::collector @ collector/src/modules/keystrokes.rs:63 OK
+    48 [d3] call module:collector::modules::camera -> module:common::root @ collector/src/modules/camera.rs:120 OK
+    49 [d3] call module:collector::modules::camera -> module:common::root @ collector/src/modules/camera.rs:169 OK
+    50 [d3] call module:collector::modules::clipboard -> module:common::root @ collector/src/modules/clipboard.rs:124 OK
+    51 [d3] call module:collector::modules::hyprland -> module:common::root @ collector/src/modules/hyprland.rs:42 OK
+    52 [d3] call module:collector::modules::keystrokes -> module:common::root @ collector/src/modules/keystrokes.rs:137 OK
+    53 [d3] call module:collector::modules::microphone -> module:common::root @ collector/src/modules/microphone.rs:321 OK
+    54 [d3] call module:collector::modules::microphone -> module:common::root @ collector/src/modules/microphone.rs:322 OK
+    55 [d3] call module:collector::modules::mouse -> module:common::root @ collector/src/modules/mouse.rs:105 OK
+    56 [d3] call module:collector::modules::processes -> module:common::root @ collector/src/modules/processes.rs:226 OK
+    57 [d3] call module:collector::modules::screen -> module:common::root @ collector/src/modules/screen.rs:159 OK
+    58 [d3] call module:collector::modules::shell_history -> module:common::root @ collector/src/modules/shell_history.rs:230 OK
+    59 [d3] call module:collector::modules::weather -> module:common::root @ collector/src/modules/weather.rs:116 OK
+    60 [d3] call module:collector::modules::window_activity -> module:common::root @ collector/src/modules/window_activity.rs:280 OK
+    61 [d3] call module:collector::modules::window_activity -> module:common::root @ collector/src/modules/window_activity.rs:281 OK
+    62 [d3] resource_access module:collector::modules::browser_history -> resource:table:urls @ collector/src/modules/browser_history.rs:75 OK
+    63 [d3] resource_access module:collector::modules::browser_history -> resource:table:visits @ collector/src/modules/browser_history.rs:75 OK
+    64 [d3] resource_access module:collector::modules::weather -> resource:table:environment @ collector/src/modules/weather.rs:40 OK
+  primary_quality: start_ok=True flow_edges=9/13 supporting=64
+
+[Journey] entry:rpc:Query
+  entry=entry:rpc:Query nodes=39 edges=93
+  Primary Path:
+    01 [d0] entry_invokes entry:rpc:Query -> module:server::grpc_service @ proto/lifelog.proto:380 OK
+    02 [d1] qualified_ref module:server::grpc_service -> module:server::server @ server/src/grpc_service.rs:2 OK
+    03 [d1] import module:server::grpc_service -> module:server::server @ server/src/grpc_service.rs:2 OK
+    04 [d1] qualified_ref module:server::grpc_service -> module:server::ingest @ server/src/grpc_service.rs:1 OK
+    05 [d2] assoc_call module:server::server -> module:server::query::ast @ server/src/server.rs:688 OK
+    06 [d2] assoc_call module:server::server -> module:server::query::executor @ server/src/server.rs:655 OK
+    07 [d2] call module:server::ingest -> module:server::grpc_service @ server/src/ingest.rs:1316 OK
+    08 [d2] call module:server::ingest -> module:server::schema @ server/src/ingest.rs:142 OK
+    09 [d3] call module:server::query::ast -> module:server::grpc_service @ server/src/query/ast.rs:18 OK
+    10 [d3] qualified_ref module:server::query::executor -> module:server::postgres @ server/src/query/executor.rs:3 OK
+    11 [d3] assoc_call module:server::schema -> module:server::db @ server/src/schema.rs:481 OK
+    12 [d4] resource_access module:server::postgres -> resource:table:schema_migrations @ server/src/postgres.rs:74 OK
+    13 [d4] resource_access module:server::db -> resource:table:catalog @ server/src/db.rs:47 OK
+  Supporting Branches:
+    01 [d1] import module:server::grpc_service -> module:server::ingest @ server/src/grpc_service.rs:1 OK
+    02 [d1] resource_access module:server::grpc_service -> resource:table:controlstream @ server/src/grpc_service.rs:133 OK
+    03 [d1] resource_access module:server::grpc_service -> resource:table:peer @ server/src/grpc_service.rs:65 OK
+    04 [d1] resource_access module:server::grpc_service -> resource:table:upload_chunks @ server/src/grpc_service.rs:348 OK
+    05 [d1] resource_access module:server::grpc_service -> resource:table:upload_chunks @ server/src/grpc_service.rs:369 OK
+    06 [d2] assoc_call module:server::server -> module:server::query::llql @ server/src/server.rs:641 OK
+    07 [d2] assoc_call module:server::server -> module:server::query::planner @ server/src/server.rs:653 OK
+    08 [d2] assoc_call module:server::server -> module:server::query::planner @ server/src/server.rs:743 OK
+    09 [d2] assoc_call module:server::server -> module:server::data_retrieval @ server/src/server.rs:1246 OK
+    10 [d2] assoc_call module:server::server -> module:server::db @ server/src/server.rs:1211 OK
+    11 [d2] assoc_call module:server::server -> module:server::db @ server/src/server.rs:1221 OK
+    12 [d2] assoc_call module:server::server -> module:server::db @ server/src/server.rs:1280 OK
+    13 [d2] assoc_call module:server::server -> module:server::replay @ server/src/server.rs:928 OK
+    14 [d2] assoc_call module:server::server -> module:server::replay @ server/src/server.rs:1087 OK
+    15 [d2] assoc_call module:server::server -> module:server::schema @ server/src/server.rs:451 OK
+    16 [d2] assoc_call module:server::server -> module:server::transform @ server/src/server.rs:1270 OK
+    17 [d2] call module:server::server -> module:server::data_retrieval @ server/src/server.rs:120 OK
+    18 [d2] call module:server::server -> module:server::db @ server/src/server.rs:409 OK
+    19 [d2] call module:server::server -> module:server::postgres @ server/src/server.rs:458 OK
+    20 [d2] call module:server::server -> module:server::postgres @ server/src/server.rs:459 OK
+    21 [d2] call module:server::server -> module:server::retention @ server/src/server.rs:1110 OK
+    22 [d2] call module:server::server -> module:server::sync @ server/src/server.rs:1181 OK
+    23 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:641 OK
+    24 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:646 OK
+    25 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:653 OK
+    26 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:655 OK
+    27 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:656 OK
+    28 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:658 OK
+    29 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:661 OK
+    30 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:688 OK
+    31 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:690 OK
+    32 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:710 OK
+    33 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:712 OK
+    34 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:722 OK
+    35 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:733 OK
+    36 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:737 OK
+    37 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:738 OK
+    38 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:743 OK
+    39 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:745 OK
+    40 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:746 OK
+    41 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:748 OK
+    42 [d2] qualified_ref module:server::server -> module:server::query @ server/src/server.rs:751 OK
+    43 [d2] qualified_ref module:server::ingest -> module:server::postgres @ server/src/ingest.rs:15 OK
+    44 [d2] qualified_ref module:server::ingest -> module:server::schema @ server/src/ingest.rs:16 OK
+    45 [d2] qualified_ref module:server::ingest -> module:server::schema @ server/src/ingest.rs:17 OK
+    46 [d2] qualified_ref module:server::server -> module:server::data_retrieval @ server/src/server.rs:18 OK
+    47 [d2] qualified_ref module:server::server -> module:server::data_retrieval @ server/src/server.rs:1246 OK
+    48 [d2] qualified_ref module:server::server -> module:server::db @ server/src/server.rs:19 OK
+    49 [d2] qualified_ref module:server::server -> module:server::db @ server/src/server.rs:1211 OK
+    50 [d2] qualified_ref module:server::server -> module:server::db @ server/src/server.rs:1221 OK
+    51 [d2] qualified_ref module:server::server -> module:server::db @ server/src/server.rs:1280 OK
+    52 [d2] qualified_ref module:server::server -> module:server::policy @ server/src/server.rs:1 OK
+    53 [d2] qualified_ref module:server::server -> module:server::postgres @ server/src/server.rs:2 OK
+    54 [d2] qualified_ref module:server::server -> module:server::replay @ server/src/server.rs:928 OK
+    55 [d2] qualified_ref module:server::server -> module:server::replay @ server/src/server.rs:958 OK
+    56 [d2] qualified_ref module:server::server -> module:server::replay @ server/src/server.rs:1040 OK
+    57 [d2] qualified_ref module:server::server -> module:server::replay @ server/src/server.rs:1074 OK
+    58 [d2] qualified_ref module:server::server -> module:server::replay @ server/src/server.rs:1087 OK
+    59 [d2] qualified_ref module:server::server -> module:server::retention @ server/src/server.rs:20 OK
+    60 [d2] qualified_ref module:server::server -> module:server::retention @ server/src/server.rs:99 OK
+    61 [d2] qualified_ref module:server::server -> module:server::retention @ server/src/server.rs:1108 OK
+    62 [d2] qualified_ref module:server::server -> module:server::schema @ server/src/server.rs:451 OK
+    63 [d2] qualified_ref module:server::server -> module:server::sync @ server/src/server.rs:21 OK
+    64 [d2] qualified_ref module:server::server -> module:server::transform @ server/src/server.rs:22 OK
+    65 [d2] qualified_ref module:server::server -> module:server::transform @ server/src/server.rs:1270 OK
+    66 [d2] import module:server::ingest -> module:server::postgres @ server/src/ingest.rs:15 OK
+    67 [d2] import module:server::ingest -> module:server::schema @ server/src/ingest.rs:16 OK
+    68 [d2] import module:server::ingest -> module:server::schema @ server/src/ingest.rs:17 OK
+    69 [d2] import module:server::server -> module:server::data_retrieval @ server/src/server.rs:18 OK
+    70 [d2] import module:server::server -> module:server::db @ server/src/server.rs:19 OK
+    71 [d2] import module:server::server -> module:server::policy @ server/src/server.rs:1 OK
+    72 [d2] import module:server::server -> module:server::postgres @ server/src/server.rs:2 OK
+    73 [d2] import module:server::server -> module:server::retention @ server/src/server.rs:20 OK
+    74 [d2] import module:server::server -> module:server::sync @ server/src/server.rs:21 OK
+    75 [d2] import module:server::server -> module:server::transform @ server/src/server.rs:22 OK
+    76 [d2] resource_access module:server::ingest -> resource:table:audio_records @ server/src/ingest.rs:1076 OK
+    77 [d2] resource_access module:server::ingest -> resource:table:browser_records @ server/src/ingest.rs:971 OK
+    78 [d2] resource_access module:server::ingest -> resource:table:clipboard_records @ server/src/ingest.rs:1140 OK
+    79 [d2] resource_access module:server::ingest -> resource:table:duration_secs @ server/src/ingest.rs:347 OK
+    80 [d2] resource_access module:server::ingest -> resource:table:duration_secs @ server/src/ingest.rs:514 OK
+  primary_quality: start_ok=True flow_edges=7/13 supporting=137
+
+[6] Overall
+alignment_score=5/5
+primary_path_fidelity=2/2 focus_journeys passed control-flow-first checks
+note: score favors control-flow-first journey readability over raw edge coverage.

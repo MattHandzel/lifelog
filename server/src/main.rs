@@ -949,7 +949,7 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
             let endpoint = std::env::var("LIFELOG_OLLAMA_ENDPOINT")
                 .unwrap_or_else(|_| "http://localhost:11434".to_string());
             let model = std::env::var("LIFELOG_SUMMARY_MODEL")
-                .unwrap_or_else(|_| "gemma3:4b-it-qat".to_string());
+                .unwrap_or_else(|_| "gemma4:e2b".to_string());
             match lifelog_server::transform::summary::generate_daily_summary(
                 &server.postgres_pool,
                 &server.cas,

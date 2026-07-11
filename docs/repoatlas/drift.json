@@ -1,0 +1,90 @@
+[
+  {
+    "level": "hard",
+    "message": "Forbidden boundary edge interface -> collector",
+    "source": "module:interface::components::Login",
+    "target": "resource:table:environment",
+    "evidence": [
+      {
+        "file": "interface/src/components/Login.tsx",
+        "line": 17
+      }
+    ]
+  },
+  {
+    "level": "soft",
+    "message": "Unexpected boundary edge common -> collector",
+    "source": "module:common::server_config",
+    "target": "resource:table:environment",
+    "evidence": [
+      {
+        "file": "common/config/src/server_config.rs",
+        "line": 3
+      },
+      {
+        "file": "common/config/src/server_config.rs",
+        "line": 12
+      }
+    ]
+  },
+  {
+    "level": "soft",
+    "message": "Unexpected boundary edge interface -> common",
+    "source": "module:interface::bin::lifelog-logger",
+    "target": "module:common::root",
+    "evidence": [
+      {
+        "file": "interface/src-tauri/src/bin/lifelog-logger.rs",
+        "line": 21
+      }
+    ]
+  },
+  {
+    "level": "soft",
+    "message": "Unexpected boundary edge interface -> common",
+    "source": "module:interface::bin::lifelog-server",
+    "target": "module:common::root",
+    "evidence": [
+      {
+        "file": "interface/src-tauri/src/bin/lifelog-server.rs",
+        "line": 77
+      }
+    ]
+  },
+  {
+    "level": "soft",
+    "message": "Unexpected boundary edge interface -> common",
+    "source": "module:interface::bin::text-upload",
+    "target": "module:common::root",
+    "evidence": [
+      {
+        "file": "interface/src-tauri/src/bin/text-upload.rs",
+        "line": 33
+      }
+    ]
+  },
+  {
+    "level": "soft",
+    "message": "Unexpected boundary edge interface -> common",
+    "source": "module:interface::root",
+    "target": "module:common::root",
+    "evidence": [
+      {
+        "file": "interface/src-tauri/src/lib.rs",
+        "line": 51
+      },
+      {
+        "file": "interface/src-tauri/src/lib.rs",
+        "line": 56
+      },
+      {
+        "file": "interface/src-tauri/src/lib.rs",
+        "line": 61
+      },
+      {
+        "file": "interface/src-tauri/src/lib.rs",
+        "line": 66
+      }
+    ]
+  }
+]

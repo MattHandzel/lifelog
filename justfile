@@ -239,6 +239,11 @@ repoatlas-agent-graph:
 repoatlas-view:
     python3 tools/repoatlas/viewer/serve_viewer.py --root . --host ${HOST:-127.0.0.1} --port ${PORT:-8123}
 
+# Text-mode visualization audit for manual verification
+repoatlas-text-audit:
+    python3 tools/repoatlas/validate_artifacts.py --repo . --graph docs/repoatlas/graph.json --journeys docs/repoatlas/journeys.json --drift docs/repoatlas/drift.json --decisions docs/repoatlas/decisions.json --out docs/repoatlas/audit.json
+    python3 tools/repoatlas/text_view_audit.py --repo . --graph docs/repoatlas/graph.json --journeys docs/repoatlas/journeys.json --view docs/repoatlas/view_config.json --audit docs/repoatlas/audit.json --focus-journey entry:cli:collector --focus-journey entry:rpc:Query --out docs/repoatlas/text_audit.txt
+
 # Get a high-signal digest of code changes
 diff-digest ref="main":
     @./tools/ai/git_diff_digest.sh {{ref}}

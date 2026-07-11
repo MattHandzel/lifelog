@@ -22,7 +22,7 @@ Environment overrides:
 
 Example:
   $0 --duration 90
-  SERVER_ADDR=http://YOUR_SERVER_IP:7182 $0
+  SERVER_ADDR=http://100.118.206.104:7182 $0
 USAGE
 }
 
@@ -68,18 +68,15 @@ if [[ -z "$SERVER_ADDR" ]]; then
   SERVER_ADDR="http://${TS_IP}:7182"
 fi
 
-# Avoid scanning /nix/store on every timer run. These cover the collector runtime deps.
-DEFAULT_LIB_DIRS=(
-  /run/opengl-driver/lib
-  /run/opengl-driver-32/lib
-  /run/current-system/sw/lib
-  /etc/profiles/per-user/matth/lib
-  /nix/store/35czwvzvfrkdc6sfdrfwrszxmp8y645b-chromium-unwrapped-145.0.7632.109/lib
-)
+# Runtime libs for collector when running outside nix develop.
 LD_PATH_PARTS=()
-for dir in "${DEFAULT_LIB_DIRS[@]}"; do
-  [[ -d "$dir" ]] && LD_PATH_PARTS+=("$dir")
+for libname in libX11.so.6 libXtst.so.6 libv4l2.so.0 libasound.so.2; do
+  libpath="$(find /nix/store -name "$libname" 2>/dev/null | head -n1 || true)"
+  if [[ -n "$libpath" ]]; then
+    LD_PATH_PARTS+=("$(dirname "$libpath")")
+  fi
 done
+# de-dup while preserving order
 if [[ "${#LD_PATH_PARTS[@]}" -gt 0 ]]; then
   mapfile -t LD_PATH_PARTS < <(printf "%s\n" "${LD_PATH_PARTS[@]}" | awk '!seen[$0]++')
 fi
@@ -98,16 +95,16 @@ query_count() {
 
 ensure_remote_server() {
   local running
-  running="$(ssh "$REMOTE_HOST" "pgrep -f 'target/debug/lifelog-server' >/dev/null; echo \$?" 2>/dev/null || echo 1)"
+  running="$(ssh "$REMOTE_HOST" "pgrep -f 'target/debug/lifelog-server-backend' >/dev/null; echo \$?" 2>/dev/null || echo 1)"
   if [[ "$running" == "0" ]]; then
     return
   fi
 
   echo "Remote server not running; starting it..."
-  ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && nohup env LIFELOG_HOST=0.0.0.0 LIFELOG_DB_USER=root LIFELOG_DB_PASS=root RUST_LOG=info nix develop --command cargo run -p lifelog-server --bin lifelog-server > /tmp/lifelog-server-remote.log 2>&1 < /dev/null &" >/dev/null
+  ssh "$REMOTE_HOST" "cd '$REMOTE_REPO' && nohup env LIFELOG_HOST=0.0.0.0 LIFELOG_DB_USER=root LIFELOG_DB_PASS=root RUST_LOG=info nix develop --command cargo run -p lifelog-server --bin lifelog-server-backend > /tmp/lifelog-server-remote.log 2>&1 < /dev/null &" >/dev/null
 
   sleep 5
-  ssh "$REMOTE_HOST" "pgrep -f 'target/debug/lifelog-server' >/dev/null" || {
+  ssh "$REMOTE_HOST" "pgrep -f 'target/debug/lifelog-server-backend' >/dev/null" || {
     echo "Failed to start remote server. Check /tmp/lifelog-server-remote.log on $REMOTE_HOST" >&2
     exit 1
   }

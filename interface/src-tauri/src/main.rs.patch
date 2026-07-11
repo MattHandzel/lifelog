@@ -1,0 +1,40 @@
+--- main.rs
++++ main.rs
+@@ -218,7 +218,10 @@
+     let channel = create_grpc_channel(&server_addr)
+         .await
+         .map_err(|e| format!("Failed to connect to gRPC server: {}", e))?;
+-    let new_client = lifelog::LifelogServerServiceClient::new(channel);
++    let token = std::env::var("LIFELOG_AUTH_TOKEN").unwrap_or_default();
++    let new_client = lifelog::LifelogServerServiceClient::with_interceptor(channel, AuthInterceptor {
++        token,
++    });
+     let mut client_guard = state.client.lock().await;
+     *client_guard = Some(new_client);
+     Ok(())
+@@ -322,7 +325,10 @@
+         None => {
+             let server_addr = grpc_server_address();
+             match create_grpc_channel(&server_addr).await {
+                 Ok(channel) => {
+-                    *client_guard = Some(lifelog::LifelogServerServiceClient::new(channel));
++                    let token = std::env::var("LIFELOG_AUTH_TOKEN").unwrap_or_default();
++                    *client_guard = Some(lifelog::LifelogServerServiceClient::with_interceptor(channel, AuthInterceptor {
++                        token,
++                    }));
+                     client_guard.as_mut().unwrap()
+                 }
+                 Err(e) => return Err(format!("gRPC connection failed: {}", e)),
+@@ -352,7 +358,10 @@
+     tokio::spawn(async move {
+         let server_addr = grpc_server_address();
+         match create_grpc_channel(&server_addr).await {
+             Ok(channel) => {
+-                let client = lifelog::LifelogServerServiceClient::new(channel);
++                let token = std::env::var("LIFELOG_AUTH_TOKEN").unwrap_or_default();
++                let client = lifelog::LifelogServerServiceClient::with_interceptor(channel, AuthInterceptor {
++                    token,
++                });
+                 let mut client_guard = client_arc_clone.lock().await;
+                 *client_guard = Some(client);
+                 println!("[TAURI_MAIN] Initial gRPC client connection successful.");

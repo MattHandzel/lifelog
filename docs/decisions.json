@@ -1,0 +1,1916 @@
+[
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:ControlStream -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 332
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:ControlStream",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:GetConfig -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 344
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:GetConfig",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:GetData -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 368
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:GetData",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:GetState -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 395
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:GetState",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:GetUploadOffset -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 419
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:GetUploadOffset",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:ListModalities -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 422
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:ListModalities",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:PairCollector -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 425
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:PairCollector",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:Query -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 380
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:Query",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:Replay -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 383
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:Replay",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:SetConfig -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 356
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:SetConfig",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: entry:rpc:UploadChunks -> module:server::grpc_service",
+    "evidence": [
+      {
+        "file": "proto/lifelog.proto",
+        "line": 407
+      }
+    ],
+    "impact_surface": [
+      "entry:rpc:UploadChunks",
+      "module:server::grpc_service"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::collector -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/collector.rs",
+        "line": 952
+      }
+    ],
+    "impact_surface": [
+      "module:collector::collector",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::audio -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/audio.rs",
+        "line": 336
+      },
+      {
+        "file": "collector/src/modules/audio.rs",
+        "line": 337
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::audio",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::browser_history -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/browser_history.rs",
+        "line": 88
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::browser_history",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::camera -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/camera.rs",
+        "line": 120
+      },
+      {
+        "file": "collector/src/modules/camera.rs",
+        "line": 169
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::camera",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::clipboard -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/clipboard.rs",
+        "line": 124
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::clipboard",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::hyprland -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/hyprland.rs",
+        "line": 42
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::hyprland",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::keystrokes -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/keystrokes.rs",
+        "line": 137
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::keystrokes",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::microphone -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/microphone.rs",
+        "line": 321
+      },
+      {
+        "file": "collector/src/modules/microphone.rs",
+        "line": 322
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::microphone",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::mouse -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/mouse.rs",
+        "line": 105
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::mouse",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::processes -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/processes.rs",
+        "line": 226
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::processes",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::screen -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/screen.rs",
+        "line": 159
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::screen",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::shell_history -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/shell_history.rs",
+        "line": 230
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::shell_history",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::weather -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/weather.rs",
+        "line": 116
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::weather",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::modules::window_activity -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/modules/window_activity.rs",
+        "line": 280
+      },
+      {
+        "file": "collector/src/modules/window_activity.rs",
+        "line": 281
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::window_activity",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:collector::root -> module:common::root",
+    "evidence": [
+      {
+        "file": "collector/src/main.rs",
+        "line": 36
+      }
+    ],
+    "impact_surface": [
+      "module:collector::root",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:common::server_config -> resource:table:environment",
+    "evidence": [
+      {
+        "file": "common/config/src/server_config.rs",
+        "line": 3
+      },
+      {
+        "file": "common/config/src/server_config.rs",
+        "line": 12
+      }
+    ],
+    "impact_surface": [
+      "module:common::server_config",
+      "resource:table:environment"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:interface::bin::lifelog-logger -> module:common::root",
+    "evidence": [
+      {
+        "file": "interface/src-tauri/src/bin/lifelog-logger.rs",
+        "line": 21
+      }
+    ],
+    "impact_surface": [
+      "module:interface::bin::lifelog-logger",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:interface::bin::lifelog-server -> module:common::root",
+    "evidence": [
+      {
+        "file": "interface/src-tauri/src/bin/lifelog-server.rs",
+        "line": 77
+      }
+    ],
+    "impact_surface": [
+      "module:interface::bin::lifelog-server",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:interface::bin::text-upload -> module:common::root",
+    "evidence": [
+      {
+        "file": "interface/src-tauri/src/bin/text-upload.rs",
+        "line": 33
+      }
+    ],
+    "impact_surface": [
+      "module:interface::bin::text-upload",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:interface::components::Login -> resource:table:environment",
+    "evidence": [
+      {
+        "file": "interface/src/components/Login.tsx",
+        "line": 17
+      }
+    ],
+    "impact_surface": [
+      "module:interface::components::Login",
+      "resource:table:environment"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:interface::generated::lifelog -> module:server::server",
+    "evidence": [
+      {
+        "file": "interface/src/generated/lifelog.ts",
+        "line": 124
+      }
+    ],
+    "impact_surface": [
+      "module:interface::generated::lifelog",
+      "module:server::server"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:interface::root -> module:common::root",
+    "evidence": [
+      {
+        "file": "interface/src-tauri/src/lib.rs",
+        "line": 51
+      },
+      {
+        "file": "interface/src-tauri/src/lib.rs",
+        "line": 56
+      },
+      {
+        "file": "interface/src-tauri/src/lib.rs",
+        "line": 61
+      },
+      {
+        "file": "interface/src-tauri/src/lib.rs",
+        "line": 66
+      }
+    ],
+    "impact_surface": [
+      "module:interface::root",
+      "module:common::root"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "Cross-boundary dependency: module:server::replay -> module:common::replay",
+    "evidence": [
+      {
+        "file": "server/src/replay.rs",
+        "line": 39
+      }
+    ],
+    "impact_surface": [
+      "module:server::replay",
+      "module:common::replay"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:cli:collector touches 4 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:environment",
+      "resource:table:implementations",
+      "resource:table:lifelog_types",
+      "resource:table:unified"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:cli:interface touches 4 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:environment",
+      "resource:table:implementations",
+      "resource:table:lifelog_types",
+      "resource:table:unified"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:cli:server touches 1 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:catalog"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:ControlStream touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:GetConfig touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:GetData touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:GetState touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:GetUploadOffset touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:ListModalities touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:PairCollector touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:Query touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:Replay touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:SetConfig touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "entry:rpc:UploadChunks touches 17 resources",
+    "evidence": [],
+    "impact_surface": [
+      "resource:table:audio_records",
+      "resource:table:browser_records",
+      "resource:table:catalog",
+      "resource:table:clipboard_records",
+      "resource:table:command",
+      "resource:table:controlstream",
+      "resource:table:duration_secs",
+      "resource:table:keystroke_records",
+      "resource:table:ocr_records",
+      "resource:table:payload",
+      "resource:table:peer",
+      "resource:table:schema_migrations",
+      "resource:table:screen",
+      "resource:table:screen_records",
+      "resource:table:shell_history_records",
+      "resource:table:upload_chunks",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::browser_history accesses resource:table:urls",
+    "evidence": [
+      {
+        "file": "collector/src/modules/browser_history.rs",
+        "line": 75
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::browser_history",
+      "resource:table:urls"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::browser_history accesses resource:table:visits",
+    "evidence": [
+      {
+        "file": "collector/src/modules/browser_history.rs",
+        "line": 75
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::browser_history",
+      "resource:table:visits"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::evdev_input_logger accesses resource:table:input",
+    "evidence": [
+      {
+        "file": "collector/src/modules/evdev_input_logger.rs",
+        "line": 87
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::evdev_input_logger",
+      "resource:table:input"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::input_logger accesses resource:table:key_events",
+    "evidence": [
+      {
+        "file": "collector/src/modules/input_logger.rs",
+        "line": 175
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::input_logger",
+      "resource:table:key_events"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::input_logger accesses resource:table:mouse_buttons",
+    "evidence": [
+      {
+        "file": "collector/src/modules/input_logger.rs",
+        "line": 184
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::input_logger",
+      "resource:table:mouse_buttons"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::input_logger accesses resource:table:mouse_movements",
+    "evidence": [
+      {
+        "file": "collector/src/modules/input_logger.rs",
+        "line": 192
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::input_logger",
+      "resource:table:mouse_movements"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::input_logger accesses resource:table:mouse_wheel",
+    "evidence": [
+      {
+        "file": "collector/src/modules/input_logger.rs",
+        "line": 200
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::input_logger",
+      "resource:table:mouse_wheel"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::text_upload accesses resource:table:text_uploads",
+    "evidence": [
+      {
+        "file": "collector/src/modules/text_upload.rs",
+        "line": 108
+      },
+      {
+        "file": "collector/src/modules/text_upload.rs",
+        "line": 158
+      },
+      {
+        "file": "collector/src/modules/text_upload.rs",
+        "line": 196
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::text_upload",
+      "resource:table:text_uploads"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::wayland_input_logger accesses resource:table:key_events",
+    "evidence": [
+      {
+        "file": "collector/src/modules/wayland_input_logger.rs",
+        "line": 277
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::wayland_input_logger",
+      "resource:table:key_events"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::wayland_input_logger accesses resource:table:last",
+    "evidence": [
+      {
+        "file": "collector/src/modules/wayland_input_logger.rs",
+        "line": 225
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::wayland_input_logger",
+      "resource:table:last"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::wayland_input_logger accesses resource:table:mouse_buttons",
+    "evidence": [
+      {
+        "file": "collector/src/modules/wayland_input_logger.rs",
+        "line": 286
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::wayland_input_logger",
+      "resource:table:mouse_buttons"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::wayland_input_logger accesses resource:table:mouse_movements",
+    "evidence": [
+      {
+        "file": "collector/src/modules/wayland_input_logger.rs",
+        "line": 294
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::wayland_input_logger",
+      "resource:table:mouse_movements"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::wayland_input_logger accesses resource:table:mouse_wheel",
+    "evidence": [
+      {
+        "file": "collector/src/modules/wayland_input_logger.rs",
+        "line": 302
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::wayland_input_logger",
+      "resource:table:mouse_wheel"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::modules::weather accesses resource:table:environment",
+    "evidence": [
+      {
+        "file": "collector/src/modules/weather.rs",
+        "line": 40
+      }
+    ],
+    "impact_surface": [
+      "module:collector::modules::weather",
+      "resource:table:environment"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::setup accesses resource:table:sqlite_master",
+    "evidence": [
+      {
+        "file": "collector/src/setup.rs",
+        "line": 423
+      },
+      {
+        "file": "collector/src/setup.rs",
+        "line": 434
+      }
+    ],
+    "impact_surface": [
+      "module:collector::setup",
+      "resource:table:sqlite_master"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:collector::setup accesses resource:table:test",
+    "evidence": [
+      {
+        "file": "collector/src/setup.rs",
+        "line": 419
+      }
+    ],
+    "impact_surface": [
+      "module:collector::setup",
+      "resource:table:test"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:common::ocr accesses resource:table:dynamic_image",
+    "evidence": [
+      {
+        "file": "common/data-modalities/src/ocr/mod.rs",
+        "line": 53
+      }
+    ],
+    "impact_surface": [
+      "module:common::ocr",
+      "resource:table:dynamic_image"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:common::root accesses resource:table:implementations",
+    "evidence": [
+      {
+        "file": "common/lifelog-types/src/lib.rs",
+        "line": 43
+      }
+    ],
+    "impact_surface": [
+      "module:common::root",
+      "resource:table:implementations"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:common::root accesses resource:table:lifelog_types",
+    "evidence": [
+      {
+        "file": "common/config/src/lib.rs",
+        "line": 12
+      }
+    ],
+    "impact_surface": [
+      "module:common::root",
+      "resource:table:lifelog_types"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:common::root accesses resource:table:unified",
+    "evidence": [
+      {
+        "file": "common/config/src/lib.rs",
+        "line": 227
+      }
+    ],
+    "impact_surface": [
+      "module:common::root",
+      "resource:table:unified"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:common::server_config accesses resource:table:environment",
+    "evidence": [
+      {
+        "file": "common/config/src/server_config.rs",
+        "line": 3
+      },
+      {
+        "file": "common/config/src/server_config.rs",
+        "line": 12
+      }
+    ],
+    "impact_surface": [
+      "module:common::server_config",
+      "resource:table:environment"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:common::time_skew accesses resource:table:median",
+    "evidence": [
+      {
+        "file": "common/lifelog-core/src/time_skew.rs",
+        "line": 40
+      }
+    ],
+    "impact_surface": [
+      "module:common::time_skew",
+      "resource:table:median"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:common::time_skew accesses resource:table:samples",
+    "evidence": [
+      {
+        "file": "common/lifelog-core/src/time_skew.rs",
+        "line": 35
+      }
+    ],
+    "impact_surface": [
+      "module:common::time_skew",
+      "resource:table:samples"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::App accesses resource:table:some",
+    "evidence": [
+      {
+        "file": "interface/src/App.tsx",
+        "line": 87
+      }
+    ],
+    "impact_surface": [
+      "module:interface::App",
+      "resource:table:some"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::components::DevicesDashboard accesses resource:table:local",
+    "evidence": [
+      {
+        "file": "interface/src/components/DevicesDashboard.tsx",
+        "line": 161
+      }
+    ],
+    "impact_surface": [
+      "module:interface::components::DevicesDashboard",
+      "resource:table:local"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::components::Login accesses resource:table:environment",
+    "evidence": [
+      {
+        "file": "interface/src/components/Login.tsx",
+        "line": 17
+      }
+    ],
+    "impact_surface": [
+      "module:interface::components::Login",
+      "resource:table:environment"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::components::MicrophoneDashboard accesses resource:table:your",
+    "evidence": [
+      {
+        "file": "interface/src/components/MicrophoneDashboard.tsx",
+        "line": 213
+      }
+    ],
+    "impact_surface": [
+      "module:interface::components::MicrophoneDashboard",
+      "resource:table:your"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::components::NetworkTopologyDashboard accesses resource:table:backend",
+    "evidence": [
+      {
+        "file": "interface/src/components/NetworkTopologyDashboard.tsx",
+        "line": 247
+      }
+    ],
+    "impact_surface": [
+      "module:interface::components::NetworkTopologyDashboard",
+      "resource:table:backend"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::components::NetworkTopologyDashboard accesses resource:table:modality",
+    "evidence": [
+      {
+        "file": "interface/src/components/NetworkTopologyDashboard.tsx",
+        "line": 272
+      }
+    ],
+    "impact_surface": [
+      "module:interface::components::NetworkTopologyDashboard",
+      "resource:table:modality"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::components::ScreenDashboard accesses resource:table:backend",
+    "evidence": [
+      {
+        "file": "interface/src/components/ScreenDashboard.tsx",
+        "line": 239
+      },
+      {
+        "file": "interface/src/components/ScreenDashboard.tsx",
+        "line": 240
+      }
+    ],
+    "impact_surface": [
+      "module:interface::components::ScreenDashboard",
+      "resource:table:backend"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::components::ScreenDashboard accesses resource:table:tauri",
+    "evidence": [
+      {
+        "file": "interface/src/components/ScreenDashboard.tsx",
+        "line": 235
+      }
+    ],
+    "impact_surface": [
+      "module:interface::components::ScreenDashboard",
+      "resource:table:tauri"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::components::SettingsDashboard accesses resource:table:local",
+    "evidence": [
+      {
+        "file": "interface/src/components/SettingsDashboard.tsx",
+        "line": 111
+      }
+    ],
+    "impact_surface": [
+      "module:interface::components::SettingsDashboard",
+      "resource:table:local"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::generated::google::protobuf::timestamp accesses resource:table:current",
+    "evidence": [
+      {
+        "file": "interface/src/generated/google/protobuf/timestamp.ts",
+        "line": 68
+      }
+    ],
+    "impact_surface": [
+      "module:interface::generated::google::protobuf::timestamp",
+      "resource:table:current"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::generated::google::protobuf::timestamp accesses resource:table:java",
+    "evidence": [
+      {
+        "file": "interface/src/generated/google/protobuf/timestamp.ts",
+        "line": 53
+      },
+      {
+        "file": "interface/src/generated/google/protobuf/timestamp.ts",
+        "line": 60
+      }
+    ],
+    "impact_surface": [
+      "module:interface::generated::google::protobuf::timestamp",
+      "resource:table:java"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::generated::google::protobuf::timestamp accesses resource:table:posix",
+    "evidence": [
+      {
+        "file": "interface/src/generated/google/protobuf/timestamp.ts",
+        "line": 26
+      },
+      {
+        "file": "interface/src/generated/google/protobuf/timestamp.ts",
+        "line": 32
+      }
+    ],
+    "impact_surface": [
+      "module:interface::generated::google::protobuf::timestamp",
+      "resource:table:posix"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::generated::google::protobuf::timestamp accesses resource:table:win32",
+    "evidence": [
+      {
+        "file": "interface/src/generated/google/protobuf/timestamp.ts",
+        "line": 41
+      }
+    ],
+    "impact_surface": [
+      "module:interface::generated::google::protobuf::timestamp",
+      "resource:table:win32"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::generated::lifelog accesses resource:table:this",
+    "evidence": [
+      {
+        "file": "interface/src/generated/lifelog.ts",
+        "line": 25
+      }
+    ],
+    "impact_surface": [
+      "module:interface::generated::lifelog",
+      "resource:table:this"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::interface::vite.config accesses resource:table:obscuring",
+    "evidence": [
+      {
+        "file": "interface/vite.config.ts",
+        "line": 20
+      }
+    ],
+    "impact_surface": [
+      "module:interface::interface::vite.config",
+      "resource:table:obscuring"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::storage accesses resource:table:path",
+    "evidence": [
+      {
+        "file": "interface/src-tauri/src/storage.rs",
+        "line": 62
+      }
+    ],
+    "impact_surface": [
+      "module:interface::storage",
+      "resource:table:path"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:interface::storage accesses resource:table:wav",
+    "evidence": [
+      {
+        "file": "interface/src-tauri/src/storage.rs",
+        "line": 92
+      }
+    ],
+    "impact_surface": [
+      "module:interface::storage",
+      "resource:table:wav"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::data_retrieval accesses resource:table:screen_records",
+    "evidence": [
+      {
+        "file": "server/src/data_retrieval.rs",
+        "line": 86
+      }
+    ],
+    "impact_surface": [
+      "module:server::data_retrieval",
+      "resource:table:screen_records"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::db accesses resource:table:catalog",
+    "evidence": [
+      {
+        "file": "server/src/db.rs",
+        "line": 47
+      }
+    ],
+    "impact_surface": [
+      "module:server::db",
+      "resource:table:catalog"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::grpc_service accesses resource:table:controlstream",
+    "evidence": [
+      {
+        "file": "server/src/grpc_service.rs",
+        "line": 133
+      }
+    ],
+    "impact_surface": [
+      "module:server::grpc_service",
+      "resource:table:controlstream"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::grpc_service accesses resource:table:peer",
+    "evidence": [
+      {
+        "file": "server/src/grpc_service.rs",
+        "line": 65
+      }
+    ],
+    "impact_surface": [
+      "module:server::grpc_service",
+      "resource:table:peer"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::grpc_service accesses resource:table:upload_chunks",
+    "evidence": [
+      {
+        "file": "server/src/grpc_service.rs",
+        "line": 348
+      },
+      {
+        "file": "server/src/grpc_service.rs",
+        "line": 369
+      }
+    ],
+    "impact_surface": [
+      "module:server::grpc_service",
+      "resource:table:upload_chunks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::ingest accesses resource:table:audio_records",
+    "evidence": [
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1076
+      }
+    ],
+    "impact_surface": [
+      "module:server::ingest",
+      "resource:table:audio_records"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::ingest accesses resource:table:browser_records",
+    "evidence": [
+      {
+        "file": "server/src/ingest.rs",
+        "line": 971
+      }
+    ],
+    "impact_surface": [
+      "module:server::ingest",
+      "resource:table:browser_records"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::ingest accesses resource:table:clipboard_records",
+    "evidence": [
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1140
+      }
+    ],
+    "impact_surface": [
+      "module:server::ingest",
+      "resource:table:clipboard_records"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::ingest accesses resource:table:duration_secs",
+    "evidence": [
+      {
+        "file": "server/src/ingest.rs",
+        "line": 347
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 514
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 594
+      }
+    ],
+    "impact_surface": [
+      "module:server::ingest",
+      "resource:table:duration_secs"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::ingest accesses resource:table:keystroke_records",
+    "evidence": [
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1245
+      }
+    ],
+    "impact_surface": [
+      "module:server::ingest",
+      "resource:table:keystroke_records"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::ingest accesses resource:table:ocr_records",
+    "evidence": [
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1020
+      }
+    ],
+    "impact_surface": [
+      "module:server::ingest",
+      "resource:table:ocr_records"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::ingest accesses resource:table:payload",
+    "evidence": [
+      {
+        "file": "server/src/ingest.rs",
+        "line": 217
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 298
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 380
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 467
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 547
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 626
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 724
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 956
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1005
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1050
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1113
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1175
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1228
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1279
+      }
+    ],
+    "impact_surface": [
+      "module:server::ingest",
+      "resource:table:payload"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::ingest accesses resource:table:screen_records",
+    "evidence": [
+      {
+        "file": "server/src/ingest.rs",
+        "line": 916
+      }
+    ],
+    "impact_surface": [
+      "module:server::ingest",
+      "resource:table:screen_records"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::ingest accesses resource:table:shell_history_records",
+    "evidence": [
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1192
+      }
+    ],
+    "impact_surface": [
+      "module:server::ingest",
+      "resource:table:shell_history_records"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::ingest accesses resource:table:upload_chunks",
+    "evidence": [
+      {
+        "file": "server/src/ingest.rs",
+        "line": 820
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1316
+      },
+      {
+        "file": "server/src/ingest.rs",
+        "line": 1352
+      }
+    ],
+    "impact_surface": [
+      "module:server::ingest",
+      "resource:table:upload_chunks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::policy accesses resource:table:screen",
+    "evidence": [
+      {
+        "file": "server/src/policy.rs",
+        "line": 44
+      }
+    ],
+    "impact_surface": [
+      "module:server::policy",
+      "resource:table:screen"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::postgres accesses resource:table:schema_migrations",
+    "evidence": [
+      {
+        "file": "server/src/postgres.rs",
+        "line": 74
+      },
+      {
+        "file": "server/src/postgres.rs",
+        "line": 95
+      }
+    ],
+    "impact_surface": [
+      "module:server::postgres",
+      "resource:table:schema_migrations"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::query::planner accesses resource:table:for",
+    "evidence": [
+      {
+        "file": "server/src/query/planner.rs",
+        "line": 17
+      }
+    ],
+    "impact_surface": [
+      "module:server::query::planner",
+      "resource:table:for"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::query::planner accesses resource:table:operators",
+    "evidence": [
+      {
+        "file": "server/src/query/planner.rs",
+        "line": 221
+      }
+    ],
+    "impact_surface": [
+      "module:server::query::planner",
+      "resource:table:operators"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::query::planner accesses resource:table:terms",
+    "evidence": [
+      {
+        "file": "server/src/query/planner.rs",
+        "line": 263
+      }
+    ],
+    "impact_surface": [
+      "module:server::query::planner",
+      "resource:table:terms"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::schema accesses resource:table:catalog",
+    "evidence": [
+      {
+        "file": "server/src/schema.rs",
+        "line": 331
+      }
+    ],
+    "impact_surface": [
+      "module:server::schema",
+      "resource:table:catalog"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::schema accesses resource:table:upload_chunks",
+    "evidence": [
+      {
+        "file": "server/src/schema.rs",
+        "line": 322
+      }
+    ],
+    "impact_surface": [
+      "module:server::schema",
+      "resource:table:upload_chunks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::schema accesses resource:table:watermarks",
+    "evidence": [
+      {
+        "file": "server/src/schema.rs",
+        "line": 326
+      }
+    ],
+    "impact_surface": [
+      "module:server::schema",
+      "resource:table:watermarks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::server accesses resource:table:command",
+    "evidence": [
+      {
+        "file": "server/src/server.rs",
+        "line": 1152
+      }
+    ],
+    "impact_surface": [
+      "module:server::server",
+      "resource:table:command"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::server accesses resource:table:payload",
+    "evidence": [
+      {
+        "file": "server/src/server.rs",
+        "line": 1143
+      }
+    ],
+    "impact_surface": [
+      "module:server::server",
+      "resource:table:payload"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::server accesses resource:table:screen_records",
+    "evidence": [
+      {
+        "file": "server/src/server.rs",
+        "line": 157
+      }
+    ],
+    "impact_surface": [
+      "module:server::server",
+      "resource:table:screen_records"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::server accesses resource:table:upload_chunks",
+    "evidence": [
+      {
+        "file": "server/src/server.rs",
+        "line": 170
+      }
+    ],
+    "impact_surface": [
+      "module:server::server",
+      "resource:table:upload_chunks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:server::transform accesses resource:table:upload_chunks",
+    "evidence": [
+      {
+        "file": "server/src/transform.rs",
+        "line": 128
+      }
+    ],
+    "impact_surface": [
+      "module:server::transform",
+      "resource:table:upload_chunks"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:tools::tools::repoatlas::repoatlas accesses resource:table:__future__",
+    "evidence": [
+      {
+        "file": "tools/repoatlas/repoatlas.py",
+        "line": 2
+      }
+    ],
+    "impact_surface": [
+      "module:tools::tools::repoatlas::repoatlas",
+      "resource:table:__future__"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:tools::tools::repoatlas::repoatlas accesses resource:table:collections",
+    "evidence": [
+      {
+        "file": "tools/repoatlas/repoatlas.py",
+        "line": 9
+      }
+    ],
+    "impact_surface": [
+      "module:tools::tools::repoatlas::repoatlas",
+      "resource:table:collections"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:tools::tools::repoatlas::repoatlas accesses resource:table:pathlib",
+    "evidence": [
+      {
+        "file": "tools/repoatlas/repoatlas.py",
+        "line": 10
+      }
+    ],
+    "impact_surface": [
+      "module:tools::tools::repoatlas::repoatlas",
+      "resource:table:pathlib"
+    ],
+    "status": "TODO"
+  },
+  {
+    "claim": "module:tools::tools::repoatlas::repoatlas accesses resource:table:typing",
+    "evidence": [
+      {
+        "file": "tools/repoatlas/repoatlas.py",
+        "line": 11
+      }
+    ],
+    "impact_surface": [
+      "module:tools::tools::repoatlas::repoatlas",
+      "resource:table:typing"
+    ],
+    "status": "TODO"
+  }
+]

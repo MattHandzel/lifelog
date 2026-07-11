@@ -48,7 +48,7 @@ impl LlmExecutor {
             model: params
                 .get("model")
                 .cloned()
-                .unwrap_or_else(|| "gemma3:4b-it-qat".to_string()),
+                .unwrap_or_else(|| "gemma4:e2b".to_string()),
             system_prompt: params
                 .get("system_prompt")
                 .cloned()

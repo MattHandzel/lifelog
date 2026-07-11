@@ -1,0 +1,24 @@
+{
+  "summary": {
+    "nodes": 220,
+    "edges": 566,
+    "journeys": 14,
+    "drift": 6,
+    "decisions": 139,
+    "evidence_total": 735
+  },
+  "checks": {
+    "edge_endpoints": true,
+    "evidence_integrity": true,
+    "journey_integrity": true,
+    "drift_integrity": true
+  },
+  "error_counts": {
+    "edge_endpoints": 0,
+    "evidence": 0,
+    "journey": 0,
+    "drift": 0
+  },
+  "issues": [],
+  "status": "pass"
+}

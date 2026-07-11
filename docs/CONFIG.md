@@ -200,6 +200,6 @@ serviceEndpoint = "http://localhost:11434"
 privacyLevel = "local_only"
 priority = 2
 [transforms.params]
-model = "gemma3:4b-it-qat"
+model = "gemma4:e2b"
 api_key = "@/run/agenix/openrouter-key"
 ```

@@ -1,0 +1,611 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RepoAtlas Explorer</title>
+  <script src="https://unpkg.com/vis-network@9.1.9/dist/vis-network.min.js"></script>
+  <style>
+    :root {
+      --bg: #0b1321;
+      --panel: #111c2f;
+      --panel-2: #172741;
+      --text: #e7edf6;
+      --muted: #9db0c7;
+      --accent: #57d3f3;
+      --danger: #ff6f6f;
+      --warn: #ffc861;
+      --ok: #65d68f;
+      --border: #243854;
+      --canvas-edge: #89a4ca;
+      --canvas-edge-boundary: #ffb07a;
+      --canvas-label: #f2f7ff;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 20% 10%, #1b2f4f 0%, var(--bg) 45%);
+      color: var(--text);
+      height: 100vh;
+      display: grid;
+      grid-template-columns: 340px 1fr 360px;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    .header {
+      padding: 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      font-weight: 700;
+      letter-spacing: .3px;
+    }
+
+    .content {
+      padding: 12px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 0;
+    }
+
+    label { font-size: 13px; color: var(--muted); display: block; margin-bottom: 6px; }
+    select, input, button {
+      width: 100%;
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font-size: 14px;
+    }
+
+    button { cursor: pointer; font-weight: 600; }
+    button:hover { border-color: var(--accent); }
+
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+    #network {
+      width: 100%;
+      height: calc(100vh - 22px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: rgba(8, 15, 28, 0.75);
+    }
+
+    .pill {
+      display: inline-block;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-right: 6px;
+      margin-bottom: 6px;
+    }
+
+    .pill.hard { background: rgba(255,111,111,.15); color: var(--danger); border: 1px solid rgba(255,111,111,.35); }
+    .pill.soft { background: rgba(255,200,97,.15); color: var(--warn); border: 1px solid rgba(255,200,97,.35); }
+    .pill.coverage-gap { background: rgba(87,211,243,.15); color: var(--accent); border: 1px solid rgba(87,211,243,.35); }
+
+    .stat {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; line-height: 1.35; }
+    .codebox {
+      margin: 0;
+      max-height: 48vh;
+      overflow: auto;
+      white-space: pre;
+      background: #0f1d33;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px;
+    }
+
+    @media (max-width: 1200px) {
+      body { grid-template-columns: 1fr; grid-template-rows: 320px 1fr 280px; }
+      #network { height: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <section class="panel">
+    <div class="header">RepoAtlas Controls</div>
+    <div class="content">
+      <div class="stat" id="summary">Loading graph...</div>
+
+      <div>
+        <label for="journey">Journey Focus</label>
+        <select id="journey"></select>
+      </div>
+
+      <div class="row">
+        <button id="showAll">Show Full Graph</button>
+        <button id="fitView">Fit View</button>
+      </div>
+
+      <div>
+        <label for="search">Search Node Id / Label</label>
+        <input id="search" placeholder="module:server::grpc_service" />
+      </div>
+
+      <button id="findNode">Find Node</button>
+
+      <div>
+        <label for="kindFilter">Node Kind</label>
+        <select id="kindFilter">
+          <option value="all">All</option>
+          <option value="entrypoint">Entrypoint</option>
+          <option value="module">Module</option>
+          <option value="resource">Resource</option>
+        </select>
+      </div>
+      <div>
+        <label>Execution Path</label>
+        <div id="pathList"></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div id="network"></div>
+  </section>
+
+  <section class="panel">
+    <div class="header">Inspector</div>
+    <div class="content">
+      <div class="stat" id="selection">Select a node or edge to inspect evidence.</div>
+      <div>
+        <label>Visualization Legend</label>
+        <div id="legendList"></div>
+      </div>
+      <div>
+        <label>Artifact Audit</label>
+        <div id="auditSummary"></div>
+      </div>
+      <div>
+        <label>Code Detail</label>
+        <pre class="codebox mono" id="codeDetail">Select a node or edge to load code context.</pre>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    const COLORS = {
+      entrypoint: '#57d3f3',
+      module: '#65d68f',
+      resource: '#ffc861',
+      other: '#97a4bb'
+    };
+
+    const STATE = {
+      graph: null,
+      journeys: [],
+      decisions: [],
+      drift: [],
+      nodeMap: new Map(),
+      network: null,
+      nodesDS: null,
+      edgesDS: null,
+      currentNodeIds: null,
+      currentEdgeIds: null,
+      viewConfig: null,
+      audit: null,
+    };
+
+    const byId = (id) => document.getElementById(id);
+
+    function edgeId(e) {
+      return `${e.kind}:${e.source}->${e.target}`;
+    }
+
+    function nodeTitle(node) {
+      return `${node.id}\nkind: ${node.kind}${node.boundary ? `\nboundary: ${node.boundary}` : ''}`;
+    }
+
+    function buildDatasets() {
+      const nodes = STATE.graph.nodes.map((n) => ({
+        ...(STATE.viewConfig?.node_styles?.[n.id] || {}),
+        id: n.id,
+        label: n.label || n.id,
+        title: nodeTitle(n),
+        shape: (STATE.viewConfig?.node_styles?.[n.id] || {}).shape || (n.kind === 'resource' ? 'box' : 'dot'),
+        color: (STATE.viewConfig?.node_styles?.[n.id] || {}).color || COLORS[n.kind] || COLORS.other,
+        borderWidth: (STATE.viewConfig?.node_styles?.[n.id] || {}).borderWidth || (n.kind === 'entrypoint' ? 2 : 1),
+        font: { color: '#f2f7ff', size: 14, face: 'IBM Plex Sans' },
+      }));
+
+      const edges = STATE.graph.edges.map((e, idx) => ({
+        id: edgeId(e) + `#${idx}`,
+        from: e.source,
+        to: e.target,
+        label: e.kind,
+        arrows: 'to',
+        color: { color: e.tags?.includes('boundary-crossing') ? '#ffb07a' : '#89a4ca' },
+        width: e.tags?.includes('boundary-crossing') ? 2.2 : 1,
+        dashes: e.kind === 'call',
+        font: { size: 11, color: '#d4e3f6' },
+        smooth: { enabled: true, type: 'dynamic' },
+        raw: e,
+      }));
+
+      STATE.nodesDS = new vis.DataSet(nodes);
+      STATE.edgesDS = new vis.DataSet(edges);
+    }
+
+    function renderNetwork() {
+      const container = byId('network');
+      STATE.network = new vis.Network(container, {
+        nodes: STATE.nodesDS,
+        edges: STATE.edgesDS,
+      }, {
+        physics: {
+          stabilization: false,
+          barnesHut: { springLength: 120, avoidOverlap: 0.2 },
+        },
+        interaction: { hover: true, multiselect: false },
+      });
+
+      STATE.network.on('click', onSelect);
+      STATE.network.on('doubleClick', () => STATE.network.fit({ animation: true }));
+    }
+
+    function renderExecutionPath(journeyName) {
+      const list = byId('pathList');
+      list.innerHTML = '';
+      if (!journeyName || journeyName === '__all__') {
+        const div = document.createElement('div');
+        div.className = 'stat mono';
+        div.textContent = 'Select a journey to view execution path with evidence.';
+        list.appendChild(div);
+        return;
+      }
+      const journey = STATE.journeys.find((x) => x.name === journeyName);
+      if (!journey) return;
+      const edgeSet = new Set(journey.edges || []);
+      const nodeSet = new Set(journey.nodes || []);
+      const edges = STATE.graph.edges
+        .filter((e) => edgeSet.has(`${e.kind}:${e.source}->${e.target}`))
+        .filter((e) => nodeSet.has(e.source) && nodeSet.has(e.target));
+
+      const bySource = new Map();
+      edges.forEach((e) => {
+        if (!bySource.has(e.source)) bySource.set(e.source, []);
+        bySource.get(e.source).push(e);
+      });
+      bySource.forEach((arr) => arr.sort((a, b) => (a.kind + a.target).localeCompare(b.kind + b.target)));
+
+      const queue = [[journey.entrypoint, 0]];
+      const seenNodes = new Set([journey.entrypoint]);
+      const seenEdges = new Set();
+      const ordered = [];
+      while (queue.length) {
+        const [cur, depth] = queue.shift();
+        const outs = bySource.get(cur) || [];
+        for (const e of outs) {
+          const key = `${e.kind}:${e.source}->${e.target}`;
+          if (!seenEdges.has(key)) {
+            seenEdges.add(key);
+            ordered.push({ e, depth });
+          }
+          if (!seenNodes.has(e.target)) {
+            seenNodes.add(e.target);
+            queue.push([e.target, depth + 1]);
+          }
+        }
+      }
+
+      if (!ordered.length) {
+        const div = document.createElement('div');
+        div.className = 'stat mono';
+        div.textContent = `No explicit path edges for ${journeyName}.`;
+        list.appendChild(div);
+        return;
+      }
+
+      ordered.slice(0, 160).forEach((item, idx) => {
+        const ev = item.e.evidence?.[0];
+        const where = ev ? `${ev.file}:${ev.line}` : 'n/a';
+        const div = document.createElement('div');
+        div.className = 'stat mono';
+        div.textContent = `${String(idx + 1).padStart(2, '0')} [d${item.depth}] ${item.e.kind} ${item.e.source} -> ${item.e.target} @ ${where}`;
+        list.appendChild(div);
+      });
+    }
+
+    function applyJourneyFilter(journeyName) {
+      if (!journeyName || journeyName === '__all__') {
+        STATE.currentNodeIds = null;
+        STATE.currentEdgeIds = null;
+        refreshVisibility();
+        renderExecutionPath('__all__');
+        return;
+      }
+      const j = STATE.journeys.find((x) => x.name === journeyName);
+      if (!j) return;
+      STATE.currentNodeIds = new Set(j.nodes);
+      STATE.currentEdgeIds = new Set(j.edges);
+      refreshVisibility();
+      renderExecutionPath(j.name);
+      STATE.network.fit({ animation: true });
+    }
+
+    function applyKindFilter(node, value) {
+      return value === 'all' || node.kind === value;
+    }
+
+    function refreshVisibility() {
+      const kind = byId('kindFilter').value;
+
+      STATE.graph.nodes.forEach((n) => {
+        const visibleByJourney = !STATE.currentNodeIds || STATE.currentNodeIds.has(n.id);
+        const visibleByKind = applyKindFilter(n, kind);
+        STATE.nodesDS.update({ id: n.id, hidden: !(visibleByJourney && visibleByKind) });
+      });
+
+      STATE.edgesDS.get().forEach((e) => {
+        const raw = e.raw;
+        const visibleByJourney = !STATE.currentEdgeIds || STATE.currentEdgeIds.has(`${raw.kind}:${raw.source}->${raw.target}`);
+        const visibleByNodes = !STATE.nodesDS.get(raw.source)?.hidden && !STATE.nodesDS.get(raw.target)?.hidden;
+
+        STATE.edgesDS.update({
+          id: e.id,
+          hidden: !(visibleByJourney && visibleByNodes),
+          color: { color: raw.tags?.includes('boundary-crossing') ? '#ffb07a' : '#89a4ca' },
+          width: raw.tags?.includes('boundary-crossing') ? 2.2 : 1,
+        });
+      });
+    }
+
+    function renderSummary() {
+      const llmStatus = STATE.viewConfig?.llm?.status || 'n/a';
+      byId('summary').innerHTML = [
+        `<div><strong>Nodes:</strong> ${STATE.graph.nodes.length}</div>`,
+        `<div><strong>Edges:</strong> ${STATE.graph.edges.length}</div>`,
+        `<div><strong>Journeys:</strong> ${STATE.journeys.length}</div>`,
+        `<div><strong>Viz LLM:</strong> ${llmStatus}</div>`
+      ].join('');
+    }
+
+    function renderJourneyOptions() {
+      const select = byId('journey');
+      select.innerHTML = '<option value="__all__">All Journeys</option>';
+      STATE.journeys.forEach((j) => {
+        const opt = document.createElement('option');
+        opt.value = j.name;
+        opt.textContent = j.name;
+        select.appendChild(opt);
+      });
+    }
+
+    function renderLegendList() {
+      const list = byId('legendList');
+      list.innerHTML = '';
+      const legends = STATE.viewConfig?.legend || [];
+      if (!legends.length) {
+        const fallback = [
+          { icon: 'cli', meaning: 'CLI entrypoint' },
+          { icon: 'rpc', meaning: 'RPC entrypoint' },
+          { icon: 'database', meaning: 'Database/table resource' },
+          { icon: 'server', meaning: 'Server module' },
+          { icon: 'collector', meaning: 'Collector module' },
+          { icon: 'ui', meaning: 'Interface/UI module' },
+        ];
+        fallback.forEach((item) => {
+          const div = document.createElement('div');
+          div.className = 'stat mono';
+          div.textContent = `${item.icon.toUpperCase()}: ${item.meaning}`;
+          list.appendChild(div);
+        });
+        return;
+      }
+      legends.forEach((item) => {
+        const div = document.createElement('div');
+        div.className = 'stat mono';
+        const icon = (item.icon || 'default').toUpperCase();
+        div.textContent = `${icon}: ${item.label || ''} ${item.meaning || ''}`.trim();
+        list.appendChild(div);
+      });
+    }
+
+    function renderAuditSummary() {
+      const list = byId('auditSummary');
+      list.innerHTML = '';
+      const a = STATE.audit;
+      if (!a) {
+        const div = document.createElement('div');
+        div.className = 'stat mono';
+        div.textContent = 'No artifact audit loaded.';
+        list.appendChild(div);
+        return;
+      }
+      const s = a.summary || {};
+      const c = a.checks || {};
+      const e = a.error_counts || {};
+      const lines = [
+        `status: ${(a.status || 'unknown').toUpperCase()}`,
+        `nodes=${s.nodes ?? 'n/a'} edges=${s.edges ?? 'n/a'} journeys=${s.journeys ?? 'n/a'}`,
+        `evidence_total=${s.evidence_total ?? 'n/a'}`,
+        `checks: edge_endpoints=${!!c.edge_endpoints} evidence=${!!c.evidence_integrity} journey=${!!c.journey_integrity} drift=${!!c.drift_integrity}`,
+        `errors: edge=${e.edge_endpoints ?? 0} evidence=${e.evidence ?? 0} journey=${e.journey ?? 0} drift=${e.drift ?? 0}`,
+      ];
+      const div = document.createElement('div');
+      div.className = 'stat mono';
+      div.textContent = lines.join('\\n');
+      list.appendChild(div);
+
+      (a.issues || []).slice(0, 8).forEach((it) => {
+        const d = document.createElement('div');
+        d.className = 'stat mono';
+        d.textContent = `[${it.type || 'issue'}] ${it.message || ''}`;
+        list.appendChild(d);
+      });
+    }
+
+    function lineWindow(lines, centerLine, before = 20, after = 40) {
+      const start = Math.max(1, centerLine - before);
+      const end = Math.min(lines.length, centerLine + after);
+      const out = [];
+      for (let i = start; i <= end; i++) {
+        const marker = i === centerLine ? '>' : ' ';
+        out.push(`${marker}${String(i).padStart(5, ' ')} | ${lines[i - 1]}`);
+      }
+      return out.join('\n');
+    }
+
+    function guessAnchorLine(text, token) {
+      if (!token) return 1;
+      const lines = text.split('\n');
+      const low = token.toLowerCase();
+      for (let i = 0; i < lines.length; i++) {
+        if (lines[i].toLowerCase().includes(low)) return i + 1;
+      }
+      return 1;
+    }
+
+    async function showCodeSnippet(file, anchorLine = 1, token = '') {
+      const box = byId('codeDetail');
+      if (!file) {
+        box.textContent = 'No file associated with this selection.';
+        return;
+      }
+      box.textContent = `Loading ${file}...`;
+      try {
+        const resp = await fetch(`../../../${file}`);
+        if (!resp.ok) {
+          box.textContent = `Unable to load file: ${file} (${resp.status})`;
+          return;
+        }
+        const text = await resp.text();
+        const lines = text.split('\n');
+        const center = anchorLine > 1 ? anchorLine : guessAnchorLine(text, token);
+        box.textContent = `${file}\n\n${lineWindow(lines, center)}`;
+      } catch (err) {
+        box.textContent = `Error loading ${file}: ${err.message}`;
+      }
+    }
+
+    async function onSelect(params) {
+      const selection = byId('selection');
+      if (params.nodes.length > 0) {
+        const id = params.nodes[0];
+        const n = STATE.graph.nodes.find((x) => x.id === id);
+        if (!n) return;
+        selection.innerHTML = `
+          <div><strong>${n.label}</strong></div>
+          <div class="mono">${n.id}</div>
+          <div>kind: ${n.kind}</div>
+          <div>boundary: ${n.boundary || 'n/a'}</div>
+          <div class="mono">file: ${n.file || 'n/a'}</div>
+        `;
+        const token = n.id.split('::').pop()?.replace(/^entry:/, '') || '';
+        await showCodeSnippet(n.file, 1, token);
+        return;
+      }
+      if (params.edges.length > 0) {
+        const id = params.edges[0];
+        const e = STATE.edgesDS.get(id)?.raw;
+        if (!e) return;
+        const ev = (e.evidence || []).map((x) => `${x.file}:${x.line}`).slice(0, 8).join('<br/>');
+        selection.innerHTML = `
+          <div><strong>${e.kind}</strong></div>
+          <div class="mono">${e.source} -> ${e.target}</div>
+          <div>confidence: ${e.confidence}</div>
+          <div>tags: ${(e.tags || []).join(', ') || 'n/a'}</div>
+          <div class="mono">evidence:<br/>${ev || 'n/a'}</div>
+        `;
+        const primary = e.evidence?.[0];
+        await showCodeSnippet(primary?.file, primary?.line || 1, e.kind);
+      }
+    }
+
+    function findNode() {
+      const query = byId('search').value.trim().toLowerCase();
+      if (!query) return;
+      const hit = STATE.graph.nodes.find((n) => n.id.toLowerCase().includes(query) || (n.label || '').toLowerCase().includes(query));
+      if (!hit) return;
+      STATE.network.selectNodes([hit.id]);
+      STATE.network.focus(hit.id, { animation: true, scale: 1.2 });
+      onSelect({ nodes: [hit.id], edges: [] });
+    }
+
+    async function load() {
+      const [graph, journeys, decisions, drift, viewConfig, audit] = await Promise.all([
+        fetch('../../../docs/repoatlas/graph.json').then((r) => r.json()),
+        fetch('../../../docs/repoatlas/journeys.json').then((r) => r.json()),
+        fetch('../../../docs/repoatlas/decisions.json').then((r) => r.json()),
+        fetch('../../../docs/repoatlas/drift.json').then((r) => r.json()),
+        fetch('../../../docs/repoatlas/view_config.json')
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+        fetch('../../../docs/repoatlas/audit.json')
+          .then((r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+      ]);
+
+      STATE.graph = graph;
+      STATE.journeys = journeys;
+      STATE.decisions = decisions;
+      STATE.drift = drift;
+      STATE.viewConfig = viewConfig;
+      STATE.audit = audit;
+
+      STATE.graph.nodes.forEach((n) => STATE.nodeMap.set(n.id, n));
+
+      buildDatasets();
+      renderNetwork();
+      renderSummary();
+      renderJourneyOptions();
+      renderLegendList();
+      renderAuditSummary();
+      renderExecutionPath('__all__');
+
+      byId('journey').addEventListener('change', (e) => applyJourneyFilter(e.target.value));
+      byId('kindFilter').addEventListener('change', refreshVisibility);
+      byId('findNode').addEventListener('click', findNode);
+      byId('showAll').addEventListener('click', () => {
+        byId('journey').value = '__all__';
+        applyJourneyFilter('__all__');
+      });
+      byId('fitView').addEventListener('click', () => STATE.network.fit({ animation: true }));
+      byId('search').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') findNode();
+      });
+
+      const params = new URLSearchParams(window.location.search);
+      const journeyParam = params.get('journey');
+      if (journeyParam) {
+        const hasJourney = STATE.journeys.some((j) => j.name === journeyParam);
+        if (hasJourney) {
+          byId('journey').value = journeyParam;
+          applyJourneyFilter(journeyParam);
+        }
+      }
+    }
+
+    load().catch((err) => {
+      byId('summary').textContent = `Failed loading RepoAtlas outputs: ${err.message}`;
+      console.error(err);
+    });
+  </script>
+</body>
+</html>

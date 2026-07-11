@@ -1,0 +1,40 @@
+{
+  "boundaries": [
+    { "name": "server", "includes": ["server/**"] },
+    { "name": "collector", "includes": ["collector/**"] },
+    { "name": "common", "includes": ["common/**"] },
+    { "name": "interface", "includes": ["interface/**"] },
+    { "name": "proto", "includes": ["proto/**"] },
+    { "name": "tools", "includes": ["tools/**"] },
+    { "name": "docs", "includes": ["docs/**"] }
+  ],
+  "rules": [
+    {
+      "allow": [
+        "server -> common",
+        "server -> proto",
+        "collector -> common",
+        "collector -> proto",
+        "interface -> server",
+        "tools -> common",
+        "tools -> server",
+        "proto -> server"
+      ],
+      "forbid": [
+        "collector -> server",
+        "interface -> collector"
+      ]
+    }
+  ],
+  "required_journeys": [
+    {
+      "name": "grpc-query-flow",
+      "entrypoint": "entry:rpc:Query",
+      "must_include": [
+        "module:server::grpc_service",
+        "module:server::server",
+        "module:server::query"
+      ]
+    }
+  ]
+}

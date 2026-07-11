@@ -1,3 +1,4 @@
+use memchr::memmem;
 use sha2::{Digest, Sha256};
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
@@ -13,8 +14,14 @@ pub enum BufferError {
 }
 
 const MAGIC: u32 = 0x4C4C4F47; // "LLOG" in ASCII
+const MAGIC_BYTES: [u8; 4] = MAGIC.to_le_bytes();
 const HEADER_SIZE: u64 = 8; // MAGIC (4) + LEN (4)
 const CHECKSUM_SIZE: u64 = 32; // SHA256
+// Upper bound on a single WAL entry's payload size, used to reject
+// implausible LEN values during corruption recovery.
+const MAX_ENTRY_SIZE: u64 = 128 * 1024 * 1024;
+// Read window for scanning forward looking for the next valid frame.
+const SCAN_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 
 /// A disk-backed byte-oriented buffer (Write-Ahead Log) that supports appending raw bytes,
 /// peeking at chunks of items, and committing the read offset.
@@ -143,10 +150,30 @@ impl DiskBuffer {
             };
 
             if magic != MAGIC {
-                return Err(BufferError::CorruptData(format!(
-                    "Invalid magic at offset {}: expected {:08X}, got {:08X}",
-                    current_offset, MAGIC, magic
-                )));
+                // Frame header is corrupt. Scan forward for the next byte
+                // sequence that begins a valid, checksum-verifying entry, and
+                // resume from there. The data between current_offset and the
+                // resync point is lost.
+                match scan_for_next_valid_entry(&mut file, current_offset + 1, file_len).await? {
+                    Some(resync_offset) => {
+                        eprintln!(
+                            "[WAL] Invalid magic at offset {}: got {:08X}; resynced to offset {} ({} bytes skipped)",
+                            current_offset,
+                            magic,
+                            resync_offset,
+                            resync_offset - current_offset
+                        );
+                        current_offset = resync_offset;
+                        file.seek(SeekFrom::Start(current_offset)).await?;
+                        continue;
+                    }
+                    None => {
+                        return Err(BufferError::CorruptData(format!(
+                            "Invalid magic at offset {}: expected {:08X}, got {:08X} (no valid entry found ahead)",
+                            current_offset, MAGIC, magic
+                        )));
+                    }
+                }
             }
 
             // Read length (u32)
@@ -160,6 +187,31 @@ impl DiskBuffer {
                 }
                 Err(e) => return Err(e.into()),
             };
+
+            // Implausibly large LEN means the frame is corrupt even though
+            // MAGIC happened to match. Treat the same as bad magic: resync.
+            if len > MAX_ENTRY_SIZE {
+                match scan_for_next_valid_entry(&mut file, current_offset + 1, file_len).await? {
+                    Some(resync_offset) => {
+                        eprintln!(
+                            "[WAL] Implausible LEN {} at offset {}; resynced to offset {} ({} bytes skipped)",
+                            len,
+                            current_offset,
+                            resync_offset,
+                            resync_offset - current_offset
+                        );
+                        current_offset = resync_offset;
+                        file.seek(SeekFrom::Start(current_offset)).await?;
+                        continue;
+                    }
+                    None => {
+                        return Err(BufferError::CorruptData(format!(
+                            "Implausible LEN {} at offset {} (no valid entry found ahead)",
+                            len, current_offset
+                        )));
+                    }
+                }
+            }
 
             if current_offset + HEADER_SIZE + len + CHECKSUM_SIZE > file_len {
                 // Potential torn write at the end of file
@@ -200,6 +252,7 @@ impl DiskBuffer {
                     current_offset, entry_size
                 );
                 current_offset += entry_size;
+                file.seek(SeekFrom::Start(current_offset)).await?;
                 continue;
             }
 
@@ -293,6 +346,124 @@ impl DiskBuffer {
     }
 }
 
+/// Verify that a complete, checksum-valid entry begins at `offset`. Returns
+/// `Some(end_offset)` when the frame parses and the SHA-256 matches; `None`
+/// when anything looks wrong (bad magic, implausible len, EOF before frame
+/// end, checksum mismatch). Only I/O errors propagate.
+///
+/// The file's cursor position is not preserved across this call.
+async fn try_parse_entry_at(
+    file: &mut File,
+    offset: u64,
+    file_len: u64,
+) -> Result<Option<u64>, BufferError> {
+    if offset + HEADER_SIZE > file_len {
+        return Ok(None);
+    }
+    file.seek(SeekFrom::Start(offset)).await?;
+
+    let magic = match file.read_u32_le().await {
+        Ok(m) => m,
+        Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    if magic != MAGIC {
+        return Ok(None);
+    }
+
+    let len = match file.read_u32_le().await {
+        Ok(l) => l as u64,
+        Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    if len > MAX_ENTRY_SIZE {
+        return Ok(None);
+    }
+    if offset + HEADER_SIZE + len + CHECKSUM_SIZE > file_len {
+        return Ok(None);
+    }
+
+    let mut data = vec![0u8; len as usize];
+    match file.read_exact(&mut data).await {
+        Ok(_) => {}
+        Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(e) => return Err(e.into()),
+    }
+
+    let mut stored_checksum = [0u8; CHECKSUM_SIZE as usize];
+    match file.read_exact(&mut stored_checksum).await {
+        Ok(_) => {}
+        Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
+        Err(e) => return Err(e.into()),
+    }
+
+    let mut hasher = Sha256::new();
+    hasher.update(MAGIC.to_le_bytes());
+    hasher.update((len as u32).to_le_bytes());
+    hasher.update(&data);
+    if hasher.finalize().as_slice() != stored_checksum {
+        return Ok(None);
+    }
+
+    Ok(Some(offset + HEADER_SIZE + len + CHECKSUM_SIZE))
+}
+
+/// Scan forward from `start_offset` looking for the next byte position where a
+/// valid, checksum-verifying entry begins. Reads in `SCAN_CHUNK_SIZE`-byte
+/// windows with overlap, using `memchr::memmem` to locate the magic byte
+/// sequence quickly. Returns `None` if no valid entry exists between
+/// `start_offset` and EOF.
+async fn scan_for_next_valid_entry(
+    file: &mut File,
+    start_offset: u64,
+    file_len: u64,
+) -> Result<Option<u64>, BufferError> {
+    let finder = memmem::Finder::new(&MAGIC_BYTES);
+    let mut buf = vec![0u8; SCAN_CHUNK_SIZE];
+    let mut search_offset = start_offset;
+
+    while search_offset + HEADER_SIZE <= file_len {
+        let to_read = ((file_len - search_offset) as usize).min(buf.len());
+
+        file.seek(SeekFrom::Start(search_offset)).await?;
+        let mut filled = 0usize;
+        while filled < to_read {
+            match file.read(&mut buf[filled..to_read]).await {
+                Ok(0) => break,
+                Ok(n) => filled += n,
+                Err(e) => return Err(e.into()),
+            }
+        }
+        if filled < MAGIC_BYTES.len() {
+            break;
+        }
+
+        let mut local = 0usize;
+        while local + MAGIC_BYTES.len() <= filled {
+            match finder.find(&buf[local..filled]) {
+                Some(idx) => {
+                    let candidate = search_offset + (local + idx) as u64;
+                    if try_parse_entry_at(file, candidate, file_len).await?.is_some() {
+                        return Ok(Some(candidate));
+                    }
+                    local += idx + 1;
+                }
+                None => break,
+            }
+        }
+
+        // Advance past this window, keeping a small overlap so magic bytes that
+        // straddle the boundary are still found in the next iteration.
+        let advance = (filled as u64).saturating_sub(MAGIC_BYTES.len() as u64 - 1);
+        if advance == 0 {
+            break;
+        }
+        search_offset += advance;
+    }
+
+    Ok(None)
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -360,5 +531,89 @@ mod tests {
         // Corrupted entry should be skipped, returning empty items
         let (_, items) = buffer.peek_chunk(1).await.unwrap();
         assert!(items.is_empty(), "Corrupted entry should be skipped");
+    }
+
+    /// Simulates the production failure: a region of zero bytes in the middle
+    /// of the WAL between two valid entries (e.g. a torn write or partially-
+    /// allocated file). Before the resync patch this returned `CorruptData`
+    /// and the upload cycle aborted. Now we expect the reader to scan past
+    /// the zero region and recover `after`.
+    #[tokio::test]
+    async fn test_resync_past_invalid_magic_region() {
+        let tmp = tempdir().unwrap();
+        let buffer = DiskBuffer::new(tmp.path()).unwrap();
+
+        buffer.append(b"before").await.unwrap();
+        let good_offset_before = tokio::fs::metadata(buffer.log_path())
+            .await
+            .unwrap()
+            .len();
+
+        // Inject ~9 KB of zeros directly into the WAL — simulates a region
+        // with no valid magic bytes.
+        let zero_run = vec![0u8; 9_000];
+        {
+            let mut f = OpenOptions::new()
+                .append(true)
+                .open(buffer.log_path())
+                .await
+                .unwrap();
+            f.write_all(&zero_run).await.unwrap();
+            f.flush().await.unwrap();
+        }
+
+        buffer.append(b"after").await.unwrap();
+
+        // Resync should skip the zero region and return both records.
+        let (next, items) = buffer.peek_chunk(10).await.unwrap();
+        assert_eq!(
+            items,
+            vec![b"before".to_vec(), b"after".to_vec()],
+            "expected reader to recover the post-corruption entry"
+        );
+        // `next` should be at EOF.
+        let file_len = tokio::fs::metadata(buffer.log_path())
+            .await
+            .unwrap()
+            .len();
+        assert_eq!(next, file_len);
+        assert!(good_offset_before < file_len);
+    }
+
+    /// Garbage bytes that happen to contain the magic sequence somewhere
+    /// without forming a valid entry there must not be treated as a frame.
+    /// The reader must keep scanning and recover the genuine post-garbage
+    /// entry.
+    #[tokio::test]
+    async fn test_resync_skips_false_magic_in_garbage() {
+        let tmp = tempdir().unwrap();
+        let buffer = DiskBuffer::new(tmp.path()).unwrap();
+
+        buffer.append(b"before").await.unwrap();
+
+        // Construct a payload that contains MAGIC_BYTES followed by garbage,
+        // appended directly to the WAL (not via `append`, so no checksum).
+        let mut garbage = Vec::new();
+        garbage.extend_from_slice(&[0xFFu8; 200]);
+        garbage.extend_from_slice(&MAGIC_BYTES); // false positive
+        garbage.extend_from_slice(&[0xAAu8; 500]); // random following bytes
+        {
+            let mut f = OpenOptions::new()
+                .append(true)
+                .open(buffer.log_path())
+                .await
+                .unwrap();
+            f.write_all(&garbage).await.unwrap();
+            f.flush().await.unwrap();
+        }
+
+        buffer.append(b"after").await.unwrap();
+
+        let (_, items) = buffer.peek_chunk(10).await.unwrap();
+        assert_eq!(
+            items,
+            vec![b"before".to_vec(), b"after".to_vec()],
+            "false-positive magic in garbage must not be parsed as a frame"
+        );
     }
 }

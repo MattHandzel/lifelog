@@ -1,0 +1,1619 @@
+{
+  "version": 1,
+  "strategy": "static-graph + rule-based-icons + llm-layout-hints",
+  "node_styles": {
+    "module:collector::collector::upload_manager": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::collector": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::root": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::audio": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::browser_history": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::camera": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::clipboard": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::data_source": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::evdev_input_logger": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::hyprland": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::input_logger": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::keystrokes": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::logger": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::microphone": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::mouse": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::processes": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::screen": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::shell_history": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::text_upload": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::wayland_input_logger": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::weather": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::modules::window_activity": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:collector::setup": {
+      "icon": "collector",
+      "shape": "dot",
+      "color": "#71d59f",
+      "borderWidth": 1
+    },
+    "module:common::root": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::policy_config": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::server_config": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::browser::data": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::browser": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::ocr": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::screen::data": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::screen": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::screen::transforms": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::correlation": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::error": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::replay": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::time_skew": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::validate": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::common::lifelog-types::build": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::buffer": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::cas": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::chunk": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:common::ingest": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::avatar": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::badge": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::button": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::calendar": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::card": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::dialog": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::dropdown-menu": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::input": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::label": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::select": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::separator": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::sheet": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::switch": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::tabs": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::textarea": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::toast": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::toaster": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::components::ui::tooltip": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::@::hooks::use-toast": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::postcss.config": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::App": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::auto_generated_types": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::CameraDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::DevicesDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::FeatureTabs": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::Header": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::Login": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::MicrophoneDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ModulesPanel": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::NetworkTopologyDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::PlaceholderDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ProcessesDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ReplayDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ReplayFrame": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ResultCard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ScreenDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::SearchDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::SettingsDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::Sidebar": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::TextUploadDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::TimelineDashboard": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::button": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::card": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::dialog": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::dropdown-menu": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::input": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::label": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::progress": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::select": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::separator": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::slider": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::spinner": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::switch": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::tabs": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::theme-toggle": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::components::ui::tooltip": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::env.d": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::generated::google::protobuf::any": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::generated::google::protobuf::timestamp": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::generated::google::protobuf::wrappers": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::generated::lifelog": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::generated::lifelog_types": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::lib::hooks": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::lib::useReplay": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::lib::utils": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::main": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::test::setup": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::vite-env.d": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::src-tauri::build": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::bin::lifelog-logger": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::bin::lifelog-server": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::bin::text-upload": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::bin::verify_connection": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::root": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::prelude": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::setup": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::storage": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::tailwind.config": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:interface::interface::vite.config": {
+      "icon": "ui",
+      "shape": "dot",
+      "color": "#b28cff",
+      "borderWidth": 1
+    },
+    "module:server::data_retrieval": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::db": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::grpc_service": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::ingest": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::root": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::policy": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::postgres": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::query::ast": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::query::executor": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::query::llql": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::query": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::query::planner": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::replay": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::retention": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::schema": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::server": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::sync": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:server::transform": {
+      "icon": "server",
+      "shape": "dot",
+      "color": "#69c0ff",
+      "borderWidth": 1
+    },
+    "module:tools::tools::repoatlas::repoatlas": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:tools::tools::repoatlas::repoatlas_agents": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:tools::tools::repoatlas::text_view_audit": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:tools::tools::repoatlas::validate_artifacts": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:tools::tools::repoatlas::viewer::serve_viewer": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "module:tools::tools::repoatlas::viz_compose": {
+      "icon": "library",
+      "shape": "dot",
+      "color": "#9ac0d8",
+      "borderWidth": 1
+    },
+    "entry:cli:collector": {
+      "icon": "cli",
+      "shape": "box",
+      "color": "#57d3f3",
+      "borderWidth": 2
+    },
+    "entry:cli:interface": {
+      "icon": "cli",
+      "shape": "box",
+      "color": "#57d3f3",
+      "borderWidth": 2
+    },
+    "entry:cli:server": {
+      "icon": "cli",
+      "shape": "box",
+      "color": "#57d3f3",
+      "borderWidth": 2
+    },
+    "entry:rpc:ControlStream": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "entry:rpc:GetConfig": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "entry:rpc:SetConfig": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "entry:rpc:GetData": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "entry:rpc:Query": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "entry:rpc:Replay": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "entry:rpc:GetState": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "entry:rpc:UploadChunks": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "entry:rpc:GetUploadOffset": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "entry:rpc:ListModalities": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "entry:rpc:PairCollector": {
+      "icon": "rpc",
+      "shape": "diamond",
+      "color": "#5cd7c8",
+      "borderWidth": 2
+    },
+    "resource:table:urls": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:visits": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:input": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:key_events": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:mouse_buttons": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:mouse_movements": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:mouse_wheel": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:text_uploads": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:last": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:environment": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:test": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:sqlite_master": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:lifelog_types": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:unified": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:dynamic_image": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:samples": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:median": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:implementations": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:some": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:local": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:your": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:backend": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:modality": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:tauri": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:posix": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:win32": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:java": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:current": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:this": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:path": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:wav": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:obscuring": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:screen_records": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:catalog": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:peer": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:controlstream": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:upload_chunks": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:payload": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:duration_secs": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:browser_records": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:ocr_records": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:audio_records": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:clipboard_records": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:shell_history_records": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:keystroke_records": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:screen": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:schema_migrations": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:for": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:operators": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:terms": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:watermarks": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:command": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:__future__": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:collections": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:pathlib": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:typing": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:concurrent": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:entry": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:provided": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    },
+    "resource:table:static": {
+      "icon": "database",
+      "shape": "database",
+      "color": "#ffbf69",
+      "borderWidth": 1
+    }
+  },
+  "boundary_groups": {
+    "collector": [
+      "module:collector::collector::upload_manager",
+      "module:collector::collector",
+      "module:collector::root",
+      "module:collector::modules::audio",
+      "module:collector::modules::browser_history",
+      "module:collector::modules::camera",
+      "module:collector::modules::clipboard",
+      "module:collector::modules::data_source",
+      "module:collector::modules::evdev_input_logger",
+      "module:collector::modules::hyprland",
+      "module:collector::modules::input_logger",
+      "module:collector::modules::keystrokes",
+      "module:collector::modules::logger",
+      "module:collector::modules::microphone",
+      "module:collector::modules",
+      "module:collector::modules::mouse",
+      "module:collector::modules::processes",
+      "module:collector::modules::screen",
+      "module:collector::modules::shell_history",
+      "module:collector::modules::text_upload",
+      "module:collector::modules::wayland_input_logger",
+      "module:collector::modules::weather",
+      "module:collector::modules::window_activity",
+      "module:collector::setup",
+      "entry:cli:collector",
+      "resource:table:urls",
+      "resource:table:visits",
+      "resource:table:input",
+      "resource:table:key_events",
+      "resource:table:mouse_buttons",
+      "resource:table:mouse_movements",
+      "resource:table:mouse_wheel",
+      "resource:table:text_uploads",
+      "resource:table:last",
+      "resource:table:environment",
+      "resource:table:test",
+      "resource:table:sqlite_master"
+    ],
+    "common": [
+      "module:common::root",
+      "module:common::policy_config",
+      "module:common::server_config",
+      "module:common::browser::data",
+      "module:common::browser",
+      "module:common::ocr",
+      "module:common::screen::data",
+      "module:common::screen",
+      "module:common::screen::transforms",
+      "module:common::correlation",
+      "module:common::error",
+      "module:common::replay",
+      "module:common::time_skew",
+      "module:common::validate",
+      "module:common::common::lifelog-types::build",
+      "module:common::buffer",
+      "module:common::cas",
+      "module:common::chunk",
+      "module:common::ingest",
+      "resource:table:lifelog_types",
+      "resource:table:unified",
+      "resource:table:dynamic_image",
+      "resource:table:samples",
+      "resource:table:median",
+      "resource:table:implementations"
+    ],
+    "interface": [
+      "module:interface::interface::@::components::ui::avatar",
+      "module:interface::interface::@::components::ui::badge",
+      "module:interface::interface::@::components::ui::button",
+      "module:interface::interface::@::components::ui::calendar",
+      "module:interface::interface::@::components::ui::card",
+      "module:interface::interface::@::components::ui::dialog",
+      "module:interface::interface::@::components::ui::dropdown-menu",
+      "module:interface::interface::@::components::ui::input",
+      "module:interface::interface::@::components::ui::label",
+      "module:interface::interface::@::components::ui::select",
+      "module:interface::interface::@::components::ui::separator",
+      "module:interface::interface::@::components::ui::sheet",
+      "module:interface::interface::@::components::ui::switch",
+      "module:interface::interface::@::components::ui::tabs",
+      "module:interface::interface::@::components::ui::textarea",
+      "module:interface::interface::@::components::ui::toast",
+      "module:interface::interface::@::components::ui::toaster",
+      "module:interface::interface::@::components::ui::tooltip",
+      "module:interface::interface::@::hooks::use-toast",
+      "module:interface::interface::postcss.config",
+      "module:interface::App",
+      "module:interface::auto_generated_types",
+      "module:interface::components::CameraDashboard",
+      "module:interface::components::DevicesDashboard",
+      "module:interface::components::FeatureTabs",
+      "module:interface::components::Header",
+      "module:interface::components::Login",
+      "module:interface::components::MicrophoneDashboard",
+      "module:interface::components::ModulesPanel",
+      "module:interface::components::NetworkTopologyDashboard",
+      "module:interface::components::PlaceholderDashboard",
+      "module:interface::components::ProcessesDashboard",
+      "module:interface::components::ReplayDashboard",
+      "module:interface::components::ReplayFrame",
+      "module:interface::components::ResultCard",
+      "module:interface::components::ScreenDashboard",
+      "module:interface::components::SearchDashboard",
+      "module:interface::components::SettingsDashboard",
+      "module:interface::components::Sidebar",
+      "module:interface::components::TextUploadDashboard",
+      "module:interface::components::TimelineDashboard",
+      "module:interface::components::ui::button",
+      "module:interface::components::ui::card",
+      "module:interface::components::ui::dialog",
+      "module:interface::components::ui::dropdown-menu",
+      "module:interface::components::ui::input",
+      "module:interface::components::ui::label",
+      "module:interface::components::ui::progress",
+      "module:interface::components::ui::select",
+      "module:interface::components::ui::separator",
+      "module:interface::components::ui::slider",
+      "module:interface::components::ui::spinner",
+      "module:interface::components::ui::switch",
+      "module:interface::components::ui::tabs",
+      "module:interface::components::ui::theme-toggle",
+      "module:interface::components::ui::tooltip",
+      "module:interface::env.d",
+      "module:interface::generated::google::protobuf::any",
+      "module:interface::generated::google::protobuf::timestamp",
+      "module:interface::generated::google::protobuf::wrappers",
+      "module:interface::generated::lifelog",
+      "module:interface::generated::lifelog_types",
+      "module:interface::lib::hooks",
+      "module:interface::lib::useReplay",
+      "module:interface::lib::utils",
+      "module:interface::main",
+      "module:interface::test::setup",
+      "module:interface::vite-env.d",
+      "module:interface::interface::src-tauri::build",
+      "module:interface::bin::lifelog-logger",
+      "module:interface::bin::lifelog-server",
+      "module:interface::bin::text-upload",
+      "module:interface::bin::verify_connection",
+      "module:interface::root",
+      "module:interface::prelude",
+      "module:interface::setup",
+      "module:interface::storage",
+      "module:interface::interface::tailwind.config",
+      "module:interface::interface::vite.config",
+      "entry:cli:interface",
+      "resource:table:some",
+      "resource:table:local",
+      "resource:table:your",
+      "resource:table:backend",
+      "resource:table:modality",
+      "resource:table:tauri",
+      "resource:table:posix",
+      "resource:table:win32",
+      "resource:table:java",
+      "resource:table:current",
+      "resource:table:this",
+      "resource:table:path",
+      "resource:table:wav",
+      "resource:table:obscuring"
+    ],
+    "server": [
+      "module:server::data_retrieval",
+      "module:server::db",
+      "module:server::grpc_service",
+      "module:server::ingest",
+      "module:server::root",
+      "module:server::policy",
+      "module:server::postgres",
+      "module:server::query::ast",
+      "module:server::query::executor",
+      "module:server::query::llql",
+      "module:server::query",
+      "module:server::query::planner",
+      "module:server::replay",
+      "module:server::retention",
+      "module:server::schema",
+      "module:server::server",
+      "module:server::sync",
+      "module:server::transform",
+      "entry:cli:server",
+      "resource:table:screen_records",
+      "resource:table:catalog",
+      "resource:table:peer",
+      "resource:table:controlstream",
+      "resource:table:upload_chunks",
+      "resource:table:payload",
+      "resource:table:duration_secs",
+      "resource:table:browser_records",
+      "resource:table:ocr_records",
+      "resource:table:audio_records",
+      "resource:table:clipboard_records",
+      "resource:table:shell_history_records",
+      "resource:table:keystroke_records",
+      "resource:table:screen",
+      "resource:table:schema_migrations",
+      "resource:table:for",
+      "resource:table:operators",
+      "resource:table:terms",
+      "resource:table:watermarks",
+      "resource:table:command"
+    ],
+    "tools": [
+      "module:tools::tools::repoatlas::repoatlas",
+      "module:tools::tools::repoatlas::repoatlas_agents",
+      "module:tools::tools::repoatlas::text_view_audit",
+      "module:tools::tools::repoatlas::validate_artifacts",
+      "module:tools::tools::repoatlas::viewer::serve_viewer",
+      "module:tools::tools::repoatlas::viz_compose",
+      "resource:table:__future__",
+      "resource:table:collections",
+      "resource:table:pathlib",
+      "resource:table:typing",
+      "resource:table:concurrent",
+      "resource:table:entry",
+      "resource:table:provided",
+      "resource:table:static"
+    ],
+    "proto": [
+      "entry:rpc:ControlStream",
+      "entry:rpc:GetConfig",
+      "entry:rpc:SetConfig",
+      "entry:rpc:GetData",
+      "entry:rpc:Query",
+      "entry:rpc:Replay",
+      "entry:rpc:GetState",
+      "entry:rpc:UploadChunks",
+      "entry:rpc:GetUploadOffset",
+      "entry:rpc:ListModalities",
+      "entry:rpc:PairCollector"
+    ]
+  },
+  "hotspots": [
+    {
+      "level": "hard",
+      "source": "module:interface::components::Login",
+      "target": "resource:table:environment",
+      "message": "Forbidden boundary edge interface -> collector"
+    },
+    {
+      "level": "soft",
+      "source": "module:common::server_config",
+      "target": "resource:table:environment",
+      "message": "Unexpected boundary edge common -> collector"
+    },
+    {
+      "level": "soft",
+      "source": "module:interface::bin::lifelog-logger",
+      "target": "module:common::root",
+      "message": "Unexpected boundary edge interface -> common"
+    },
+    {
+      "level": "soft",
+      "source": "module:interface::bin::lifelog-server",
+      "target": "module:common::root",
+      "message": "Unexpected boundary edge interface -> common"
+    },
+    {
+      "level": "soft",
+      "source": "module:interface::bin::text-upload",
+      "target": "module:common::root",
+      "message": "Unexpected boundary edge interface -> common"
+    },
+    {
+      "level": "soft",
+      "source": "module:interface::root",
+      "target": "module:common::root",
+      "message": "Unexpected boundary edge interface -> common"
+    }
+  ],
+  "suggested_journey_order": [
+    "entry:cli:collector",
+    "entry:cli:interface",
+    "entry:cli:server",
+    "entry:rpc:ControlStream",
+    "entry:rpc:GetConfig",
+    "entry:rpc:SetConfig",
+    "entry:rpc:GetData",
+    "entry:rpc:Query",
+    "entry:rpc:Replay",
+    "entry:rpc:GetState",
+    "entry:rpc:UploadChunks",
+    "entry:rpc:GetUploadOffset",
+    "entry:rpc:ListModalities",
+    "entry:rpc:PairCollector"
+  ],
+  "llm": {
+    "enabled": false,
+    "status": "failed",
+    "notes": "Using deterministic rules only; llm_error=Visualization agent failed (1) with command: codex --dangerously-bypass-approvals-and-sandbox -- 'You are a visualization composition agent. Do not infer new architecture facts. Only propose view-layer hints from provide"
+  }
+}

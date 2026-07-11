@@ -1,0 +1,148 @@
+{
+  "runs": [
+    {
+      "iteration": 1,
+      "ok": true,
+      "steps": [
+        {
+          "cmd": "python3 tools/repoatlas/repoatlas.py --repo . --expected repoatlas/expected_arch.json --out docs/repoatlas --max-hops 4",
+          "code": 0,
+          "stdout": "RepoAtlas report generated in /home/matth/Projects/lifelog/docs/repoatlas",
+          "stderr": ""
+        },
+        {
+          "cmd": "python3 tools/repoatlas/viz_compose.py --repo . --graph docs/repoatlas/graph.json --journeys docs/repoatlas/journeys.json --decisions docs/repoatlas/decisions.json --drift docs/repoatlas/drift.json --out docs/repoatlas/view_config.json",
+          "code": 0,
+          "stdout": "Visualization config written to /home/matth/Projects/lifelog/docs/repoatlas/view_config.json",
+          "stderr": ""
+        },
+        {
+          "cmd": "python3 tools/repoatlas/validate_artifacts.py --repo . --graph docs/repoatlas/graph.json --journeys docs/repoatlas/journeys.json --drift docs/repoatlas/drift.json --decisions docs/repoatlas/decisions.json --out docs/repoatlas/audit.json",
+          "code": 0,
+          "stdout": "Artifact audit written to /home/matth/Projects/lifelog/docs/repoatlas/audit.json\n{\n  \"status\": \"pass\",\n  \"checks\": {\n    \"edge_endpoints\": true,\n    \"evidence_integrity\": true,\n    \"journey_integrity\": true,\n    \"drift_integrity\": true\n  },\n  \"errors\": {\n    \"edge_endpoints\": 0,\n    \"evidence\": 0,\n    \"journey\": 0,\n    \"drift\": 0\n  }\n}",
+          "stderr": ""
+        }
+      ],
+      "metrics": {
+        "nodes": 218,
+        "edges": 502,
+        "journeys": 14,
+        "drift": 6,
+        "audit_status": "pass",
+        "audit_errors": {
+          "edge_endpoints": 0,
+          "evidence": 0,
+          "journey": 0,
+          "drift": 0
+        },
+        "collector_entry_ok": true,
+        "icon_mismatch": 0,
+        "dead_journey_refs": 0,
+        "noisy_resource_tokens": 0,
+        "graph.json_sha256": "530466d5e19914979ac4392cc6d406a8b2b23786dbd9cd83224f2a67bb833769",
+        "journeys.json_sha256": "fdc887aea305911c065d3865c09ff1cf452369ee31aafc6b7d8dabd8fe6e52d6",
+        "decisions.json_sha256": "27d409f57eed7fcd028d1f19ddba2a7aa677e073ada9995f262518537ebb9458",
+        "drift.json_sha256": "16cbbe7e18f654e71a976be52aeece30baad23f6045d1c67a6177d4c1ebe5759",
+        "view_config.json_sha256": "98dce6ad773ada00615ead9eae08794980c07e930949e2077b38cae1849f90c3",
+        "audit.json_sha256": "2d16fa802cf55362beb370eb0fb7873fa7f6c076015a120bac4a38eba6a714e5"
+      },
+      "anomalies": []
+    },
+    {
+      "iteration": 2,
+      "ok": true,
+      "steps": [
+        {
+          "cmd": "python3 tools/repoatlas/repoatlas.py --repo . --expected repoatlas/expected_arch.json --out docs/repoatlas --max-hops 4",
+          "code": 0,
+          "stdout": "RepoAtlas report generated in /home/matth/Projects/lifelog/docs/repoatlas",
+          "stderr": ""
+        },
+        {
+          "cmd": "python3 tools/repoatlas/viz_compose.py --repo . --graph docs/repoatlas/graph.json --journeys docs/repoatlas/journeys.json --decisions docs/repoatlas/decisions.json --drift docs/repoatlas/drift.json --out docs/repoatlas/view_config.json",
+          "code": 0,
+          "stdout": "Visualization config written to /home/matth/Projects/lifelog/docs/repoatlas/view_config.json",
+          "stderr": ""
+        },
+        {
+          "cmd": "python3 tools/repoatlas/validate_artifacts.py --repo . --graph docs/repoatlas/graph.json --journeys docs/repoatlas/journeys.json --drift docs/repoatlas/drift.json --decisions docs/repoatlas/decisions.json --out docs/repoatlas/audit.json",
+          "code": 0,
+          "stdout": "Artifact audit written to /home/matth/Projects/lifelog/docs/repoatlas/audit.json\n{\n  \"status\": \"pass\",\n  \"checks\": {\n    \"edge_endpoints\": true,\n    \"evidence_integrity\": true,\n    \"journey_integrity\": true,\n    \"drift_integrity\": true\n  },\n  \"errors\": {\n    \"edge_endpoints\": 0,\n    \"evidence\": 0,\n    \"journey\": 0,\n    \"drift\": 0\n  }\n}",
+          "stderr": ""
+        }
+      ],
+      "metrics": {
+        "nodes": 218,
+        "edges": 502,
+        "journeys": 14,
+        "drift": 6,
+        "audit_status": "pass",
+        "audit_errors": {
+          "edge_endpoints": 0,
+          "evidence": 0,
+          "journey": 0,
+          "drift": 0
+        },
+        "collector_entry_ok": true,
+        "icon_mismatch": 0,
+        "dead_journey_refs": 0,
+        "noisy_resource_tokens": 0,
+        "graph.json_sha256": "530466d5e19914979ac4392cc6d406a8b2b23786dbd9cd83224f2a67bb833769",
+        "journeys.json_sha256": "fdc887aea305911c065d3865c09ff1cf452369ee31aafc6b7d8dabd8fe6e52d6",
+        "decisions.json_sha256": "27d409f57eed7fcd028d1f19ddba2a7aa677e073ada9995f262518537ebb9458",
+        "drift.json_sha256": "16cbbe7e18f654e71a976be52aeece30baad23f6045d1c67a6177d4c1ebe5759",
+        "view_config.json_sha256": "98dce6ad773ada00615ead9eae08794980c07e930949e2077b38cae1849f90c3",
+        "audit.json_sha256": "2d16fa802cf55362beb370eb0fb7873fa7f6c076015a120bac4a38eba6a714e5"
+      },
+      "anomalies": []
+    },
+    {
+      "iteration": 3,
+      "ok": true,
+      "steps": [
+        {
+          "cmd": "python3 tools/repoatlas/repoatlas.py --repo . --expected repoatlas/expected_arch.json --out docs/repoatlas --max-hops 4",
+          "code": 0,
+          "stdout": "RepoAtlas report generated in /home/matth/Projects/lifelog/docs/repoatlas",
+          "stderr": ""
+        },
+        {
+          "cmd": "python3 tools/repoatlas/viz_compose.py --repo . --graph docs/repoatlas/graph.json --journeys docs/repoatlas/journeys.json --decisions docs/repoatlas/decisions.json --drift docs/repoatlas/drift.json --out docs/repoatlas/view_config.json",
+          "code": 0,
+          "stdout": "Visualization config written to /home/matth/Projects/lifelog/docs/repoatlas/view_config.json",
+          "stderr": ""
+        },
+        {
+          "cmd": "python3 tools/repoatlas/validate_artifacts.py --repo . --graph docs/repoatlas/graph.json --journeys docs/repoatlas/journeys.json --drift docs/repoatlas/drift.json --decisions docs/repoatlas/decisions.json --out docs/repoatlas/audit.json",
+          "code": 0,
+          "stdout": "Artifact audit written to /home/matth/Projects/lifelog/docs/repoatlas/audit.json\n{\n  \"status\": \"pass\",\n  \"checks\": {\n    \"edge_endpoints\": true,\n    \"evidence_integrity\": true,\n    \"journey_integrity\": true,\n    \"drift_integrity\": true\n  },\n  \"errors\": {\n    \"edge_endpoints\": 0,\n    \"evidence\": 0,\n    \"journey\": 0,\n    \"drift\": 0\n  }\n}",
+          "stderr": ""
+        }
+      ],
+      "metrics": {
+        "nodes": 218,
+        "edges": 502,
+        "journeys": 14,
+        "drift": 6,
+        "audit_status": "pass",
+        "audit_errors": {
+          "edge_endpoints": 0,
+          "evidence": 0,
+          "journey": 0,
+          "drift": 0
+        },
+        "collector_entry_ok": true,
+        "icon_mismatch": 0,
+        "dead_journey_refs": 0,
+        "noisy_resource_tokens": 0,
+        "graph.json_sha256": "530466d5e19914979ac4392cc6d406a8b2b23786dbd9cd83224f2a67bb833769",
+        "journeys.json_sha256": "fdc887aea305911c065d3865c09ff1cf452369ee31aafc6b7d8dabd8fe6e52d6",
+        "decisions.json_sha256": "27d409f57eed7fcd028d1f19ddba2a7aa677e073ada9995f262518537ebb9458",
+        "drift.json_sha256": "16cbbe7e18f654e71a976be52aeece30baad23f6045d1c67a6177d4c1ebe5759",
+        "view_config.json_sha256": "98dce6ad773ada00615ead9eae08794980c07e930949e2077b38cae1849f90c3",
+        "audit.json_sha256": "2d16fa802cf55362beb370eb0fb7873fa7f6c076015a120bac4a38eba6a714e5"
+      },
+      "anomalies": []
+    }
+  ]
+}
