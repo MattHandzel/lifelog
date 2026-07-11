@@ -1066,8 +1066,21 @@ impl Server {
                             dag, watermarks, pool_clone, cas_clone, http, 50,
                         ));
 
-                    if let Err(e) = worker.poll_once().await {
-                        tracing::error!(error = %e, "Transform pipeline error");
+                    tracing::info!("Transform pipeline: poll_once starting");
+                    match tokio::time::timeout(
+                        std::time::Duration::from_secs(600),
+                        worker.poll_once(),
+                    )
+                    .await
+                    {
+                        Ok(Ok(())) => tracing::info!("Transform pipeline: poll_once completed"),
+                        Ok(Err(e)) => tracing::error!(error = %e, "Transform pipeline error"),
+                        // Without this timeout a single wedged executor leaves the
+                        // TransformData pending flag set forever and the whole
+                        // pipeline freezes (observed: watermarks frozen since 2026-04-15).
+                        Err(_) => tracing::error!(
+                            "Transform pipeline: poll_once timed out after 600s; clearing pending flag to allow retry"
+                        ),
                     }
 
                     let mut state = state_clone.write().await;

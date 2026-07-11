@@ -177,7 +177,12 @@ impl PipelineWorker {
             return Ok(());
         }
 
+        tracing::debug!("poll_once: fetching available origins");
         let available_origins = crate::frames::get_origins(&self.postgres_pool).await?;
+        tracing::debug!(
+            origins = available_origins.len(),
+            "poll_once: origins fetched, dispatching transforms"
+        );
 
         let mut join_set = JoinSet::new();
 
@@ -252,6 +257,7 @@ impl PipelineWorker {
                 return false;
             }
         };
+        tracing::debug!(transform_id = %id, watermark = %watermark, "run_single_transform: start");
 
         let source_tier = PrivacyTier::for_modality(transform.source_modality());
         if !transform.privacy_level().can_process(source_tier) {
@@ -266,6 +272,11 @@ impl PipelineWorker {
         }
 
         let targets = resolve_targets(&transform.source(), available_origins);
+        tracing::debug!(
+            transform_id = %id,
+            targets = targets.len(),
+            "run_single_transform: resolved targets"
+        );
 
         for target_origin in &targets {
             match crate::frames::count_keys_after(&self.postgres_pool, target_origin, watermark)
