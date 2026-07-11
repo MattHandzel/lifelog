@@ -96,7 +96,11 @@ pub(crate) fn make_endpoint(server_address: &str) -> Result<Endpoint, LifelogErr
             field: "server_address".to_string(),
             reason: format!("invalid URL: {}", e),
         })?
-        .connect_timeout(Duration::from_secs(10));
+        .connect_timeout(Duration::from_secs(10))
+        .http2_keep_alive_interval(Duration::from_secs(15))
+        .keep_alive_timeout(Duration::from_secs(10))
+        .initial_stream_window_size(1024 * 1024)
+        .initial_connection_window_size(4 * 1024 * 1024);
 
     if server_address.starts_with("https://") {
         let tls = if let Ok(ca_path) = std::env::var("LIFELOG_TLS_CA_CERT_PATH") {
@@ -202,7 +206,18 @@ impl CollectorHandle {
 
             if needs_handshake {
                 let mut collector = collector_handle.collector.write().await;
-                if let Err(e) = collector.handshake(collector_handle.clone()).await {
+                let handshake_result = tokio::time::timeout(
+                    Duration::from_secs(30),
+                    collector.handshake(collector_handle.clone()),
+                )
+                .await;
+                let handshake_result = match handshake_result {
+                    Ok(r) => r,
+                    Err(_) => Err(LifelogError::Database(
+                        "Handshake timed out after 30s".to_string(),
+                    )),
+                };
+                if let Err(e) = handshake_result {
                     consecutive_failures = consecutive_failures.saturating_add(1);
                     let exp_delay =
                         BASE_DELAY_SECS.saturating_mul(1u64 << consecutive_failures.min(8));
