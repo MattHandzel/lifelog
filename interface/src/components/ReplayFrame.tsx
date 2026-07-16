@@ -65,9 +65,16 @@ export default function ReplayFrame({ step, screenshot, contextFrames, isLoading
 
   return (
     <div className="space-y-4">
-      <div className="relative rounded-lg border border-[#232B3D] bg-[#0F111A] overflow-hidden min-h-[280px]">
+      <div className="relative rounded-lg border border-[#232B3D] bg-[#0F111A] overflow-hidden">
         {screenshot ? (
-          <img src={screenshot.dataUrl} alt="Replay step screenshot" className="w-full h-auto block" />
+          <img
+            src={screenshot.dataUrl}
+            alt="Replay step screenshot"
+            // max-constraints only: percentage width/height resolve against
+            // an ancestor chain that WebKit mis-sizes to its 2^25 layout
+            // limit when the window maps before a real output configure.
+            style={{ maxWidth: 960, maxHeight: 480, display: 'block' }}
+          />
         ) : (
           <div className="flex flex-col items-center justify-center py-16 text-[#9CA3AF]">
             <Monitor className="w-12 h-12 mb-3" />

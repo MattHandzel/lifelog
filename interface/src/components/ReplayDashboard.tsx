@@ -305,8 +305,11 @@ export default function ReplayDashboard(): JSX.Element {
           </div>
         </div>
 
-        <div className="card lg:col-span-2">
-          <div className="p-6 space-y-4">
+        {/* min-w-0: without it this grid item sizes to max-content and the
+            2880px replay screenshot explodes the track to WebKit's 2^25
+            layout limit (observed clientWidth 33554432, height 0). */}
+        <div className="card lg:col-span-2 min-w-0">
+          <div className="p-6 space-y-4 min-w-0">
             <div className="flex items-center justify-between gap-4 flex-wrap">
               <div className="flex items-center gap-2">
                 <Monitor className="w-5 h-5 text-[#9CA3AF]" />
