@@ -3596,6 +3596,7 @@ dependencies = [
  "deadpool-postgres",
  "directories",
  "futures-core",
+ "futures-util",
  "http 1.4.0",
  "inquire",
  "lifelog-collector",

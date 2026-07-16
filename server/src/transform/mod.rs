@@ -58,6 +58,14 @@ pub trait TransformExecutor: Send + Sync {
         PrivacyLevel::Standard
     }
 
+    /// How many frames of one batch may run concurrently. Only raise this for
+    /// transforms whose execute() has no serial backend (e.g. tesseract
+    /// subprocesses); transforms calling a serial external service (STT, LLM)
+    /// must stay at 1.
+    fn max_concurrency(&self) -> usize {
+        1
+    }
+
     async fn execute(
         &self,
         http: &reqwest::Client,

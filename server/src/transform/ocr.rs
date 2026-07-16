@@ -54,6 +54,16 @@ impl TransformExecutor for OcrExecutor {
         self.privacy_level
     }
 
+    fn max_concurrency(&self) -> usize {
+        // Each execute() spawns its own tesseract subprocess, so batches can
+        // fan out safely. Tunable because tesseract itself uses ~2-4 threads.
+        std::env::var("LIFELOG_OCR_CONCURRENCY")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .filter(|&n| n >= 1)
+            .unwrap_or(12)
+    }
+
     fn matches_origin(&self, key_origin: &DataOrigin) -> bool {
         let src = self.inner.source();
         if src.modality_name != key_origin.modality_name {

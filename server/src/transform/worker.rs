@@ -3,6 +3,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
+use futures_util::StreamExt;
 use lifelog_core::{DataOrigin, DataOriginType, LifelogError, LifelogFrameKey, PrivacyTier};
 use tokio::sync::Mutex;
 use tokio::task::JoinSet;
@@ -381,78 +382,31 @@ impl PipelineWorker {
         transform: &Arc<dyn TransformExecutor>,
         keys: &[LifelogFrameKey],
     ) -> Option<DateTime<Utc>> {
+        // The watermark is only advanced by the caller after the whole batch
+        // finishes (to the max timestamp seen), so frames within a batch may
+        // complete out of order.
+        let concurrency = transform.max_concurrency().max(1);
+        // Build the futures eagerly (they don't run until polled) — storing a
+        // closure in the stream trips rustc's "FnOnce not general enough"
+        // HRTB bug when this future crosses a tokio::spawn.
+        let frame_futures: Vec<_> = keys
+            .iter()
+            .map(|key| self.process_one(transform, key))
+            .collect();
+        let results: Vec<(Option<DateTime<Utc>>, bool)> =
+            futures_util::stream::iter(frame_futures)
+                .buffer_unordered(concurrency)
+                .collect()
+                .await;
+
         let mut last_ts: Option<DateTime<Utc>> = None;
         let mut skip_count: u64 = 0;
-
-        for key in keys {
-            let data = match crate::frames::get_by_id(
-                &self.postgres_pool,
-                &self.cas,
-                uuid::Uuid::from_bytes(key.uuid.into_bytes()),
-            )
-            .await
-            {
-                Ok(d) => d,
-                Err(e) => {
-                    tracing::error!(uuid = %key.uuid, error = %e, "Failed to load data for transform; skipping frame");
-                    skip_count += 1;
-                    continue;
-                }
-            };
-
-            if !transform.matches_origin(&key.origin) {
-                continue;
+        for (ts, skipped) in results {
+            if let Some(t) = ts {
+                last_ts = Some(last_ts.map_or(t, |prev| prev.max(t)));
             }
-
-            let source_timestamps = extract_source_timestamps(&data);
-            if let Some(ref t) = source_timestamps.t_canonical {
-                let t_utc = DateTime::from_timestamp(t.seconds, t.nanos as u32).unwrap_or_default();
-                last_ts = Some(last_ts.map_or(t_utc, |prev| prev.max(t_utc)));
-            }
-
-            let output = match transform.execute(&self.http_client, &data, key).await {
-                Ok(o) => o,
-                Err(e) => {
-                    tracing::error!(
-                        uuid = %key.uuid,
-                        transform = %transform.id(),
-                        error = %e,
-                        "Transform execution failed; skipping frame"
-                    );
-                    skip_count += 1;
-                    continue;
-                }
-            };
-
-            let destination = transform.destination();
-
-            match write_transform_output(
-                &self.postgres_pool,
-                output,
-                &destination,
-                &source_timestamps,
-            )
-            .await
-            {
-                Ok(Some(ts)) => {
-                    last_ts = Some(last_ts.map_or(ts, |prev| prev.max(ts)));
-                    tracing::debug!(
-                        uuid = %key.uuid,
-                        transform = %transform.id(),
-                        "Transform output written"
-                    );
-                }
-                Ok(None) => {}
-                Err(e) => {
-                    tracing::error!(
-                        uuid = %key.uuid,
-                        transform = %transform.id(),
-                        error = %e,
-                        "Failed to write transform output; skipping frame"
-                    );
-                    skip_count += 1;
-                    continue;
-                }
+            if skipped {
+                skip_count += 1;
             }
         }
 
@@ -465,6 +419,78 @@ impl PipelineWorker {
         }
 
         last_ts
+    }
+
+    /// Process a single frame. Returns (timestamp contribution, skipped).
+    /// A failed frame still contributes its source timestamp once loaded, so
+    /// the watermark advances past it — same semantics as the old serial loop.
+    async fn process_one(
+        &self,
+        transform: &Arc<dyn TransformExecutor>,
+        key: &LifelogFrameKey,
+    ) -> (Option<DateTime<Utc>>, bool) {
+        let data = match crate::frames::get_by_id(
+            &self.postgres_pool,
+            &self.cas,
+            uuid::Uuid::from_bytes(key.uuid.into_bytes()),
+        )
+        .await
+        {
+            Ok(d) => d,
+            Err(e) => {
+                tracing::error!(uuid = %key.uuid, error = %e, "Failed to load data for transform; skipping frame");
+                return (None, true);
+            }
+        };
+
+        if !transform.matches_origin(&key.origin) {
+            return (None, false);
+        }
+
+        let source_timestamps = extract_source_timestamps(&data);
+        let mut last_ts: Option<DateTime<Utc>> = source_timestamps
+            .t_canonical
+            .as_ref()
+            .map(|t| DateTime::from_timestamp(t.seconds, t.nanos as u32).unwrap_or_default());
+
+        let output = match transform.execute(&self.http_client, &data, key).await {
+            Ok(o) => o,
+            Err(e) => {
+                tracing::error!(
+                    uuid = %key.uuid,
+                    transform = %transform.id(),
+                    error = %e,
+                    "Transform execution failed; skipping frame"
+                );
+                return (last_ts, true);
+            }
+        };
+
+        let destination = transform.destination();
+
+        match write_transform_output(&self.postgres_pool, output, &destination, &source_timestamps)
+            .await
+        {
+            Ok(Some(ts)) => {
+                last_ts = Some(last_ts.map_or(ts, |prev| prev.max(ts)));
+                tracing::debug!(
+                    uuid = %key.uuid,
+                    transform = %transform.id(),
+                    "Transform output written"
+                );
+                (last_ts, false)
+            }
+            Ok(None) => (last_ts, false),
+            Err(e) => {
+                tracing::error!(
+                    uuid = %key.uuid,
+                    transform = %transform.id(),
+                    error = %e,
+                    "Failed to write transform output; skipping frame"
+                );
+                (last_ts, true)
+            }
+        }
     }
 }
 

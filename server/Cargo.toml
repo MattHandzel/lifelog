@@ -40,6 +40,7 @@ data-modalities = { path = "../common/data-modalities" } # TODO: refactor, we sh
 toml = {workspace = true}
 once_cell = {workspace = true}
 futures-core = {workspace = true}
+futures-util = {workspace = true}
 strum = { version = "0.27.1", features = ["derive"] }
 sysinfo = { version = "0.35.0", features = ["network", "multithread", "disk"] }
 tokio-stream = {workspace = true}
