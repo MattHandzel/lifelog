@@ -989,8 +989,14 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
 
     let deploy_config = config::load_server_deploy_config();
     let tls_config = deploy_config.tls;
+    // Default h2 stream window is 64KiB; over a ~140ms WAN link that caps
+    // chunk uploads at ~0.5 MB/s and the collector WAL backlog never drains.
+    // Adaptive window sizes the receive windows from the measured BDP.
     let mut builder = TonicServer::builder()
         .accept_http1(true)
+        .initial_stream_window_size(4 * 1024 * 1024)
+        .initial_connection_window_size(16 * 1024 * 1024)
+        .http2_adaptive_window(true)
         .layer(tonic_web::GrpcWebLayer::new());
 
     if !tls_config.is_enabled() && !deploy_config.allow_plaintext {

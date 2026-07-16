@@ -188,7 +188,12 @@ impl DataSource for ScreenDataSource {
                     }
                 }
                 Err(e) => {
-                    tracing::error!(error = %e, "ScreenDataSource: Failed to capture screen data for WAL store");
+                    let display_off = matches!(&e, LifelogError::Io(io) if io.kind() == std::io::ErrorKind::WouldBlock);
+                    if display_off {
+                        tracing::debug!("ScreenDataSource: display off; skipping capture");
+                    } else {
+                        tracing::error!(error = %e, "ScreenDataSource: Failed to capture screen data for WAL store");
+                    }
                 }
             }
             sleep(Duration::from_secs_f64(self.config.interval)).await;
@@ -288,11 +293,25 @@ impl ScreenLogger {
         }
         #[cfg(not(target_os = "macos"))]
         {
+            let mut cmd = Command::new(&self.config.program);
+            match pick_capture_target().await {
+                CaptureTarget::Nothing => {
+                    return Err(LifelogError::Io(std::io::Error::new(
+                        std::io::ErrorKind::WouldBlock,
+                        "all outputs DPMS-off; nothing to capture",
+                    )));
+                }
+                // grim blocks until timeout if ANY output is DPMS-off, so
+                // when only some are on, capture the focused/on one instead
+                // of the whole space. (-o is grim-specific.)
+                CaptureTarget::Output(name) if self.config.program.ends_with("grim") => {
+                    cmd.arg("-o").arg(name);
+                }
+                CaptureTarget::Output(_) | CaptureTarget::WholeSpace => {}
+            }
             let status = tokio::time::timeout(
                 Duration::from_secs(10),
-                Command::new(&self.config.program)
-                    .arg(&out)
-                    .status(),
+                cmd.arg(&out).status(),
             )
             .await
             .map_err(|_| {
@@ -323,6 +342,54 @@ impl ScreenLogger {
         }
 
         Ok(image_data)
+    }
+}
+
+enum CaptureTarget {
+    /// All outputs on (or not a Hyprland session): capture the whole space.
+    WholeSpace,
+    /// Some outputs are DPMS-off: capture this powered-on output only.
+    Output(String),
+    /// Every output is DPMS-off: nothing to capture.
+    Nothing,
+}
+
+/// grim blocks until timeout when any output is DPMS-off, so ask Hyprland
+/// which outputs are powered before capturing. Non-Hyprland sessions
+/// (hyprctl missing/failing) fall back to whole-space capture.
+async fn pick_capture_target() -> CaptureTarget {
+    let Ok(out) = Command::new("hyprctl")
+        .args(["monitors", "-j"])
+        .output()
+        .await
+    else {
+        return CaptureTarget::WholeSpace;
+    };
+    if !out.status.success() {
+        return CaptureTarget::WholeSpace;
+    }
+    let Ok(serde_json::Value::Array(mons)) = serde_json::from_slice(&out.stdout) else {
+        return CaptureTarget::WholeSpace;
+    };
+    if mons.is_empty() {
+        return CaptureTarget::WholeSpace;
+    }
+    let dpms_on =
+        |m: &&serde_json::Value| m.get("dpmsStatus").and_then(|v| v.as_bool()) != Some(false);
+    if mons.iter().all(|m| dpms_on(&m)) {
+        return CaptureTarget::WholeSpace;
+    }
+    let focused_on = mons
+        .iter()
+        .filter(dpms_on)
+        .find(|m| m.get("focused").and_then(|v| v.as_bool()) == Some(true));
+    let any_on = mons.iter().find(dpms_on);
+    match focused_on
+        .or(any_on)
+        .and_then(|m| m.get("name").and_then(|v| v.as_str()))
+    {
+        Some(name) => CaptureTarget::Output(name.to_string()),
+        None => CaptureTarget::Nothing,
     }
 }
 

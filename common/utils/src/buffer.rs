@@ -17,8 +17,8 @@ const MAGIC: u32 = 0x4C4C4F47; // "LLOG" in ASCII
 const MAGIC_BYTES: [u8; 4] = MAGIC.to_le_bytes();
 const HEADER_SIZE: u64 = 8; // MAGIC (4) + LEN (4)
 const CHECKSUM_SIZE: u64 = 32; // SHA256
-// Upper bound on a single WAL entry's payload size, used to reject
-// implausible LEN values during corruption recovery.
+                               // Upper bound on a single WAL entry's payload size, used to reject
+                               // implausible LEN values during corruption recovery.
 const MAX_ENTRY_SIZE: u64 = 128 * 1024 * 1024;
 // Read window for scanning forward looking for the next valid frame.
 const SCAN_CHUNK_SIZE: usize = 4 * 1024 * 1024;
@@ -32,13 +32,20 @@ const SCAN_CHUNK_SIZE: usize = 4 * 1024 * 1024;
 #[derive(Debug)]
 pub struct DiskBuffer {
     directory: PathBuf,
+    /// Serializes append/peek/commit/compact. Without this, an `append`
+    /// racing a long `compact` writes to the old inode and is silently lost
+    /// when the compacted file is renamed over it.
+    lock: tokio::sync::Mutex<()>,
 }
 
 impl DiskBuffer {
     pub fn new(directory: impl AsRef<Path>) -> Result<Self, BufferError> {
         let dir = directory.as_ref().to_path_buf();
         std::fs::create_dir_all(&dir)?;
-        Ok(Self { directory: dir })
+        Ok(Self {
+            directory: dir,
+            lock: tokio::sync::Mutex::new(()),
+        })
     }
 
     fn log_path(&self) -> PathBuf {
@@ -51,6 +58,7 @@ impl DiskBuffer {
 
     /// Append raw bytes to the log.
     pub async fn append(&self, data: &[u8]) -> Result<(), BufferError> {
+        let _guard = self.lock.lock().await;
         let len = data.len() as u32;
 
         let mut hasher = Sha256::new();
@@ -119,6 +127,7 @@ impl DiskBuffer {
     /// Peek at the next chunk of raw items starting from the committed offset.
     /// Returns `(next_offset, items)`.
     pub async fn peek_chunk(&self, max_items: usize) -> Result<(u64, Vec<Vec<u8>>), BufferError> {
+        let _guard = self.lock.lock().await;
         let start_offset = self.get_committed_offset().await?;
         let mut current_offset = start_offset;
         let mut items = Vec::new();
@@ -266,6 +275,11 @@ impl DiskBuffer {
     /// Compact the WAL by removing already-committed data from the front.
     /// Call periodically to prevent unbounded WAL growth.
     pub async fn compact(&self) -> Result<(), BufferError> {
+        let _guard = self.lock.lock().await;
+        self.compact_locked().await
+    }
+
+    async fn compact_locked(&self) -> Result<(), BufferError> {
         let committed = self.get_committed_offset().await?;
         if committed == 0 {
             return Ok(());
@@ -330,13 +344,20 @@ impl DiskBuffer {
     }
 
     pub async fn commit_offset(&self, offset: u64) -> Result<(), BufferError> {
+        let _guard = self.lock.lock().await;
         self.write_cursor(offset).await?;
 
+        // Compaction rewrites the whole remaining file, so it must be
+        // amortized: only compact when the dead (committed) prefix is both
+        // large in absolute terms AND at least half the file. Otherwise a
+        // large backlog degenerates into a full-file rewrite per commit
+        // (observed 2026-07-15: 25 GB WAL rewritten after every 10-frame
+        // batch — ~100 MB/s of disk I/O and uploads stalled for minutes).
         const COMPACT_THRESHOLD: u64 = 100 * 1024 * 1024;
         let log = self.log_path();
         if let Ok(meta) = tokio::fs::metadata(&log).await {
-            if meta.len() > COMPACT_THRESHOLD && offset > 0 {
-                if let Err(e) = self.compact().await {
+            if offset > COMPACT_THRESHOLD && offset >= meta.len() / 2 {
+                if let Err(e) = self.compact_locked().await {
                     eprintln!("[WAL] Auto-compact failed: {e}");
                 }
             }
@@ -443,7 +464,10 @@ async fn scan_for_next_valid_entry(
             match finder.find(&buf[local..filled]) {
                 Some(idx) => {
                     let candidate = search_offset + (local + idx) as u64;
-                    if try_parse_entry_at(file, candidate, file_len).await?.is_some() {
+                    if try_parse_entry_at(file, candidate, file_len)
+                        .await?
+                        .is_some()
+                    {
                         return Ok(Some(candidate));
                     }
                     local += idx + 1;
@@ -544,10 +568,7 @@ mod tests {
         let buffer = DiskBuffer::new(tmp.path()).unwrap();
 
         buffer.append(b"before").await.unwrap();
-        let good_offset_before = tokio::fs::metadata(buffer.log_path())
-            .await
-            .unwrap()
-            .len();
+        let good_offset_before = tokio::fs::metadata(buffer.log_path()).await.unwrap().len();
 
         // Inject ~9 KB of zeros directly into the WAL — simulates a region
         // with no valid magic bytes.
@@ -572,10 +593,7 @@ mod tests {
             "expected reader to recover the post-corruption entry"
         );
         // `next` should be at EOF.
-        let file_len = tokio::fs::metadata(buffer.log_path())
-            .await
-            .unwrap()
-            .len();
+        let file_len = tokio::fs::metadata(buffer.log_path()).await.unwrap().len();
         assert_eq!(next, file_len);
         assert!(good_offset_before < file_len);
     }
