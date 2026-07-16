@@ -12,8 +12,29 @@
   "app": {
     "security": {
       "csp": {
-        "defaultSrc": ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
-        "connectSrc": ["'self'", "https://YOUR_SERVER_IP:7182", "http://localhost:9000", "ws://localhost:1420", "http://localhost:8080", "*"]
+        "defaultSrc": [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'"
+        ],
+        "connectSrc": [
+          "'self'",
+          "https://YOUR_SERVER_IP:7182",
+          "http://localhost:9000",
+          "ws://localhost:1420",
+          "http://localhost:8080",
+          "*"
+        ],
+        "imgSrc": [
+          "'self'",
+          "data:",
+          "blob:"
+        ],
+        "mediaSrc": [
+          "'self'",
+          "data:",
+          "blob:"
+        ]
       },
       "capabilities": []
     },
@@ -35,17 +56,30 @@
       "open": true
     },
     "fs": {
-      "scope": ["$DOCUMENT/*", "$HOME/*", "$APP/*", "$TEMP/*"]
+      "scope": [
+        "$DOCUMENT/*",
+        "$HOME/*",
+        "$APP/*",
+        "$TEMP/*"
+      ]
     },
     "http": {
       "all": true,
       "request": true,
-      "scope": ["https://YOUR_SERVER_IP:7182/*", "http://localhost:9000/*", "http://localhost:8080/*"]
+      "scope": [
+        "https://YOUR_SERVER_IP:7182/*",
+        "http://localhost:9000/*",
+        "http://localhost:8080/*"
+      ]
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["msi", "app", "dmg"],
+    "targets": [
+      "msi",
+      "app",
+      "dmg"
+    ],
     "category": "Productivity"
   }
 }

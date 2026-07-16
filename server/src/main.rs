@@ -996,7 +996,7 @@ async fn run_server() -> Result<(), Box<dyn std::error::Error>> {
         .accept_http1(true)
         .initial_stream_window_size(4 * 1024 * 1024)
         .initial_connection_window_size(16 * 1024 * 1024)
-        .http2_adaptive_window(true)
+        .http2_adaptive_window(Some(true))
         .layer(tonic_web::GrpcWebLayer::new());
 
     if !tls_config.is_enabled() && !deploy_config.allow_plaintext {
