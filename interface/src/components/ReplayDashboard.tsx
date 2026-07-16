@@ -70,21 +70,35 @@ export default function ReplayDashboard(): JSX.Element {
   }, []);
 
   useEffect(() => {
+    function seekToTimestamp(timestamp: number): void {
+      const ts = timestamp < 1e12 ? timestamp * 1000 : timestamp;
+      const fiveMinBefore = new Date(ts - 5 * 60 * 1000);
+      const fiveMinAfter = new Date(ts + 5 * 60 * 1000);
+      const toLocal = (d: Date): string => {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      };
+      setStartDate(toLocal(fiveMinBefore));
+      setEndDate(toLocal(fiveMinAfter));
+    }
     function handleReplayMoment(e: Event): void {
       const detail = (e as CustomEvent).detail;
       if (detail?.timestamp) {
-        const ts = detail.timestamp < 1e12 ? detail.timestamp * 1000 : detail.timestamp;
-        const fiveMinBefore = new Date(ts - 5 * 60 * 1000);
-        const fiveMinAfter = new Date(ts + 5 * 60 * 1000);
-        const toLocal = (d: Date): string => {
-          const pad = (n: number) => String(n).padStart(2, '0');
-          return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-        };
-        setStartDate(toLocal(fiveMinBefore));
-        setEndDate(toLocal(fiveMinAfter));
+        seekToTimestamp(detail.timestamp);
       }
     }
     window.addEventListener('replay-moment', handleReplayMoment);
+
+    // Consume a replay target fired before this dashboard mounted
+    // ("Replay this moment" from the standalone Search view). Not deleted:
+    // StrictMode runs this effect twice and the default-dates effect runs
+    // between them, so the value must survive re-reads; the age guard keeps
+    // later manual visits from re-seeking.
+    const pending = (window as any).__lifelogPendingReplayTs as { ts: number; at: number } | undefined;
+    if (pending && Date.now() - pending.at < 30_000) {
+      seekToTimestamp(pending.ts);
+    }
+
     return () => window.removeEventListener('replay-moment', handleReplayMoment);
   }, []);
 

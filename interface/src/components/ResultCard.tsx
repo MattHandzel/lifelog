@@ -438,6 +438,14 @@ export default function ResultCard({ result, frame }: ResultCardProps): JSX.Elem
               <button
                 type="button"
                 onClick={() => {
+                  // The dashboard (FeatureTabs/ReplayDashboard) may not be
+                  // mounted when this fires from the standalone Search view,
+                  // so stash pending state for them to consume on mount.
+                  (window as any).__lifelogPendingTab = 'replay';
+                  // Age-stamped instead of delete-on-consume: StrictMode
+                  // double-runs effects, and a deleted value makes the second
+                  // run a no-op while the default-dates effect wins.
+                  (window as any).__lifelogPendingReplayTs = { ts: effectiveResult.timestamp, at: Date.now() };
                   window.dispatchEvent(new CustomEvent('replay-moment', { detail: { timestamp: effectiveResult.timestamp } }));
                   window.dispatchEvent(new CustomEvent('switch-tab', { detail: { tab: 'replay' } }));
                 }}

@@ -429,7 +429,14 @@ async fn get_screenshots_data(
             for d in data {
                 if let Some(lifelog::lifelog_data::Payload::Screenframe(f)) = d.payload {
                     let base64_image = general_purpose::STANDARD.encode(&f.image_bytes);
-                    let data_url = format!("data:image/jpeg;base64,{}", base64_image);
+                    // WebKit does not content-sniff data: URLs — a PNG served
+                    // as image/jpeg renders as a broken 0-height image.
+                    let mime = if f.mime_type.is_empty() {
+                        "image/png"
+                    } else {
+                        f.mime_type.as_str()
+                    };
+                    let data_url = format!("data:{};base64,{}", mime, base64_image);
                     results.push(serde_json::json!({
                         "uuid": f.uuid,
                         "width": f.width,
@@ -823,7 +830,9 @@ async fn get_frame_data_async(
         })
         .collect();
     let mut all_data = Vec::new();
-    for chunk in grpc_keys.chunks(1) {
+    // 50 keys/request: small enough for the 128MB message cap even with
+    // full-res screen frames, large enough to not serialize 1000 round trips.
+    for chunk in grpc_keys.chunks(50) {
         let req = lifelog::GetDataRequest {
             keys: chunk.to_vec(),
         };
@@ -851,14 +860,25 @@ async fn get_frame_data_async(
                 if let Some(payload) = d.payload {
                     let frame = match payload {
                         lifelog::lifelog_data::Payload::Screenframe(f) => FrameDataWrapper {
-                            uuid: f.uuid,
+                            uuid: f.uuid.clone(),
                             modality: "Screen".into(),
                             timestamp: f.timestamp.map(|ts| ts.seconds),
-                            dataUrl: Some(encode_dataUrl(
+                            // One undecodable image must not fail the whole
+                            // batch — render the entry without a thumbnail.
+                            dataUrl: match encode_dataUrl(
                                 &f.image_bytes,
                                 &f.mime_type,
                                 thumbnail_mode,
-                            )?),
+                            ) {
+                                Ok(u) => Some(u),
+                                Err(e) => {
+                                    eprintln!(
+                                        "[get_frame_data] thumbnail encode failed uuid={} err={}",
+                                        f.uuid, e
+                                    );
+                                    None
+                                }
+                            },
                             width: Some(f.width),
                             height: Some(f.height),
                             mime_type: Some(f.mime_type),
@@ -1001,14 +1021,23 @@ async fn get_frame_data_async(
                             }
                         }
                         lifelog::lifelog_data::Payload::Cameraframe(f) => FrameDataWrapper {
-                            uuid: f.uuid,
+                            uuid: f.uuid.clone(),
                             modality: "Camera".into(),
                             timestamp: f.timestamp.map(|ts| ts.seconds),
-                            dataUrl: Some(encode_dataUrl(
+                            dataUrl: match encode_dataUrl(
                                 &f.image_bytes,
                                 &f.mime_type,
                                 thumbnail_mode,
-                            )?),
+                            ) {
+                                Ok(u) => Some(u),
+                                Err(e) => {
+                                    eprintln!(
+                                        "[get_frame_data] thumbnail encode failed uuid={} err={}",
+                                        f.uuid, e
+                                    );
+                                    None
+                                }
+                            },
                             width: Some(f.width),
                             height: Some(f.height),
                             mime_type: Some(f.mime_type),

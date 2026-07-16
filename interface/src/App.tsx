@@ -50,6 +50,16 @@ function AppLayout(): JSX.Element {
     setCurrentView(view);
   }
 
+  // "Replay this moment" (and any switch-tab) from the standalone Search
+  // view must land on the dashboard, where FeatureTabs is mounted.
+  useEffect(() => {
+    function handleSwitchTab() {
+      setCurrentView('dashboard');
+    }
+    window.addEventListener('switch-tab', handleSwitchTab);
+    return () => window.removeEventListener('switch-tab', handleSwitchTab);
+  }, []);
+
   // Ctrl+Shift+D/S/N/G for view switching
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {

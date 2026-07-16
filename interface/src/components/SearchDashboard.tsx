@@ -151,8 +151,11 @@ export default function SearchDashboard(): JSX.Element {
         uuid: entry.uuid,
         origin: entry.origin,
       }));
+      // Fetch previews only for the results actually shown — GetData returns
+      // full-resolution frames, so fetching all (1000+) matches transfers
+      // hundreds of MB and hangs the search for minutes.
       const frames = keys.length > 0
-        ? await invoke<FrameDataWrapper[]>('get_frame_data_thumbnails', { keys })
+        ? await invoke<FrameDataWrapper[]>('get_frame_data_thumbnails', { keys: keys.slice(0, 48) })
         : [];
       const frameByUuid = new Map(frames.map((frame) => [frame.uuid, frame]));
       const mapped = entries.map((entry) => buildSearchResult(entry, frameByUuid.get(entry.uuid), queryTerms));

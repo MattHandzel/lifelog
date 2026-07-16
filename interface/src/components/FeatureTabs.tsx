@@ -76,6 +76,19 @@ export default function FeatureTabs(): JSX.Element {
       }
     }
     window.addEventListener('switch-tab', handleSwitchTab);
+
+    // A switch-tab may have fired before this component mounted (e.g.
+    // "Replay this moment" from the standalone Search view).
+    const pending = (window as any).__lifelogPendingTab as ModuleType | undefined;
+    if (pending) {
+      delete (window as any).__lifelogPendingTab;
+      setActiveTab(pending);
+      const targetTab = tabs.find(function (t) { return t.id === pending; });
+      if (targetTab) {
+        setExpandedCategory(targetTab.category);
+      }
+    }
+
     return () => window.removeEventListener('switch-tab', handleSwitchTab);
   }, []);
 
