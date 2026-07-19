@@ -393,11 +393,10 @@ impl PipelineWorker {
             .iter()
             .map(|key| self.process_one(transform, key))
             .collect();
-        let results: Vec<(Option<DateTime<Utc>>, bool)> =
-            futures_util::stream::iter(frame_futures)
-                .buffer_unordered(concurrency)
-                .collect()
-                .await;
+        let results: Vec<(Option<DateTime<Utc>>, bool)> = futures_util::stream::iter(frame_futures)
+            .buffer_unordered(concurrency)
+            .collect()
+            .await;
 
         let mut last_ts: Option<DateTime<Utc>> = None;
         let mut skip_count: u64 = 0;
@@ -468,8 +467,13 @@ impl PipelineWorker {
 
         let destination = transform.destination();
 
-        match write_transform_output(&self.postgres_pool, output, &destination, &source_timestamps)
-            .await
+        match write_transform_output(
+            &self.postgres_pool,
+            output,
+            &destination,
+            &source_timestamps,
+        )
+        .await
         {
             Ok(Some(ts)) => {
                 last_ts = Some(last_ts.map_or(ts, |prev| prev.max(ts)));
