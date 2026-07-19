@@ -343,11 +343,94 @@ async fn get_component_config(
 
 #[tauri::command]
 async fn set_component_config(
-    _collector_id: String,
-    _component_type: String,
-    _config_json: String,
+    collector_id: String,
+    component_type: String,
+    config_value: Value,
 ) -> Result<(), String> {
-    Err("set_component_config is not yet implemented".to_string())
+    let component = component_type.to_lowercase();
+
+    // These live on the server config, not a collector, and the server has no
+    // GetConfig/SetConfig plumbing for them yet — fail honestly instead of
+    // reporting a confusing "unknown collector" for the 'server' collector id.
+    if matches!(
+        component.as_str(),
+        "retention" | "text_upload" | "transforms"
+    ) {
+        return Err(format!(
+            "Saving '{}' config from the UI is not supported yet",
+            component
+        ));
+    }
+
+    let server_addr = grpc_server_address();
+    let channel = create_grpc_channel(&server_addr)
+        .await
+        .map_err(|e| format!("Failed to connect to gRPC server: {}", e))?;
+    let mut client = create_client(channel);
+
+    // Read-modify-write: the server only accepts a whole SystemConfig, so fetch
+    // the current one, replace the single component, and send it back.
+    let mut config = match client.get_config(lifelog::GetSystemConfigRequest {}).await {
+        Ok(resp) => resp
+            .into_inner()
+            .config
+            .ok_or("Server returned no config")?,
+        Err(e) => return Err(format!("gRPC error fetching config: {}", e)),
+    };
+
+    if component == "server" {
+        config.server = Some(
+            serde_json::from_value(config_value)
+                .map_err(|e| format!("Invalid server config: {}", e))?,
+        );
+    } else {
+        let collector = config
+            .collectors
+            .get_mut(&collector_id)
+            .ok_or_else(|| format!("Unknown collector: {}", collector_id))?;
+
+        macro_rules! set_field {
+            ($field:ident, $ty:ty) => {{
+                collector.$field = Some(
+                    serde_json::from_value::<$ty>(config_value)
+                        .map_err(|e| format!("Invalid {} config: {}", component, e))?,
+                );
+            }};
+        }
+
+        match component.as_str() {
+            "browser" => set_field!(browser, lifelog::BrowserHistoryConfig),
+            "screen" => set_field!(screen, lifelog::ScreenConfig),
+            "camera" => set_field!(camera, lifelog::CameraConfig),
+            "microphone" => set_field!(microphone, lifelog::MicrophoneConfig),
+            "processes" => set_field!(processes, lifelog::ProcessesConfig),
+            "hyprland" => set_field!(hyprland, lifelog::HyprlandConfig),
+            "weather" => set_field!(weather, lifelog::WeatherConfig),
+            "wifi" => set_field!(wifi, lifelog::WifiConfig),
+            "clipboard" => set_field!(clipboard, lifelog::ClipboardConfig),
+            "shell_history" => set_field!(shell_history, lifelog::ShellHistoryConfig),
+            "mouse" => set_field!(mouse, lifelog::MouseConfig),
+            "window_activity" => set_field!(window_activity, lifelog::WindowActivityConfig),
+            "keyboard" => set_field!(keyboard, lifelog::KeyboardConfig),
+            _ => return Err(format!("Unknown component type: {}", component_type)),
+        }
+    }
+
+    match client
+        .set_config(lifelog::SetSystemConfigRequest {
+            config: Some(config),
+        })
+        .await
+    {
+        Ok(resp) => {
+            if resp.into_inner().success {
+                Ok(())
+            } else {
+                Err("Server rejected the configuration update".to_string())
+            }
+        }
+        Err(e) => Err(format!("gRPC error saving config: {}", e)),
+    }
 }
 
 #[tauri::command]
