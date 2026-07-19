@@ -414,6 +414,13 @@ async fn set_component_config(
             "keyboard" => set_field!(keyboard, lifelog::KeyboardConfig),
             _ => return Err(format!("Unknown component type: {}", component_type)),
         }
+
+        // We only changed a collector. Drop the server config from the payload so
+        // the server skips its server-config validation on SetConfig — the live
+        // server config can have an empty database_name (it uses database_endpoint
+        // instead), which validate() rejects, and that has nothing to do with the
+        // collector change the user actually made.
+        config.server = None;
     }
 
     match client
