@@ -156,6 +156,11 @@ impl<C: Send + Sync + Debug + Clone + 'static> RunningSourceTrait for RunningSou
         guard.get_buffered_source()
     }
 
+    async fn is_running(&self) -> bool {
+        let guard = self.instance.lock().await;
+        guard.is_running()
+    }
+
     async fn stop_source(&self) {
         {
             let mut guard = self.instance.lock().await;
@@ -168,6 +173,7 @@ impl<C: Send + Sync + Debug + Clone + 'static> RunningSourceTrait for RunningSou
 #[async_trait]
 trait RunningSourceTrait: Send + Sync + 'static + Debug {
     async fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>>;
+    async fn is_running(&self) -> bool;
     async fn stop_source(&self);
 }
 
@@ -783,186 +789,35 @@ impl Collector {
     }
 
     async fn _get_state(&self) -> CollectorState {
+        // Registry-driven state: every started source reports its running + buffer
+        // state in one loop, so a new modality cannot silently skip state reporting.
+        // (The old per-source downcast blocks covered only 7 of 13 sources.)
         let mut source_states = Vec::<String>::new();
         let mut buffer_states = Vec::<String>::new();
-        let mut total = 0;
+        let mut total = 0usize;
 
-        if let Some(running_src_trait) = self.sources.get("screen") {
-            if let Some(running_screen_src) =
-                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ScreenConfig>>()
-            {
-                let guard = running_screen_src.instance.lock().await;
-                if let Some(screen_ds) = guard.as_any().downcast_ref::<ScreenDataSource>() {
-                    let screen_buf_size = match screen_ds.buffer.get_uncommitted_size().await {
-                        Ok(s) => s as usize,
-                        Err(e) => {
-                            tracing::error!("Failed to get buffer size: {}", e);
-                            0
-                        }
-                    };
+        for (name, source) in &self.sources {
+            source_states.push(format!(
+                "{} source running state: {}",
+                name,
+                source.is_running().await
+            ));
 
-                    let fs = format!("Screen source buffer length: {}", screen_buf_size);
-                    buffer_states.push(fs.to_string());
-
-                    total += screen_buf_size;
-
-                    let is_running = screen_ds.is_running();
-                    let fs = format!("Screen souce running state: {}", is_running);
-                    source_states.push(fs.to_string());
-                }
+            if let Some(bs) = source.get_buffered_source().await {
+                let buf_size = match bs.uncommitted_size().await {
+                    Ok(s) => s as usize,
+                    Err(e) => {
+                        tracing::error!(source = %name, "Failed to get buffer size: {}", e);
+                        0
+                    }
+                };
+                buffer_states.push(format!("{} source buffer length: {}", name, buf_size));
+                total += buf_size;
             }
         }
-
-        if let Some(running_src_trait) = self.sources.get("processes") {
-            if let Some(running_proc_src) =
-                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ProcessesConfig>>()
-            {
-                let guard = running_proc_src.instance.lock().await;
-                if let Some(proc_ds) = guard.as_any().downcast_ref::<ProcessDataSource>() {
-                    let buf_size = match proc_ds.buffer.get_uncommitted_size().await {
-                        Ok(s) => s as usize,
-                        Err(e) => {
-                            tracing::error!("Failed to get buffer size: {}", e);
-                            0
-                        }
-                    };
-
-                    let fs = format!("Processes source buffer length: {}", buf_size);
-                    buffer_states.push(fs.to_string());
-                    total += buf_size;
-
-                    let is_running = proc_ds.is_running();
-                    let fs = format!("Processes source running state: {}", is_running);
-                    source_states.push(fs.to_string());
-                }
-            }
-        }
-
-        if let Some(running_src_trait) = self.sources.get("camera") {
-            if let Some(running_cam_src) =
-                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<CameraConfig>>()
-            {
-                let guard = running_cam_src.instance.lock().await;
-                if let Some(cam_ds) = guard.as_any().downcast_ref::<CameraDataSource>() {
-                    let buf_size = match cam_ds.buffer.get_uncommitted_size().await {
-                        Ok(s) => s as usize,
-                        Err(e) => {
-                            tracing::error!("Failed to get buffer size: {}", e);
-                            0
-                        }
-                    };
-
-                    let fs = format!("Camera source buffer length: {}", buf_size);
-                    buffer_states.push(fs.to_string());
-                    total += buf_size;
-
-                    let is_running = cam_ds.is_running();
-                    let fs = format!("Camera source running state: {}", is_running);
-                    source_states.push(fs.to_string());
-                }
-            }
-        }
-
-        if let Some(running_src_trait) = self.sources.get("clipboard") {
-            if let Some(running_clip_src) =
-                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ClipboardConfig>>()
-            {
-                let guard = running_clip_src.instance.lock().await;
-                if let Some(clip_ds) = guard.as_any().downcast_ref::<ClipboardDataSource>() {
-                    let buf_size = match clip_ds.buffer.get_uncommitted_size().await {
-                        Ok(s) => s as usize,
-                        Err(e) => {
-                            tracing::error!("Failed to get buffer size: {}", e);
-                            0
-                        }
-                    };
-                    buffer_states.push(format!("Clipboard source buffer length: {}", buf_size));
-                    total += buf_size;
-                    source_states.push(format!(
-                        "Clipboard source running state: {}",
-                        clip_ds.is_running()
-                    ));
-                }
-            }
-        }
-
-        if let Some(running_src_trait) = self.sources.get("shell_history") {
-            if let Some(running_shell_src) =
-                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<ShellHistoryConfig>>()
-            {
-                let guard = running_shell_src.instance.lock().await;
-                if let Some(shell_ds) = guard.as_any().downcast_ref::<ShellHistoryDataSource>() {
-                    let buf_size = match shell_ds.buffer.get_uncommitted_size().await {
-                        Ok(s) => s as usize,
-                        Err(e) => {
-                            tracing::error!("Failed to get buffer size: {}", e);
-                            0
-                        }
-                    };
-                    buffer_states.push(format!("Shell history source buffer length: {}", buf_size));
-                    total += buf_size;
-                    source_states.push(format!(
-                        "Shell history source running state: {}",
-                        shell_ds.is_running()
-                    ));
-                }
-            }
-        }
-
-        if let Some(running_src_trait) = self.sources.get("weather") {
-            if let Some(running_weather_src) =
-                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<WeatherConfig>>()
-            {
-                let guard = running_weather_src.instance.lock().await;
-                if let Some(weather_ds) = guard.as_any().downcast_ref::<WeatherDataSource>() {
-                    let buf_size = match weather_ds.buffer.get_uncommitted_size().await {
-                        Ok(s) => s as usize,
-                        Err(e) => {
-                            tracing::error!("Failed to get buffer size: {}", e);
-                            0
-                        }
-                    };
-
-                    let fs = format!("Weather source buffer length: {}", buf_size);
-                    buffer_states.push(fs.to_string());
-                    total += buf_size;
-
-                    let is_running = weather_ds.is_running();
-                    let fs = format!("Weather source running state: {}", is_running);
-                    source_states.push(fs.to_string());
-                }
-            }
-        }
-
-        if let Some(running_src_trait) = self.sources.get("hyprland") {
-            if let Some(running_hypr_src) =
-                (running_src_trait as &dyn Any).downcast_ref::<RunningSource<HyprlandConfig>>()
-            {
-                let guard = running_hypr_src.instance.lock().await;
-                if let Some(hypr_ds) = guard.as_any().downcast_ref::<HyprlandDataSource>() {
-                    let buf_size = match hypr_ds.buffer.get_uncommitted_size().await {
-                        Ok(s) => s as usize,
-                        Err(e) => {
-                            tracing::error!("Failed to get buffer size: {}", e);
-                            0
-                        }
-                    };
-
-                    let fs = format!("Hyprland source buffer length: {}", buf_size);
-                    buffer_states.push(fs.to_string());
-                    total += buf_size;
-
-                    let is_running = hypr_ds.is_running();
-                    let fs = format!("Hyprland source running state: {}", is_running);
-                    source_states.push(fs.to_string());
-                }
-            }
-        }
-
-        let dev_name = normalize_collector_id(&self.client_id);
 
         CollectorState {
-            name: dev_name,
+            name: normalize_collector_id(&self.client_id),
             timestamp: to_pb_ts(chrono::Utc::now()),
             source_states,
             source_buffer_sizes: buffer_states,

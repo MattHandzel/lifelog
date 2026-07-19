@@ -17,7 +17,7 @@ use std::io::Cursor;
 
 use std::sync::Arc;
 
-use crate::data_source::{BufferedSource, DataSource, DataSourceHandle};
+use crate::data_source::{BufferedSource, DataSource, DataSourceHandle, DiskBufferedSource};
 use lifelog_core::LifelogError;
 use utils::buffer::DiskBuffer;
 
@@ -188,10 +188,10 @@ impl DataSource for ScreenDataSource {
     }
 
     fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>> {
-        Some(Arc::new(ScreenBufferedSource {
-            stream_id: "screen".to_string(),
-            buffer: self.buffer.clone(),
-        }))
+        Some(Arc::new(DiskBufferedSource::new(
+            "screen",
+            self.buffer.clone(),
+        )))
     }
 
     fn start(&self) -> Result<DataSourceHandle, LifelogError> {
@@ -259,43 +259,6 @@ impl DataSource for ScreenDataSource {
         self.config.clone()
     }
 }
-
-pub struct ScreenBufferedSource {
-    stream_id: String,
-    buffer: Arc<DiskBuffer>,
-}
-
-#[async_trait]
-impl BufferedSource for ScreenBufferedSource {
-    fn stream_id(&self) -> String {
-        self.stream_id.clone()
-    }
-
-    async fn peek_upload_batch(
-        &self,
-        max_items: usize,
-    ) -> Result<(u64, Vec<Vec<u8>>), LifelogError> {
-        let (next_offset, raws) = self.buffer.peek_chunk(max_items).await.map_err(|e| {
-            LifelogError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e.to_string(),
-            ))
-        })?;
-
-        Ok((next_offset, raws))
-    }
-
-    async fn commit_upload(&self, offset: u64) -> Result<(), LifelogError> {
-        self.buffer.commit_offset(offset).await.map_err(|e| {
-            LifelogError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e.to_string(),
-            ))
-        })?;
-        Ok(())
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct ScreenLogger {
     config: ScreenConfig,
