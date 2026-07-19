@@ -3,7 +3,6 @@ pub mod browser_topic;
 pub mod dag;
 pub mod egress;
 pub mod llm;
-pub mod location;
 pub mod meeting;
 pub mod ocr;
 pub mod sound;
