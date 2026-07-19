@@ -22,11 +22,6 @@ use tokio::sync::Mutex;
 use tokio::task::AbortHandle;
 use tokio::time::Duration;
 
-use config::{
-    BrowserHistoryConfig, CameraConfig, ClipboardConfig, HyprlandConfig, KeyboardConfig,
-    MicrophoneConfig, MouseConfig, ProcessesConfig, ScreenConfig, ShellHistoryConfig,
-    WeatherConfig, WindowActivityConfig,
-};
 use lifelog_core::*;
 use lifelog_types::CollectorState;
 use tokio::sync::mpsc;
@@ -175,6 +170,23 @@ trait RunningSourceTrait: Send + Sync + 'static + Debug {
     async fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>>;
     async fn is_running(&self) -> bool;
     async fn stop_source(&self);
+}
+
+/// Construct + start a data source and box it behind `RunningSourceTrait`.
+/// The registry in `start()` calls this once per modality; upload and state
+/// reporting are handled generically over the trait, so this plus one registry
+/// line is the entire wiring a modality needs.
+fn start_source<D>(cfg: D::Config) -> Result<Box<dyn RunningSourceTrait>, LifelogError>
+where
+    D: DataSource + Send + Sync + 'static,
+    D::Config: Send + Sync + Debug + Clone + 'static,
+{
+    let source = D::new(cfg)?;
+    let handle = source.start()?;
+    Ok(Box::new(RunningSource::<D::Config> {
+        instance: Arc::new(Mutex::new(Box::new(source))),
+        handle,
+    }))
 }
 
 #[derive(Clone)]
@@ -419,347 +431,49 @@ impl Collector {
         self.stop_sources().await;
         let mut setup_errors: Vec<LifelogError> = Vec::new();
 
-        if config.screen.as_ref().map(|s| s.enabled).unwrap_or(false) {
-            let config_clone = Arc::clone(&self.config);
-            match ScreenDataSource::new(config_clone.screen.clone().unwrap()) {
-                Ok(screen_source) => match screen_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<ScreenConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(screen_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("screen".to_string(), Box::new(running_src));
+        // Source registry: one line per modality. Adding a modality = its module +
+        // one `reg!` line here; start/stop, upload, and state reporting are all
+        // handled generically, so there is no second edit-site to forget.
+        macro_rules! reg {
+            ($name:expr, $cfg:expr, $src:ty) => {
+                if let Some(cfg) = $cfg.as_ref() {
+                    if cfg.enabled {
+                        match start_source::<$src>(cfg.clone()) {
+                            Ok(running) => {
+                                self.sources.insert($name.to_string(), running);
+                            }
+                            Err(e) => {
+                                let err =
+                                    LifelogError::SourceSetup($name.to_string(), e.to_string());
+                                tracing::error!("{}", err);
+                                setup_errors.push(err);
+                            }
+                        }
                     }
-                    Err(e) => {
-                        let err = LifelogError::SourceSetup("screen".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("screen".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
                 }
-            }
+            };
         }
 
-        if config.browser.as_ref().map(|b| b.enabled).unwrap_or(false) {
-            let config_clone = Arc::clone(&self.config);
-            match BrowserHistorySource::new(config_clone.browser.clone().unwrap()) {
-                Ok(browser_source) => match browser_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<BrowserHistoryConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(browser_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("browser".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err = LifelogError::SourceSetup("browser".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("browser".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        if config
-            .processes
-            .as_ref()
-            .map(|p| p.enabled)
-            .unwrap_or(false)
-        {
-            let config_clone = Arc::clone(&self.config);
-            match ProcessDataSource::new(config_clone.processes.clone().unwrap()) {
-                Ok(process_source) => match process_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<ProcessesConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(process_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("processes".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err = LifelogError::SourceSetup("processes".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("processes".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        if config.camera.as_ref().map(|c| c.enabled).unwrap_or(false) {
-            let config_clone = Arc::clone(&self.config);
-            match CameraDataSource::new(config_clone.camera.clone().unwrap()) {
-                Ok(camera_source) => match camera_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<CameraConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(camera_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("camera".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err = LifelogError::SourceSetup("camera".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("camera".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        if config
-            .microphone
-            .as_ref()
-            .map(|m| m.enabled)
-            .unwrap_or(false)
-        {
-            let config_clone = Arc::clone(&self.config);
-            match MicrophoneDataSource::new(config_clone.microphone.clone().unwrap()) {
-                Ok(mic_source) => match mic_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<MicrophoneConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(mic_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("microphone".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err =
-                            LifelogError::SourceSetup("microphone".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("microphone".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        if config.keyboard.as_ref().map(|k| k.enabled).unwrap_or(false) {
-            let config_clone = Arc::clone(&self.config);
-            match KeystrokesDataSource::new(config_clone.keyboard.clone().unwrap()) {
-                Ok(keys_source) => match keys_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<KeyboardConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(keys_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("keystrokes".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err =
-                            LifelogError::SourceSetup("keystrokes".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("keystrokes".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        if config.weather.as_ref().map(|w| w.enabled).unwrap_or(false) {
-            let config_clone = Arc::clone(&self.config);
-            match WeatherDataSource::new(config_clone.weather.clone().unwrap()) {
-                Ok(weather_source) => match weather_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<WeatherConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(weather_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("weather".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err = LifelogError::SourceSetup("weather".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("weather".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        if config.hyprland.as_ref().map(|h| h.enabled).unwrap_or(false) {
-            let config_clone = Arc::clone(&self.config);
-            match HyprlandDataSource::new(config_clone.hyprland.clone().unwrap()) {
-                Ok(hyprland_source) => match hyprland_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<HyprlandConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(hyprland_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("hyprland".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err = LifelogError::SourceSetup("hyprland".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("hyprland".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        if config
-            .clipboard
-            .as_ref()
-            .map(|c| c.enabled)
-            .unwrap_or(false)
-        {
-            let config_clone = Arc::clone(&self.config);
-            match ClipboardDataSource::new(config_clone.clipboard.clone().unwrap()) {
-                Ok(clipboard_source) => match clipboard_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<ClipboardConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(clipboard_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("clipboard".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err = LifelogError::SourceSetup("clipboard".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("clipboard".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        if config
-            .shell_history
-            .as_ref()
-            .map(|s| s.enabled)
-            .unwrap_or(false)
-        {
-            let config_clone = Arc::clone(&self.config);
-            match ShellHistoryDataSource::new(config_clone.shell_history.clone().unwrap()) {
-                Ok(shell_source) => match shell_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<ShellHistoryConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(shell_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("shell_history".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err =
-                            LifelogError::SourceSetup("shell_history".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("shell_history".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        if config.mouse.as_ref().map(|m| m.enabled).unwrap_or(false) {
-            let config_clone = Arc::clone(&self.config);
-            match MouseDataSource::new(config_clone.mouse.clone().unwrap()) {
-                Ok(mouse_source) => match mouse_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<MouseConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(mouse_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("mouse".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err = LifelogError::SourceSetup("mouse".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err = LifelogError::SourceSetup("mouse".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
-
-        if config
-            .window_activity
-            .as_ref()
-            .map(|w| w.enabled)
-            .unwrap_or(false)
-        {
-            let config_clone = Arc::clone(&self.config);
-            match WindowActivityDataSource::new(config_clone.window_activity.clone().unwrap()) {
-                Ok(window_source) => match window_source.start() {
-                    Ok(ds_handle) => {
-                        let running_src = RunningSource::<WindowActivityConfig> {
-                            instance: Arc::new(Mutex::new(Box::new(window_source))),
-                            handle: ds_handle,
-                        };
-                        self.sources
-                            .insert("window_activity".to_string(), Box::new(running_src));
-                    }
-                    Err(e) => {
-                        let err =
-                            LifelogError::SourceSetup("window_activity".to_string(), e.to_string());
-                        tracing::error!("{}", err);
-                        setup_errors.push(err);
-                    }
-                },
-                Err(e) => {
-                    let err =
-                        LifelogError::SourceSetup("window_activity".to_string(), e.to_string());
-                    tracing::error!("{}", err);
-                    setup_errors.push(err);
-                }
-            }
-        }
+        reg!("screen", config.screen, ScreenDataSource);
+        reg!("browser", config.browser, BrowserHistorySource);
+        reg!("processes", config.processes, ProcessDataSource);
+        reg!("camera", config.camera, CameraDataSource);
+        reg!("microphone", config.microphone, MicrophoneDataSource);
+        reg!("keystrokes", config.keyboard, KeystrokesDataSource);
+        reg!("weather", config.weather, WeatherDataSource);
+        reg!("hyprland", config.hyprland, HyprlandDataSource);
+        reg!("clipboard", config.clipboard, ClipboardDataSource);
+        reg!(
+            "shell_history",
+            config.shell_history,
+            ShellHistoryDataSource
+        );
+        reg!("mouse", config.mouse, MouseDataSource);
+        reg!(
+            "window_activity",
+            config.window_activity,
+            WindowActivityDataSource
+        );
 
         tracing::info!(active_sources = ?self.sources.keys(), "Sources started");
 
@@ -904,5 +618,75 @@ impl Collector {
         self.stop().await;
         tokio::time::sleep(Duration::from_secs(1)).await;
         self.start().await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct MockSource {
+        running: bool,
+    }
+
+    #[async_trait]
+    impl RunningSourceTrait for MockSource {
+        async fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>> {
+            None
+        }
+        async fn is_running(&self) -> bool {
+            self.running
+        }
+        async fn stop_source(&self) {}
+    }
+
+    fn test_collector() -> Collector {
+        let (tx, _rx) = mpsc::channel(1);
+        Collector::new(
+            Arc::new(config::CollectorConfig::default()),
+            "https://example.invalid".to_string(),
+            "test-collector".to_string(),
+            tx,
+        )
+    }
+
+    /// The registry-driven state loop must emit a running-state entry for EVERY
+    /// registered source. This is the structural guarantee that replaced the old
+    /// per-source downcast blocks (which silently skipped 6 of 13 sources).
+    #[tokio::test]
+    async fn every_registered_source_reports_state() {
+        let mut collector = test_collector();
+        let names = [
+            "screen",
+            "browser",
+            "processes",
+            "microphone",
+            "mouse",
+            "window_activity",
+        ];
+        for name in names {
+            collector
+                .sources
+                .insert(name.to_string(), Box::new(MockSource { running: true }));
+        }
+
+        let state = collector._get_state().await;
+
+        assert_eq!(
+            state.source_states.len(),
+            names.len(),
+            "one running-state line per registered source"
+        );
+        for name in names {
+            assert!(
+                state
+                    .source_states
+                    .iter()
+                    .any(|s| s.starts_with(&format!("{} source running state", name))),
+                "registered source `{}` missing from state report",
+                name
+            );
+        }
     }
 }
