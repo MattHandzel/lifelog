@@ -124,15 +124,18 @@ pub async fn run_migrations(pool: &PostgresPool) -> Result<(), LifelogError> {
 }
 
 /// Verifies the DB's applied-migration set is consistent with this binary's
-/// embedded set, returning an Err that names the offending version(s).
+/// embedded set. `run_migrations` calls this after applying.
 ///
-/// `run_migrations` calls this after applying. The apply loop already guarantees
-/// every embedded migration is recorded, so the *reachable* drift this catches is
-/// the reverse direction: `schema_migrations` holds a version this binary does not
-/// know about — i.e. the DB was migrated by a **newer** build and this older
-/// binary must not run against it (silent code/schema mismatch, e.g. a bad
-/// rollback). The embedded-not-recorded branch is kept as defense-in-depth against
-/// a future runner regression.
+/// Two directions, handled differently on purpose:
+///
+/// - **DB ahead of this binary** — `schema_migrations` holds a version this build
+///   doesn't know, i.e. the DB was migrated by a *newer* build. This is expected
+///   during an emergency binary rollback, so we **warn loudly and continue** rather
+///   than refuse to boot (a refusal would force fix-forward on every incident). The
+///   running code may not understand newer schema changes, hence the error-level
+///   noise. (A fail-closed config flag could be added later if wanted.)
+/// - **Embedded migration not recorded** — the apply loop guarantees this can't
+///   happen, so a violation means the runner itself is broken. **Fail closed** (Err).
 pub async fn verify_migration_consistency(
     client: &deadpool_postgres::Client,
 ) -> Result<(), LifelogError> {
@@ -145,7 +148,7 @@ pub async fn verify_migration_consistency(
     let embedded: std::collections::HashSet<&str> =
         EMBEDDED_MIGRATIONS.iter().map(|m| m.version).collect();
 
-    // Reachable: DB is ahead of this binary (migrated by a newer build).
+    // DB ahead of this binary (migrated by a newer build): warn loudly, keep going.
     let mut unknown: Vec<&str> = recorded
         .iter()
         .map(String::as_str)
@@ -153,16 +156,22 @@ pub async fn verify_migration_consistency(
         .collect();
     if !unknown.is_empty() {
         unknown.sort_unstable();
-        return Err(LifelogError::Database(format!(
-            "database has {} applied migration(s) unknown to this server build \
-             (DB migrated by a newer build?): {}",
+        tracing::error!(
+            "DATABASE IS AHEAD OF THIS SERVER BUILD: {} applied migration(s) are unknown to this \
+             binary: {}. This binary is running BEHIND the schema — likely a rollback to an older \
+             build. Continuing, but the running code may not understand newer schema changes.",
             unknown.len(),
             unknown.join(", ")
-        )));
+        );
+        tracing::error!(
+            "SCHEMA DRIFT: server is running BEHIND the database schema by {} migration(s); \
+             confirm this is an intentional rollback.",
+            unknown.len()
+        );
     }
 
-    // Defense-in-depth: the apply loop guarantees this holds; a violation means
-    // the runner regressed.
+    // Embedded migration not recorded: the apply loop guarantees this can't happen,
+    // so a violation means the runner is broken. Fail closed.
     let mut missing: Vec<&str> = EMBEDDED_MIGRATIONS
         .iter()
         .map(|m| m.version)
@@ -171,7 +180,7 @@ pub async fn verify_migration_consistency(
     if !missing.is_empty() {
         missing.sort_unstable();
         return Err(LifelogError::Database(format!(
-            "migration drift: {} embedded migration(s) not recorded: {}",
+            "migration drift: {} embedded migration(s) not recorded (the runner is broken): {}",
             missing.len(),
             missing.join(", ")
         )));
