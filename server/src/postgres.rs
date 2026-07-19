@@ -116,34 +116,62 @@ pub async fn run_migrations(pool: &PostgresPool) -> Result<(), LifelogError> {
         })?;
     }
 
-    // Startup assertion: every embedded migration must now be recorded, or the
-    // server refuses to serve on a drifted DB (the MAT-1500 class).
-    verify_all_migrations_recorded(&client).await?;
+    // Startup consistency check: the DB's applied-migration set must match what
+    // this binary knows about, or refuse to serve on a drifted DB (MAT-1500 class).
+    verify_migration_consistency(&client).await?;
 
     Ok(())
 }
 
-/// Verifies every embedded migration is recorded in `schema_migrations`, returning
-/// an Err that names the missing migration(s). `run_migrations` calls this as a
-/// startup backstop against a runner regression silently leaving the schema
-/// partially migrated; it is also the directly-testable seam for that failure path.
-pub async fn verify_all_migrations_recorded(
+/// Verifies the DB's applied-migration set is consistent with this binary's
+/// embedded set, returning an Err that names the offending version(s).
+///
+/// `run_migrations` calls this after applying. The apply loop already guarantees
+/// every embedded migration is recorded, so the *reachable* drift this catches is
+/// the reverse direction: `schema_migrations` holds a version this binary does not
+/// know about — i.e. the DB was migrated by a **newer** build and this older
+/// binary must not run against it (silent code/schema mismatch, e.g. a bad
+/// rollback). The embedded-not-recorded branch is kept as defense-in-depth against
+/// a future runner regression.
+pub async fn verify_migration_consistency(
     client: &deadpool_postgres::Client,
 ) -> Result<(), LifelogError> {
-    let recorded = client
+    let rows = client
         .query("SELECT version FROM schema_migrations", &[])
         .await
         .map_err(|e| LifelogError::Database(format!("schema_migrations read-back failed: {e}")))?;
     let recorded: std::collections::HashSet<String> =
-        recorded.iter().map(|row| row.get::<_, String>(0)).collect();
-    let missing: Vec<&str> = EMBEDDED_MIGRATIONS
+        rows.iter().map(|row| row.get::<_, String>(0)).collect();
+    let embedded: std::collections::HashSet<&str> =
+        EMBEDDED_MIGRATIONS.iter().map(|m| m.version).collect();
+
+    // Reachable: DB is ahead of this binary (migrated by a newer build).
+    let mut unknown: Vec<&str> = recorded
+        .iter()
+        .map(String::as_str)
+        .filter(|v| !embedded.contains(v))
+        .collect();
+    if !unknown.is_empty() {
+        unknown.sort_unstable();
+        return Err(LifelogError::Database(format!(
+            "database has {} applied migration(s) unknown to this server build \
+             (DB migrated by a newer build?): {}",
+            unknown.len(),
+            unknown.join(", ")
+        )));
+    }
+
+    // Defense-in-depth: the apply loop guarantees this holds; a violation means
+    // the runner regressed.
+    let mut missing: Vec<&str> = EMBEDDED_MIGRATIONS
         .iter()
         .map(|m| m.version)
         .filter(|v| !recorded.contains(*v))
         .collect();
     if !missing.is_empty() {
+        missing.sort_unstable();
         return Err(LifelogError::Database(format!(
-            "migration drift after apply: {} embedded migration(s) not recorded: {}",
+            "migration drift: {} embedded migration(s) not recorded: {}",
             missing.len(),
             missing.join(", ")
         )));
