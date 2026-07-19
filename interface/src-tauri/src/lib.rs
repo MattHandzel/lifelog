@@ -10,8 +10,6 @@ pub mod embed {
 // }
 
 pub mod prelude;
-pub mod setup;
-pub mod storage;
 
 pub mod google {
     pub mod protobuf {
@@ -28,7 +26,6 @@ pub mod lifelog {
 // Re-export commonly used items
 pub use config::*;
 // pub use modules::*;  // No longer using direct module access
-pub use setup::*;
 pub use utils::*;
 
 // Define utility functions for loading configs
