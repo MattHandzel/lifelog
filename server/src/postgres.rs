@@ -116,9 +116,20 @@ pub async fn run_migrations(pool: &PostgresPool) -> Result<(), LifelogError> {
         })?;
     }
 
-    // Startup assertion: every embedded migration must now be recorded. Guards
-    // against a runner regression silently leaving the schema partially migrated
-    // (the MAT-1500 class), so the server refuses to serve on a drifted DB.
+    // Startup assertion: every embedded migration must now be recorded, or the
+    // server refuses to serve on a drifted DB (the MAT-1500 class).
+    verify_all_migrations_recorded(&client).await?;
+
+    Ok(())
+}
+
+/// Verifies every embedded migration is recorded in `schema_migrations`, returning
+/// an Err that names the missing migration(s). `run_migrations` calls this as a
+/// startup backstop against a runner regression silently leaving the schema
+/// partially migrated; it is also the directly-testable seam for that failure path.
+pub async fn verify_all_migrations_recorded(
+    client: &deadpool_postgres::Client,
+) -> Result<(), LifelogError> {
     let recorded = client
         .query("SELECT version FROM schema_migrations", &[])
         .await
@@ -137,7 +148,6 @@ pub async fn run_migrations(pool: &PostgresPool) -> Result<(), LifelogError> {
             missing.join(", ")
         )));
     }
-
     Ok(())
 }
 
