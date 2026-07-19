@@ -4,6 +4,7 @@ use chrono::Utc;
 use config::BrowserHistoryConfig;
 use lifelog_core::LifelogError;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::{fs, io::Read};
 
 use data_modalities::browser::BrowserFrame;
@@ -12,18 +13,21 @@ use lifelog_types::to_pb_ts;
 use rusqlite::Connection;
 use tokio::time::{sleep, Duration};
 
-static RUNNING: AtomicBool = AtomicBool::new(false);
 // Chrome uses windows epoch, not unix
 const WINDOWS_EPOCH_MICROS: i64 = 11644473600000000;
 
 #[derive(Debug, Clone)]
 pub struct BrowserHistorySource {
     config: BrowserHistoryConfig,
+    running: Arc<AtomicBool>,
 }
 
 impl BrowserHistorySource {
     pub fn new(config: BrowserHistoryConfig) -> Result<Self, LifelogError> {
-        Ok(BrowserHistorySource { config })
+        Ok(BrowserHistorySource {
+            config,
+            running: Arc::new(AtomicBool::new(false)),
+        })
     }
 
     pub fn get_data(&mut self) -> Result<Vec<BrowserFrame>, LifelogError> {
@@ -127,13 +131,13 @@ impl DataSource for BrowserHistorySource {
     }
 
     fn start(&self) -> Result<DataSourceHandle, LifelogError> {
-        if RUNNING.load(Ordering::SeqCst) {
+        if self.running.load(Ordering::SeqCst) {
             tracing::warn!("BrowserHistorySource: Start called but task is already running.");
             return Err(LifelogError::AlreadyRunning);
         }
 
         tracing::info!("BrowserHistorySource: Starting data source task to store in memory");
-        RUNNING.store(true, Ordering::SeqCst);
+        self.running.store(true, Ordering::SeqCst);
 
         let source_clone = self.clone();
 
@@ -148,13 +152,13 @@ impl DataSource for BrowserHistorySource {
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {
-        RUNNING.store(false, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
         // FIXME, actually implmenet stop handles
         Ok(())
     }
 
     async fn run(&self) -> Result<(), LifelogError> {
-        while RUNNING.load(Ordering::SeqCst) {
+        while self.running.load(Ordering::SeqCst) {
             sleep(Duration::from_secs_f64(5.0)).await; //fixme
         }
         tracing::info!("BrowserHistorySource: In-memory run loop finished");
@@ -162,7 +166,7 @@ impl DataSource for BrowserHistorySource {
     }
 
     fn is_running(&self) -> bool {
-        RUNNING.load(Ordering::SeqCst)
+        self.running.load(Ordering::SeqCst)
     }
 
     fn get_config(&self) -> Self::Config {

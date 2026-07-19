@@ -1,4 +1,4 @@
-use crate::data_source::{BufferedSource, DataSource, DataSourceHandle, DiskBufferedSource};
+use crate::modules::polling_source::Capture;
 use async_trait::async_trait;
 use config::WeatherConfig;
 use lifelog_core::{LifelogError, Utc, Uuid};
@@ -7,155 +7,104 @@ use prost::Message;
 use reqwest::Client;
 use serde_json::Value;
 use std::env;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use tokio::time::{sleep, Duration};
-use utils::buffer::DiskBuffer;
-
-static RUNNING: AtomicBool = AtomicBool::new(false);
-
-#[derive(Debug, Clone)]
-pub struct WeatherDataSource {
-    config: WeatherConfig,
-    pub buffer: Arc<DiskBuffer>,
-}
-
-impl WeatherDataSource {
-    pub fn new(config: WeatherConfig) -> Result<Self, LifelogError> {
-        let buffer_path = std::path::Path::new(&config.output_dir).join("buffer");
-        let buffer = DiskBuffer::new(&buffer_path).map_err(|e| {
-            LifelogError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e.to_string(),
-            ))
-        })?;
-
-        Ok(WeatherDataSource {
-            config,
-            buffer: Arc::new(buffer),
-        })
-    }
-}
+use tokio::time::Duration;
 
 // Function to get API key from environment if available
 fn get_weather_api_key(config_api_key: &str) -> String {
     env::var("WEATHER_API_KEY").unwrap_or_else(|_| config_api_key.to_string())
 }
 
+pub struct WeatherCapture {
+    config: WeatherConfig,
+    client: Client,
+    url: String,
+    api_key: String,
+}
+
 #[async_trait]
-impl DataSource for WeatherDataSource {
+impl Capture for WeatherCapture {
     type Config = WeatherConfig;
 
-    fn new(config: WeatherConfig) -> Result<Self, LifelogError> {
-        WeatherDataSource::new(config)
+    fn from_config(config: WeatherConfig) -> Result<Self, LifelogError> {
+        let api_key = get_weather_api_key(&config.api_key);
+        let client = Client::new();
+        let url = format!(
+            "https://api.openweathermap.org/data/2.5/weather?lat={}&lon={}&appid={}&units=metric",
+            config.latitude, config.longitude, api_key
+        );
+        Ok(Self {
+            config,
+            client,
+            url,
+            api_key,
+        })
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    fn output_dir(&self) -> &str {
+        &self.config.output_dir
     }
 
-    fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>> {
-        Some(Arc::new(DiskBufferedSource::new(
-            "weather",
-            self.buffer.clone(),
-        )))
+    fn stream_id(&self) -> &str {
+        "weather"
     }
 
-    fn start(&self) -> Result<DataSourceHandle, LifelogError> {
-        if RUNNING.load(Ordering::SeqCst) {
-            return Err(LifelogError::AlreadyRunning);
-        }
-
-        tracing::info!("WeatherDataSource: Starting data source task");
-        RUNNING.store(true, Ordering::SeqCst);
-
-        let source_clone = self.clone();
-
-        let join_handle = tokio::spawn(async move {
-            let task_result = source_clone.run().await;
-            tracing::info!(result = ?task_result, "WeatherDataSource background task finished");
-            task_result
-        });
-
-        Ok(DataSourceHandle { join: join_handle })
+    fn interval(&self) -> Duration {
+        Duration::from_secs_f64(self.config.interval)
     }
 
-    async fn stop(&mut self) -> Result<(), LifelogError> {
-        RUNNING.store(false, Ordering::SeqCst);
-        Ok(())
-    }
-
-    async fn run(&self) -> Result<(), LifelogError> {
-        let api_key = get_weather_api_key(&self.config.api_key);
-
-        if api_key.is_empty() {
+    async fn init(&self) -> Result<(), LifelogError> {
+        if self.api_key.is_empty() {
             tracing::error!("Weather API key is not set!");
             return Err(LifelogError::SourceSetup(
                 "weather".to_string(),
                 "API key is missing".to_string(),
             ));
         }
-
-        let client = Client::new();
-        let url = format!(
-            "https://api.openweathermap.org/data/2.5/weather?lat={}&lon={}&appid={}&units=metric",
-            self.config.latitude, self.config.longitude, api_key
-        );
-
-        while RUNNING.load(Ordering::SeqCst) {
-            match client.get(&url).send().await {
-                Ok(resp) => {
-                    if let Ok(json) = resp.json::<Value>().await {
-                        if let (Some(main), Some(weather_arr)) =
-                            (json["main"].as_object(), json["weather"].as_array())
-                        {
-                            if let Some(weather) = weather_arr.first().and_then(|w| w.as_object()) {
-                                let timestamp = to_pb_ts(Utc::now());
-                                let frame = WeatherFrame {
-                                    uuid: Uuid::new_v4().to_string(),
-                                    timestamp,
-                                    temperature: main["temp"].as_f64().unwrap_or(0.0),
-                                    humidity: main["humidity"].as_f64().unwrap_or(0.0),
-                                    pressure: main["pressure"].as_f64().unwrap_or(0.0),
-                                    conditions: weather["main"]
-                                        .as_str()
-                                        .unwrap_or("Unknown")
-                                        .to_string(),
-                                    t_device: timestamp,
-                                    t_canonical: timestamp,
-                                    t_end: timestamp,
-                                    ..Default::default()
-                                };
-
-                                let mut buf = Vec::new();
-                                if let Err(e) = frame.encode(&mut buf) {
-                                    tracing::error!("Failed to encode WeatherFrame: {}", e);
-                                } else if let Err(e) = self.buffer.append(&buf).await {
-                                    tracing::error!(
-                                        "Failed to append WeatherFrame to buffer: {}",
-                                        e
-                                    );
-                                } else {
-                                    tracing::debug!("Stored weather frame in WAL");
-                                }
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Weather API request failed: {}", e);
-                }
-            }
-            sleep(Duration::from_secs_f64(self.config.interval)).await;
-        }
         Ok(())
     }
 
-    fn is_running(&self) -> bool {
-        RUNNING.load(Ordering::SeqCst)
-    }
+    async fn capture(&self) -> Result<Vec<Vec<u8>>, LifelogError> {
+        let resp = self.client.get(&self.url).send().await.map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Weather API request failed: {e}"),
+            ))
+        })?;
 
-    fn get_config(&self) -> Self::Config {
-        self.config.clone()
+        let json: Value = match resp.json::<Value>().await {
+            Ok(j) => j,
+            Err(_) => return Ok(vec![]),
+        };
+
+        if let (Some(main), Some(weather_arr)) =
+            (json["main"].as_object(), json["weather"].as_array())
+        {
+            if let Some(weather) = weather_arr.first().and_then(|w| w.as_object()) {
+                let timestamp = to_pb_ts(Utc::now());
+                let frame = WeatherFrame {
+                    uuid: Uuid::new_v4().to_string(),
+                    timestamp,
+                    temperature: main["temp"].as_f64().unwrap_or(0.0),
+                    humidity: main["humidity"].as_f64().unwrap_or(0.0),
+                    pressure: main["pressure"].as_f64().unwrap_or(0.0),
+                    conditions: weather["main"].as_str().unwrap_or("Unknown").to_string(),
+                    t_device: timestamp,
+                    t_canonical: timestamp,
+                    t_end: timestamp,
+                    ..Default::default()
+                };
+
+                let mut buf = Vec::new();
+                frame.encode(&mut buf).map_err(|e| {
+                    LifelogError::Io(std::io::Error::new(
+                        std::io::ErrorKind::Other,
+                        format!("failed to encode WeatherFrame: {e}"),
+                    ))
+                })?;
+                return Ok(vec![buf]);
+            }
+        }
+
+        Ok(vec![])
     }
 }

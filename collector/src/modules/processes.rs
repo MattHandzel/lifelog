@@ -12,12 +12,11 @@ use tokio::time::{sleep, Duration};
 use users::{Users, UsersCache};
 use utils::buffer::DiskBuffer;
 
-static RUNNING: AtomicBool = AtomicBool::new(false);
-
 #[derive(Debug, Clone)]
 pub struct ProcessDataSource {
     config: ProcessesConfig,
     pub buffer: Arc<DiskBuffer>,
+    running: Arc<AtomicBool>,
 }
 
 impl ProcessDataSource {
@@ -33,6 +32,7 @@ impl ProcessDataSource {
         Ok(ProcessDataSource {
             config,
             buffer: Arc::new(buffer),
+            running: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -187,12 +187,12 @@ impl DataSource for ProcessDataSource {
     }
 
     fn start(&self) -> Result<DataSourceHandle, LifelogError> {
-        if RUNNING.load(Ordering::SeqCst) {
+        if self.running.load(Ordering::SeqCst) {
             return Err(LifelogError::AlreadyRunning);
         }
 
         tracing::info!("ProcessDataSource: Starting data source task");
-        RUNNING.store(true, Ordering::SeqCst);
+        self.running.store(true, Ordering::SeqCst);
 
         let source_clone = self.clone();
 
@@ -206,7 +206,7 @@ impl DataSource for ProcessDataSource {
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {
-        RUNNING.store(false, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
         Ok(())
     }
 
@@ -216,7 +216,7 @@ impl DataSource for ProcessDataSource {
         #[cfg(not(target_os = "linux"))]
         let users_cache = ();
 
-        while RUNNING.load(Ordering::SeqCst) {
+        while self.running.load(Ordering::SeqCst) {
             match Self::get_process_info(&users_cache) {
                 Ok(processes) => {
                     if !processes.is_empty() {
@@ -251,7 +251,7 @@ impl DataSource for ProcessDataSource {
     }
 
     fn is_running(&self) -> bool {
-        RUNNING.load(Ordering::SeqCst)
+        self.running.load(Ordering::SeqCst)
     }
 
     fn get_config(&self) -> Self::Config {

@@ -1,4 +1,4 @@
-use crate::data_source::{BufferedSource, DataSource, DataSourceHandle, DiskBufferedSource};
+use crate::modules::polling_source::Capture;
 use async_trait::async_trait;
 use config::HyprlandConfig;
 use hyprland::data::{Clients, CursorPosition, Devices, Monitors, Workspace, Workspaces};
@@ -9,36 +9,14 @@ use lifelog_types::{
     to_pb_ts, HyprClient, HyprCursor, HyprDevice, HyprMonitor, HyprWorkspace, HyprlandFrame,
 };
 use prost::Message;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use tokio::time::{sleep, Duration};
-use utils::buffer::DiskBuffer;
+use tokio::time::Duration;
 
-static RUNNING: AtomicBool = AtomicBool::new(false);
-
-#[derive(Debug, Clone)]
-pub struct HyprlandDataSource {
+pub struct HyprlandCapture {
     config: HyprlandConfig,
-    pub buffer: Arc<DiskBuffer>,
 }
 
-impl HyprlandDataSource {
-    pub fn new(config: HyprlandConfig) -> Result<Self, LifelogError> {
-        let buffer_path = std::path::Path::new(&config.output_dir).join("buffer");
-        let buffer = DiskBuffer::new(&buffer_path).map_err(|e| {
-            LifelogError::Io(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                e.to_string(),
-            ))
-        })?;
-
-        Ok(HyprlandDataSource {
-            config,
-            buffer: Arc::new(buffer),
-        })
-    }
-
-    async fn capture_frame(&self) -> Result<HyprlandFrame, LifelogError> {
+impl HyprlandCapture {
+    fn build_frame(&self) -> HyprlandFrame {
         let timestamp = to_pb_ts(Utc::now());
         let mut frame = HyprlandFrame {
             uuid: Uuid::new_v4().to_string(),
@@ -161,80 +139,39 @@ impl HyprlandDataSource {
             });
         }
 
-        Ok(frame)
+        frame
     }
 }
 
 #[async_trait]
-impl DataSource for HyprlandDataSource {
+impl Capture for HyprlandCapture {
     type Config = HyprlandConfig;
 
-    fn new(config: HyprlandConfig) -> Result<Self, LifelogError> {
-        HyprlandDataSource::new(config)
+    fn from_config(config: HyprlandConfig) -> Result<Self, LifelogError> {
+        Ok(Self { config })
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
+    fn output_dir(&self) -> &str {
+        &self.config.output_dir
     }
 
-    fn get_buffered_source(&self) -> Option<Arc<dyn BufferedSource>> {
-        Some(Arc::new(DiskBufferedSource::new(
-            "hyprland",
-            self.buffer.clone(),
-        )))
+    fn stream_id(&self) -> &str {
+        "hyprland"
     }
 
-    fn start(&self) -> Result<DataSourceHandle, LifelogError> {
-        if RUNNING.load(Ordering::SeqCst) {
-            return Err(LifelogError::AlreadyRunning);
-        }
-
-        tracing::info!("HyprlandDataSource: Starting data source task");
-        RUNNING.store(true, Ordering::SeqCst);
-
-        let source_clone = self.clone();
-
-        let join_handle = tokio::spawn(async move {
-            let task_result = source_clone.run().await;
-            tracing::info!(result = ?task_result, "HyprlandDataSource background task finished");
-            task_result
-        });
-
-        Ok(DataSourceHandle { join: join_handle })
+    fn interval(&self) -> Duration {
+        Duration::from_secs_f64(self.config.interval)
     }
 
-    async fn stop(&mut self) -> Result<(), LifelogError> {
-        RUNNING.store(false, Ordering::SeqCst);
-        Ok(())
-    }
-
-    async fn run(&self) -> Result<(), LifelogError> {
-        while RUNNING.load(Ordering::SeqCst) {
-            match self.capture_frame().await {
-                Ok(frame) => {
-                    let mut buf = Vec::new();
-                    if let Err(e) = frame.encode(&mut buf) {
-                        tracing::error!("Failed to encode HyprlandFrame: {}", e);
-                    } else if let Err(e) = self.buffer.append(&buf).await {
-                        tracing::error!("Failed to append HyprlandFrame to buffer: {}", e);
-                    } else {
-                        tracing::debug!("Stored hyprland frame in WAL");
-                    }
-                }
-                Err(e) => {
-                    tracing::error!("Failed to capture hyprland frame: {}", e);
-                }
-            }
-            sleep(Duration::from_secs_f64(self.config.interval)).await;
-        }
-        Ok(())
-    }
-
-    fn is_running(&self) -> bool {
-        RUNNING.load(Ordering::SeqCst)
-    }
-
-    fn get_config(&self) -> Self::Config {
-        self.config.clone()
+    async fn capture(&self) -> Result<Vec<Vec<u8>>, LifelogError> {
+        let frame = self.build_frame();
+        let mut buf = Vec::new();
+        frame.encode(&mut buf).map_err(|e| {
+            LifelogError::Io(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("failed to encode HyprlandFrame: {e}"),
+            ))
+        })?;
+        Ok(vec![buf])
     }
 }

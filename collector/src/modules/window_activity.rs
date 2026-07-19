@@ -12,12 +12,11 @@ use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 use utils::buffer::DiskBuffer;
 
-static RUNNING: AtomicBool = AtomicBool::new(false);
-
 #[derive(Debug, Clone)]
 pub struct WindowActivityDataSource {
     config: WindowActivityConfig,
     pub buffer: Arc<DiskBuffer>,
+    running: Arc<AtomicBool>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -69,6 +68,7 @@ impl WindowActivityDataSource {
         Ok(Self {
             config,
             buffer: Arc::new(buffer),
+            running: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -329,12 +329,12 @@ impl DataSource for WindowActivityDataSource {
     }
 
     fn start(&self) -> Result<DataSourceHandle, LifelogError> {
-        if RUNNING.load(Ordering::SeqCst) {
+        if self.running.load(Ordering::SeqCst) {
             tracing::warn!("WindowActivityDataSource: Start called but task is already running.");
             return Err(LifelogError::AlreadyRunning);
         }
 
-        RUNNING.store(true, Ordering::SeqCst);
+        self.running.store(true, Ordering::SeqCst);
         let source_clone = self.clone();
         let join_handle = tokio::spawn(async move { source_clone.run().await });
 
@@ -342,14 +342,14 @@ impl DataSource for WindowActivityDataSource {
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {
-        RUNNING.store(false, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
         Ok(())
     }
 
     async fn run(&self) -> Result<(), LifelogError> {
         let mut current: Option<ActiveWindowSpan> = None;
 
-        while RUNNING.load(Ordering::SeqCst) {
+        while self.running.load(Ordering::SeqCst) {
             let now = Utc::now();
             let this = self.clone();
             let window_result = tokio::time::timeout(
@@ -399,7 +399,7 @@ impl DataSource for WindowActivityDataSource {
     }
 
     fn is_running(&self) -> bool {
-        RUNNING.load(Ordering::SeqCst)
+        self.running.load(Ordering::SeqCst)
     }
 
     fn get_config(&self) -> Self::Config {

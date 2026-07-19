@@ -12,14 +12,13 @@ use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 use utils::buffer::DiskBuffer;
 
-static RUNNING: AtomicBool = AtomicBool::new(false);
-
 type ShellEvent = (chrono::DateTime<Utc>, String);
 
 #[derive(Debug, Clone)]
 pub struct ShellHistoryDataSource {
     config: ShellHistoryConfig,
     pub buffer: Arc<DiskBuffer>,
+    running: Arc<AtomicBool>,
 }
 
 impl ShellHistoryDataSource {
@@ -35,6 +34,7 @@ impl ShellHistoryDataSource {
         Ok(Self {
             config,
             buffer: Arc::new(buffer),
+            running: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -200,12 +200,12 @@ impl DataSource for ShellHistoryDataSource {
     }
 
     fn start(&self) -> Result<DataSourceHandle, LifelogError> {
-        if RUNNING.load(Ordering::SeqCst) {
+        if self.running.load(Ordering::SeqCst) {
             tracing::warn!("ShellHistoryDataSource: Start called but task is already running.");
             return Err(LifelogError::AlreadyRunning);
         }
 
-        RUNNING.store(true, Ordering::SeqCst);
+        self.running.store(true, Ordering::SeqCst);
         let source_clone = self.clone();
         let join_handle = tokio::spawn(async move { source_clone.run().await });
 
@@ -213,14 +213,14 @@ impl DataSource for ShellHistoryDataSource {
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {
-        RUNNING.store(false, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
         Ok(())
     }
 
     async fn run(&self) -> Result<(), LifelogError> {
         let mut cursor = self.load_cursor();
 
-        while RUNNING.load(Ordering::SeqCst) {
+        while self.running.load(Ordering::SeqCst) {
             match self.read_new_history(cursor) {
                 Ok((new_cursor, events)) => {
                     cursor = new_cursor;
@@ -266,7 +266,7 @@ impl DataSource for ShellHistoryDataSource {
     }
 
     fn is_running(&self) -> bool {
-        RUNNING.load(Ordering::SeqCst)
+        self.running.load(Ordering::SeqCst)
     }
 
     fn get_config(&self) -> Self::Config {

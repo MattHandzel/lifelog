@@ -14,8 +14,6 @@ use std::sync::{Arc, Mutex};
 use tokio::time::{sleep, Duration};
 use utils::buffer::DiskBuffer;
 
-static RUNNING: AtomicBool = AtomicBool::new(false);
-
 #[derive(Clone)]
 struct SharedCursor {
     inner: Arc<Mutex<Cursor<Vec<u8>>>>,
@@ -53,6 +51,7 @@ impl Seek for SharedCursor {
 pub struct MicrophoneDataSource {
     config: MicrophoneConfig,
     pub buffer: Arc<DiskBuffer>,
+    running: Arc<AtomicBool>,
 }
 
 impl MicrophoneDataSource {
@@ -68,6 +67,7 @@ impl MicrophoneDataSource {
         Ok(Self {
             config,
             buffer: Arc::new(buffer),
+            running: Arc::new(AtomicBool::new(false)),
         })
     }
 }
@@ -275,12 +275,12 @@ impl DataSource for MicrophoneDataSource {
     }
 
     fn start(&self) -> Result<DataSourceHandle, LifelogError> {
-        if RUNNING.load(Ordering::SeqCst) {
+        if self.running.load(Ordering::SeqCst) {
             tracing::warn!("MicrophoneDataSource: Start called but task is already running.");
             return Err(LifelogError::AlreadyRunning);
         }
 
-        RUNNING.store(true, Ordering::SeqCst);
+        self.running.store(true, Ordering::SeqCst);
         let source_clone = self.clone();
         let join_handle = tokio::spawn(async move { source_clone.run().await });
 
@@ -288,12 +288,12 @@ impl DataSource for MicrophoneDataSource {
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {
-        RUNNING.store(false, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
         Ok(())
     }
 
     async fn run(&self) -> Result<(), LifelogError> {
-        while RUNNING.load(Ordering::SeqCst) {
+        while self.running.load(Ordering::SeqCst) {
             let cfg = self.config.clone();
             let started_at = Utc::now();
 
@@ -360,7 +360,7 @@ impl DataSource for MicrophoneDataSource {
     }
 
     fn is_running(&self) -> bool {
-        RUNNING.load(Ordering::SeqCst)
+        self.running.load(Ordering::SeqCst)
     }
 
     fn get_config(&self) -> Self::Config {

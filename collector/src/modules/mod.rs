@@ -8,6 +8,7 @@ pub mod keystrokes;
 pub mod logger;
 pub mod microphone;
 pub mod mouse;
+pub mod polling_source;
 pub mod processes;
 pub mod screen;
 pub mod shell_history;

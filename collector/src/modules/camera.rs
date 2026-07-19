@@ -17,12 +17,11 @@ use tempfile::NamedTempFile;
 #[cfg(target_os = "macos")]
 use tokio::process::Command;
 
-static RUNNING: AtomicBool = AtomicBool::new(false);
-
 #[derive(Debug, Clone)]
 pub struct CameraDataSource {
     config: CameraConfig,
     pub buffer: Arc<DiskBuffer>,
+    running: Arc<AtomicBool>,
 }
 
 impl CameraDataSource {
@@ -38,6 +37,7 @@ impl CameraDataSource {
         Ok(CameraDataSource {
             config,
             buffer: Arc::new(buffer),
+            running: Arc::new(AtomicBool::new(false)),
         })
     }
 }
@@ -62,12 +62,12 @@ impl DataSource for CameraDataSource {
     }
 
     fn start(&self) -> Result<DataSourceHandle, LifelogError> {
-        if RUNNING.load(Ordering::SeqCst) {
+        if self.running.load(Ordering::SeqCst) {
             return Err(LifelogError::AlreadyRunning);
         }
 
         tracing::info!("CameraDataSource: Starting data source task");
-        RUNNING.store(true, Ordering::SeqCst);
+        self.running.store(true, Ordering::SeqCst);
 
         let source_clone = self.clone();
 
@@ -81,7 +81,7 @@ impl DataSource for CameraDataSource {
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {
-        RUNNING.store(false, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
         Ok(())
     }
 
@@ -109,7 +109,7 @@ impl DataSource for CameraDataSource {
                 ))
             })?;
 
-            while RUNNING.load(Ordering::SeqCst) {
+            while self.running.load(Ordering::SeqCst) {
                 match camera.capture() {
                     Ok(frame) => {
                         let timestamp = to_pb_ts(Utc::now());
@@ -146,7 +146,7 @@ impl DataSource for CameraDataSource {
 
         #[cfg(target_os = "macos")]
         {
-            while RUNNING.load(Ordering::SeqCst) {
+            while self.running.load(Ordering::SeqCst) {
                 // macOS implementation using imagesnap
                 if let Ok(temp_file) = NamedTempFile::new() {
                     let temp_path = temp_file.path().to_string_lossy().to_string();
@@ -214,7 +214,7 @@ impl DataSource for CameraDataSource {
     }
 
     fn is_running(&self) -> bool {
-        RUNNING.load(Ordering::SeqCst)
+        self.running.load(Ordering::SeqCst)
     }
 
     fn get_config(&self) -> Self::Config {

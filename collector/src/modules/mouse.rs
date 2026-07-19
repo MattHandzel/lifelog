@@ -13,12 +13,11 @@ use utils::buffer::DiskBuffer;
 #[cfg(target_os = "linux")]
 use hyprland::shared::HyprData;
 
-static RUNNING: AtomicBool = AtomicBool::new(false);
-
 #[derive(Debug, Clone)]
 pub struct MouseDataSource {
     config: MouseConfig,
     pub buffer: Arc<DiskBuffer>,
+    running: Arc<AtomicBool>,
 }
 
 impl MouseDataSource {
@@ -34,6 +33,7 @@ impl MouseDataSource {
         Ok(Self {
             config,
             buffer: Arc::new(buffer),
+            running: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -72,11 +72,11 @@ impl DataSource for MouseDataSource {
     }
 
     fn start(&self) -> Result<DataSourceHandle, LifelogError> {
-        if RUNNING.load(Ordering::SeqCst) {
+        if self.running.load(Ordering::SeqCst) {
             return Err(LifelogError::AlreadyRunning);
         }
 
-        RUNNING.store(true, Ordering::SeqCst);
+        self.running.store(true, Ordering::SeqCst);
         let source_clone = self.clone();
         let join_handle = tokio::spawn(async move { source_clone.run().await });
 
@@ -84,7 +84,7 @@ impl DataSource for MouseDataSource {
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {
-        RUNNING.store(false, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
         Ok(())
     }
 
@@ -92,7 +92,7 @@ impl DataSource for MouseDataSource {
         let mut last_pos: Option<(f64, f64)> = None;
         let mut warned = false;
 
-        while RUNNING.load(Ordering::SeqCst) {
+        while self.running.load(Ordering::SeqCst) {
             match self.get_cursor_pos() {
                 Some((x, y)) => {
                     warned = false;
@@ -144,7 +144,7 @@ impl DataSource for MouseDataSource {
     }
 
     fn is_running(&self) -> bool {
-        RUNNING.load(Ordering::SeqCst)
+        self.running.load(Ordering::SeqCst)
     }
 
     fn get_config(&self) -> Self::Config {

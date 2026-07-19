@@ -21,7 +21,6 @@ use crate::data_source::{BufferedSource, DataSource, DataSourceHandle, DiskBuffe
 use lifelog_core::LifelogError;
 use utils::buffer::DiskBuffer;
 
-static RUNNING: AtomicBool = AtomicBool::new(false);
 /// Ensures the WebP-vs-PNG size comparison is logged exactly once per process.
 static SIZE_LOGGED: AtomicBool = AtomicBool::new(false);
 
@@ -43,6 +42,7 @@ pub struct ScreenDataSource {
     config: ScreenConfig,
     logger: ScreenLogger,
     pub buffer: Arc<DiskBuffer>,
+    running: Arc<AtomicBool>,
 }
 
 impl ScreenDataSource {
@@ -60,6 +60,7 @@ impl ScreenDataSource {
             config,
             logger: logger?,
             buffer: Arc::new(buffer),
+            running: Arc::new(AtomicBool::new(false)),
         })
     }
 
@@ -195,13 +196,13 @@ impl DataSource for ScreenDataSource {
     }
 
     fn start(&self) -> Result<DataSourceHandle, LifelogError> {
-        if RUNNING.load(Ordering::SeqCst) {
+        if self.running.load(Ordering::SeqCst) {
             tracing::warn!("ScreenDataSource: Start called but task is already running.");
             return Err(LifelogError::AlreadyRunning);
         }
 
         tracing::info!("ScreenDataSource: Starting data source task to store in WAL");
-        RUNNING.store(true, Ordering::SeqCst);
+        self.running.store(true, Ordering::SeqCst);
 
         let source_clone = self.clone();
 
@@ -216,13 +217,13 @@ impl DataSource for ScreenDataSource {
     }
 
     async fn stop(&mut self) -> Result<(), LifelogError> {
-        RUNNING.store(false, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
         // FIXME, actually implmenet stop handles
         Ok(())
     }
 
     async fn run(&self) -> Result<(), LifelogError> {
-        while RUNNING.load(Ordering::SeqCst) {
+        while self.running.load(Ordering::SeqCst) {
             match self.logger.capture_frames().await {
                 Ok(frames) => {
                     // One ScreenFrame per powered-on output, each its own uuid,
@@ -252,7 +253,7 @@ impl DataSource for ScreenDataSource {
     }
 
     fn is_running(&self) -> bool {
-        RUNNING.load(Ordering::SeqCst)
+        self.running.load(Ordering::SeqCst)
     }
 
     fn get_config(&self) -> Self::Config {
@@ -262,11 +263,15 @@ impl DataSource for ScreenDataSource {
 #[derive(Clone, Debug)]
 pub struct ScreenLogger {
     config: ScreenConfig,
+    running: Arc<AtomicBool>,
 }
 
 impl ScreenLogger {
     pub fn new(config: ScreenConfig) -> Result<Self, LifelogError> {
-        Ok(ScreenLogger { config })
+        Ok(ScreenLogger {
+            config,
+            running: Arc::new(AtomicBool::new(false)),
+        })
     }
 
     pub fn setup(&self) -> Result<LoggerHandle, LifelogError> {
@@ -592,8 +597,8 @@ impl DataLogger for ScreenLogger {
     }
 
     async fn run(&self) -> Result<(), LifelogError> {
-        RUNNING.store(true, Ordering::SeqCst);
-        while RUNNING.load(Ordering::SeqCst) {
+        self.running.store(true, Ordering::SeqCst);
+        while self.running.load(Ordering::SeqCst) {
             self.log_data().await?;
             sleep(Duration::from_secs_f64(self.config.interval)).await;
         }
@@ -601,7 +606,7 @@ impl DataLogger for ScreenLogger {
     }
 
     fn stop(&self) {
-        RUNNING.store(false, Ordering::SeqCst);
+        self.running.store(false, Ordering::SeqCst);
     }
 
     async fn log_data(&self) -> Result<Vec<u8>, LifelogError> {

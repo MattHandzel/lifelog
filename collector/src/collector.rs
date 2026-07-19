@@ -2,14 +2,15 @@ use super::data_source::{BufferedSource, DataSource, DataSourceHandle};
 use crate::modules::browser_history::BrowserHistorySource;
 use crate::modules::camera::CameraDataSource;
 use crate::modules::clipboard::ClipboardDataSource;
-use crate::modules::hyprland::HyprlandDataSource;
+use crate::modules::hyprland::HyprlandCapture;
 use crate::modules::keystrokes::KeystrokesDataSource;
 use crate::modules::microphone::MicrophoneDataSource;
 use crate::modules::mouse::MouseDataSource;
+use crate::modules::polling_source::PollingSource;
 use crate::modules::processes::ProcessDataSource;
 use crate::modules::screen::ScreenDataSource;
 use crate::modules::shell_history::ShellHistoryDataSource;
-use crate::modules::weather::WeatherDataSource;
+use crate::modules::weather::WeatherCapture;
 use crate::modules::window_activity::WindowActivityDataSource;
 use async_trait::async_trait;
 use config;
@@ -460,8 +461,8 @@ impl Collector {
         reg!("camera", config.camera, CameraDataSource);
         reg!("microphone", config.microphone, MicrophoneDataSource);
         reg!("keystrokes", config.keyboard, KeystrokesDataSource);
-        reg!("weather", config.weather, WeatherDataSource);
-        reg!("hyprland", config.hyprland, HyprlandDataSource);
+        reg!("weather", config.weather, PollingSource<WeatherCapture>);
+        reg!("hyprland", config.hyprland, PollingSource<HyprlandCapture>);
         reg!("clipboard", config.clipboard, ClipboardDataSource);
         reg!(
             "shell_history",
