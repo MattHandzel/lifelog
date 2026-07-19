@@ -397,6 +397,7 @@ pub fn create_default_config() -> CollectorConfig {
             output_dir: lifelog_dir.join("screen").display().to_string(),
             program: "gnome-screenshot".to_string(),
             timestamp_format: default_timestamp_format(),
+            webp_quality: 80,
         }),
         browser: Some(BrowserHistoryConfig {
             enabled: true,

@@ -49,6 +49,7 @@ pub fn from_screen(
             "width": frame.width,
             "height": frame.height,
             "mime_type": frame.mime_type,
+            "source_output": frame.source_output,
         }),
     })
 }

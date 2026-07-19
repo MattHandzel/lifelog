@@ -340,6 +340,7 @@ message ScreenConfig {
   string output_dir = 3;
   string program = 4;
   string timestamp_format = 5;
+  uint32 webp_quality = 6;
 }
 
 message ScreenFrame {
@@ -355,6 +356,7 @@ message ScreenFrame {
   google.protobuf.Timestamp t_end = 10;
   TimeQuality time_quality = 11;
   RecordType record_type = 12;
+  string source_output = 13;
 }
 
 message CameraFrame {

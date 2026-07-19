@@ -88,6 +88,7 @@ pub fn to_lifelog_data(row: &FrameRow, cas: &FsCas) -> Result<lifelog_types::Lif
                 t_end,
                 time_quality: 0,
                 record_type: 0,
+                source_output: p["source_output"].as_str().unwrap_or("").to_string(),
             })
         }
         "Browser" => Payload::Browserframe(lifelog_types::BrowserFrame {

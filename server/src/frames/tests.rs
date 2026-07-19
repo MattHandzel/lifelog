@@ -25,7 +25,8 @@ fn roundtrip_screen() {
         width: 1920,
         height: 1080,
         image_bytes: vec![0xFF, 0xD8, 0xFF],
-        mime_type: "image/png".to_string(),
+        mime_type: "image/webp".to_string(),
+        source_output: "DP-1".to_string(),
         t_device: ts(1000),
         ..Default::default()
     };
@@ -43,10 +44,52 @@ fn roundtrip_screen() {
             assert_eq!(f.width, 1920);
             assert_eq!(f.height, 1080);
             assert_eq!(f.image_bytes, vec![0xFF, 0xD8, 0xFF]);
-            assert_eq!(f.mime_type, "image/png");
+            assert_eq!(f.mime_type, "image/webp");
+            // source_output must survive serialize -> DB row -> deserialize.
+            assert_eq!(f.source_output, "DP-1");
         }
         _ => panic!("wrong payload type"),
     }
+}
+
+/// OCR compatibility: the OCR transform decodes a frame's `image_bytes` through
+/// the `image` crate (`From<ScreenFrame> for image::DynamicImage`) before handing
+/// tesseract a re-encoded image, so WebP frames must decode to real pixels (not
+/// the 1x1 fallback the conversion returns on failure). This proves the WebP
+/// switch does not break OCR without needing the tesseract binary.
+#[test]
+fn webp_screen_frame_decodes_for_ocr() {
+    use image::{DynamicImage, ImageFormat, RgbImage};
+    use std::io::Cursor;
+
+    // Build a small image and encode it as WebP with the image crate.
+    let mut src = RgbImage::new(48, 32);
+    for (x, y, px) in src.enumerate_pixels_mut() {
+        *px = image::Rgb([(x * 5) as u8, (y * 7) as u8, ((x + y) * 3) as u8]);
+    }
+    let src = DynamicImage::ImageRgb8(src);
+    let mut webp_bytes = Vec::new();
+    src.write_to(&mut Cursor::new(&mut webp_bytes), ImageFormat::WebP)
+        .expect("image crate should encode WebP");
+
+    let frame = lifelog_types::ScreenFrame {
+        uuid: "550e8400-e29b-41d4-a716-446655440099".to_string(),
+        timestamp: ts(1000),
+        width: 48,
+        height: 32,
+        image_bytes: webp_bytes,
+        mime_type: "image/webp".to_string(),
+        source_output: "eDP-1".to_string(),
+        ..Default::default()
+    };
+
+    let decoded: image::DynamicImage = frame.into();
+    // A decode failure returns a 1x1 fallback; real decode yields the true dims.
+    assert_eq!(
+        (decoded.width(), decoded.height()),
+        (48, 32),
+        "WebP screen frame must decode to full dimensions for the OCR path"
+    );
 }
 
 #[test]
