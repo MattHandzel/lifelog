@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { invoke } from '@tauri-apps/api/core';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from './ui/button';
 import { FrameDataWrapper } from './ResultCard';
+import { useModalityFrames } from '../lib/useModalityFrames';
 import { Activity, History, RefreshCw, Search } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
@@ -21,11 +21,26 @@ interface Process {
   timestamp?: number;
 }
 
+function mapFramesToProcesses(frames: FrameDataWrapper[]): Process[] {
+  return frames.flatMap(f =>
+    (f.processes ?? []).map(p => ({
+      pid: p.pid,
+      ppid: p.ppid,
+      name: p.name,
+      exe: p.exe || null,
+      cmdline: p.cmdline || null,
+      status: p.status,
+      cpu_usage: p.cpu_usage,
+      memory_usage: p.memory_usage,
+      threads: p.threads,
+      user: p.user || null,
+      start_time: p.start_time,
+      timestamp: f.timestamp ?? undefined,
+    }))
+  );
+}
+
 export default function ProcessesDashboard(): JSX.Element {
-  const [processes, setProcesses] = useState<Process[]>([]);
-  const [processHistory, setProcessHistory] = useState<Process[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [sortField, setSortField] = useState<keyof Process>('cpu_usage');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -34,97 +49,31 @@ export default function ProcessesDashboard(): JSX.Element {
   const [historyLimit, setHistoryLimit] = useState(100);
   const [activeTab, setActiveTab] = useState('current');
 
+  // "Current" = frames from the single newest Processes entry; "history" = all.
+  const current = useModalityFrames('Processes', { limit: 1, autoLoad: false });
+  const history = useModalityFrames('Processes', { autoLoad: false });
+
+  const processes = useMemo(() => mapFramesToProcesses(current.frames), [current.frames]);
+  const processHistory = useMemo(() => mapFramesToProcesses(history.frames), [history.frames]);
+  const isLoading = current.loading;
+  const isHistoryLoading = history.loading;
+  const loadProcesses = current.reload;
+  const loadProcessHistory = history.reload;
+
   useEffect(function () {
-    loadProcesses();
+    void loadProcesses();
     let intervalId: number | undefined;
     if (autoRefresh && activeTab === 'current') {
-      intervalId = window.setInterval(loadProcesses, 5000);
+      intervalId = window.setInterval(() => {
+        void loadProcesses();
+      }, 5000);
     }
     return function () {
       if (intervalId !== undefined) {
         clearInterval(intervalId);
       }
     };
-  }, [autoRefresh, activeTab]);
-
-  async function loadProcesses(): Promise<void> {
-    setIsLoading(true);
-    try {
-      const entries = await invoke<Array<{ uuid: string; origin: string; modality: string; timestamp: number | null }>>('query_timeline', {
-        textQuery: undefined,
-        collectorId: undefined,
-      });
-      const processEntries = entries.filter(e => e.modality === 'Processes');
-      if (processEntries.length === 0) {
-        setProcesses([]);
-        return;
-      }
-      const latest = processEntries.slice(0, 1);
-      const keys = latest.map(e => ({ uuid: e.uuid, origin: e.origin }));
-      const frames = await invoke<FrameDataWrapper[]>('get_frame_data', { keys });
-      const allProcs: Process[] = frames.flatMap(f =>
-        (f.processes ?? []).map(p => ({
-          pid: p.pid,
-          ppid: p.ppid,
-          name: p.name,
-          exe: p.exe || null,
-          cmdline: p.cmdline || null,
-          status: p.status,
-          cpu_usage: p.cpu_usage,
-          memory_usage: p.memory_usage,
-          threads: p.threads,
-          user: p.user || null,
-          start_time: p.start_time,
-          timestamp: f.timestamp ?? undefined,
-        }))
-      );
-      setProcesses(allProcs);
-    } catch (err) {
-      console.error('Failed to load processes:', err);
-      setProcesses([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  async function loadProcessHistory(): Promise<void> {
-    setIsHistoryLoading(true);
-    try {
-      const entries = await invoke<Array<{ uuid: string; origin: string; modality: string; timestamp: number | null }>>('query_timeline', {
-        textQuery: undefined,
-        collectorId: undefined,
-      });
-      const processEntries = entries.filter(e => e.modality === 'Processes');
-      if (processEntries.length === 0) {
-        setProcessHistory([]);
-        return;
-      }
-      const keys = processEntries.map(e => ({ uuid: e.uuid, origin: e.origin }));
-      const frames = await invoke<FrameDataWrapper[]>('get_frame_data', { keys });
-      const allProcs: Process[] = frames.flatMap(f =>
-        (f.processes ?? []).map(p => ({
-          pid: p.pid,
-          ppid: p.ppid,
-          name: p.name,
-          exe: p.exe || null,
-          cmdline: p.cmdline || null,
-          status: p.status,
-          cpu_usage: p.cpu_usage,
-          memory_usage: p.memory_usage,
-          threads: p.threads,
-          user: p.user || null,
-          start_time: p.start_time,
-          timestamp: f.timestamp ?? undefined,
-        }))
-      );
-      setProcessHistory(allProcs);
-    } catch (err) {
-      console.error('Failed to load process history:', err);
-      setProcessHistory([]);
-    } finally {
-      setIsHistoryLoading(false);
-    }
-  }
+  }, [autoRefresh, activeTab, loadProcesses]);
 
   function toggleSort(field: keyof Process): void {
     if (field === sortField) {
