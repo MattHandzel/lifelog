@@ -34,6 +34,10 @@ pub struct Server {
     pub config: Arc<RwLock<ServerConfig>>,
     pub state: Arc<RwLock<SystemState>>,
     pub registered_collectors: Arc<RwLock<Vec<RegisteredCollector>>>,
+    /// Collector configs set by an operator via SetConfig. These are
+    /// authoritative over whatever a collector self-reports on (re)registration,
+    /// so a reconnect can't silently revert an operator change. [MAT-1522]
+    pub operator_configs: Arc<RwLock<HashMap<CollectorId, CollectorConfig>>>,
     pub policy: Arc<RwLock<ServerPolicy>>,
     pub transform_dag: Arc<TransformDag>,
     pub http_client: reqwest::Client,
@@ -48,6 +52,50 @@ pub struct ServerHandle {
 
 fn normalize_collector_id(id: &str) -> String {
     id.replace(":", "")
+}
+
+/// Serialize a collector config into a hot-reload `UpdateConfig` command that
+/// the collector applies on receipt.
+fn build_update_config_command(cfg: &CollectorConfig) -> Result<ServerCommand, LifelogError> {
+    let payload = serde_json::to_string(cfg).map_err(|e| LifelogError::Validation {
+        field: "collector_config".to_string(),
+        reason: format!("failed to serialize update payload: {e}"),
+    })?;
+    Ok(ServerCommand {
+        r#type: CommandType::UpdateConfig as i32,
+        payload,
+    })
+}
+
+/// Register (or re-register) a collector, collapsing duplicate entries for the
+/// same id down to one.
+///
+/// A collector re-registers on every reconnect (network blip, restart). The old
+/// code pushed a fresh entry each time and never removed dead ones, so
+/// `registered_collectors` accumulated stale duplicates. `apply_system_config`'s
+/// `find()` then matched the *first* (dead) duplicate while `get_config`'s
+/// id-keyed map returned the *last* one — a SetConfig write landed on a corpse
+/// and the read never saw it, making the entire settings feature cosmetic.
+///
+/// Deduping by id fixes that. When an operator has set this collector's config
+/// via SetConfig, that config is authoritative: it's restored onto the fresh
+/// registration (overriding the collector's self-reported config) and returned
+/// so the caller can push it back down to the reconnecting collector. [MAT-1522]
+fn upsert_registration(
+    collectors: &mut Vec<RegisteredCollector>,
+    operator_configs: &HashMap<CollectorId, CollectorConfig>,
+    mut collector: RegisteredCollector,
+) -> Option<(
+    tokio::sync::mpsc::Sender<Result<ServerCommand, tonic::Status>>,
+    CollectorConfig,
+)> {
+    let repush = operator_configs.get(&collector.id).cloned().map(|cfg| {
+        collector.latest_config = Some(cfg.clone());
+        (collector.command_tx.clone(), cfg)
+    });
+    collectors.retain(|c| c.id != collector.id);
+    collectors.push(collector);
+    repush
 }
 
 impl ServerHandle {
@@ -130,7 +178,28 @@ impl ServerHandle {
 
     pub async fn register_collector(&self, collector: RegisteredCollector) {
         let server = self.server.write().await;
-        server.registered_collectors.write().await.push(collector);
+        let repush = {
+            let operator_configs = server.operator_configs.read().await;
+            let mut collectors = server.registered_collectors.write().await;
+            upsert_registration(&mut collectors, &operator_configs, collector)
+        };
+        drop(server);
+
+        // If an operator override was restored, push it to the freshly connected
+        // collector so it actually applies the operator's config rather than the
+        // (stale) one it just reported for itself.
+        if let Some((tx, cfg)) = repush {
+            match build_update_config_command(&cfg) {
+                Ok(cmd) => {
+                    if tx.send(Ok(cmd)).await.is_err() {
+                        tracing::warn!("failed to push operator config to reconnecting collector");
+                    }
+                }
+                Err(e) => {
+                    tracing::warn!(error = %e, "failed to build operator config update command");
+                }
+            }
+        }
     }
 
     pub async fn report_collector_state(&self, state: CollectorState) {
@@ -511,6 +580,7 @@ impl Server {
             config: Arc::new(RwLock::new(config.clone())),
             state: Arc::new(RwLock::new(system_state)),
             registered_collectors: Arc::new(RwLock::new(vec![])),
+            operator_configs: Arc::new(RwLock::new(HashMap::new())),
             policy: Arc::new(RwLock::new(ServerPolicy::new(policy_config))),
             transform_dag,
             http_client,
@@ -979,6 +1049,16 @@ impl Server {
             return Ok(());
         }
 
+        // Record the operator overrides first. They are authoritative and must
+        // survive a collector reconnect (register_collector restores them), so
+        // they're stored even for a collector that isn't currently connected.
+        {
+            let mut overrides = self.operator_configs.write().await;
+            for (collector_id, new_cfg) in &system_config.collectors {
+                overrides.insert(collector_id.clone(), new_cfg.clone());
+            }
+        }
+
         let mut updates: Vec<(
             tokio::sync::mpsc::Sender<Result<ServerCommand, tonic::Status>>,
             CollectorConfig,
@@ -995,14 +1075,7 @@ impl Server {
         }
 
         for (tx, cfg, collector_id) in updates {
-            let payload = serde_json::to_string(&cfg).map_err(|e| LifelogError::Validation {
-                field: "collector_config".to_string(),
-                reason: format!("failed to serialize update payload: {e}"),
-            })?;
-            let cmd = ServerCommand {
-                r#type: CommandType::UpdateConfig as i32,
-                payload,
-            };
+            let cmd = build_update_config_command(&cfg)?;
             if tx.send(Ok(cmd)).await.is_err() {
                 tracing::warn!(
                     collector_id = %collector_id,
@@ -1093,5 +1166,130 @@ impl Server {
             #[allow(clippy::todo)]
             _ => todo!(),
         }
+    }
+}
+
+#[cfg(test)]
+mod config_persistence_tests {
+    use super::*;
+    use lifelog_types::{CollectorConfig, ScreenConfig};
+
+    fn cfg_with_interval(id: &str, interval: f64) -> CollectorConfig {
+        CollectorConfig {
+            id: id.to_string(),
+            screen: Some(ScreenConfig {
+                interval,
+                ..Default::default()
+            }),
+            ..Default::default()
+        }
+    }
+
+    fn dummy_collector(id: &str, interval: f64) -> RegisteredCollector {
+        // Keep the receiver leaked so the Sender stays open for the test's
+        // lifetime; these tests never assert on delivery.
+        let (tx, rx) = tokio::sync::mpsc::channel(8);
+        Box::leak(Box::new(rx));
+        RegisteredCollector {
+            id: id.to_string(),
+            address: "test".to_string(),
+            mac: id.to_string(),
+            command_tx: tx,
+            latest_config: Some(cfg_with_interval(id, interval)),
+        }
+    }
+
+    /// Mirrors `Server::get_config`'s projection: the id-keyed map a GetConfig
+    /// response is built from. With duplicate entries the last one wins.
+    fn get_config_view(collectors: &[RegisteredCollector]) -> HashMap<String, CollectorConfig> {
+        let mut out = HashMap::new();
+        for c in collectors {
+            if let Some(cfg) = &c.latest_config {
+                out.insert(c.id.clone(), cfg.clone());
+            }
+        }
+        out
+    }
+
+    fn interval_of(view: &HashMap<String, CollectorConfig>, id: &str) -> f64 {
+        view[id].screen.as_ref().unwrap().interval
+    }
+
+    /// Applies a SetConfig the way `apply_system_config` does: record the
+    /// operator override, then write it onto the matching registered entry.
+    fn apply_set_config(
+        collectors: &mut [RegisteredCollector],
+        operator_configs: &mut HashMap<CollectorId, CollectorConfig>,
+        id: &str,
+        cfg: CollectorConfig,
+    ) {
+        operator_configs.insert(id.to_string(), cfg.clone());
+        if let Some(c) = collectors.iter_mut().find(|c| c.id == id) {
+            c.latest_config = Some(cfg);
+        }
+    }
+
+    #[test]
+    fn duplicate_registration_collapses_to_single_entry() {
+        // The original bug: repeated registrations of the same id stacked up,
+        // splitting reads from writes.
+        let mut collectors = Vec::new();
+        let ops = HashMap::new();
+        for _ in 0..5 {
+            upsert_registration(&mut collectors, &ops, dummy_collector("cam", 10.0));
+        }
+        assert_eq!(collectors.len(), 1, "duplicates must collapse to one entry");
+    }
+
+    #[test]
+    fn set_config_round_trips_and_survives_reconnect() {
+        let mut collectors = Vec::new();
+        let mut ops: HashMap<CollectorId, CollectorConfig> = HashMap::new();
+
+        // Collector connects reporting interval 10.
+        upsert_registration(&mut collectors, &ops, dummy_collector("cam", 10.0));
+        assert_eq!(interval_of(&get_config_view(&collectors), "cam"), 10.0);
+
+        // Operator SetConfig -> 15. GetConfig must now return 15.
+        apply_set_config(
+            &mut collectors,
+            &mut ops,
+            "cam",
+            cfg_with_interval("cam", 15.0),
+        );
+        assert_eq!(
+            interval_of(&get_config_view(&collectors), "cam"),
+            15.0,
+            "GetConfig must reflect the SetConfig write"
+        );
+
+        // Collector reconnects, self-reporting the STALE interval 10. The
+        // operator override is authoritative, so GetConfig must still be 15
+        // and we must have a repush queued to re-apply it to the collector.
+        let repush = upsert_registration(&mut collectors, &ops, dummy_collector("cam", 10.0));
+        assert_eq!(collectors.len(), 1, "reconnect must not duplicate");
+        assert_eq!(
+            interval_of(&get_config_view(&collectors), "cam"),
+            15.0,
+            "reconnect must not clobber the operator-set value"
+        );
+        assert!(
+            repush.is_some(),
+            "operator config must be re-pushed on reconnect"
+        );
+        assert_eq!(repush.unwrap().1.screen.unwrap().interval, 15.0);
+    }
+
+    #[test]
+    fn reconnect_without_override_takes_reported_config() {
+        // No operator override: a collector that locally changed its config
+        // should have its self-reported value accepted on reconnect.
+        let mut collectors = Vec::new();
+        let ops = HashMap::new();
+        upsert_registration(&mut collectors, &ops, dummy_collector("cam", 10.0));
+        let repush = upsert_registration(&mut collectors, &ops, dummy_collector("cam", 20.0));
+        assert_eq!(collectors.len(), 1);
+        assert_eq!(interval_of(&get_config_view(&collectors), "cam"), 20.0);
+        assert!(repush.is_none());
     }
 }
