@@ -13,8 +13,16 @@ export interface TimelineEntry {
 }
 
 export interface UseModalityFramesOptions {
-  /** Max entries (after the modality filter) to load frame data for. Undefined = all. */
+  /** Max entries (after the modality filter, sort, and offset) to load frame data for. Undefined = all. */
   limit?: number;
+  /** Number of matched entries to skip before applying `limit` (default 0). Set with `limit` to page. */
+  offset?: number;
+  /**
+   * Order applied to the matched entries before `offset`/`limit`.
+   * 'none' (default) preserves the backend's newest-first order — the contract ProcessesDashboard relies on.
+   * 'timestamp-desc' re-sorts by timestamp descending (Audio/Camera do this defensively before capping).
+   */
+  sort?: 'none' | 'timestamp-desc';
   /** Passed through to `query_timeline`. */
   collectorId?: string;
   /** Passed through to `query_timeline`. */
@@ -26,7 +34,7 @@ export interface UseModalityFramesOptions {
 }
 
 export interface UseModalityFramesResult {
-  /** Timeline entries filtered to this modality (newest-first, as the backend returns them). */
+  /** Timeline entries for this modality after filter/sort/offset/limit (in the order `frames` follows). */
   entries: TimelineEntry[];
   /** Frame data for the (limited) entries, in entry order. */
   frames: FrameDataWrapper[];
@@ -46,8 +54,15 @@ export function useModalityFrames(
   modality: string,
   options: UseModalityFramesOptions = {},
 ): UseModalityFramesResult {
-  const { limit, collectorId, textQuery, autoLoad = true, frameCommand = 'get_frame_data' } =
-    options;
+  const {
+    limit,
+    offset = 0,
+    sort = 'none',
+    collectorId,
+    textQuery,
+    autoLoad = true,
+    frameCommand = 'get_frame_data',
+  } = options;
 
   const [entries, setEntries] = useState<TimelineEntry[]>([]);
   const [frames, setFrames] = useState<FrameDataWrapper[]>([]);
@@ -74,7 +89,15 @@ export function useModalityFrames(
       const matched = (Array.isArray(timeline) ? timeline : []).filter(
         (entry) => entry.modality === modality,
       );
-      const selected = typeof limit === 'number' ? matched.slice(0, limit) : matched;
+      // 'none' keeps the backend's newest-first order (Processes contract); 'timestamp-desc'
+      // re-sorts so a paged/capped slice is deterministic regardless of backend ordering.
+      const sortedEntries =
+        sort === 'timestamp-desc'
+          ? [...matched].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0))
+          : matched;
+      // slice(offset, offset+limit) — with offset 0 + no limit this is the full set (a copy).
+      const end = typeof limit === 'number' ? offset + limit : undefined;
+      const selected = sortedEntries.slice(offset, end);
       setEntries(selected);
 
       if (selected.length === 0) {
@@ -110,7 +133,7 @@ export function useModalityFrames(
       loadInFlight.current = false;
       setLoading(false);
     }
-  }, [modality, limit, collectorId, textQuery, frameCommand]);
+  }, [modality, limit, offset, sort, collectorId, textQuery, frameCommand]);
 
   useEffect(() => {
     if (autoLoad) {

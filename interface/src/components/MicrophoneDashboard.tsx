@@ -5,6 +5,7 @@ import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
 import { Mic, Clock, Square, Settings, Play, Pause, ExternalLink } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { useModalityFrames } from '../lib/useModalityFrames';
 
 interface MicrophoneSettings {
   enabled: boolean; // Auto-recording enabled
@@ -62,6 +63,36 @@ const MicrophoneDashboard: React.FC = function (): JSX.Element {
   const [isSavingSettings, setIsSavingSettings] = useState<boolean>(false);
 
   const statusCheckInterval = useRef<number | null>(null);
+
+  // List data-layer: query_timeline → filter Audio → sort newest-first → cap to 50 → get_frame_data.
+  // `recordings` stays local state so handlePlayRecording can lazily inject an audio blob into one row.
+  const audio = useModalityFrames('Audio', {
+    limit: 50,
+    sort: 'timestamp-desc',
+    autoLoad: false,
+  });
+
+  useEffect(function () {
+    setRecordings(audio.frames.map(function (f): AudioFile {
+      return {
+        path: f.uuid,
+        filename: f.uuid.slice(0, 8) + (f.codec ? `.${f.codec}` : ''),
+        duration: f.audio_duration_secs ?? 0,
+        created_at: f.timestamp ? new Date(f.timestamp * 1000).toISOString() : '',
+        size: 0,
+        audio_data_url: f.audio_data_url ?? undefined,
+        codec: f.codec ?? undefined,
+        sample_rate: f.sample_rate ?? undefined,
+        channels: f.channels ?? undefined,
+      };
+    }));
+  }, [audio.frames]);
+
+  useEffect(function () {
+    if (audio.error) {
+      setErrorMessage(`Failed to load recordings: ${audio.error}`);
+    }
+  }, [audio.error]);
 
   useEffect(function () {
     async function init(): Promise<void> {
@@ -147,38 +178,7 @@ const MicrophoneDashboard: React.FC = function (): JSX.Element {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const entries = await invoke<Array<{ uuid: string; origin: string; modality: string; timestamp: number | null }>>('query_timeline', {
-        textQuery: undefined,
-        collectorId: undefined,
-      });
-      const audioEntries = entries.filter(e => e.modality === 'Audio');
-      if (audioEntries.length === 0) {
-        setRecordings([]);
-        return;
-      }
-      const sorted = [...audioEntries].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
-      const keys = sorted.slice(0, 50).map(e => ({ uuid: e.uuid, origin: e.origin }));
-      const frames = await invoke<Array<{
-        uuid: string; timestamp: number | null; audio_data_url: string | null;
-        codec: string | null; sample_rate: number | null; channels: number | null;
-        audio_duration_secs: number | null;
-      }>>('get_frame_data', { keys });
-      const audioFiles: AudioFile[] = frames.map(f => ({
-        path: f.uuid,
-        filename: f.uuid.slice(0, 8) + (f.codec ? `.${f.codec}` : ''),
-        duration: f.audio_duration_secs ?? 0,
-        created_at: f.timestamp ? new Date(f.timestamp * 1000).toISOString() : '',
-        size: 0,
-        audio_data_url: f.audio_data_url ?? undefined,
-        codec: f.codec ?? undefined,
-        sample_rate: f.sample_rate ?? undefined,
-        channels: f.channels ?? undefined,
-      }));
-      setRecordings(audioFiles);
-    } catch (err) {
-      console.error('Failed to fetch recordings:', err);
-      setErrorMessage(`Failed to load recordings: ${err}`);
-      setRecordings([]);
+      await audio.reload();
     } finally {
       setIsLoading(false);
     }

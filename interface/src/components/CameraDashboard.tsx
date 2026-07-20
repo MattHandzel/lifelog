@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { Button } from './ui/button';
 import { Settings, Power, Clock, X, RefreshCcw, Camera } from 'lucide-react';
 import { Slider } from './ui/slider';
 import { Switch } from './ui/switch';
+import { useModalityFrames } from '../lib/useModalityFrames';
 
 interface CameraFrame {
   timestamp: number;
@@ -24,7 +25,6 @@ interface CameraSettings {
 }
 
 export default function CameraDashboard(): JSX.Element {
-  const [frames, setFrames] = useState<CameraFrame[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -40,6 +40,38 @@ export default function CameraDashboard(): JSX.Element {
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   
   const pageSize = 9;
+
+  // List data-layer: query_timeline → filter Camera → sort newest-first → page slice → get_frame_data.
+  // Paging is expressed as offset/limit; the hook fetches exactly the current page's frames.
+  const camera = useModalityFrames('Camera', {
+    limit: pageSize,
+    offset: (currentPage - 1) * pageSize,
+    sort: 'timestamp-desc',
+    autoLoad: false,
+  });
+
+  const frames = useMemo<CameraFrame[]>(function () {
+    return camera.frames
+      .filter(function (f) { return f.image_data_url; })
+      .map(function (f): CameraFrame {
+        return {
+          timestamp: f.timestamp ?? 0,
+          path: f.uuid,
+          width: f.width ?? 0,
+          height: f.height ?? 0,
+          dataUrl: f.image_data_url ?? undefined,
+        };
+      });
+  }, [camera.frames]);
+
+  const loadFrames = useCallback(async function (): Promise<void> {
+    setIsLoading(true);
+    try {
+      await camera.reload();
+    } finally {
+      setIsLoading(false);
+    }
+  }, [camera.reload]);
 
   useEffect(function () {
     checkCameraSupport();
@@ -63,43 +95,6 @@ export default function CameraDashboard(): JSX.Element {
     } catch (error) {
       console.error('Failed to check camera support:', error);
       setIsSupported(false);
-    }
-  }
-
-  async function loadFrames(): Promise<void> {
-    setIsLoading(true);
-    try {
-      const entries = await invoke<Array<{ uuid: string; origin: string; modality: string; timestamp: number | null }>>('query_timeline', {
-        textQuery: undefined,
-        collectorId: undefined,
-      });
-      const cameraEntries = entries.filter(e => e.modality === 'Camera');
-      if (cameraEntries.length === 0) {
-        setFrames([]);
-        return;
-      }
-      const sorted = [...cameraEntries].sort((a, b) => (b.timestamp ?? 0) - (a.timestamp ?? 0));
-      const paged = sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
-      const keys = paged.map(e => ({ uuid: e.uuid, origin: e.origin }));
-      const frameData = await invoke<Array<{
-        uuid: string; timestamp: number | null; image_data_url: string | null;
-        width: number | null; height: number | null;
-      }>>('get_frame_data', { keys });
-      const cameraFrames: CameraFrame[] = frameData
-        .filter(f => f.image_data_url)
-        .map(f => ({
-          timestamp: f.timestamp ?? 0,
-          path: f.uuid,
-          width: f.width ?? 0,
-          height: f.height ?? 0,
-          dataUrl: f.image_data_url ?? undefined,
-        }));
-      setFrames(cameraFrames);
-    } catch (err) {
-      console.error('Failed to load camera frames:', err);
-      setFrames([]);
-    } finally {
-      setIsLoading(false);
     }
   }
 
